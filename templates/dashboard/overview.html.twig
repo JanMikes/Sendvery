@@ -1,0 +1,119 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Overview{% endblock %}
+
+{% block content %}
+    {# Stat cards #}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <twig:StatCard
+            title="Monitored Domains"
+            value="{{ stats.totalDomains }}"
+            variant="default"
+            icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>'
+        />
+        <twig:StatCard
+            title="Reports (30 days)"
+            value="{{ stats.totalReportsLast30Days }}"
+            variant="default"
+            icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
+        />
+        <twig:StatCard
+            title="DMARC Pass Rate"
+            value="{{ stats.overallPassRate|number_format(1) }}%"
+            variant="{{ stats.overallPassRate >= 90 ? 'success' : (stats.overallPassRate >= 70 ? 'warning' : 'error') }}"
+            icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>'
+        />
+        <twig:StatCard
+            title="Total Messages"
+            value="{{ stats.totalMessages|number_format(0, '.', ',') }}"
+            variant="default"
+            icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>'
+        />
+    </div>
+
+    {# Trend chart #}
+    <div class="mb-6">
+        <twig:ChartCard
+            title="DMARC Pass/Fail Trend"
+            description="Last 30 days"
+            :config="trendChartConfig"
+        />
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {# Recent reports #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold">Recent Reports</h3>
+                    <a href="{{ path('dashboard_reports') }}" class="text-xs text-primary hover:underline">View all</a>
+                </div>
+
+                {% if recentReports is empty %}
+                    <p class="text-sm text-base-content/50 py-4 text-center">No reports yet.</p>
+                {% else %}
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Domain</th>
+                                    <th>Reporter</th>
+                                    <th>Date</th>
+                                    <th class="text-right">Pass Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for report in recentReports %}
+                                    <tr class="hover:bg-base-200/50 cursor-pointer" onclick="window.location='{{ path('dashboard_report_detail', { id: report.reportId }) }}'">
+                                        <td class="font-medium">{{ report.domainName }}</td>
+                                        <td>{{ report.reporterOrg }}</td>
+                                        <td>{{ report.dateRangeEnd|date('M j') }}</td>
+                                        <td class="text-right">
+                                            <span class="{{ report.passRate >= 90 ? 'text-success' : (report.passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                                {{ report.passRate|number_format(1) }}%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Domain health #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold">Domain Health</h3>
+                    <a href="{{ path('dashboard_domains') }}" class="text-xs text-primary hover:underline">View all</a>
+                </div>
+
+                {% if domains is empty %}
+                    <twig:EmptyState
+                        title="No domains"
+                        message="Add your first domain to start monitoring DMARC reports."
+                        actionUrl="{{ path('dashboard_domain_add') }}"
+                        actionLabel="Add domain"
+                    />
+                {% else %}
+                    <div class="space-y-3">
+                        {% for domain in domains[:5] %}
+                            <a href="{{ path('dashboard_domain_detail', { id: domain.domainId }) }}"
+                               class="flex items-center justify-between p-3 rounded-btn hover:bg-base-200/50 transition-colors">
+                                <div>
+                                    <span class="font-medium text-sm">{{ domain.domainName }}</span>
+                                    <span class="text-xs text-base-content/50 ml-2">{{ domain.totalReports }} reports</span>
+                                </div>
+                                <span class="text-sm font-semibold {{ domain.passRate >= 90 ? 'text-success' : (domain.passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                    {{ domain.passRate|number_format(1) }}%
+                                </span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}

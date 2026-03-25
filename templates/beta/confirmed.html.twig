@@ -1,0 +1,29 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}Confirmed! — Sendvery{% endblock %}
+{% block meta_description %}Your Sendvery beta signup has been confirmed.{% endblock %}
+
+{% block content %}
+
+<section class="py-24 lg:py-32">
+    <div class="container mx-auto text-center">
+        <div class="max-w-lg mx-auto">
+            <div class="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-6">
+                <svg class="w-10 h-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">You're confirmed!</h1>
+            <p class="mt-4 text-base-content/60 text-lg">
+                Your beta signup is confirmed. We'll send you an email when Sendvery is ready for early access.
+            </p>
+            <p class="mt-2 text-base-content/60">
+                In the meantime, check out our free DNS tools:
+            </p>
+            <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="{{ path('tools_domain_health') }}" class="btn btn-primary">Check your domain health</a>
+                <a href="{{ path('home') }}" class="btn btn-ghost">Back to homepage</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

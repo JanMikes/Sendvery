@@ -58,16 +58,19 @@
 {# 2. SEO Content Sections #}
 {% block seo_content %}{% endblock %}
 
-{# 3. CTA #}
+{# 3. CTA — Beta Signup #}
 <section class="py-16 lg:py-20 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
     <div class="container mx-auto text-center">
         <h2 class="text-2xl md:text-3xl font-bold">Want ongoing monitoring?</h2>
         <p class="mt-3 text-base-content/60 max-w-xl mx-auto">
-            Checking once is a start. But email authentication breaks silently over time. Get alerted the moment something changes.
+            Checking once is a start. But email authentication breaks silently over time. Join the beta to get alerted the moment something changes.
         </p>
-        <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="{{ path('tools_domain_health') }}" class="btn btn-primary">Check your domain health</a>
-            <a href="{{ path('home') }}#pricing" class="btn btn-ghost">View pricing</a>
+        <div class="max-w-md mx-auto mt-8">
+            <turbo-frame id="beta-signup-form" src="{{ path('beta_signup') }}" loading="lazy">
+                <div class="flex justify-center">
+                    <span class="loading loading-spinner loading-md text-primary"></span>
+                </div>
+            </turbo-frame>
         </div>
     </div>
 </section>

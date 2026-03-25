@@ -23,6 +23,9 @@ return App::config([
         'SPFLib\SemanticValidator' => [
             'autoconfigure' => true,
         ],
+        'App\Services\Mail\MailClient' => [
+            'alias' => 'App\Services\Mail\ImapMailClient',
+        ],
     ],
     'when@test' => [
         'services' => [
@@ -60,6 +63,76 @@ return App::config([
                 'public' => true,
             ],
             'App\Services\Dns\DomainHealthScorer' => [
+                'public' => true,
+            ],
+            'App\Repository\BetaSignupRepository' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\RegisterBetaSignupHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\ProcessDmarcReportHandler' => [
+                'public' => true,
+            ],
+            'App\Repository\MonitoredDomainRepository' => [
+                'public' => true,
+            ],
+            'App\Repository\DmarcReportRepository' => [
+                'public' => true,
+            ],
+            'App\Query\GetDomainOverview' => [
+                'public' => true,
+            ],
+            'App\Query\GetDomainReports' => [
+                'public' => true,
+            ],
+            'App\Query\GetReportDetail' => [
+                'public' => true,
+            ],
+            'App\Services\Dmarc\DmarcXmlParser' => [
+                'public' => true,
+            ],
+            'App\Services\Dmarc\ReportAttachmentExtractor' => [
+                'public' => true,
+            ],
+            'App\Services\CredentialEncryptor' => [
+                'public' => true,
+            ],
+            'App\Repository\MailboxConnectionRepository' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\ConnectMailboxHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\PollMailboxHandler' => [
+                'public' => true,
+            ],
+            'App\Services\Mail\FakeMailClient' => [
+                'public' => true,
+            ],
+            'App\Services\Mail\MailClient' => [
+                'alias' => 'App\Services\Mail\FakeMailClient',
+                'public' => true,
+            ],
+            'App\Query\GetDashboardStats' => [
+                'public' => true,
+            ],
+            'App\Query\GetDomainDetail' => [
+                'public' => true,
+            ],
+            'App\Query\GetDomainSenderBreakdown' => [
+                'public' => true,
+            ],
+            'App\Query\GetDomainPassRateTrend' => [
+                'public' => true,
+            ],
+            'App\Query\GetAllReports' => [
+                'public' => true,
+            ],
+            'App\Services\DashboardContext' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\AddDomainHandler' => [
                 'public' => true,
             ],
         ],

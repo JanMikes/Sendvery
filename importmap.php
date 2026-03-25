@@ -32,4 +32,7 @@ return [
     '@symfony/stimulus-bundle' => [
         'path' => './vendor/symfony/stimulus-bundle/assets/dist/loader.js',
     ],
+    'apexcharts' => [
+        'version' => '4.5.0',
+    ],
 ];

@@ -1,0 +1,53 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}Join the Beta — Sendvery{% endblock %}
+{% block meta_description %}Sign up for early access to Sendvery — email health & deliverability monitoring with DMARC report parsing and AI-powered insights.{% endblock %}
+
+{% block content %}
+
+<section class="py-24 lg:py-32 bg-gradient-to-br from-base-100 via-base-100 to-primary/5">
+    <div class="container mx-auto">
+        <div class="max-w-xl mx-auto text-center">
+            <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-8">
+                <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                Early access
+            </div>
+            <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight">
+                Get early access to <span class="text-primary">Sendvery</span>
+            </h1>
+            <p class="mt-4 text-base-content/60 text-lg">
+                Be among the first to try Sendvery when it launches. Free DMARC report parsing, DNS monitoring, and AI-powered email authentication insights.
+            </p>
+        </div>
+
+        <div class="max-w-md mx-auto mt-12">
+            {% include 'beta/_form.html.twig' with {data: data, errors: errors, success: success, source: 'beta-page'} %}
+        </div>
+
+        <div class="max-w-2xl mx-auto mt-16 grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
+            <div>
+                <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h3 class="font-semibold mb-1">Free forever tier</h3>
+                <p class="text-sm text-base-content/60">Monitor 1 domain with full features at no cost.</p>
+            </div>
+            <div>
+                <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <h3 class="font-semibold mb-1">AI-powered insights</h3>
+                <p class="text-sm text-base-content/60">Plain-English explanations of your DMARC data.</p>
+            </div>
+            <div>
+                <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                </div>
+                <h3 class="font-semibold mb-1">Open source</h3>
+                <p class="text-sm text-base-content/60">Self-host for free. All features, no limits.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

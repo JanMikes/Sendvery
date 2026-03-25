@@ -1,0 +1,86 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}Knowledge Base — Email Authentication Guides — Sendvery{% endblock %}
+{% block meta_description %}Free guides on DMARC, SPF, DKIM, and email deliverability. Learn how email authentication works and how to protect your domain from spoofing.{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": "Sendvery Knowledge Base",
+    "description": "Free guides on DMARC, SPF, DKIM, and email deliverability.",
+    "url": "{{ url('knowledge_base_index') }}",
+    "publisher": {
+        "@type": "Organization",
+        "name": "Sendvery"
+    }
+}
+</script>
+{% endblock %}
+
+{% block content %}
+
+<section class="py-16 lg:py-24 bg-gradient-to-br from-base-100 via-base-100 to-primary/5">
+    <div class="container mx-auto">
+        <nav class="text-sm breadcrumbs mb-6">
+            <ul>
+                <li><a href="{{ path('home') }}">Home</a></li>
+                <li>Knowledge Base</li>
+            </ul>
+        </nav>
+
+        <div class="max-w-3xl mx-auto text-center">
+            <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight">
+                Email Authentication <span class="text-primary">Knowledge Base</span>
+            </h1>
+            <p class="mt-4 text-base-content/60 text-lg">
+                Practical guides to help you understand and implement SPF, DKIM, and DMARC. Protect your domain from email spoofing and improve deliverability.
+            </p>
+        </div>
+    </div>
+</section>
+
+{% for category, categoryGuides in categories %}
+<twig:SectionContainer bgClass="{{ loop.index is odd ? '' : 'bg-base-200/50' }}">
+    {% block content %}
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-xl md:text-2xl font-bold mb-8">{{ category }}</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {% for guide in categoryGuides %}
+                    <a href="{{ path('knowledge_base_article', {slug: guide.slug}) }}"
+                       class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/30 hover:shadow-md transition-all">
+                        <div class="card-body">
+                            <div class="badge badge-outline badge-sm mb-2">{{ guide.category }}</div>
+                            <h3 class="card-title text-lg">{{ guide.title }}</h3>
+                            <p class="text-base-content/60 text-sm">{{ guide.excerpt }}</p>
+                            <div class="card-actions justify-end mt-4">
+                                <span class="text-primary text-sm font-medium">Read guide &rarr;</span>
+                            </div>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+{% endfor %}
+
+{# Beta Signup CTA #}
+<section class="py-16 lg:py-20 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
+    <div class="container mx-auto text-center">
+        <h2 class="text-2xl md:text-3xl font-bold">Ready to put this knowledge into action?</h2>
+        <p class="mt-3 text-base-content/60 max-w-xl mx-auto">
+            Join the Sendvery beta for automated DMARC monitoring and AI-powered insights.
+        </p>
+        <div class="max-w-md mx-auto mt-8">
+            <turbo-frame id="beta-signup-form" src="{{ path('beta_signup') }}" loading="lazy">
+                <div class="flex justify-center">
+                    <span class="loading loading-spinner loading-md text-primary"></span>
+                </div>
+            </turbo-frame>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

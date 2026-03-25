@@ -1,0 +1,51 @@
+<turbo-frame id="domain-reports-table">
+    <div class="card bg-base-100 border border-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Reporter</th>
+                            <th>Date Range</th>
+                            <th class="text-right">Records</th>
+                            <th class="text-right">Pass Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in reports %}
+                            <tr class="hover:bg-base-200/50 cursor-pointer" onclick="window.location='{{ path('dashboard_report_detail', { id: report.reportId }) }}'">
+                                <td class="font-medium">{{ report.reporterOrg }}</td>
+                                <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
+                                <td class="text-right">{{ report.recordCount }}</td>
+                                <td class="text-right">
+                                    <span class="{{ report.passRate >= 90 ? 'text-success' : (report.passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                        {{ report.passRate|number_format(1) }}%
+                                    </span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {# Pagination #}
+            <div class="flex items-center justify-between mt-4">
+                <div class="text-xs text-base-content/50">
+                    Page {{ currentPage }}
+                </div>
+                <div class="join">
+                    {% if currentPage > 1 %}
+                        <a href="{{ path('dashboard_domain_reports', { id: domainId, page: currentPage - 1 }) }}"
+                           class="join-item btn btn-sm"
+                           data-turbo-frame="domain-reports-table">Previous</a>
+                    {% endif %}
+                    {% if hasNextPage %}
+                        <a href="{{ path('dashboard_domain_reports', { id: domainId, page: currentPage + 1 }) }}"
+                           class="join-item btn btn-sm"
+                           data-turbo-frame="domain-reports-table">Next</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</turbo-frame>

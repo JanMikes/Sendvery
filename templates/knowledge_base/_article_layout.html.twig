@@ -1,0 +1,135 @@
+{# Shared layout for Knowledge Base articles #}
+{% extends 'marketing_layout.html.twig' %}
+
+{% block og_type %}article{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "{{ block('article_title') }}",
+    "description": "{{ block('meta_description') }}",
+    "url": "{{ url('knowledge_base_article', {slug: guide.slug}) }}",
+    "datePublished": "2026-03-25",
+    "dateModified": "2026-03-25",
+    "author": {
+        "@type": "Organization",
+        "name": "Sendvery"
+    },
+    "publisher": {
+        "@type": "Organization",
+        "name": "Sendvery"
+    },
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "{{ url('knowledge_base_article', {slug: guide.slug}) }}"
+    }
+}
+</script>
+{% endblock %}
+
+{% block content %}
+
+<section class="py-16 lg:py-20 bg-gradient-to-br from-base-100 via-base-100 to-primary/5">
+    <div class="container mx-auto">
+        <nav class="text-sm breadcrumbs mb-6">
+            <ul>
+                <li><a href="{{ path('home') }}">Home</a></li>
+                <li><a href="{{ path('knowledge_base_index') }}">Knowledge Base</a></li>
+                <li>{{ guide.title }}</li>
+            </ul>
+        </nav>
+
+        <div class="max-w-3xl mx-auto text-center">
+            <div class="badge badge-outline badge-sm mb-4">{{ guide.category }}</div>
+            <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight">
+                {% block article_title %}{% endblock %}
+            </h1>
+            <p class="mt-4 text-base-content/60 text-lg">{% block article_intro %}{% endblock %}</p>
+        </div>
+    </div>
+</section>
+
+<section class="py-12 lg:py-16">
+    <div class="container mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-12 max-w-5xl mx-auto">
+            {# Article Content #}
+            <article class="prose prose-lg max-w-none">
+                {% block article_content %}{% endblock %}
+            </article>
+
+            {# Sidebar #}
+            <aside class="hidden lg:block">
+                <div class="sticky top-24 space-y-8">
+                    {# Table of Contents #}
+                    <div class="card bg-base-200/50 border border-base-200">
+                        <div class="card-body p-5">
+                            <h3 class="font-semibold text-sm uppercase tracking-wider text-base-content/50 mb-3">On this page</h3>
+                            <nav>
+                                {% block table_of_contents %}{% endblock %}
+                            </nav>
+                        </div>
+                    </div>
+
+                    {# Related Tools #}
+                    <div class="card bg-base-200/50 border border-base-200">
+                        <div class="card-body p-5">
+                            <h3 class="font-semibold text-sm uppercase tracking-wider text-base-content/50 mb-3">Related Tools</h3>
+                            <div class="flex flex-col gap-2">
+                                {% block related_tools %}
+                                    <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DMARC Checker</a>
+                                    <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">SPF Checker</a>
+                                    <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DKIM Checker</a>
+                                    <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm btn-block justify-start">Domain Health</a>
+                                {% endblock %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+{# More Guides #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-xl font-bold mb-8 text-center">More guides</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {% for otherGuide in guides %}
+                    {% if otherGuide.slug != guide.slug %}
+                        <a href="{{ path('knowledge_base_article', {slug: otherGuide.slug}) }}"
+                           class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/30 hover:shadow-md transition-all">
+                            <div class="card-body p-5">
+                                <div class="badge badge-outline badge-sm mb-1">{{ otherGuide.category }}</div>
+                                <h3 class="font-semibold text-sm">{{ otherGuide.title }}</h3>
+                                <span class="text-primary text-xs font-medium mt-2">Read &rarr;</span>
+                            </div>
+                        </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+{# Beta Signup CTA #}
+<section class="py-16 lg:py-20 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
+    <div class="container mx-auto text-center">
+        <h2 class="text-2xl md:text-3xl font-bold">Monitor your email authentication automatically</h2>
+        <p class="mt-3 text-base-content/60 max-w-xl mx-auto">
+            Join the Sendvery beta for automated DMARC report parsing, DNS monitoring, and AI-powered insights.
+        </p>
+        <div class="max-w-md mx-auto mt-8">
+            <turbo-frame id="beta-signup-form" src="{{ path('beta_signup') }}" loading="lazy">
+                <div class="flex justify-center">
+                    <span class="loading loading-spinner loading-md text-primary"></span>
+                </div>
+            </turbo-frame>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

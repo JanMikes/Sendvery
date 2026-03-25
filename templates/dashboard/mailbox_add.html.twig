@@ -1,0 +1,92 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Add Mailbox{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_mailboxes') }}">Mailboxes</a></li>
+    <li>Add</li>
+{% endblock %}
+
+{% block content %}
+    <div class="max-w-lg mx-auto">
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-6">
+                <h2 class="text-lg font-semibold mb-4">Connect a mailbox</h2>
+                <p class="text-sm text-base-content/50 mb-6">
+                    Connect an IMAP mailbox that receives DMARC aggregate reports.
+                </p>
+
+                {% if errors is not empty %}
+                    <div class="alert alert-error mb-4">
+                        <ul class="text-sm">
+                            {% for error in errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form method="POST" action="{{ path('dashboard_mailbox_add') }}">
+                    <div class="form-control mb-4">
+                        <label class="label" for="type">
+                            <span class="label-text">Protocol</span>
+                        </label>
+                        <select id="type" name="type" class="select select-bordered w-full">
+                            <option value="imap_user" {{ data.type == 'imap_user' ? 'selected' }}>IMAP</option>
+                            <option value="pop3_user" {{ data.type == 'pop3_user' ? 'selected' }}>POP3</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="form-control">
+                            <label class="label" for="host">
+                                <span class="label-text">Host</span>
+                            </label>
+                            <input type="text" id="host" name="host" value="{{ data.host }}"
+                                   placeholder="imap.example.com" class="input input-bordered w-full" required>
+                        </div>
+                        <div class="form-control">
+                            <label class="label" for="port">
+                                <span class="label-text">Port</span>
+                            </label>
+                            <input type="number" id="port" name="port" value="{{ data.port }}"
+                                   class="input input-bordered w-full" required>
+                        </div>
+                    </div>
+
+                    <div class="form-control mb-4">
+                        <label class="label" for="encryption">
+                            <span class="label-text">Encryption</span>
+                        </label>
+                        <select id="encryption" name="encryption" class="select select-bordered w-full">
+                            <option value="ssl" {{ data.encryption == 'ssl' ? 'selected' }}>SSL</option>
+                            <option value="tls" {{ data.encryption == 'tls' ? 'selected' }}>TLS</option>
+                            <option value="starttls" {{ data.encryption == 'starttls' ? 'selected' }}>STARTTLS</option>
+                            <option value="none" {{ data.encryption == 'none' ? 'selected' }}>None</option>
+                        </select>
+                    </div>
+
+                    <div class="form-control mb-4">
+                        <label class="label" for="username">
+                            <span class="label-text">Username</span>
+                        </label>
+                        <input type="text" id="username" name="username" value="{{ data.username }}"
+                               placeholder="dmarc@example.com" class="input input-bordered w-full" required>
+                    </div>
+
+                    <div class="form-control mb-6">
+                        <label class="label" for="password">
+                            <span class="label-text">Password</span>
+                        </label>
+                        <input type="password" id="password" name="password"
+                               class="input input-bordered w-full" required>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3">
+                        <a href="{{ path('dashboard_mailboxes') }}" class="btn btn-ghost btn-sm">Cancel</a>
+                        <button type="submit" class="btn btn-primary btn-sm">Connect mailbox</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

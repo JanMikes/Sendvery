@@ -1,0 +1,216 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}SPF Record: The Complete Guide — Sendvery{% endblock %}
+{% block meta_description %}Everything about SPF records: syntax, mechanisms, qualifiers, the 10 DNS lookup limit, common mistakes, and how to fix them. A complete guide.{% endblock %}
+
+{% block article_title %}SPF Record: The Complete Guide{% endblock %}
+{% block article_intro %}Everything you need to know about Sender Policy Framework &mdash; from basic syntax to advanced troubleshooting.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#what-is-spf" class="link link-hover text-base-content/60">What is SPF?</a></li>
+    <li><a href="#how-spf-works" class="link link-hover text-base-content/60">How SPF works</a></li>
+    <li><a href="#spf-syntax" class="link link-hover text-base-content/60">SPF syntax explained</a></li>
+    <li><a href="#mechanisms" class="link link-hover text-base-content/60">Mechanisms</a></li>
+    <li><a href="#qualifiers" class="link link-hover text-base-content/60">Qualifiers</a></li>
+    <li><a href="#dns-lookup-limit" class="link link-hover text-base-content/60">The 10 DNS lookup limit</a></li>
+    <li><a href="#common-mistakes" class="link link-hover text-base-content/60">Common mistakes</a></li>
+    <li><a href="#best-practices" class="link link-hover text-base-content/60">Best practices</a></li>
+</ul>
+{% endblock %}
+
+{% block related_tools %}
+<a href="{{ path('tools_spf_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">SPF Checker</a>
+<a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DMARC Checker</a>
+<a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DKIM Checker</a>
+<a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">Email Auth Checker</a>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="what-is-spf">What is SPF?</h2>
+
+<p><strong>SPF</strong> (Sender Policy Framework) is a DNS-based email authentication protocol that lets domain owners specify which mail servers are authorized to send email on behalf of their domain.</p>
+
+<p>When you publish an SPF record, you're creating a public list of IP addresses and servers that are allowed to send email using your domain name. Receiving mail servers check this list to decide whether to trust the email.</p>
+
+<p>SPF is one of three pillars of email authentication, alongside <a href="{{ path('knowledge_base_article', {slug: 'email-authentication-explained'}) }}">DKIM and DMARC</a>. While SPF alone isn't sufficient for full protection, it's a critical foundation.</p>
+
+<h2 id="how-spf-works">How SPF works</h2>
+
+<p>Here's what happens when a receiving server gets an email:</p>
+
+<ol>
+    <li>The server looks at the <strong>envelope sender</strong> (the "MAIL FROM" address in the SMTP conversation, not necessarily the "From" header you see)</li>
+    <li>It extracts the domain from this address</li>
+    <li>It queries DNS for a TXT record at that domain</li>
+    <li>It checks whether the sending server's IP address matches any of the authorized sources in the SPF record</li>
+    <li>Based on the result (pass, fail, softfail, neutral), the server decides what to do</li>
+</ol>
+
+<p>A key detail: SPF checks the <strong>envelope sender</strong>, not the "From" header. This is why SPF alone doesn't prevent spoofing of the visible "From" address &mdash; you need DMARC for that (which enforces alignment between the envelope sender and the "From" header).</p>
+
+<h2 id="spf-syntax">SPF syntax explained</h2>
+
+<p>An SPF record is a TXT DNS record published at your domain's root. Every SPF record starts with <code>v=spf1</code> and contains a series of mechanisms and modifiers:</p>
+
+<pre><code>v=spf1 ip4:203.0.113.0/24 include:_spf.google.com include:sendgrid.net ~all</code></pre>
+
+<p>Let's break this down:</p>
+
+<ul>
+    <li><code>v=spf1</code> &mdash; Identifies this as an SPF record (required, must be first)</li>
+    <li><code>ip4:203.0.113.0/24</code> &mdash; Authorizes this IP range</li>
+    <li><code>include:_spf.google.com</code> &mdash; Authorizes Google Workspace servers</li>
+    <li><code>include:sendgrid.net</code> &mdash; Authorizes SendGrid servers</li>
+    <li><code>~all</code> &mdash; Everything else should softfail</li>
+</ul>
+
+<h2 id="mechanisms">Mechanisms</h2>
+
+<p>Mechanisms are the building blocks of SPF records. They define who is authorized to send:</p>
+
+<h3><code>ip4</code> and <code>ip6</code></h3>
+
+<p>Authorize specific IP addresses or CIDR ranges:</p>
+
+<pre><code>ip4:203.0.113.5        {# single IP #}
+ip4:203.0.113.0/24     {# IP range #}
+ip6:2001:db8::/32      {# IPv6 range #}</code></pre>
+
+<p>These are the most straightforward mechanisms and don't count toward the DNS lookup limit.</p>
+
+<h3><code>include</code></h3>
+
+<p>References another domain's SPF record. Used when third-party services send email on your behalf:</p>
+
+<pre><code>include:_spf.google.com      {# Google Workspace #}
+include:sendgrid.net          {# SendGrid #}
+include:spf.protection.outlook.com  {# Microsoft 365 #}</code></pre>
+
+<p>Each <code>include</code> counts as one DNS lookup. The included domain's SPF record is fetched and evaluated recursively.</p>
+
+<h3><code>a</code></h3>
+
+<p>Authorizes the IP addresses that your domain's A (or AAAA) records point to:</p>
+
+<pre><code>a                  {# your domain's A records #}
+a:mail.example.com {# another domain's A records #}</code></pre>
+
+<h3><code>mx</code></h3>
+
+<p>Authorizes the IP addresses of your domain's MX (mail exchange) servers:</p>
+
+<pre><code>mx                  {# your domain's MX servers #}
+mx:example.com      {# another domain's MX servers #}</code></pre>
+
+<h3><code>all</code></h3>
+
+<p>Matches everything. Always placed last as a catch-all:</p>
+
+<pre><code>-all    {# hard fail: reject unauthorized senders #}
+~all    {# soft fail: mark as suspicious but deliver #}
+?all    {# neutral: no opinion #}
++all    {# pass all: allows anyone (never use this!) #}</code></pre>
+
+<h2 id="qualifiers">Qualifiers</h2>
+
+<p>Each mechanism can be prefixed with a qualifier that determines the result when matched:</p>
+
+<table class="table table-zebra not-prose">
+    <thead>
+        <tr>
+            <th>Qualifier</th>
+            <th>Result</th>
+            <th>Meaning</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td><code>+</code> (default)</td><td>Pass</td><td>Authorized sender</td></tr>
+        <tr><td><code>-</code></td><td>Fail</td><td>Unauthorized, reject</td></tr>
+        <tr><td><code>~</code></td><td>SoftFail</td><td>Unauthorized, but don't reject</td></tr>
+        <tr><td><code>?</code></td><td>Neutral</td><td>No assertion</td></tr>
+    </tbody>
+</table>
+
+<p>The <code>+</code> qualifier is the default and is usually omitted. So <code>include:example.com</code> and <code>+include:example.com</code> mean the same thing.</p>
+
+<h2 id="dns-lookup-limit">The 10 DNS lookup limit</h2>
+
+<p>This is the most common source of SPF problems. The SPF specification (RFC 7208) limits SPF evaluation to <strong>10 DNS lookups</strong>. If your SPF record exceeds this limit, the entire check returns <code>permerror</code> &mdash; as if you had no SPF record at all.</p>
+
+<h3>What counts as a DNS lookup?</h3>
+
+<ul>
+    <li><code>include:</code> &mdash; 1 lookup (plus any lookups in the included record)</li>
+    <li><code>a</code> &mdash; 1 lookup</li>
+    <li><code>mx</code> &mdash; 1 lookup (plus A lookups for each MX host)</li>
+    <li><code>redirect=</code> &mdash; 1 lookup</li>
+    <li><code>exists:</code> &mdash; 1 lookup</li>
+</ul>
+
+<h3>What does NOT count?</h3>
+
+<ul>
+    <li><code>ip4:</code> and <code>ip6:</code> &mdash; no DNS lookup needed</li>
+    <li><code>all</code> &mdash; no DNS lookup needed</li>
+    <li>The initial TXT record lookup &mdash; doesn't count</li>
+</ul>
+
+<h3>How to stay under the limit</h3>
+
+<ol>
+    <li><strong>Audit your includes</strong> &mdash; Remove services you no longer use. Old marketing platforms, retired CRMs, and migrated email providers add unnecessary lookups</li>
+    <li><strong>Use <code>ip4</code>/<code>ip6</code> for static IPs</strong> &mdash; If a service has a fixed IP, use <code>ip4:</code> instead of <code>include:</code></li>
+    <li><strong>Flatten your SPF record</strong> &mdash; Resolve <code>include:</code> domains to their final IPs. Be careful: you'll need to keep these updated if the service changes IPs</li>
+    <li><strong>Use subdomains</strong> &mdash; Send marketing emails from <code>marketing.yourdomain.com</code> with its own SPF record, keeping the main domain's record lean</li>
+</ol>
+
+<div class="alert alert-info not-prose my-8">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Check your SPF record's lookup count with our free <a href="{{ path('tools_spf_checker') }}" class="link font-semibold">SPF Checker</a> tool. It shows exactly how many lookups your record uses.</span>
+</div>
+
+<h2 id="common-mistakes">Common SPF mistakes</h2>
+
+<h3>Multiple SPF records</h3>
+
+<p>A domain must have <strong>only one SPF record</strong>. If you have two TXT records starting with <code>v=spf1</code>, the result is undefined (most servers return <code>permerror</code>). This commonly happens when adding a new email service without updating the existing record.</p>
+
+<p><strong>Wrong:</strong></p>
+<pre><code>v=spf1 include:_spf.google.com ~all
+v=spf1 include:sendgrid.net ~all</code></pre>
+
+<p><strong>Correct:</strong></p>
+<pre><code>v=spf1 include:_spf.google.com include:sendgrid.net ~all</code></pre>
+
+<h3>Using <code>+all</code></h3>
+
+<p>The mechanism <code>+all</code> means "authorize everyone." This defeats the purpose of SPF entirely. Always use <code>-all</code> (hard fail) or <code>~all</code> (soft fail).</p>
+
+<h3>Missing the <code>all</code> mechanism</h3>
+
+<p>Without a trailing <code>all</code> mechanism, there's no default action for IPs that don't match. The result is <code>neutral</code>, which provides weaker protection than <code>~all</code> or <code>-all</code>.</p>
+
+<h3>Stale records</h3>
+
+<p>SPF records accumulate <code>include:</code> entries over time as you add services. When you stop using a service, the include stays. This wastes DNS lookups and can push you over the limit. Audit your SPF record at least annually.</p>
+
+<h3>Using <code>ptr</code> mechanism</h3>
+
+<p>The <code>ptr</code> mechanism is deprecated by RFC 7208. It's slow, unreliable, and should not be used. Some services still recommend it in their documentation &mdash; ignore those instructions and use <code>include:</code> or <code>ip4:</code> instead.</p>
+
+<h2 id="best-practices">Best practices</h2>
+
+<ol>
+    <li><strong>Start with <code>~all</code>, aim for <code>-all</code></strong> &mdash; Use softfail while setting up, switch to hardfail once you're confident all legitimate sources are listed</li>
+    <li><strong>Audit regularly</strong> &mdash; Review your SPF record quarterly. Remove unused includes. Check lookup counts</li>
+    <li><strong>Use subdomains for different services</strong> &mdash; <code>notifications.yourdomain.com</code>, <code>marketing.yourdomain.com</code>, each with its own lean SPF record</li>
+    <li><strong>Always pair with DMARC</strong> &mdash; SPF alone checks the envelope sender, not the visible "From" header. DMARC adds the alignment check that closes this gap</li>
+    <li><strong>Monitor with DMARC reports</strong> &mdash; DMARC aggregate reports show which IPs are sending as your domain and whether they pass SPF. This is the best way to discover unauthorized senders or misconfigured legitimate ones</li>
+    <li><strong>Don't forget IPv6</strong> &mdash; If your mail servers have IPv6 addresses, include <code>ip6:</code> mechanisms too</li>
+</ol>
+
+<p>Ready to check your SPF record? Use our free <a href="{{ path('tools_spf_checker') }}">SPF Checker</a> tool, or see the <a href="{{ path('knowledge_base_article', {slug: 'email-authentication-explained'}) }}">full email authentication guide</a> to understand how SPF works together with DKIM and DMARC.</p>
+
+{% endblock %}

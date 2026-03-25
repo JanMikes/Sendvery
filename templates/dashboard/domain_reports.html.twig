@@ -1,0 +1,20 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Reports{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_domains') }}">Domains</a></li>
+    <li>Reports</li>
+{% endblock %}
+
+{% block content %}
+    {% if reports is empty and currentPage == 1 %}
+        <twig:EmptyState
+            title="No reports yet"
+            message="DMARC reports for this domain will appear here."
+        />
+    {% else %}
+        <turbo-frame id="domain-reports-table">
+            {% include 'dashboard/_domain_reports_table.html.twig' %}
+        </turbo-frame>
+    {% endif %}
+{% endblock %}

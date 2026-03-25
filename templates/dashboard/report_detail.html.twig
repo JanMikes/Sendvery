@@ -1,0 +1,122 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Report {{ report.externalReportId }}{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_reports') }}">Reports</a></li>
+    <li>{{ report.externalReportId|length > 30 ? report.externalReportId[:30] ~ '...' : report.externalReportId }}</li>
+{% endblock %}
+
+{% block content %}
+    {# Report header #}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">Report from {{ report.reporterOrg }}</h1>
+        <p class="text-sm text-base-content/50 mt-1">
+            {{ report.dateRangeBegin|date('M j, Y') }} — {{ report.dateRangeEnd|date('M j, Y') }}
+            <span class="mx-2">|</span>
+            External ID: <span class="font-mono text-xs">{{ report.externalReportId }}</span>
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {# Report metadata #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm lg:col-span-2">
+            <div class="card-body p-4">
+                <h3 class="text-sm font-semibold mb-3">Report Details</h3>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                        <span class="text-base-content/50">Reporter</span>
+                        <p class="font-medium">{{ report.reporterOrg }}</p>
+                    </div>
+                    <div>
+                        <span class="text-base-content/50">Reporter Email</span>
+                        <p class="font-medium">{{ report.reporterEmail }}</p>
+                    </div>
+                    <div>
+                        <span class="text-base-content/50">Policy Domain</span>
+                        <p class="font-medium">{{ report.policyDomain }}</p>
+                    </div>
+                    <div>
+                        <span class="text-base-content/50">Processed</span>
+                        <p class="font-medium">{{ report.processedAt|date('M j, Y H:i') }}</p>
+                    </div>
+                </div>
+
+                <div class="divider my-3"></div>
+
+                <h3 class="text-sm font-semibold mb-3">Published Policy</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                    <div>
+                        <span class="text-base-content/50">Policy (p)</span>
+                        <p><twig:StatusBadge status="{{ report.policyP }}" label="p={{ report.policyP }}" /></p>
+                    </div>
+                    {% if report.policySp %}
+                        <div>
+                            <span class="text-base-content/50">Subdomain (sp)</span>
+                            <p><twig:StatusBadge status="{{ report.policySp }}" label="sp={{ report.policySp }}" /></p>
+                        </div>
+                    {% endif %}
+                    <div>
+                        <span class="text-base-content/50">DKIM Alignment</span>
+                        <p class="font-medium">{{ report.policyAdkim == 'r' ? 'Relaxed' : 'Strict' }}</p>
+                    </div>
+                    <div>
+                        <span class="text-base-content/50">SPF Alignment</span>
+                        <p class="font-medium">{{ report.policyAspf == 'r' ? 'Relaxed' : 'Strict' }}</p>
+                    </div>
+                    <div>
+                        <span class="text-base-content/50">Percentage</span>
+                        <p class="font-medium">{{ report.policyPct }}%</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Pass/fail donut #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="text-sm font-semibold mb-2">Authentication Summary</h3>
+                <div class="text-center mb-2">
+                    <span class="text-3xl font-bold">{{ totalMessages }}</span>
+                    <span class="text-sm text-base-content/50 block">total messages</span>
+                </div>
+                <div {{ stimulus_controller('chart', { config: donutConfig }) }} style="min-height: 200px"></div>
+            </div>
+        </div>
+    </div>
+
+    {# Records table #}
+    <div class="card bg-base-100 border border-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <h3 class="text-sm font-semibold mb-3">Records ({{ report.records|length }})</h3>
+
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Source IP</th>
+                            <th>Hostname</th>
+                            <th class="text-right">Count</th>
+                            <th>Disposition</th>
+                            <th>DKIM</th>
+                            <th>SPF</th>
+                            <th>Header From</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in report.records %}
+                            <tr>
+                                <td class="font-mono text-xs">{{ record.sourceIp }}</td>
+                                <td class="text-xs">{{ record.resolvedHostname ?? record.resolvedOrg ?? '—' }}</td>
+                                <td class="text-right font-medium">{{ record.count }}</td>
+                                <td><twig:StatusBadge status="{{ record.disposition }}" /></td>
+                                <td><twig:StatusBadge status="{{ record.dkimResult }}" /></td>
+                                <td><twig:StatusBadge status="{{ record.spfResult }}" /></td>
+                                <td class="text-xs">{{ record.headerFrom }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}

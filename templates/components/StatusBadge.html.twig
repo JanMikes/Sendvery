@@ -1,0 +1,20 @@
+{# Status badge — pass/fail/warning/neutral indicator #}
+{% props status, label = null %}
+
+{% set badgeClass = {
+    'pass': 'badge-success',
+    'fail': 'badge-error',
+    'softfail': 'badge-warning',
+    'warning': 'badge-warning',
+    'neutral': 'badge-ghost',
+    'none': 'badge-ghost',
+    'temperror': 'badge-warning',
+    'permerror': 'badge-error',
+    'quarantine': 'badge-warning',
+    'reject': 'badge-error',
+    'active': 'badge-success',
+    'error': 'badge-error',
+    'inactive': 'badge-ghost',
+}[status] ?? 'badge-ghost' %}
+
+<span class="badge badge-sm {{ badgeClass }}">{{ label ?? status }}</span>

@@ -1,0 +1,116 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{% block page_title %}Dashboard{% endblock %} — Sendvery{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex" {{ stimulus_controller('sidebar') }}>
+    {# Mobile overlay #}
+    <div class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden"
+         {{ stimulus_target('sidebar', 'overlay') }}
+         {{ stimulus_action('sidebar', 'close') }}></div>
+
+    {# Sidebar #}
+    <aside class="fixed lg:sticky top-0 left-0 z-50 lg:z-auto w-64 h-screen bg-base-200 border-r border-base-300 flex flex-col transition-transform duration-200 -translate-x-full lg:translate-x-0"
+           {{ stimulus_target('sidebar', 'sidebar') }}>
+        {# Logo #}
+        <div class="p-4 border-b border-base-300">
+            <a href="{{ path('dashboard_overview') }}" class="text-xl font-bold text-primary tracking-tight">
+                Sendvery
+            </a>
+            <p class="text-xs text-base-content/50 mt-0.5">Email Health Dashboard</p>
+        </div>
+
+        {# Navigation #}
+        <nav class="flex-1 overflow-y-auto p-3 space-y-1">
+            {% set current_route = app.request.attributes.get('_route') %}
+
+            <a href="{{ path('dashboard_overview') }}"
+               class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route == 'dashboard_overview' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                Dashboard
+            </a>
+
+            <a href="{{ path('dashboard_domains') }}"
+               class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route starts with 'dashboard_domain' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                Domains
+            </a>
+
+            <a href="{{ path('dashboard_reports') }}"
+               class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route starts with 'dashboard_report' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Reports
+            </a>
+
+            <a href="{{ path('tools_domain_health') }}"
+               class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium text-base-content/70 hover:bg-base-300 hover:text-base-content">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                DNS Health
+            </a>
+
+            <a href="{{ path('dashboard_mailboxes') }}"
+               class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route starts with 'dashboard_mailbox' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                Mailboxes
+            </a>
+
+            <div class="divider my-2 text-xs text-base-content/30">Settings</div>
+
+            <a href="#"
+               class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium text-base-content/70 hover:bg-base-300 hover:text-base-content opacity-50 cursor-not-allowed">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Settings
+                <span class="badge badge-xs badge-ghost">Soon</span>
+            </a>
+        </nav>
+
+        {# Sidebar footer #}
+        <div class="p-3 border-t border-base-300">
+            <a href="{{ path('home') }}" class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm text-base-content/50 hover:text-base-content hover:bg-base-300">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"></path></svg>
+                Back to website
+            </a>
+            <button class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm text-base-content/50 hover:text-base-content hover:bg-base-300 w-full"
+                    {{ stimulus_action('dark-mode', 'toggle') }}>
+                <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                Toggle dark mode
+            </button>
+        </div>
+    </aside>
+
+    {# Main content #}
+    <div class="flex-1 flex flex-col min-h-screen">
+        {# Top bar #}
+        <header class="sticky top-0 z-30 bg-base-100/80 backdrop-blur-md border-b border-base-200">
+            <div class="flex items-center justify-between px-4 lg:px-6 h-14">
+                <div class="flex items-center gap-3">
+                    {# Mobile hamburger #}
+                    <button class="btn btn-ghost btn-sm btn-square lg:hidden"
+                            {{ stimulus_action('sidebar', 'toggle') }}
+                            aria-label="Toggle sidebar">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+
+                    {# Breadcrumbs #}
+                    <div class="breadcrumbs text-sm">
+                        <ul>
+                            <li><a href="{{ path('dashboard_overview') }}">Dashboard</a></li>
+                            {% block breadcrumbs %}{% endblock %}
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    {% block header_actions %}{% endblock %}
+                </div>
+            </div>
+        </header>
+
+        {# Page content #}
+        <main class="flex-1 p-4 lg:p-6">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+{% endblock %}

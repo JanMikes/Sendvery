@@ -1,0 +1,53 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Add Domain{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_domains') }}">Domains</a></li>
+    <li>Add</li>
+{% endblock %}
+
+{% block content %}
+    <div class="max-w-lg mx-auto">
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-6">
+                <h2 class="text-lg font-semibold mb-4">Add a domain</h2>
+                <p class="text-sm text-base-content/50 mb-6">
+                    Enter the domain name you want to monitor for DMARC reports.
+                </p>
+
+                {% if errors is not empty %}
+                    <div class="alert alert-error mb-4">
+                        <ul class="text-sm">
+                            {% for error in errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <form method="POST" action="{{ path('dashboard_domain_add') }}">
+                    <div class="form-control mb-4">
+                        <label class="label" for="domain_name">
+                            <span class="label-text">Domain name</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="domain_name"
+                            name="domain_name"
+                            value="{{ data.domainName }}"
+                            placeholder="example.com"
+                            class="input input-bordered w-full"
+                            required
+                            autofocus
+                        >
+                    </div>
+
+                    <div class="flex items-center justify-end gap-3">
+                        <a href="{{ path('dashboard_domains') }}" class="btn btn-ghost btn-sm">Cancel</a>
+                        <button type="submit" class="btn btn-primary btn-sm">Add domain</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

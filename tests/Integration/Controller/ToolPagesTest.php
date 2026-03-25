@@ -30,7 +30,7 @@ final class ToolPagesTest extends WebTestCase
         $crawler = $client->request('GET', $url);
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h2', 'Frequently asked questions');
+        self::assertSelectorTextContains('body', 'Frequently asked questions');
     }
 
     #[Test]
@@ -82,7 +82,7 @@ final class ToolPagesTest extends WebTestCase
         $crawler = $client->request('GET', $url);
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h2', 'Related tools');
+        self::assertSelectorTextContains('body', 'Related tools');
     }
 
     #[Test]

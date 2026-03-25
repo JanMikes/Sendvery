@@ -1,0 +1,35 @@
+{# Domain card — summary for a monitored domain #}
+{% props domainId, domainName, passRate = 0, totalReports = 0, latestReportDate = null, dmarcPolicy = null %}
+
+<a href="{{ path('dashboard_domain_detail', { id: domainId }) }}"
+   class="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md hover:border-primary/30 transition-all">
+    <div class="card-body p-4">
+        <div class="flex items-start justify-between">
+            <div>
+                <h3 class="font-semibold text-base">{{ domainName }}</h3>
+                {% if dmarcPolicy %}
+                    <twig:StatusBadge status="{{ dmarcPolicy }}" label="p={{ dmarcPolicy }}" />
+                {% endif %}
+            </div>
+            <div class="text-right">
+                <div class="text-2xl font-bold {{ passRate >= 90 ? 'text-success' : (passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                    {{ passRate|number_format(1) }}%
+                </div>
+                <span class="text-xs text-base-content/50">pass rate</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4 mt-3 text-xs text-base-content/50">
+            <span class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                {{ totalReports }} {{ totalReports == 1 ? 'report' : 'reports' }}
+            </span>
+            {% if latestReportDate %}
+                <span class="flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    {{ latestReportDate|date('M j, Y') }}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+</a>

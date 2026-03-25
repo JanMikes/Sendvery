@@ -1,0 +1,47 @@
+<turbo-frame id="beta-signup-form">
+    {% if success %}
+        <div class="text-center py-8">
+            <div class="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h3 class="text-xl font-bold mb-2">You're on the list!</h3>
+            <p class="text-base-content/60">Check your inbox for a confirmation email. We'll notify you when Sendvery is ready.</p>
+        </div>
+    {% else %}
+        <form method="post" action="{{ path('beta_signup') }}" class="space-y-4">
+            {% if errors|length > 0 %}
+                <div class="alert alert-error">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                    <span>{{ errors|first }}</span>
+                </div>
+            {% endif %}
+
+            <input type="hidden" name="source" value="{{ source|default('beta-page') }}">
+
+            <div class="form-control">
+                <input type="email" name="email" placeholder="your@email.com" value="{{ data.email }}"
+                       class="input input-bordered w-full" required>
+            </div>
+
+            <div class="form-control">
+                <select name="domain_count" class="select select-bordered w-full">
+                    <option value="" disabled {{ data.domainCount is null ? 'selected' : '' }}>How many domains do you manage? (optional)</option>
+                    <option value="1" {{ data.domainCount == 1 ? 'selected' : '' }}>1</option>
+                    <option value="5" {{ data.domainCount == 5 ? 'selected' : '' }}>2-5</option>
+                    <option value="10" {{ data.domainCount == 10 ? 'selected' : '' }}>5-10</option>
+                    <option value="50" {{ data.domainCount == 50 ? 'selected' : '' }}>10-50</option>
+                    <option value="100" {{ data.domainCount == 100 ? 'selected' : '' }}>50+</option>
+                </select>
+            </div>
+
+            <div class="form-control">
+                <textarea name="pain_point" placeholder="What's your biggest email authentication pain point? (optional)"
+                          class="textarea textarea-bordered w-full" rows="2" maxlength="500">{{ data.painPoint }}</textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-full">Join the beta waitlist</button>
+
+            <p class="text-xs text-base-content/40 text-center">No spam. We'll only email you about the beta launch.</p>
+        </form>
+    {% endif %}
+</turbo-frame>

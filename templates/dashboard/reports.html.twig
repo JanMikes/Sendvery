@@ -1,0 +1,17 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Reports{% endblock %}
+{% block breadcrumbs %}<li>Reports</li>{% endblock %}
+
+{% block content %}
+    {% if reports is empty and currentPage == 1 %}
+        <twig:EmptyState
+            title="No reports yet"
+            message="DMARC reports will appear here once your mailbox connection starts receiving them."
+        />
+    {% else %}
+        <turbo-frame id="reports-table">
+            {% include 'dashboard/_reports_table.html.twig' %}
+        </turbo-frame>
+    {% endif %}
+{% endblock %}

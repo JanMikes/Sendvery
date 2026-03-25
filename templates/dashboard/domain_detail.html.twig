@@ -1,0 +1,116 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}{{ domain.domainName }}{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_domains') }}">Domains</a></li>
+    <li>{{ domain.domainName }}</li>
+{% endblock %}
+
+{% block content %}
+    {# Domain header #}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">{{ domain.domainName }}</h1>
+            <div class="flex items-center gap-2 mt-1">
+                {% if domain.dmarcPolicy %}
+                    <twig:StatusBadge status="{{ domain.dmarcPolicy }}" label="p={{ domain.dmarcPolicy }}" />
+                {% endif %}
+                {% if domain.isVerified %}
+                    <span class="badge badge-sm badge-success">Verified</span>
+                {% else %}
+                    <span class="badge badge-sm badge-ghost">Unverified</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{{ path('dashboard_domain_reports', { id: domain.domainId }) }}" class="btn btn-ghost btn-sm">
+                All reports
+            </a>
+            <a href="{{ path('tools_domain_health') }}?domain={{ domain.domainName }}" class="btn btn-ghost btn-sm">
+                DNS Health Check
+            </a>
+        </div>
+    </div>
+
+    {# Quick stats #}
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <twig:StatCard title="Total Messages" value="{{ domain.totalMessages|number_format(0, '.', ',') }}" />
+        <twig:StatCard
+            title="Pass Rate"
+            value="{{ domain.passRate|number_format(1) }}%"
+            variant="{{ domain.passRate >= 90 ? 'success' : (domain.passRate >= 70 ? 'warning' : 'error') }}"
+        />
+        <twig:StatCard title="Unique Senders" value="{{ domain.uniqueSenders }}" />
+        <twig:StatCard title="Reports" value="{{ domain.totalReports }}" />
+    </div>
+
+    {# Charts row #}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <twig:ChartCard
+            title="DMARC Pass/Fail Trend"
+            description="Last 90 days"
+            :config="trendChartConfig"
+            height="280px"
+        />
+
+        {% if senders is not empty %}
+            <twig:ChartCard
+                title="Top Senders"
+                description="By message volume"
+                :config="senderChartConfig"
+                height="300px"
+            />
+        {% else %}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-4">
+                    <h3 class="text-sm font-semibold">Top Senders</h3>
+                    <twig:EmptyState
+                        title="No sender data"
+                        message="Sender breakdown will appear once DMARC reports are processed."
+                    />
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    {# Recent reports table #}
+    <div class="card bg-base-100 border border-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold">Recent Reports</h3>
+                <a href="{{ path('dashboard_domain_reports', { id: domain.domainId }) }}" class="text-xs text-primary hover:underline">View all</a>
+            </div>
+
+            {% if reports is empty %}
+                <p class="text-sm text-base-content/50 py-4 text-center">No reports for this domain yet.</p>
+            {% else %}
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Reporter</th>
+                                <th>Date Range</th>
+                                <th class="text-right">Records</th>
+                                <th class="text-right">Pass Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for report in reports %}
+                                <tr class="hover:bg-base-200/50 cursor-pointer" onclick="window.location='{{ path('dashboard_report_detail', { id: report.reportId }) }}'">
+                                    <td class="font-medium">{{ report.reporterOrg }}</td>
+                                    <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
+                                    <td class="text-right">{{ report.recordCount }}</td>
+                                    <td class="text-right">
+                                        <span class="{{ report.passRate >= 90 ? 'text-success' : (report.passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                            {{ report.passRate|number_format(1) }}%
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

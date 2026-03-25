@@ -1,0 +1,243 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}Email Authentication: SPF, DKIM, and DMARC Explained — Sendvery{% endblock %}
+{% block meta_description %}How SPF, DKIM, and DMARC work together to protect your domain from email spoofing. Why you need all three and how the authentication flow works.{% endblock %}
+
+{% block article_title %}Email Authentication: SPF, DKIM, and DMARC Explained{% endblock %}
+{% block article_intro %}How the three pillars of email authentication work together to protect your domain. A comprehensive guide for everyone from beginners to sysadmins.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#why-authentication" class="link link-hover text-base-content/60">Why email authentication?</a></li>
+    <li><a href="#spf-explained" class="link link-hover text-base-content/60">SPF explained</a></li>
+    <li><a href="#dkim-explained" class="link link-hover text-base-content/60">DKIM explained</a></li>
+    <li><a href="#dmarc-explained" class="link link-hover text-base-content/60">DMARC explained</a></li>
+    <li><a href="#how-they-work-together" class="link link-hover text-base-content/60">How they work together</a></li>
+    <li><a href="#why-all-three" class="link link-hover text-base-content/60">Why you need all three</a></li>
+    <li><a href="#authentication-flow" class="link link-hover text-base-content/60">The authentication flow</a></li>
+    <li><a href="#common-misconceptions" class="link link-hover text-base-content/60">Common misconceptions</a></li>
+    <li><a href="#getting-started" class="link link-hover text-base-content/60">Getting started</a></li>
+</ul>
+{% endblock %}
+
+{% block related_tools %}
+<a href="{{ path('tools_email_auth_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">Email Auth Checker</a>
+<a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">SPF Checker</a>
+<a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DKIM Checker</a>
+<a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DMARC Checker</a>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="why-authentication">Why email needs authentication</h2>
+
+<p>Email was designed in the 1970s without any built-in way to verify the sender's identity. The SMTP protocol lets anyone claim any "From" address &mdash; there's nothing in the protocol to prevent it. This is like postal mail: you can write any return address on an envelope.</p>
+
+<p>This fundamental design flaw enables <strong>email spoofing</strong>: attackers sending messages that appear to come from your domain. The consequences range from phishing attacks against your customers to full-blown business email compromise (BEC) fraud.</p>
+
+<p>Three protocols were developed to solve this: <strong>SPF</strong>, <strong>DKIM</strong>, and <strong>DMARC</strong>. Each addresses a different aspect of the problem, and together they form a comprehensive authentication system.</p>
+
+<h2 id="spf-explained">SPF: Who can send?</h2>
+
+<p><strong>Sender Policy Framework (SPF)</strong> lets you publish a DNS record listing which IP addresses are authorized to send email for your domain.</p>
+
+<p><strong>How it works:</strong></p>
+
+<ol>
+    <li>You publish a TXT record at your domain: <code>v=spf1 include:_spf.google.com ip4:203.0.113.5 -all</code></li>
+    <li>When a server receives an email claiming to be from your domain, it looks up your SPF record</li>
+    <li>It checks whether the sending server's IP is in the authorized list</li>
+    <li>If yes, SPF passes. If no, it fails (or softfails, depending on your record)</li>
+</ol>
+
+<p><strong>What SPF can do:</strong></p>
+<ul>
+    <li>Verify that the sending server is authorized</li>
+    <li>Prevent direct IP spoofing</li>
+</ul>
+
+<p><strong>What SPF can't do:</strong></p>
+<ul>
+    <li>Protect the visible "From" header (it checks the envelope sender)</li>
+    <li>Survive email forwarding (the forwarding server's IP isn't in your SPF)</li>
+    <li>Guarantee message integrity (the content could be modified)</li>
+</ul>
+
+<p>For the full details, read our <a href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">complete SPF guide</a>.</p>
+
+<h2 id="dkim-explained">DKIM: Is the email authentic?</h2>
+
+<p><strong>DomainKeys Identified Mail (DKIM)</strong> adds a cryptographic signature to each email. The signing domain publishes a public key in DNS, and the receiving server uses it to verify the signature.</p>
+
+<p><strong>How it works:</strong></p>
+
+<ol>
+    <li>Your mail server generates a key pair (private key stays on your server, public key goes in DNS)</li>
+    <li>When sending, the server creates a hash of certain email headers and the body, then signs it with the private key</li>
+    <li>The signature is added as a <code>DKIM-Signature</code> header</li>
+    <li>The receiving server retrieves the public key from DNS and verifies the signature</li>
+</ol>
+
+<p><strong>What DKIM can do:</strong></p>
+<ul>
+    <li>Prove the email wasn't modified in transit</li>
+    <li>Cryptographically link the email to a specific domain</li>
+    <li>Survive email forwarding (the signature travels with the message)</li>
+</ul>
+
+<p><strong>What DKIM can't do:</strong></p>
+<ul>
+    <li>Specify what to do with unsigned or failing emails (that's DMARC's job)</li>
+    <li>Prevent someone from adding a valid DKIM signature for a <em>different</em> domain</li>
+</ul>
+
+<h2 id="dmarc-explained">DMARC: What to do when checks fail?</h2>
+
+<p><strong>Domain-based Message Authentication, Reporting, and Conformance (DMARC)</strong> ties SPF and DKIM together with two critical additions: alignment and policy.</p>
+
+<p><strong>Alignment</strong> means the domain that passed SPF or DKIM must match the domain in the visible "From" header. Without this, an attacker could use their own domain for SPF/DKIM while spoofing your domain in the "From" header.</p>
+
+<p><strong>Policy</strong> tells receiving servers what to do with messages that fail DMARC: nothing (<code>p=none</code>), quarantine (<code>p=quarantine</code>), or reject (<code>p=reject</code>).</p>
+
+<p>DMARC also adds <strong>reporting</strong>: receiving servers send you aggregate reports showing who's sending email as your domain and whether they pass authentication. For a deep dive, read our <a href="{{ path('knowledge_base_article', {slug: 'what-is-dmarc'}) }}">DMARC guide</a>.</p>
+
+<h2 id="how-they-work-together">How they work together</h2>
+
+<p>Think of email authentication as a three-layer security system:</p>
+
+<table class="table table-zebra not-prose my-6">
+    <thead>
+        <tr>
+            <th>Protocol</th>
+            <th>Question</th>
+            <th>Mechanism</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>SPF</strong></td>
+            <td>Is this server allowed to send for this domain?</td>
+            <td>IP address allowlist in DNS</td>
+        </tr>
+        <tr>
+            <td><strong>DKIM</strong></td>
+            <td>Was this message tampered with?</td>
+            <td>Cryptographic signature</td>
+        </tr>
+        <tr>
+            <td><strong>DMARC</strong></td>
+            <td>Does the "From" domain match? What to do if it doesn't?</td>
+            <td>Alignment check + policy + reporting</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>For DMARC to pass, at least one of these must be true:</p>
+
+<ul>
+    <li><strong>SPF passes AND aligns</strong> &mdash; The envelope sender domain matches the "From" header domain</li>
+    <li><strong>DKIM passes AND aligns</strong> &mdash; The DKIM signing domain (<code>d=</code>) matches the "From" header domain</li>
+</ul>
+
+<p>Only one needs to pass with alignment. This is important because SPF breaks during forwarding (the IP changes), but DKIM usually survives (the signature stays with the message).</p>
+
+<h2 id="why-all-three">Why you need all three</h2>
+
+<h3>SPF alone isn't enough</h3>
+
+<p>SPF checks the envelope sender, not the "From" header that users see. An attacker can set the envelope sender to their own domain (passing SPF) while displaying your domain in the "From" header. Without DMARC's alignment check, the user sees a spoofed email.</p>
+
+<p>SPF also breaks during email forwarding. When a message is forwarded, the sending IP changes to the forwarding server's IP, which isn't in your SPF record.</p>
+
+<h3>DKIM alone isn't enough</h3>
+
+<p>DKIM proves a domain signed the email, but without DMARC, there's no policy for unsigned messages. An attacker can simply send unsigned emails claiming to be from your domain. There's also nothing preventing an attacker from DKIM-signing the email with <em>their own</em> domain while spoofing your domain in the "From" header.</p>
+
+<h3>DMARC alone isn't enough</h3>
+
+<p>DMARC is a policy layer. It depends on SPF and DKIM for the actual authentication. Without at least one of them, DMARC has nothing to enforce.</p>
+
+<h3>Together, they're comprehensive</h3>
+
+<p>With all three configured:</p>
+
+<ul>
+    <li><strong>SPF</strong> authorizes your sending servers</li>
+    <li><strong>DKIM</strong> proves message integrity and survives forwarding</li>
+    <li><strong>DMARC</strong> enforces alignment and provides a policy for failures</li>
+</ul>
+
+<h2 id="authentication-flow">The authentication flow</h2>
+
+<p>Here's what happens when someone sends an email from <code>user@yourdomain.com</code>:</p>
+
+<h3>Sending side</h3>
+
+<ol>
+    <li>Your mail server connects to the recipient's mail server via SMTP</li>
+    <li>It announces the envelope sender (<code>MAIL FROM: user@yourdomain.com</code>)</li>
+    <li>It adds a DKIM signature header to the message</li>
+    <li>It transmits the message</li>
+</ol>
+
+<h3>Receiving side</h3>
+
+<ol>
+    <li><strong>SPF check:</strong> Look up <code>yourdomain.com</code>'s SPF record. Is the sender's IP authorized? &rarr; Pass or Fail</li>
+    <li><strong>DKIM check:</strong> Find the DKIM signature header. Look up the public key at <code>selector._domainkey.yourdomain.com</code>. Verify the signature. &rarr; Pass or Fail</li>
+    <li><strong>DMARC check:</strong> Look up <code>_dmarc.yourdomain.com</code>. Check alignment:
+        <ul>
+            <li>Did SPF pass? Does the envelope sender domain match the "From" header domain?</li>
+            <li>Did DKIM pass? Does the signing domain match the "From" header domain?</li>
+        </ul>
+    </li>
+    <li><strong>Policy enforcement:</strong> If DMARC fails, apply the domain's policy (none/quarantine/reject)</li>
+    <li><strong>Reporting:</strong> Record the results for the domain's aggregate DMARC report</li>
+</ol>
+
+<div class="alert alert-info not-prose my-8">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Check all three protocols at once with our <a href="{{ path('tools_email_auth_checker') }}" class="link font-semibold">Email Auth Checker</a> tool.</span>
+</div>
+
+<h2 id="common-misconceptions">Common misconceptions</h2>
+
+<h3>"SPF checks the From header"</h3>
+
+<p>No. SPF checks the <em>envelope</em> sender (MAIL FROM), which is invisible to most users. The visible "From" header is a separate field. This is exactly why DMARC's alignment is necessary.</p>
+
+<h3>"DKIM encrypts the email"</h3>
+
+<p>No. DKIM <em>signs</em> the email &mdash; it proves the message wasn't modified. It does not encrypt the content. Email encryption is handled by TLS (in transit) and S/MIME or PGP (end-to-end).</p>
+
+<h3>"DMARC is only for large companies"</h3>
+
+<p>Small businesses and personal domains are spoofed too &mdash; often more easily because they're less likely to have protections. DMARC is free to implement and relevant for any domain that sends email.</p>
+
+<h3>"Setting up SPF is enough"</h3>
+
+<p>SPF without DMARC leaves the visible "From" header unprotected. You need DMARC to enforce alignment between the envelope sender and the header "From" domain.</p>
+
+<h3>"Email authentication prevents all spam"</h3>
+
+<p>Email authentication prevents <em>domain spoofing</em> &mdash; it stops people from sending email as your domain. It doesn't prevent all spam. An attacker can still send spam from their own properly-authenticated domain.</p>
+
+<h3>"Once set up, authentication doesn't need maintenance"</h3>
+
+<p>SPF records drift as you add and remove email services. DKIM keys can expire or become weak. New subdomains need their own records. Email authentication requires ongoing monitoring &mdash; which is exactly what Sendvery is built for.</p>
+
+<h2 id="getting-started">Getting started</h2>
+
+<p>Here's your action plan:</p>
+
+<ol>
+    <li><strong><a href="{{ path('tools_email_auth_checker') }}">Run the Email Auth Checker</a></strong> to see your current state across all three protocols</li>
+    <li><strong>Fix SPF first</strong> &mdash; Make sure your SPF record lists all legitimate sending sources. Read our <a href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">complete SPF guide</a></li>
+    <li><strong>Set up DKIM</strong> &mdash; Configure DKIM signing on all your email-sending services. Use our <a href="{{ path('tools_dkim_checker') }}">DKIM Checker</a> to verify</li>
+    <li><strong>Add DMARC</strong> &mdash; Start with <code>p=none</code> and monitoring. Read our <a href="{{ path('knowledge_base_article', {slug: 'what-is-dmarc'}) }}">DMARC guide</a> for the full setup process</li>
+    <li><strong>Monitor and tighten</strong> &mdash; Review DMARC reports, fix issues, and gradually move to <code>p=reject</code></li>
+</ol>
+
+<p>The whole process can be done in an afternoon for simple setups. For organizations with many sending services, allow 2-4 weeks for the monitoring phase before tightening your DMARC policy.</p>
+
+{% endblock %}

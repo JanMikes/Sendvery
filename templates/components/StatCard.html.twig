@@ -1,0 +1,32 @@
+{# Stat card — title, value, optional trend, optional color variant #}
+{% props title, value, trend = null, trendDirection = null, variant = 'default', icon = null %}
+
+<div class="card bg-base-100 border border-base-200 shadow-sm">
+    <div class="card-body p-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-xs font-medium text-base-content/50 uppercase tracking-wider">{{ title }}</h3>
+            {% if icon %}
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center
+                    {% if variant == 'success' %}bg-success/10 text-success
+                    {% elseif variant == 'warning' %}bg-warning/10 text-warning
+                    {% elseif variant == 'error' %}bg-error/10 text-error
+                    {% else %}bg-primary/10 text-primary{% endif %}">
+                    {{ icon|raw }}
+                </div>
+            {% endif %}
+        </div>
+        <div class="mt-2">
+            <span class="text-2xl font-bold">{{ value }}</span>
+            {% if trend is not null %}
+                <span class="ml-2 text-sm font-medium {{ trendDirection == 'up' ? 'text-success' : 'text-error' }}">
+                    {% if trendDirection == 'up' %}
+                        <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                    {% else %}
+                        <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    {% endif %}
+                    {{ trend }}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+</div>

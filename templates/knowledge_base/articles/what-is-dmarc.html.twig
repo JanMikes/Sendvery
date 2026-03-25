@@ -1,0 +1,162 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}What is DMARC and Why Should You Care? — Sendvery{% endblock %}
+{% block meta_description %}Learn what DMARC is, how it protects against email spoofing, the three DMARC policies, and how to set it up step by step. A plain-English guide.{% endblock %}
+
+{% block article_title %}What is DMARC and Why Should You Care?{% endblock %}
+{% block article_intro %}A plain-English guide to the email security protocol that protects your domain from being spoofed.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#what-is-dmarc" class="link link-hover text-base-content/60">What is DMARC?</a></li>
+    <li><a href="#why-dmarc-matters" class="link link-hover text-base-content/60">Why DMARC matters</a></li>
+    <li><a href="#how-dmarc-works" class="link link-hover text-base-content/60">How DMARC works</a></li>
+    <li><a href="#three-policies" class="link link-hover text-base-content/60">The three DMARC policies</a></li>
+    <li><a href="#setup-guide" class="link link-hover text-base-content/60">Setting up DMARC</a></li>
+    <li><a href="#dmarc-reports" class="link link-hover text-base-content/60">DMARC reports</a></li>
+    <li><a href="#common-mistakes" class="link link-hover text-base-content/60">Common mistakes</a></li>
+    <li><a href="#next-steps" class="link link-hover text-base-content/60">Next steps</a></li>
+</ul>
+{% endblock %}
+
+{% block related_tools %}
+<a href="{{ path('tools_dmarc_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">DMARC Checker</a>
+<a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">SPF Checker</a>
+<a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">Email Auth Checker</a>
+<a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm btn-block justify-start">Domain Health</a>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="what-is-dmarc">What is DMARC?</h2>
+
+<p><strong>DMARC</strong> (Domain-based Message Authentication, Reporting, and Conformance) is an email security protocol that lets domain owners tell receiving mail servers what to do when someone sends an email that fails authentication checks.</p>
+
+<p>Think of it this way: anyone can write any "From" address on an email, just like anyone can write any return address on a physical letter. Without DMARC, there's no reliable way for the recipient to verify that the email actually came from who it claims. DMARC fixes this.</p>
+
+<p>DMARC builds on two existing protocols &mdash; <strong>SPF</strong> (Sender Policy Framework) and <strong>DKIM</strong> (DomainKeys Identified Mail) &mdash; and adds a critical missing piece: a policy that tells receiving servers what to do when emails fail these checks.</p>
+
+<h2 id="why-dmarc-matters">Why DMARC matters</h2>
+
+<p>Without DMARC, attackers can send emails that appear to come from your domain. This is called <strong>email spoofing</strong>, and it's used in:</p>
+
+<ul>
+    <li><strong>Phishing attacks</strong> &mdash; tricking your customers or employees into revealing passwords, credit card numbers, or other sensitive information</li>
+    <li><strong>Business Email Compromise (BEC)</strong> &mdash; impersonating executives to authorize fraudulent wire transfers</li>
+    <li><strong>Brand damage</strong> &mdash; spam sent "from" your domain erodes trust and can get your legitimate emails blocked</li>
+    <li><strong>Deliverability issues</strong> &mdash; without DMARC, mailbox providers have less confidence in your emails, which can affect inbox placement</li>
+</ul>
+
+<p>DMARC is no longer optional. Major email providers like Google and Yahoo now <strong>require</strong> DMARC for bulk senders. If you send marketing emails, transactional emails, or any significant volume, you need DMARC.</p>
+
+<h2 id="how-dmarc-works">How DMARC works</h2>
+
+<p>When a receiving mail server gets an email claiming to be from your domain, here's what happens:</p>
+
+<ol>
+    <li><strong>SPF check</strong> &mdash; The server checks if the sending IP is authorized to send for your domain (via your SPF DNS record)</li>
+    <li><strong>DKIM check</strong> &mdash; The server verifies the cryptographic signature on the email matches a public key in your DNS</li>
+    <li><strong>DMARC alignment</strong> &mdash; The server checks that the domain in the "From" header matches the domain that passed SPF or DKIM. This alignment step is what makes DMARC powerful &mdash; SPF and DKIM alone can pass on a different domain than the visible "From" address</li>
+    <li><strong>Policy enforcement</strong> &mdash; Based on your DMARC policy, the server takes action: deliver, quarantine, or reject the message</li>
+</ol>
+
+<p>The key insight is that DMARC requires <strong>alignment</strong>. Even if SPF passes, the domain must match the "From" header domain. This closes the loophole that made SPF and DKIM alone insufficient.</p>
+
+<h2 id="three-policies">The three DMARC policies</h2>
+
+<p>Your DMARC record includes a policy (<code>p=</code>) that tells receiving servers what to do with emails that fail DMARC:</p>
+
+<h3><code>p=none</code> &mdash; Monitor only</h3>
+
+<p>Do nothing with failing emails, but send reports. This is the starting policy &mdash; it lets you see who's sending email as your domain without affecting delivery. <strong>Important:</strong> this provides zero protection against spoofing. It's a monitoring step, not a security measure.</p>
+
+<h3><code>p=quarantine</code> &mdash; Send to spam</h3>
+
+<p>Emails that fail DMARC should be treated with suspicion. Most receiving servers will move these to the spam/junk folder. This is a good intermediate step once you've confirmed your legitimate emails pass DMARC.</p>
+
+<h3><code>p=reject</code> &mdash; Block completely</h3>
+
+<p>Emails that fail DMARC should be rejected outright &mdash; they never reach the inbox or spam folder. This is the strongest protection and the goal you should work toward. With <code>p=reject</code>, no one can successfully spoof your domain.</p>
+
+<div class="alert alert-info not-prose my-8">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Want to check your current DMARC policy? Use our free <a href="{{ path('tools_dmarc_checker') }}" class="link font-semibold">DMARC Checker</a> tool.</span>
+</div>
+
+<h2 id="setup-guide">Setting up DMARC step by step</h2>
+
+<p>DMARC is configured via a DNS TXT record at <code>_dmarc.yourdomain.com</code>. Here's how to set it up:</p>
+
+<h3>Step 1: Make sure SPF and DKIM are configured</h3>
+
+<p>DMARC depends on SPF and DKIM. Before adding DMARC, verify both are set up correctly. You can use our <a href="{{ path('tools_spf_checker') }}">SPF Checker</a> and <a href="{{ path('tools_dkim_checker') }}">DKIM Checker</a> tools.</p>
+
+<h3>Step 2: Start with <code>p=none</code></h3>
+
+<p>Add this DNS TXT record:</p>
+
+<pre><code>Host: _dmarc.yourdomain.com
+Type: TXT
+Value: v=DMARC1; p=none; rua=mailto:dmarc-reports@yourdomain.com</code></pre>
+
+<p>The <code>rua</code> tag specifies where aggregate reports should be sent. These XML reports show who's sending email using your domain and whether they pass or fail authentication.</p>
+
+<h3>Step 3: Monitor reports for 2-4 weeks</h3>
+
+<p>Review the DMARC reports to identify all legitimate email sources (marketing platforms, CRM systems, transactional email services). Make sure they all pass SPF and/or DKIM with proper alignment.</p>
+
+<h3>Step 4: Move to <code>p=quarantine</code></h3>
+
+<p>Once you're confident all legitimate sources pass, upgrade your policy:</p>
+
+<pre><code>v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@yourdomain.com; pct=25</code></pre>
+
+<p>The <code>pct=25</code> tag applies the policy to only 25% of failing emails at first. Gradually increase to 100% as you gain confidence.</p>
+
+<h3>Step 5: Move to <code>p=reject</code></h3>
+
+<p>The final step &mdash; full protection:</p>
+
+<pre><code>v=DMARC1; p=reject; rua=mailto:dmarc-reports@yourdomain.com</code></pre>
+
+<h2 id="dmarc-reports">Understanding DMARC reports</h2>
+
+<p>DMARC generates two types of reports:</p>
+
+<h3>Aggregate reports (rua)</h3>
+
+<p>XML files sent daily by receiving mail servers. They contain statistics about emails from your domain: how many passed/failed, which IPs sent them, and which authentication checks failed. These are the reports you'll use most &mdash; they show the big picture.</p>
+
+<h3>Forensic reports (ruf)</h3>
+
+<p>Detailed reports about individual messages that fail DMARC. These contain more information but are less commonly sent by receiving servers due to privacy concerns. Not all providers send forensic reports.</p>
+
+<p>Raw DMARC reports are XML files that are difficult to read manually. Tools like Sendvery parse these reports automatically and give you visual dashboards showing your authentication rates and any issues.</p>
+
+<h2 id="common-mistakes">Common DMARC mistakes</h2>
+
+<h3>Staying on <code>p=none</code> indefinitely</h3>
+
+<p>Many organizations set up DMARC with <code>p=none</code> and never progress. This provides visibility but <strong>zero protection</strong>. Attackers can still spoof your domain without consequence. Set a deadline to move to <code>p=quarantine</code> and then <code>p=reject</code>.</p>
+
+<h3>Jumping straight to <code>p=reject</code></h3>
+
+<p>Going directly to <code>p=reject</code> without monitoring can block your own legitimate emails. Always start with <code>p=none</code>, review reports, fix authentication issues, then gradually tighten the policy.</p>
+
+<h3>Forgetting third-party senders</h3>
+
+<p>Your marketing platform, CRM, helpdesk, and other services send email on your behalf. Each needs proper SPF and/or DKIM configuration. Review your DMARC reports carefully to identify all senders before tightening your policy.</p>
+
+<h3>Not setting up a subdomain policy</h3>
+
+<p>DMARC's <code>sp=</code> tag controls the policy for subdomains. Without it, subdomains inherit the main domain's policy. If you don't send email from subdomains, set <code>sp=reject</code> to prevent subdomain spoofing.</p>
+
+<h2 id="next-steps">Next steps</h2>
+
+<ol>
+    <li><strong><a href="{{ path('tools_dmarc_checker') }}">Check your current DMARC setup</a></strong> with our free tool</li>
+    <li><strong>Read our <a href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">SPF guide</a></strong> to make sure your SPF record is correct</li>
+    <li><strong>Read our <a href="{{ path('knowledge_base_article', {slug: 'email-authentication-explained'}) }}">email authentication overview</a></strong> to understand how SPF, DKIM, and DMARC work together</li>
+</ol>
+
+{% endblock %}

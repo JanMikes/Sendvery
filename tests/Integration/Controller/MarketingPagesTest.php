@@ -96,6 +96,7 @@ final class MarketingPagesTest extends WebTestCase
         self::assertSelectorExists('a[href="/tools/dkim-checker"]');
         self::assertSelectorExists('a[href="/tools/dmarc-checker"]');
         self::assertSelectorExists('a[href="/tools/domain-health"]');
+        self::assertSelectorExists('a[href="/learn"]');
     }
 
     #[Test]
@@ -112,6 +113,8 @@ final class MarketingPagesTest extends WebTestCase
         self::assertStringContainsString('Blacklist Checker', $footer->text());
         self::assertStringContainsString('DNS Monitoring', $footer->text());
         self::assertStringContainsString('Domain Health', $footer->text());
+        self::assertStringContainsString('Knowledge Base', $footer->text());
+        self::assertStringContainsString('Join Beta', $footer->text());
     }
 
     /** @return iterable<string, array{string}> */
@@ -129,5 +132,10 @@ final class MarketingPagesTest extends WebTestCase
         yield 'pricing' => ['/pricing'];
         yield 'what-is-sendvery' => ['/about/what-is-sendvery'];
         yield 'open-source' => ['/about/open-source'];
+        yield 'beta' => ['/beta'];
+        yield 'knowledge-base' => ['/learn'];
+        yield 'learn-what-is-dmarc' => ['/learn/what-is-dmarc'];
+        yield 'learn-spf-record-guide' => ['/learn/spf-record-guide'];
+        yield 'learn-email-auth-explained' => ['/learn/email-authentication-explained'];
     }
 }

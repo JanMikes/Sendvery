@@ -1,0 +1,34 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Domains{% endblock %}
+{% block breadcrumbs %}<li>Domains</li>{% endblock %}
+
+{% block header_actions %}
+    <a href="{{ path('dashboard_domain_add') }}" class="btn btn-primary btn-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        Add domain
+    </a>
+{% endblock %}
+
+{% block content %}
+    {% if domains is empty %}
+        <twig:EmptyState
+            title="No domains yet"
+            message="Add your first domain to start monitoring its DMARC reports and email authentication health."
+            actionUrl="{{ path('dashboard_domain_add') }}"
+            actionLabel="Add your first domain"
+        />
+    {% else %}
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {% for domain in domains %}
+                <twig:DomainCard
+                    domainId="{{ domain.domainId }}"
+                    domainName="{{ domain.domainName }}"
+                    passRate="{{ domain.passRate }}"
+                    totalReports="{{ domain.totalReports }}"
+                    latestReportDate="{{ domain.latestReportDate }}"
+                />
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}

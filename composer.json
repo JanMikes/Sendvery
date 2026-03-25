@@ -37,7 +37,8 @@
         "symfony/ux-turbo": "^2.0",
         "symfony/ux-twig-component": "^2.34",
         "symfony/yaml": "^8.0",
-        "symfonycasts/tailwind-bundle": "^0.12"
+        "symfonycasts/tailwind-bundle": "^0.12",
+        "webklex/php-imap": "^6.2"
     },
     "require-dev": {
         "dama/doctrine-test-bundle": "^8.0",

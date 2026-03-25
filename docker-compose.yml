@@ -1,6 +1,6 @@
-# Production docker-compose.yml
-# Assumes Traefik is running on the host as the reverse proxy (TLS, routing)
-# FrankenPHP serves HTTP only — Traefik terminates TLS
+# docker-compose.yml
+# Production: override env vars via .env.local or host environment variables
+# Dev: defaults come from .env, override uses compose.override.yml
 
 services:
   app:
@@ -8,15 +8,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-    environment:
-      FRANKENPHP_WORKER: "1"
-      DATABASE_URL: "postgresql://app:secret@database:5432/sendvery?serverVersion=17"
-      MESSENGER_TRANSPORT_DSN: "doctrine://default?queue_name=messages"
-      MAILER_DSN: "smtp://user:pass@smtp.seznam.cz:465"
-      SENTRY_DSN: ""
-      STRIPE_SECRET_KEY: ""
-      ENCRYPTION_KEY: ""
-      APP_SECRET: "change-me-in-production"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.sendvery.rule=Host(`sendvery.com`)"
@@ -34,14 +25,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-    environment:
-      DATABASE_URL: "postgresql://app:secret@database:5432/sendvery?serverVersion=17"
-      MESSENGER_TRANSPORT_DSN: "doctrine://default?queue_name=messages"
-      MAILER_DSN: "smtp://user:pass@smtp.seznam.cz:465"
-      SENTRY_DSN: ""
-      STRIPE_SECRET_KEY: ""
-      ENCRYPTION_KEY: ""
-      APP_SECRET: "change-me-in-production"
     restart: unless-stopped
 
   scheduler:
@@ -50,14 +33,6 @@ services:
     depends_on:
       database:
         condition: service_healthy
-    environment:
-      DATABASE_URL: "postgresql://app:secret@database:5432/sendvery?serverVersion=17"
-      MESSENGER_TRANSPORT_DSN: "doctrine://default?queue_name=messages"
-      MAILER_DSN: "smtp://user:pass@smtp.seznam.cz:465"
-      SENTRY_DSN: ""
-      STRIPE_SECRET_KEY: ""
-      ENCRYPTION_KEY: ""
-      APP_SECRET: "change-me-in-production"
     restart: unless-stopped
 
   database:

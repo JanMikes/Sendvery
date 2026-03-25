@@ -8,6 +8,12 @@ return App::config([
     'framework' => [
         'mailer' => [
             'dsn' => '%env(MAILER_DSN)%',
+            'envelope' => [
+                'sender' => 'noreply@sendvery.com',
+            ],
+            'headers' => [
+                'From' => 'Sendvery <noreply@sendvery.com>',
+            ],
         ],
     ],
 ]);

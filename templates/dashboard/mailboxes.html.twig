@@ -1,0 +1,59 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Mailboxes{% endblock %}
+{% block breadcrumbs %}<li>Mailboxes</li>{% endblock %}
+
+{% block header_actions %}
+    <a href="{{ path('dashboard_mailbox_add') }}" class="btn btn-primary btn-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        Add mailbox
+    </a>
+{% endblock %}
+
+{% block content %}
+    {% if mailboxes is empty %}
+        <twig:EmptyState
+            title="No mailboxes connected"
+            message="Connect a mailbox to automatically receive and parse DMARC reports."
+            actionUrl="{{ path('dashboard_mailbox_add') }}"
+            actionLabel="Connect a mailbox"
+        />
+    {% else %}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Host</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Last Polled</th>
+                                <th>Last Error</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mailbox in mailboxes %}
+                                <tr>
+                                    <td class="font-medium">{{ mailbox.host }}:{{ mailbox.port }}</td>
+                                    <td>{{ mailbox.type.value }}</td>
+                                    <td>
+                                        {% if mailbox.isActive and mailbox.lastError is null %}
+                                            <twig:StatusBadge status="active" label="Active" />
+                                        {% elseif mailbox.lastError %}
+                                            <twig:StatusBadge status="error" label="Error" />
+                                        {% else %}
+                                            <twig:StatusBadge status="inactive" label="Inactive" />
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ mailbox.lastPolledAt ? mailbox.lastPolledAt|date('M j, H:i') : '—' }}</td>
+                                    <td class="text-xs text-error max-w-xs truncate">{{ mailbox.lastError ?? '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
