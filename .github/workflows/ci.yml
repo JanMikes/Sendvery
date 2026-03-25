@@ -75,7 +75,7 @@ jobs:
           DATABASE_URL: postgresql://localhost/fake?serverVersion=17
 
       - name: Run PHPStan
-        run: vendor/bin/phpstan --memory-limit=-1 analyse -c phpstan.neon.dist
+        run: vendor/bin/phpstan --memory-limit=-1 analyse
 
   cs-check:
     name: Code Style
