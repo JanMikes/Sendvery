@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  COMPOSER_PROCESS_TIMEOUT: 0
+  COMPOSER_NO_INTERACTION: 1
+  COMPOSER_NO_AUDIT: 1
+
 jobs:
   tests:
     name: Tests
@@ -26,6 +31,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      DATABASE_URL: postgresql://sendvery:sendvery@localhost:5432/sendvery_test?serverVersion=16
+
     steps:
       - uses: actions/checkout@v4
 
@@ -40,13 +48,9 @@ jobs:
         run: composer install --no-interaction --prefer-dist
 
       - name: Run migrations
-        env:
-          DATABASE_URL: postgresql://sendvery:sendvery@localhost:5432/sendvery_test
         run: bin/console doctrine:migrations:migrate --no-interaction --env=test
 
       - name: Run PHPUnit
-        env:
-          DATABASE_URL: postgresql://sendvery:sendvery@localhost:5432/sendvery_test
         run: vendor/bin/phpunit --coverage-clover=coverage.xml
 
   phpstan:
@@ -65,8 +69,13 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
+      - name: Warm up Symfony cache
+        run: bin/console cache:warmup --env=dev
+        env:
+          DATABASE_URL: postgresql://localhost/fake?serverVersion=16
+
       - name: Run PHPStan
-        run: vendor/bin/phpstan --memory-limit=-1 analyse
+        run: vendor/bin/phpstan --memory-limit=-1 analyse -c phpstan.neon.dist
 
   cs-check:
     name: Code Style

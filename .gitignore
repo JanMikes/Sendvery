@@ -48,5 +48,5 @@ Thumbs.db
 ###< friendsofphp/php-cs-fixer ###
 
 ###> phpstan/phpstan ###
-phpstan.neon
+/phpstan.neon
 ###< phpstan/phpstan ###
