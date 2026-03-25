@@ -15,7 +15,7 @@ final readonly class DomainSenderResult
     ) {
     }
 
-    /** @param array{source_ip: string, resolved_org: ?string, total_messages: int, pass_count: int, fail_count: int} $row */
+    /** @param array{source_ip: string, resolved_org: string|null, total_messages: int|string, pass_count: int|string, fail_count: int|string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

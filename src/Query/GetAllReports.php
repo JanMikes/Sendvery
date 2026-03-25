@@ -17,6 +17,7 @@ final readonly class GetAllReports
     /** @return array<ReportListResult> */
     public function forTeam(string $teamId, int $limit = 50, int $offset = 0): array
     {
+        /** @var list<array{report_id: string, domain_name: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int|string, pass_rate: float|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 dr.id AS report_id,

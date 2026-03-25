@@ -14,6 +14,7 @@ final class TestMailboxConnectionCommandTest extends IntegrationTestCase
     public function testSuccessfulConnection(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:mailbox:test');
         $tester = new CommandTester($command);
@@ -36,6 +37,7 @@ final class TestMailboxConnectionCommandTest extends IntegrationTestCase
         assert($fakeClient instanceof FakeMailClient);
         $fakeClient->simulateFailure('Connection refused');
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:mailbox:test');
         $tester = new CommandTester($command);

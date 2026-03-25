@@ -64,6 +64,7 @@ final readonly class GetAlerts
         $sql .= ' ORDER BY a.created_at DESC LIMIT :limit';
         $params['limit'] = $limit;
 
+        /** @var list<array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null}> $rows */
         $rows = $this->database->executeQuery($sql, $params)->fetchAllAssociative();
 
         return array_map(AlertListResult::fromDatabaseRow(...), $rows);

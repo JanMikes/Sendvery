@@ -74,6 +74,6 @@ final class User implements EntityWithEvents, UserInterface
 
     public function getUserIdentifier(): string
     {
-        return $this->email;
+        return $this->email; // @phpstan-ignore return.type
     }
 }

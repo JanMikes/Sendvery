@@ -15,7 +15,7 @@ final readonly class DomainOverviewResult
     ) {
     }
 
-    /** @param array{domain_id: string, domain_name: string, total_reports: int, latest_report_date: ?string, pass_rate: float} $row */
+    /** @param array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

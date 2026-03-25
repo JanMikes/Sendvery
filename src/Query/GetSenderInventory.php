@@ -31,6 +31,7 @@ final readonly class GetSenderInventory
 
         $sql .= ' ORDER BY total_messages DESC';
 
+        /** @var list<array{id: string, source_ip: string, hostname: string|null, organization: string|null, label: string|null, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string}> $data */
         $data = $this->database->executeQuery($sql, $params)->fetchAllAssociative();
 
         return array_map(SenderInventoryResult::fromDatabaseRow(...), $data);

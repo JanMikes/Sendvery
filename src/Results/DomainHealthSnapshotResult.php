@@ -24,7 +24,7 @@ final readonly class DomainHealthSnapshotResult
     ) {
     }
 
-    /** @param array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, checked_at: string, recommendations: string, share_hash: ?string} $row */
+    /** @param array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, checked_at: string, recommendations: string, share_hash: string|null} $row */
     public static function fromDatabaseRow(array $row): self
     {
         /** @var array<string, mixed> $recommendations */

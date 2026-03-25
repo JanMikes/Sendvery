@@ -46,7 +46,7 @@ final class DomainHealthSnapshotTest extends TestCase
             mxScore: 100,
             blacklistScore: 100,
             checkedAt: $checkedAt,
-            recommendations: ['Upgrade DKIM key to 2048-bit'],
+            recommendations: ['dkim' => 'Upgrade DKIM key to 2048-bit'],
             shareHash: 'abc123hash',
         );
 
@@ -60,7 +60,7 @@ final class DomainHealthSnapshotTest extends TestCase
         self::assertSame(100, $snapshot->mxScore);
         self::assertSame(100, $snapshot->blacklistScore);
         self::assertSame($checkedAt, $snapshot->checkedAt);
-        self::assertSame(['Upgrade DKIM key to 2048-bit'], $snapshot->recommendations);
+        self::assertSame(['dkim' => 'Upgrade DKIM key to 2048-bit'], $snapshot->recommendations);
         self::assertSame('abc123hash', $snapshot->shareHash);
     }
 

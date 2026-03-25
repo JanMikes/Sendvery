@@ -38,6 +38,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dmarc:import');
         $tester = new CommandTester($command);
@@ -77,6 +78,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dmarc:import');
         $tester = new CommandTester($command);
@@ -93,6 +95,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
     public function testFailsOnMissingFile(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dmarc:import');
         $tester = new CommandTester($command);
@@ -109,6 +112,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
     public function testFailsWithoutDomainId(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dmarc:import');
         $tester = new CommandTester($command);

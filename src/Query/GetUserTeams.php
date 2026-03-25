@@ -17,6 +17,7 @@ final readonly class GetUserTeams
     /** @return array<UserTeamResult> */
     public function forUser(string $userId): array
     {
+        /** @var list<array{team_id: string, team_name: string, team_slug: string, role: string, member_count: int|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 t.id AS team_id,

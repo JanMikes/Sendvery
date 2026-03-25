@@ -22,7 +22,7 @@ final class BlacklistStatusResultTest extends TestCase
             'id' => '550e8400-e29b-41d4-a716-446655440000',
             'ip_address' => '1.2.3.4',
             'checked_at' => '2026-03-25 10:00:00',
-            'results' => json_encode($results),
+            'results' => json_encode($results, JSON_THROW_ON_ERROR),
             'is_listed' => true,
         ];
 

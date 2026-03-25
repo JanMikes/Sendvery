@@ -15,6 +15,7 @@ use Ramsey\Uuid\Uuid;
 
 final class TeamMembershipRepositoryTest extends IntegrationTestCase
 {
+    /** @return array{User, Team} */
     private function createUserAndTeam(EntityManagerInterface $em): array
     {
         $userId = Uuid::uuid7();

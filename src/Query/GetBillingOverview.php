@@ -16,6 +16,7 @@ final readonly class GetBillingOverview
 
     public function forTeam(string $teamId): BillingOverviewResult
     {
+        /** @var array{plan: string, stripe_customer_id: string|null, stripe_subscription_id: string|null, plan_warning_at: string|null, domain_count: int|string, member_count: int|string}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 t.plan,
@@ -33,7 +34,6 @@ final readonly class GetBillingOverview
             throw new \RuntimeException('Team not found.');
         }
 
-        /* @var array{plan: string, stripe_customer_id: ?string, stripe_subscription_id: ?string, plan_warning_at: ?string, domain_count: int|string, member_count: int|string} $row */
         return BillingOverviewResult::fromDatabaseRow($row);
     }
 }

@@ -17,6 +17,7 @@ final readonly class GetDomainOverview
     /** @return array<DomainOverviewResult> */
     public function forTeam(string $teamId): array
     {
+        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 md.id AS domain_id,

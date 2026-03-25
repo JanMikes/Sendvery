@@ -323,6 +323,7 @@ final class DashboardPagesTest extends WebTestCase
 
         self::assertResponseRedirects();
         $location = $data['client']->getResponse()->headers->get('Location');
+        self::assertNotNull($location);
         self::assertStringContainsString('/app/domains/', $location);
     }
 

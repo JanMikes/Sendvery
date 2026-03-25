@@ -75,6 +75,7 @@ final class BetaInvitationTest extends WebTestCase
 
         self::assertResponseRedirects();
         $location = $client->getResponse()->headers->get('Location');
+        self::assertNotNull($location);
         self::assertStringContainsString('/login', $location);
     }
 

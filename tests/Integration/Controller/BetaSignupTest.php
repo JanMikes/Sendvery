@@ -199,6 +199,7 @@ final class BetaSignupTest extends WebTestCase
         $em->clear();
         $refreshed = $em->find(BetaSignup::class, $signup->id);
         self::assertNotNull($refreshed);
+        self::assertNotNull($refreshed->confirmedAt);
         self::assertSame(
             $confirmedAt->format('Y-m-d H:i:s'),
             $refreshed->confirmedAt->format('Y-m-d H:i:s'),

@@ -17,6 +17,7 @@ final readonly class GetReportDetail
 
     public function forReport(string $reportId): ?ReportDetailResult
     {
+        /** @var array{report_id: string, reporter_org: string, reporter_email: string, external_report_id: string, date_range_begin: string, date_range_end: string, policy_domain: string, policy_adkim: string, policy_aspf: string, policy_p: string, policy_sp: string|null, policy_pct: int|string, processed_at: string}|false $reportRow */
         $reportRow = $this->database->executeQuery(
             'SELECT
                 dr.id AS report_id,
@@ -41,6 +42,7 @@ final readonly class GetReportDetail
             return null;
         }
 
+        /** @var list<array{record_id: string, source_ip: string, count: int|string, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: string|null, dkim_selector: string|null, spf_domain: string|null, resolved_hostname: string|null, resolved_org: string|null}> $recordRows */
         $recordRows = $this->database->executeQuery(
             'SELECT
                 rec.id AS record_id,

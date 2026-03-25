@@ -19,7 +19,7 @@ final readonly class DomainDetailResult
     ) {
     }
 
-    /** @param array{domain_id: string, domain_name: string, dmarc_policy: ?string, is_verified: bool, created_at: string, total_reports: int, total_messages: int, pass_rate: float, unique_senders: int} $row */
+    /** @param array{domain_id: string, domain_name: string, dmarc_policy: string|null, is_verified: bool|string, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

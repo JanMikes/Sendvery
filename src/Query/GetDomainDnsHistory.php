@@ -19,6 +19,7 @@ final readonly class GetDomainDnsHistory
      */
     public function forDomain(string $domainId, int $limit = 100): array
     {
+        /** @var list<array{id: string, type: string, checked_at: string, raw_record: string|null, is_valid: bool|string, issues: string, details: string, previous_raw_record: string|null, has_changed: bool|string}> $rows */
         $rows = $this->database->executeQuery(
             'SELECT
                 dcr.id,

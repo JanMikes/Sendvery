@@ -41,7 +41,9 @@ final readonly class ProcessDmarcReportHandler
         $domain = $this->monitoredDomainRepository->get($message->domainId);
         $now = $this->clock->now();
 
-        $compressedXml = base64_encode(gzcompress($message->xmlContent));
+        $compressed = gzcompress($message->xmlContent);
+        assert(false !== $compressed);
+        $compressedXml = base64_encode($compressed);
 
         $report = new DmarcReport(
             id: $message->reportId,

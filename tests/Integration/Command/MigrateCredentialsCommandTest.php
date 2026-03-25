@@ -15,6 +15,7 @@ final class MigrateCredentialsCommandTest extends IntegrationTestCase
     public function runsWithNoConnections(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:credentials:migrate');
         $tester = new CommandTester($command);

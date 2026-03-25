@@ -17,6 +17,7 @@ final readonly class GetDomainPassRateTrend
     /** @return array<PassRateTrendResult> */
     public function forDomain(string $domainId, int $days = 90): array
     {
+        /** @var list<array{date: string, pass_count: int|string, fail_count: int|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 d::date AS date,
@@ -47,6 +48,7 @@ final readonly class GetDomainPassRateTrend
     /** @return array<PassRateTrendResult> */
     public function forTeam(string $teamId, int $days = 30): array
     {
+        /** @var list<array{date: string, pass_count: int|string, fail_count: int|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 d::date AS date,

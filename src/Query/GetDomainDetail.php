@@ -16,6 +16,7 @@ final readonly class GetDomainDetail
 
     public function forDomain(string $domainId): ?DomainDetailResult
     {
+        /** @var array{domain_id: string, domain_name: string, dmarc_policy: string|null, is_verified: bool|string, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 md.id AS domain_id,

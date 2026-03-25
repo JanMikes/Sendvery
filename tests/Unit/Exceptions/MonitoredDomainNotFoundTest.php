@@ -13,7 +13,7 @@ final class MonitoredDomainNotFoundTest extends TestCase
     {
         $exception = new MonitoredDomainNotFound('Not found');
 
-        self::assertInstanceOf(\DomainException::class, $exception);
+        self::assertSame(\DomainException::class, get_parent_class($exception));
         self::assertSame('Not found', $exception->getMessage());
     }
 }

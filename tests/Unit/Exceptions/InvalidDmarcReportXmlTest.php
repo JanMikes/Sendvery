@@ -13,7 +13,7 @@ final class InvalidDmarcReportXmlTest extends TestCase
     {
         $exception = new InvalidDmarcReportXml('Bad XML');
 
-        self::assertInstanceOf(\RuntimeException::class, $exception);
+        self::assertSame(\RuntimeException::class, get_parent_class($exception));
         self::assertSame('Bad XML', $exception->getMessage());
     }
 }

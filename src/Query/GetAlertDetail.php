@@ -16,6 +16,7 @@ final readonly class GetAlertDetail
 
     public function forAlert(string $alertId): ?AlertDetailResult
     {
+        /** @var array{alert_id: string, type: string, severity: string, title: string, message: string, data: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 a.id AS alert_id,

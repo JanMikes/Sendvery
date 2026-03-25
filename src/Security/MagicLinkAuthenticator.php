@@ -39,7 +39,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
     ) {
     }
 
-    public function supports(Request $request): ?bool
+    public function supports(Request $request): bool
     {
         return 'auth_verify_magic_link' === $request->attributes->get('_route');
     }
@@ -81,7 +81,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         );
     }
 
-    public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
+    public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): Response
     {
         $user = $token->getUser();
 
@@ -97,7 +97,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         return new RedirectResponse($this->urlGenerator->generate('auth_login'));
     }
 
-    public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
+    public function onAuthenticationFailure(Request $request, AuthenticationException $exception): Response
     {
         $request->getSession()->set('auth_error', $exception->getMessageKey());
 

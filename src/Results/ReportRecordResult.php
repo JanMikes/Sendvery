@@ -22,7 +22,7 @@ final readonly class ReportRecordResult
     ) {
     }
 
-    /** @param array{record_id: string, source_ip: string, count: int, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: ?string, dkim_selector: ?string, spf_domain: ?string, resolved_hostname: ?string, resolved_org: ?string} $row */
+    /** @param array{record_id: string, source_ip: string, count: int|string, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: string|null, dkim_selector: string|null, spf_domain: string|null, resolved_hostname: string|null, resolved_org: string|null} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

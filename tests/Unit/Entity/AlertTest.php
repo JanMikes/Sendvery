@@ -16,6 +16,7 @@ use Ramsey\Uuid\Uuid;
 
 final class AlertTest extends TestCase
 {
+    /** @return array{Team, MonitoredDomain} */
     private function createTeamAndDomain(): array
     {
         $team = new Team(
@@ -139,6 +140,7 @@ final class AlertTest extends TestCase
         self::assertNull($alert->monitoredDomain);
 
         $events = $alert->popEvents();
+        assert($events[0] instanceof AlertCreated);
         self::assertNull($events[0]->domainName);
     }
 }

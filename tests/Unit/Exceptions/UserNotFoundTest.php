@@ -13,7 +13,7 @@ final class UserNotFoundTest extends TestCase
     {
         $exception = new UserNotFound('User not found');
 
-        self::assertInstanceOf(\DomainException::class, $exception);
+        self::assertSame(\DomainException::class, get_parent_class($exception));
         self::assertSame('User not found', $exception->getMessage());
     }
 }

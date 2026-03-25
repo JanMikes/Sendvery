@@ -19,6 +19,7 @@ final readonly class GetBlacklistStatus
      */
     public function forDomain(string $domainId): array
     {
+        /** @var list<array{id: string, ip_address: string, checked_at: string, results: string, is_listed: bool|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT DISTINCT ON (ip_address) id, ip_address, checked_at, results, is_listed
              FROM blacklist_check_result
@@ -35,6 +36,7 @@ final readonly class GetBlacklistStatus
      */
     public function historyForIp(string $domainId, string $ipAddress, int $limit = 30): array
     {
+        /** @var list<array{id: string, ip_address: string, checked_at: string, results: string, is_listed: bool|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT id, ip_address, checked_at, results, is_listed
              FROM blacklist_check_result

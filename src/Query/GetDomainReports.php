@@ -17,6 +17,7 @@ final readonly class GetDomainReports
     /** @return array<DomainReportListResult> */
     public function forDomain(string $domainId, int $limit = 50, int $offset = 0): array
     {
+        /** @var list<array{report_id: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int|string, pass_rate: float|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 dr.id AS report_id,

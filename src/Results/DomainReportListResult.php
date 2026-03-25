@@ -16,7 +16,7 @@ final readonly class DomainReportListResult
     ) {
     }
 
-    /** @param array{report_id: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int, pass_rate: float} $row */
+    /** @param array{report_id: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int|string, pass_rate: float|string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

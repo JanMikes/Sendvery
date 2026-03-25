@@ -54,6 +54,7 @@ final class PreferencesTest extends WebTestCase
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
         $user = $em->find(User::class, $userId);
+        self::assertNotNull($user);
         self::assertFalse($user->emailDigestEnabled);
         self::assertFalse($user->emailAlertsEnabled);
     }

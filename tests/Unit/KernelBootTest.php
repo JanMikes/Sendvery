@@ -14,7 +14,7 @@ final class KernelBootTest extends TestCase
         $kernel = new Kernel('test', true);
         $kernel->boot();
 
-        self::assertNotNull($kernel->getContainer());
+        self::assertSame('test', $kernel->getContainer()->getParameter('kernel.environment'));
 
         $kernel->shutdown();
     }

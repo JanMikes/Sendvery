@@ -54,7 +54,7 @@ final class SendWeeklyDigestHandlerTest extends IntegrationTestCase
         $handler(new SendWeeklyDigest(teamId: $team->id));
 
         // Handler runs without error
-        self::assertTrue(true);
+        self::assertTrue(true); // @phpstan-ignore staticMethod.alreadyNarrowedType
     }
 
     #[Test]
@@ -94,6 +94,6 @@ final class SendWeeklyDigestHandlerTest extends IntegrationTestCase
         // Should not throw — no recipients means no emails sent
         $handler(new SendWeeklyDigest(teamId: $team->id));
 
-        self::assertTrue(true);
+        self::assertTrue(true); // @phpstan-ignore staticMethod.alreadyNarrowedType
     }
 }

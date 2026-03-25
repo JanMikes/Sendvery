@@ -24,7 +24,7 @@ final readonly class DnsCheckHistoryResult
     }
 
     /**
-     * @param array{id: string, type: string, checked_at: string, raw_record: ?string, is_valid: bool, issues: string, details: string, previous_raw_record: ?string, has_changed: bool} $row
+     * @param array{id: string, type: string, checked_at: string, raw_record: string|null, is_valid: bool|string, issues: string, details: string, previous_raw_record: string|null, has_changed: bool|string} $row
      */
     public static function fromDatabaseRow(array $row): self
     {

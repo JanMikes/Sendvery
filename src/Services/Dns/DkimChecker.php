@@ -37,7 +37,7 @@ final readonly class DkimChecker
             keyExists: false,
             keyType: null,
             keyBits: null,
-            selector: $selector ?? 'default',
+            selector: 'default',
             issues: [new DnsIssue(IssueSeverity::Warning, 'No DKIM key found for common selectors. You may need to specify the selector used by your email provider.')],
             recommendations: ['Check with your email provider for the correct DKIM selector. Common selectors: google, selector1, selector2, k1, default.'],
         );

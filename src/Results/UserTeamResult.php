@@ -15,7 +15,7 @@ final readonly class UserTeamResult
     ) {
     }
 
-    /** @param array{team_id: string, team_name: string, team_slug: string, role: string, member_count: int} $row */
+    /** @param array{team_id: string, team_name: string, team_slug: string, role: string, member_count: int|string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

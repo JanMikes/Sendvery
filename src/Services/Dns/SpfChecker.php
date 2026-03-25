@@ -64,6 +64,18 @@ final readonly class SpfChecker
             );
         }
 
+        if (null === $record) {
+            return new SpfCheckResult(
+                rawRecord: $rawRecord,
+                isValid: false,
+                mechanismCount: 0,
+                lookupCount: 0,
+                includes: [],
+                issues: [new DnsIssue(IssueSeverity::Warning, 'SPF record could not be parsed.')],
+                recommendations: ['Verify your SPF record syntax.'],
+            );
+        }
+
         $issues = [];
         $recommendations = [];
         $includes = [];

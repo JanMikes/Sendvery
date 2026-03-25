@@ -18,6 +18,7 @@ use Ramsey\Uuid\Uuid;
 
 final class AlertOnDnsChangeTest extends IntegrationTestCase
 {
+    /** @return array{Team, MonitoredDomain} */
     private function createTeamAndDomain(): array
     {
         $em = $this->getService(EntityManagerInterface::class);

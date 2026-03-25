@@ -19,6 +19,7 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 
 final class TeamVoterTest extends TestCase
 {
+    /** @return array{User, Team} */
     private function createTeamAndUser(): array
     {
         $now = new \DateTimeImmutable();

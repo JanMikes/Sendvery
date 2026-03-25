@@ -33,7 +33,7 @@ final class OnboardingTeamController extends AbstractController
         $memberships = $this->teamMembershipRepository->findForUser($user->id);
         $team = $memberships[0]->team ?? null;
 
-        $suggestedName = $team?->name ?? $this->extractDomain($user->email);
+        $suggestedName = $team->name ?? $this->extractDomain($user->email);
 
         if ($request->isMethod('POST')) {
             $teamName = trim($request->request->getString('team_name'));

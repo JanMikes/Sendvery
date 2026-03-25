@@ -20,7 +20,7 @@ final readonly class AlertListResult
     }
 
     /**
-     * @param array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool, created_at: string, domain_id: ?string, domain_name: ?string} $row
+     * @param array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null} $row
      */
     public static function fromDatabaseRow(array $row): self
     {

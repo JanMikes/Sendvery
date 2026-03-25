@@ -17,6 +17,7 @@ final readonly class GetDomainSenderBreakdown
     /** @return array<DomainSenderResult> */
     public function forDomain(string $domainId, int $limit = 10): array
     {
+        /** @var list<array{source_ip: string, resolved_org: string|null, total_messages: int|string, pass_count: int|string, fail_count: int|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 rec.source_ip AS source_ip,

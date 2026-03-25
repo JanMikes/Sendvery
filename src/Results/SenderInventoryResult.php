@@ -20,7 +20,7 @@ final readonly class SenderInventoryResult
     ) {
     }
 
-    /** @param array{id: string, source_ip: string, hostname: ?string, organization: ?string, label: ?string, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string} $row */
+    /** @param array{id: string, source_ip: string, hostname: string|null, organization: string|null, label: string|null, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

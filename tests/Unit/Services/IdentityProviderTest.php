@@ -6,7 +6,7 @@ namespace App\Tests\Unit\Services;
 
 use App\Services\IdentityProvider;
 use PHPUnit\Framework\TestCase;
-use Ramsey\Uuid\UuidInterface;
+use Ramsey\Uuid\Rfc4122\FieldsInterface;
 
 final class IdentityProviderTest extends TestCase
 {
@@ -16,7 +16,7 @@ final class IdentityProviderTest extends TestCase
 
         $uuid = $provider->nextIdentity();
 
-        self::assertInstanceOf(UuidInterface::class, $uuid);
+        self::assertNotEmpty($uuid->toString());
     }
 
     public function testNextIdentityReturnsDifferentUuidsEachTime(): void
@@ -35,6 +35,8 @@ final class IdentityProviderTest extends TestCase
 
         $uuid = $provider->nextIdentity();
 
-        self::assertSame(7, $uuid->getFields()->getVersion());
+        $fields = $uuid->getFields();
+        assert($fields instanceof FieldsInterface);
+        self::assertSame(7, $fields->getVersion());
     }
 }

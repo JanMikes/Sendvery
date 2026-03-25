@@ -60,7 +60,7 @@ final readonly class ImapMailClient implements MailClient
                 yield new MailMessage(
                     messageId: $message->getMessageId()->toString(),
                     subject: $message->getSubject()->toString(),
-                    from: $message->getFrom()->first()?->mail ?? '',
+                    from: $message->getFrom()->first()->mail ?? '',
                     date: $message->getDate()->first()?->toDate() ?? new \DateTimeImmutable(),
                     attachments: $attachments,
                 );
@@ -109,7 +109,8 @@ final readonly class ImapMailClient implements MailClient
             $client->connect();
 
             $folder = $client->getFolderByName('INBOX') ?? $client->getFolderByPath('INBOX');
-            $messageCount = $folder?->status()?->get('messages') ?? 0;
+            $status = $folder?->status();
+            $messageCount = $status['messages'] ?? 0;
 
             $client->disconnect();
 
@@ -160,7 +161,7 @@ final readonly class ImapMailClient implements MailClient
             }
         }
 
-        $from = strtolower($message->getFrom()->first()?->mail ?? '');
+        $from = strtolower($message->getFrom()->first()->mail ?? '');
         foreach (self::DMARC_SENDER_PATTERNS as $pattern) {
             if ($from === $pattern) {
                 return true;
@@ -195,7 +196,7 @@ final readonly class ImapMailClient implements MailClient
             $attachments[] = new MailAttachment(
                 filename: $attachment->getName(),
                 content: $attachment->getContent(),
-                mimeType: $attachment->getMimeType(),
+                mimeType: $attachment->getMimeType() ?? 'application/octet-stream',
             );
         }
 

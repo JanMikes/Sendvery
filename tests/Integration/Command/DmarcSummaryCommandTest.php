@@ -72,6 +72,7 @@ final class DmarcSummaryCommandTest extends IntegrationTestCase
         $em->persist($record);
         $em->flush();
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dmarc:summary');
         $tester = new CommandTester($command);
@@ -87,6 +88,7 @@ final class DmarcSummaryCommandTest extends IntegrationTestCase
     public function testShowsWarningWithNoData(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dmarc:summary');
         $tester = new CommandTester($command);

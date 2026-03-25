@@ -13,6 +13,7 @@ final class PollMailboxesCommandTest extends IntegrationTestCase
     public function testRunsWithNoActiveConnections(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:mailbox:poll');
         $tester = new CommandTester($command);
@@ -50,6 +51,7 @@ final class PollMailboxesCommandTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:mailbox:poll');
         $tester = new CommandTester($command);
@@ -87,6 +89,7 @@ final class PollMailboxesCommandTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:mailbox:poll');
         $tester = new CommandTester($command);

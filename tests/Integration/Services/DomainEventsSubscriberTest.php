@@ -32,7 +32,7 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
         $reflMethod->invoke($subscriber, $entity);
 
         // Verify events were collected from entity (entity events are now empty)
-        self::assertSame([], $entity->popEvents());
+        self::assertSame([], $entity->popEvents()); // @phpstan-ignore staticMethod.alreadyNarrowedType
 
         // Verify the subscriber has collected events internally
         $reflProp = new \ReflectionProperty($subscriber, 'events');
@@ -46,8 +46,9 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
         $dispatched = [];
         $mockBus = new class ($dispatched) implements MessageBusInterface {
             /** @param array<object> $dispatched */
-            public function __construct(private array &$dispatched)
-            {
+            public function __construct(
+                private array &$dispatched, // @phpstan-ignore property.onlyWritten
+            ) {
             }
 
             public function dispatch(object $message, array $stamps = []): Envelope
@@ -81,7 +82,7 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
         // Internal events are cleared — second flush dispatches nothing
         $dispatched = [];
         $subscriber->postFlush($postFlushArgs);
-        self::assertSame([], $dispatched);
+        self::assertSame([], $dispatched); // @phpstan-ignore staticMethod.alreadyNarrowedType
     }
 
     public function testNonEntityWithEventsIsIgnored(): void
@@ -89,8 +90,9 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
         $dispatched = [];
         $mockBus = new class ($dispatched) implements MessageBusInterface {
             /** @param array<object> $dispatched */
-            public function __construct(private array &$dispatched)
-            {
+            public function __construct(
+                private array &$dispatched, // @phpstan-ignore property.onlyWritten
+            ) {
             }
 
             public function dispatch(object $message, array $stamps = []): Envelope
@@ -112,6 +114,6 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
         $postFlushArgs = $this->createStub(\Doctrine\ORM\Event\PostFlushEventArgs::class);
         $subscriber->postFlush($postFlushArgs);
 
-        self::assertSame([], $dispatched);
+        self::assertSame([], $dispatched); // @phpstan-ignore staticMethod.alreadyNarrowedType
     }
 }

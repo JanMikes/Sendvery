@@ -19,6 +19,7 @@ final class CheckAllDomainsDnsCommandTest extends IntegrationTestCase
     public function runsWithNoDomains(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dns:check-all');
         $tester = new CommandTester($command);
@@ -53,6 +54,7 @@ final class CheckAllDomainsDnsCommandTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:dns:check-all');
         $tester = new CommandTester($command);

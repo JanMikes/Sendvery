@@ -13,7 +13,7 @@ final class TeamNotFoundTest extends TestCase
     {
         $exception = new TeamNotFound('Team not found');
 
-        self::assertInstanceOf(\DomainException::class, $exception);
+        self::assertSame(\DomainException::class, get_parent_class($exception));
         self::assertSame('Team not found', $exception->getMessage());
     }
 }

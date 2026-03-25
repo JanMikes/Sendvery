@@ -18,7 +18,7 @@ final readonly class BillingOverviewResult
     ) {
     }
 
-    /** @param array{plan: string, stripe_customer_id: ?string, stripe_subscription_id: ?string, plan_warning_at: ?string, domain_count: int|string, member_count: int|string} $row */
+    /** @param array{plan: string, stripe_customer_id: string|null, stripe_subscription_id: string|null, plan_warning_at: string|null, domain_count: int|string, member_count: int|string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(

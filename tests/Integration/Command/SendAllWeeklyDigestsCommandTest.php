@@ -21,6 +21,7 @@ final class SendAllWeeklyDigestsCommandTest extends IntegrationTestCase
     public function runsWithNoTeams(): void
     {
         self::bootKernel();
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:digest:send-all');
         $tester = new CommandTester($command);
@@ -65,6 +66,7 @@ final class SendAllWeeklyDigestsCommandTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
+        assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
         $command = $application->find('sendvery:digest:send-all');
         $tester = new CommandTester($command);

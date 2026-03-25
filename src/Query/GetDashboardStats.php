@@ -16,6 +16,7 @@ final readonly class GetDashboardStats
 
     public function forTeam(string $teamId): DashboardStatsResult
     {
+        /** @var array{total_domains: int|string, total_reports_30d: int|string, total_messages: int|string, pass_rate: float|string}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 (SELECT COUNT(*) FROM monitored_domain WHERE team_id = :teamId) AS total_domains,
@@ -50,6 +51,15 @@ final readonly class GetDashboardStats
                 'pass' => 'pass',
             ],
         )->fetchAssociative();
+
+        if (false === $row) {
+            return new DashboardStatsResult(
+                totalDomains: 0,
+                totalReportsLast30Days: 0,
+                overallPassRate: 0.0,
+                totalMessages: 0,
+            );
+        }
 
         return new DashboardStatsResult(
             totalDomains: (int) $row['total_domains'],

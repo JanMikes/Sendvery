@@ -19,6 +19,7 @@ final readonly class GetDomainHealthHistory
      */
     public function forDomain(string $domainId, int $limit = 90): array
     {
+        /** @var list<array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, checked_at: string, recommendations: string, share_hash: string|null}> $data */
         $data = $this->database->executeQuery(
             'SELECT id, grade, score, spf_score, dkim_score, dmarc_score, mx_score, blacklist_score, checked_at, recommendations, share_hash
              FROM domain_health_snapshot
@@ -36,6 +37,7 @@ final readonly class GetDomainHealthHistory
 
     public function latestForDomain(string $domainId): ?DomainHealthSnapshotResult
     {
+        /** @var array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, checked_at: string, recommendations: string, share_hash: string|null}|false $data */
         $data = $this->database->executeQuery(
             'SELECT id, grade, score, spf_score, dkim_score, dmarc_score, mx_score, blacklist_score, checked_at, recommendations, share_hash
              FROM domain_health_snapshot
@@ -54,6 +56,7 @@ final readonly class GetDomainHealthHistory
 
     public function findByShareHash(string $shareHash): ?DomainHealthSnapshotResult
     {
+        /** @var array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, checked_at: string, recommendations: string, share_hash: string|null}|false $data */
         $data = $this->database->executeQuery(
             'SELECT dhs.id, dhs.grade, dhs.score, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score, dhs.blacklist_score, dhs.checked_at, dhs.recommendations, dhs.share_hash
              FROM domain_health_snapshot dhs
