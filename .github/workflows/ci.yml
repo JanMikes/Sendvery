@@ -18,7 +18,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: sendvery
           POSTGRES_PASSWORD: sendvery
@@ -32,7 +32,7 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://sendvery:sendvery@localhost:5432/sendvery_test?serverVersion=16
+      DATABASE_URL: postgresql://sendvery:sendvery@localhost:5432/sendvery_test?serverVersion=17
 
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
       - name: Warm up Symfony cache
         run: bin/console cache:warmup --env=dev
         env:
-          DATABASE_URL: postgresql://localhost/fake?serverVersion=16
+          DATABASE_URL: postgresql://localhost/fake?serverVersion=17
 
       - name: Run PHPStan
         run: vendor/bin/phpstan --memory-limit=-1 analyse -c phpstan.neon.dist
