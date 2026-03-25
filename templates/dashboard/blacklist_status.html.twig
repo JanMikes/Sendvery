@@ -1,0 +1,58 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Blacklist Status — {{ domain.domainName }}{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_domains') }}">Domains</a></li>
+    <li><a href="{{ path('dashboard_domain_detail', { id: domain.domainId }) }}">{{ domain.domainName }}</a></li>
+    <li>Blacklist Status</li>
+{% endblock %}
+
+{% block content %}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">Blacklist Status</h1>
+            <p class="text-sm text-base-content/60 mt-1">IP blacklist monitoring for {{ domain.domainName }}</p>
+        </div>
+    </div>
+
+    {% if statusResults is empty %}
+        <div class="card bg-base-100 shadow">
+            <div class="card-body text-center py-12">
+                <p class="text-base-content/60">No blacklist checks yet. Checks will run automatically for known sender IPs.</p>
+            </div>
+        </div>
+    {% else %}
+        <div class="space-y-4">
+            {% for result in statusResults %}
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <span class="font-mono font-medium">{{ result.ipAddress }}</span>
+                                {% if result.isListed %}
+                                    <span class="badge badge-error">Listed on {{ result.listedCount() }} blacklist(s)</span>
+                                {% else %}
+                                    <span class="badge badge-success">Clean</span>
+                                {% endif %}
+                            </div>
+                            <span class="text-sm text-base-content/60">Checked: {{ result.checkedAt|date('M j, Y H:i') }}</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            {% for dnsbl, data in result.results %}
+                                <div class="flex items-center gap-2 px-3 py-2 rounded {{ data.listed ? 'bg-error/10' : 'bg-success/10' }}">
+                                    {% if data.listed %}
+                                        <svg class="w-4 h-4 text-error shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    {% else %}
+                                        <svg class="w-4 h-4 text-success shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    {% endif %}
+                                    <span class="text-sm truncate">{{ dnsbl }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}

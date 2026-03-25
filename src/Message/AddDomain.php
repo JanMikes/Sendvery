@@ -6,7 +6,7 @@ namespace App\Message;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class AddDomain
+final readonly class AddDomain
 {
     public function __construct(
         public UuidInterface $domainId,

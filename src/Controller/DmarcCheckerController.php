@@ -23,7 +23,7 @@ final class DmarcCheckerController extends AbstractController
         $result = null;
         $domain = $request->request->getString('domain');
 
-        if ($request->isMethod('POST') && $domain !== '') {
+        if ($request->isMethod('POST') && '' !== $domain) {
             $result = $this->dmarcChecker->check($domain);
 
             if ($request->isXmlHttpRequest()) {

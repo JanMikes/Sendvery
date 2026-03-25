@@ -6,7 +6,7 @@ namespace App\Message;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class RegisterBetaSignup
+final readonly class RegisterBetaSignup
 {
     public function __construct(
         public UuidInterface $signupId,

@@ -11,7 +11,7 @@ use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
-readonly final class RegisterBetaSignupHandler
+final readonly class RegisterBetaSignupHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,

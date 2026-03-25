@@ -20,7 +20,7 @@ final class RegisterBetaSignupHandlerTest extends IntegrationTestCase
         $signupId = Uuid::uuid7();
         $command = new RegisterBetaSignup(
             signupId: $signupId,
-            email: 'beta-' . $signupId->toString() . '@example.com',
+            email: 'beta-'.$signupId->toString().'@example.com',
             domainCount: 5,
             painPoint: 'DNS is hard',
             source: 'homepage',
@@ -49,7 +49,7 @@ final class RegisterBetaSignupHandlerTest extends IntegrationTestCase
         $signupId = Uuid::uuid7();
         $command = new RegisterBetaSignup(
             signupId: $signupId,
-            email: 'minimal-' . $signupId->toString() . '@example.com',
+            email: 'minimal-'.$signupId->toString().'@example.com',
             domainCount: null,
             painPoint: null,
             source: 'beta-page',

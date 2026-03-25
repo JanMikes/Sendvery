@@ -9,7 +9,7 @@ use App\Value\Dns\DnsIssue;
 use App\Value\Dns\IssueSeverity;
 use Spatie\Dns\Dns;
 
-readonly final class DmarcChecker
+final readonly class DmarcChecker
 {
     public function __construct(
         private Dns $dns,
@@ -31,11 +31,12 @@ readonly final class DmarcChecker
             $txt = $this->extractTxtValue((string) $record);
             if (str_starts_with(trim($txt), 'v=DMARC1')) {
                 $rawRecord = $txt;
+
                 break;
             }
         }
 
-        if ($rawRecord === null) {
+        if (null === $rawRecord) {
             return $this->noRecordResult();
         }
 
@@ -52,10 +53,10 @@ readonly final class DmarcChecker
         $ruaAddresses = $this->parseAddresses($tags['rua'] ?? '');
         $rufAddresses = $this->parseAddresses($tags['ruf'] ?? '');
 
-        if ($policy === null) {
+        if (null === $policy) {
             $issues[] = new DnsIssue(IssueSeverity::Critical, 'DMARC record is missing the p= (policy) tag.', 'Add a policy: p=none for monitoring, p=quarantine or p=reject for enforcement.');
             $recommendations[] = 'Add a p= tag to your DMARC record.';
-        } elseif ($policy === 'none') {
+        } elseif ('none' === $policy) {
             $issues[] = new DnsIssue(
                 IssueSeverity::Warning,
                 'DMARC policy is set to "none" — monitoring only, no enforcement. Attackers can still send email as your domain.',
@@ -64,7 +65,7 @@ readonly final class DmarcChecker
             $recommendations[] = 'Upgrade your DMARC policy from p=none to p=quarantine or p=reject for enforcement.';
         }
 
-        if ($ruaAddresses === []) {
+        if ([] === $ruaAddresses) {
             $issues[] = new DnsIssue(
                 IssueSeverity::Warning,
                 'No rua= address configured. You are not receiving aggregate DMARC reports.',
@@ -73,7 +74,7 @@ readonly final class DmarcChecker
             $recommendations[] = 'Add an rua= tag to receive DMARC aggregate reports.';
         }
 
-        if ($pct !== null && $pct < 100) {
+        if (null !== $pct && $pct < 100) {
             $issues[] = new DnsIssue(
                 IssueSeverity::Warning,
                 "DMARC policy applies to only {$pct}% of messages (pct={$pct}).",
@@ -82,7 +83,7 @@ readonly final class DmarcChecker
             $recommendations[] = 'Remove the pct tag or set it to 100 to enforce the policy on all messages.';
         }
 
-        if ($subdomainPolicy === null && $policy !== null && $policy !== 'reject') {
+        if (null === $subdomainPolicy && null !== $policy && 'reject' !== $policy) {
             $issues[] = new DnsIssue(
                 IssueSeverity::Info,
                 'No subdomain policy (sp=) set. Subdomains inherit the main domain policy.',
@@ -112,11 +113,11 @@ readonly final class DmarcChecker
 
         foreach ($parts as $part) {
             $part = trim($part);
-            if ($part === '') {
+            if ('' === $part) {
                 continue;
             }
             $eqPos = strpos($part, '=');
-            if ($eqPos === false) {
+            if (false === $eqPos) {
                 continue;
             }
             $key = trim(substr($part, 0, $eqPos));
@@ -130,7 +131,7 @@ readonly final class DmarcChecker
     /** @return array<string> */
     private function parseAddresses(string $value): array
     {
-        if ($value === '') {
+        if ('' === $value) {
             return [];
         }
 
@@ -139,7 +140,7 @@ readonly final class DmarcChecker
             $addr = trim($addr);
             if (str_starts_with($addr, 'mailto:')) {
                 $addresses[] = substr($addr, 7);
-            } elseif ($addr !== '') {
+            } elseif ('' !== $addr) {
                 $addresses[] = $addr;
             }
         }

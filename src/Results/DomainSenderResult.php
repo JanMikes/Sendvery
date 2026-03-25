@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Results;
 
-readonly final class DomainSenderResult
+final readonly class DomainSenderResult
 {
     public function __construct(
         public string $sourceIp,

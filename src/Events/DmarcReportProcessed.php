@@ -6,7 +6,7 @@ namespace App\Events;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class DmarcReportProcessed
+final readonly class DmarcReportProcessed
 {
     public function __construct(
         public UuidInterface $reportId,

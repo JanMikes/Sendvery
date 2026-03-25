@@ -6,7 +6,7 @@ namespace App\Services\Dmarc;
 
 use App\Exceptions\InvalidDmarcReportXml;
 
-readonly final class ReportAttachmentExtractor
+final readonly class ReportAttachmentExtractor
 {
     /**
      * Extracts XML content from a DMARC report attachment.
@@ -36,7 +36,7 @@ readonly final class ReportAttachmentExtractor
             return true;
         }
 
-        return strlen($content) >= 2 && $content[0] === "\x1f" && $content[1] === "\x8b";
+        return strlen($content) >= 2 && "\x1f" === $content[0] && "\x8b" === $content[1];
     }
 
     private function isZip(string $content, string $filename): bool
@@ -45,7 +45,7 @@ readonly final class ReportAttachmentExtractor
             return true;
         }
 
-        return strlen($content) >= 4 && $content[0] === 'P' && $content[1] === 'K' && $content[2] === "\x03" && $content[3] === "\x04";
+        return strlen($content) >= 4 && 'P' === $content[0] && 'K' === $content[1] && "\x03" === $content[2] && "\x04" === $content[3];
     }
 
     private function isXml(string $content, string $filename): bool
@@ -64,7 +64,7 @@ readonly final class ReportAttachmentExtractor
     {
         $decompressed = @gzdecode($content);
 
-        if ($decompressed === false) {
+        if (false === $decompressed) {
             throw new InvalidDmarcReportXml('Failed to decompress gzip archive.');
         }
 
@@ -75,7 +75,7 @@ readonly final class ReportAttachmentExtractor
     private function extractZip(string $content): array
     {
         $tempFile = tempnam(sys_get_temp_dir(), 'dmarc_');
-        if ($tempFile === false) { // @codeCoverageIgnore
+        if (false === $tempFile) { // @codeCoverageIgnore
             throw new InvalidDmarcReportXml('Failed to create temporary file for zip extraction.'); // @codeCoverageIgnore
         }
 
@@ -85,14 +85,14 @@ readonly final class ReportAttachmentExtractor
             $zip = new \ZipArchive();
             $result = $zip->open($tempFile);
 
-            if ($result !== true) {
+            if (true !== $result) {
                 throw new InvalidDmarcReportXml('Failed to open zip archive.');
             }
 
             $xmlFiles = [];
-            for ($i = 0; $i < $zip->numFiles; $i++) {
+            for ($i = 0; $i < $zip->numFiles; ++$i) {
                 $name = $zip->getNameIndex($i);
-                if ($name === false) { // @codeCoverageIgnore
+                if (false === $name) { // @codeCoverageIgnore
                     continue; // @codeCoverageIgnore
                 }
 
@@ -101,7 +101,7 @@ readonly final class ReportAttachmentExtractor
                 }
 
                 $fileContent = $zip->getFromIndex($i);
-                if ($fileContent === false) { // @codeCoverageIgnore
+                if (false === $fileContent) { // @codeCoverageIgnore
                     continue; // @codeCoverageIgnore
                 }
 
@@ -110,7 +110,7 @@ readonly final class ReportAttachmentExtractor
 
             $zip->close();
 
-            if ($xmlFiles === []) {
+            if ([] === $xmlFiles) {
                 throw new InvalidDmarcReportXml('No XML files found in zip archive.');
             }
 

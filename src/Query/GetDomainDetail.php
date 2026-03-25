@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\DomainDetailResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetDomainDetail
+final readonly class GetDomainDetail
 {
     public function __construct(
         private Connection $database,
@@ -53,7 +53,7 @@ readonly final class GetDomainDetail
             ],
         )->fetchAssociative();
 
-        if ($row === false) {
+        if (false === $row) {
             return null;
         }
 

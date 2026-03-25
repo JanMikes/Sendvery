@@ -6,7 +6,7 @@ namespace App\Events;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class DomainAdded
+final readonly class DomainAdded
 {
     public function __construct(
         public UuidInterface $domainId,

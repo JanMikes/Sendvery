@@ -1,0 +1,40 @@
+{# Floating feedback button + modal #}
+<div class="fixed bottom-6 right-6 z-50" {{ stimulus_controller('feedback') }}>
+    <button class="btn btn-primary btn-circle shadow-lg"
+            {{ stimulus_action('feedback', 'toggle') }}
+            aria-label="Send feedback">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+    </button>
+
+    <div class="hidden absolute bottom-16 right-0 w-80 card bg-base-100 shadow-xl border border-base-300"
+         {{ stimulus_target('feedback', 'modal') }}>
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-sm">Send Feedback</h3>
+                <button class="btn btn-ghost btn-xs btn-circle" {{ stimulus_action('feedback', 'toggle') }}>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <turbo-frame id="feedback-frame">
+                <form method="POST" action="{{ path('dashboard_submit_feedback') }}" data-turbo-frame="feedback-frame">
+                    <input type="hidden" name="page" value="{{ app.request.requestUri }}">
+
+                    <div class="form-control mb-3">
+                        <select name="type" class="select select-bordered select-sm w-full">
+                            <option value="general">General</option>
+                            <option value="bug">Bug Report</option>
+                            <option value="feature_request">Feature Request</option>
+                        </select>
+                    </div>
+
+                    <div class="form-control mb-3">
+                        <textarea name="message" class="textarea textarea-bordered textarea-sm h-24" placeholder="What's on your mind?" required></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-sm w-full">Send Feedback</button>
+                </form>
+            </turbo-frame>
+        </div>
+    </div>
+</div>

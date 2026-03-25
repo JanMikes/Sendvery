@@ -28,7 +28,7 @@ final class GetAllReportsTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'All Reports Test',
-            slug: 'all-reports-' . Uuid::uuid7()->toString(),
+            slug: 'all-reports-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -90,7 +90,7 @@ final class GetAllReportsTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Empty All Reports',
-            slug: 'empty-all-reports-' . Uuid::uuid7()->toString(),
+            slug: 'empty-all-reports-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

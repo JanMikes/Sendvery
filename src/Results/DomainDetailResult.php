@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Results;
 
-readonly final class DomainDetailResult
+final readonly class DomainDetailResult
 {
     public function __construct(
         public string $domainId,

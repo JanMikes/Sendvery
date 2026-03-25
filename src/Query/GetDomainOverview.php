@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\DomainOverviewResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetDomainOverview
+final readonly class GetDomainOverview
 {
     public function __construct(
         private Connection $database,

@@ -24,7 +24,7 @@ final class AddDomainHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Add Domain Test',
-            slug: 'add-domain-test-' . Uuid::uuid7()->toString(),
+            slug: 'add-domain-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -53,7 +53,7 @@ final class AddDomainHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Normalize Test',
-            slug: 'normalize-test-' . Uuid::uuid7()->toString(),
+            slug: 'normalize-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

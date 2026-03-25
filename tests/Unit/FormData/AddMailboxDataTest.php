@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class AddMailboxDataTest extends TestCase
 {
     #[Test]
-    public function it_has_default_values(): void
+    public function itHasDefaultValues(): void
     {
         $data = new AddMailboxData();
 

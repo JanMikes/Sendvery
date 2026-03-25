@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Dashboard;
 
+use App\Query\GetAlerts;
 use App\Query\GetAllReports;
 use App\Query\GetDashboardStats;
 use App\Query\GetDomainOverview;
@@ -21,6 +22,7 @@ final class DashboardOverviewController extends AbstractController
         private readonly GetDomainOverview $getDomainOverview,
         private readonly GetAllReports $getAllReports,
         private readonly GetDomainPassRateTrend $getDomainPassRateTrend,
+        private readonly GetAlerts $getAlerts,
     ) {
     }
 
@@ -65,11 +67,20 @@ final class DashboardOverviewController extends AbstractController
             'tooltip' => ['x' => ['format' => 'MMM dd']],
         ];
 
+        $unreadAlertCount = $this->getAlerts->countUnreadForTeam($teamIdString);
+        $recentAlerts = $this->getAlerts->forTeam(
+            teamId: $teamIdString,
+            severity: 'critical',
+            limit: 5,
+        );
+
         return $this->render('dashboard/overview.html.twig', [
             'stats' => $stats,
             'domains' => $domains,
             'recentReports' => $recentReports,
             'trendChartConfig' => $trendChartConfig,
+            'unreadAlertCount' => $unreadAlertCount,
+            'recentAlerts' => $recentAlerts,
         ]);
     }
 }

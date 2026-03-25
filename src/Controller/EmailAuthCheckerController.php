@@ -26,7 +26,7 @@ final class EmailAuthCheckerController extends AbstractController
         $healthScore = null;
         $domain = $request->request->getString('domain');
 
-        if ($request->isMethod('POST') && $domain !== '') {
+        if ($request->isMethod('POST') && '' !== $domain) {
             $result = $this->emailAuthChecker->check($domain);
             $healthScore = $this->healthScorer->score($result);
 

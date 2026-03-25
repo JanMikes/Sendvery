@@ -19,15 +19,15 @@ final class TeamFilterTest extends IntegrationTestCase
         $em = $this->getService(EntityManagerInterface::class);
         $now = new \DateTimeImmutable();
 
-        $user = new User(id: Uuid::uuid7(), email: 'filter-' . Uuid::uuid7()->toString() . '@test.com', createdAt: $now);
+        $user = new User(id: Uuid::uuid7(), email: 'filter-'.Uuid::uuid7()->toString().'@test.com', createdAt: $now);
         $em->persist($user);
 
         $team1Id = Uuid::uuid7();
-        $team1 = new Team(id: $team1Id, name: 'Team 1', slug: 'team1-' . $team1Id->toString(), createdAt: $now);
+        $team1 = new Team(id: $team1Id, name: 'Team 1', slug: 'team1-'.$team1Id->toString(), createdAt: $now);
         $em->persist($team1);
 
         $team2Id = Uuid::uuid7();
-        $team2 = new Team(id: $team2Id, name: 'Team 2', slug: 'team2-' . $team2Id->toString(), createdAt: $now);
+        $team2 = new Team(id: $team2Id, name: 'Team 2', slug: 'team2-'.$team2Id->toString(), createdAt: $now);
         $em->persist($team2);
 
         $m1 = new TeamMembership(id: Uuid::uuid7(), user: $user, team: $team1, role: TeamRole::Owner, joinedAt: $now);

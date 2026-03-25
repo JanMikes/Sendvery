@@ -9,7 +9,7 @@ use App\Exceptions\MailboxConnectionNotFound;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class MailboxConnectionRepository
+final readonly class MailboxConnectionRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -20,7 +20,7 @@ readonly final class MailboxConnectionRepository
     {
         $connection = $this->entityManager->find(MailboxConnection::class, $id);
 
-        if ($connection === null) {
+        if (null === $connection) {
             throw new MailboxConnectionNotFound(sprintf('Mailbox connection with ID "%s" not found.', $id->toString()));
         }
 

@@ -1,0 +1,29 @@
+<turbo-frame id="feedback-frame">
+    {% if success is defined and success %}
+        <div class="text-center py-4">
+            <svg class="w-12 h-12 mx-auto text-success mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <p class="font-medium text-sm">Thank you!</p>
+            <p class="text-xs text-base-content/50 mt-1">Your feedback has been received.</p>
+        </div>
+    {% endif %}
+
+    {% if error is defined and error %}
+        <div class="alert alert-error alert-sm mb-3">
+            <span class="text-xs">{{ error }}</span>
+        </div>
+        <form method="POST" action="{{ path('dashboard_submit_feedback') }}" data-turbo-frame="feedback-frame">
+            <input type="hidden" name="page" value="{{ app.request.requestUri }}">
+            <div class="form-control mb-3">
+                <select name="type" class="select select-bordered select-sm w-full">
+                    <option value="general">General</option>
+                    <option value="bug">Bug Report</option>
+                    <option value="feature_request">Feature Request</option>
+                </select>
+            </div>
+            <div class="form-control mb-3">
+                <textarea name="message" class="textarea textarea-bordered textarea-sm h-24" placeholder="What's on your mind?" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm w-full">Send Feedback</button>
+        </form>
+    {% endif %}
+</turbo-frame>

@@ -27,7 +27,7 @@ final class ShowDomainDetailController extends AbstractController
     {
         $domain = $this->getDomainDetail->forDomain($id);
 
-        if ($domain === null) {
+        if (null === $domain) {
             throw $this->createNotFoundException('Domain not found.');
         }
 

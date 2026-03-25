@@ -1,0 +1,49 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Preferences{% endblock %}
+
+{% block breadcrumbs %}
+    <li>Settings</li>
+    <li>Preferences</li>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">Email Preferences</h1>
+
+    {% if success is defined and success %}
+        <div class="alert alert-success mb-6">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <span>{{ success }}</span>
+        </div>
+    {% endif %}
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <form method="POST" action="{{ path('dashboard_preferences') }}">
+                <div class="form-control mb-4">
+                    <label class="label cursor-pointer justify-start gap-4">
+                        <input type="checkbox" name="email_digest_enabled" value="1" class="toggle toggle-primary" {{ user.emailDigestEnabled ? 'checked' : '' }}>
+                        <div>
+                            <span class="label-text font-medium">Weekly Digest Email</span>
+                            <p class="text-xs text-base-content/50 mt-0.5">Receive a weekly summary of your DMARC reports, alerts, and DNS changes every Monday.</p>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="form-control mb-6">
+                    <label class="label cursor-pointer justify-start gap-4">
+                        <input type="checkbox" name="email_alerts_enabled" value="1" class="toggle toggle-primary" {{ user.emailAlertsEnabled ? 'checked' : '' }}>
+                        <div>
+                            <span class="label-text font-medium">Alert Notifications</span>
+                            <p class="text-xs text-base-content/50 mt-0.5">Receive email notifications for critical alerts like DNS changes or failure spikes.</p>
+                        </div>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Preferences</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

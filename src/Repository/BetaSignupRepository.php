@@ -7,7 +7,7 @@ namespace App\Repository;
 use App\Entity\BetaSignup;
 use Doctrine\ORM\EntityManagerInterface;
 
-readonly final class BetaSignupRepository
+final readonly class BetaSignupRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,

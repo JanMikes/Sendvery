@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\Test;
 final class SeoTest extends WebTestCase
 {
     #[Test]
-    public function sitemap_returns_valid_xml(): void
+    public function sitemapReturnsValidXml(): void
     {
         $client = self::createClient();
         $client->request('GET', '/sitemap.xml');
@@ -27,7 +27,7 @@ final class SeoTest extends WebTestCase
     }
 
     #[Test]
-    public function sitemap_contains_all_public_routes(): void
+    public function sitemapContainsAllPublicRoutes(): void
     {
         $client = self::createClient();
         $client->request('GET', '/sitemap.xml');
@@ -53,7 +53,7 @@ final class SeoTest extends WebTestCase
     }
 
     #[Test]
-    public function robots_txt_returns_correct_content(): void
+    public function robotsTxtReturnsCorrectContent(): void
     {
         $client = self::createClient();
         $client->request('GET', '/robots.txt');
@@ -69,7 +69,7 @@ final class SeoTest extends WebTestCase
     }
 
     #[Test]
-    public function all_pages_have_opengraph_tags(): void
+    public function allPagesHaveOpengraphTags(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -81,7 +81,7 @@ final class SeoTest extends WebTestCase
     }
 
     #[Test]
-    public function all_pages_have_twitter_card_tags(): void
+    public function allPagesHaveTwitterCardTags(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -92,7 +92,7 @@ final class SeoTest extends WebTestCase
     }
 
     #[Test]
-    public function homepage_has_canonical_url(): void
+    public function homepageHasCanonicalUrl(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');

@@ -23,7 +23,7 @@ final class DmarcXmlParserTest extends TestCase
 
     public function testParsesGoogleReport(): void
     {
-        $xml = file_get_contents(__DIR__ . '/../../../Fixtures/google-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../../Fixtures/google-report.xml');
         assert(is_string($xml));
 
         $report = $this->parser->parse($xml);
@@ -60,7 +60,7 @@ final class DmarcXmlParserTest extends TestCase
 
     public function testParsesYahooReport(): void
     {
-        $xml = file_get_contents(__DIR__ . '/../../../Fixtures/yahoo-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../../Fixtures/yahoo-report.xml');
         assert(is_string($xml));
 
         $report = $this->parser->parse($xml);
@@ -77,7 +77,7 @@ final class DmarcXmlParserTest extends TestCase
 
     public function testParsesMinimalReport(): void
     {
-        $xml = file_get_contents(__DIR__ . '/../../../Fixtures/minimal-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../../Fixtures/minimal-report.xml');
         assert(is_string($xml));
 
         $report = $this->parser->parse($xml);

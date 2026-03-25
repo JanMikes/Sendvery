@@ -8,11 +8,8 @@ use App\Entity\EntityWithEvents;
 use App\Entity\HasEvents;
 use App\Tests\IntegrationTestCase;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
-use Symfony\Component\Messenger\Transport\TransportInterface;
 
 final class DomainEventsSubscriberTest extends IntegrationTestCase
 {
@@ -25,7 +22,7 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
         $subscriber = self::getContainer()->get('App\Services\DomainEventsSubscriber');
 
         $event = new \stdClass();
-        $entity = new class implements EntityWithEvents {
+        $entity = new class () implements EntityWithEvents {
             use HasEvents;
         };
         $entity->recordThat($event);
@@ -47,7 +44,7 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
     public function testEventsAreClearedAfterDispatch(): void
     {
         $dispatched = [];
-        $mockBus = new class($dispatched) implements MessageBusInterface {
+        $mockBus = new class ($dispatched) implements MessageBusInterface {
             /** @param array<object> $dispatched */
             public function __construct(private array &$dispatched)
             {
@@ -64,7 +61,7 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
         $subscriber = new \App\Services\DomainEventsSubscriber($mockBus);
 
         $event = new \stdClass();
-        $entity = new class implements EntityWithEvents {
+        $entity = new class () implements EntityWithEvents {
             use HasEvents;
         };
         $entity->recordThat($event);
@@ -90,7 +87,7 @@ final class DomainEventsSubscriberTest extends IntegrationTestCase
     public function testNonEntityWithEventsIsIgnored(): void
     {
         $dispatched = [];
-        $mockBus = new class($dispatched) implements MessageBusInterface {
+        $mockBus = new class ($dispatched) implements MessageBusInterface {
             /** @param array<object> $dispatched */
             public function __construct(private array &$dispatched)
             {

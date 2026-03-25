@@ -6,7 +6,7 @@ namespace App\Message;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class PollMailbox
+final readonly class PollMailbox
 {
     public function __construct(
         public UuidInterface $connectionId,

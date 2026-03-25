@@ -8,6 +8,12 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    healthcheck:
+      test: curl --fail http://localhost/-/health-check/liveness || exit 1
+      start_period: 5s
+      timeout: 10s
+      interval: 15s
+      retries: 3
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.sendvery.rule=Host(`sendvery.com`)"

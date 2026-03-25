@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\UserTeamResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetUserTeams
+final readonly class GetUserTeams
 {
     public function __construct(
         private Connection $database,

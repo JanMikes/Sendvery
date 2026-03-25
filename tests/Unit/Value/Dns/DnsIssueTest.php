@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class DnsIssueTest extends TestCase
 {
     #[Test]
-    public function can_be_constructed(): void
+    public function canBeConstructed(): void
     {
         $issue = new DnsIssue(IssueSeverity::Critical, 'Something is wrong', 'Fix it');
 
@@ -22,7 +22,7 @@ final class DnsIssueTest extends TestCase
     }
 
     #[Test]
-    public function recommendation_defaults_to_empty(): void
+    public function recommendationDefaultsToEmpty(): void
     {
         $issue = new DnsIssue(IssueSeverity::Info, 'Just info');
 

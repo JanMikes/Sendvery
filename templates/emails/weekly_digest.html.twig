@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sendvery Weekly Report</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 32px 16px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    {# Header #}
+                    <tr>
+                        <td style="padding: 24px 32px; background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                            <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff;">Sendvery Weekly Report</h1>
+                            <p style="margin: 4px 0 0 0; font-size: 13px; color: rgba(255,255,255,0.8);">{{ digest.teamName }} &mdash; {{ dateRange }}</p>
+                        </td>
+                    </tr>
+
+                    {# Summary Banner #}
+                    <tr>
+                        <td style="padding: 24px 32px;">
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td width="33%" style="text-align: center; padding: 12px 8px; background-color: #f8fafc; border-radius: 6px;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #18181b;">{{ digest.totalMessages }}</div>
+                                        <div style="font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em;">Messages</div>
+                                    </td>
+                                    <td width="8"></td>
+                                    <td width="33%" style="text-align: center; padding: 12px 8px; background-color: #f8fafc; border-radius: 6px;">
+                                        <div style="font-size: 28px; font-weight: 700; color: {{ digest.averagePassRate >= 95 ? '#16a34a' : (digest.averagePassRate >= 80 ? '#d97706' : '#dc2626') }};">{{ digest.averagePassRate|number_format(1) }}%</div>
+                                        <div style="font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em;">Pass Rate</div>
+                                    </td>
+                                    <td width="8"></td>
+                                    <td width="33%" style="text-align: center; padding: 12px 8px; background-color: #f8fafc; border-radius: 6px;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #18181b;">{{ digest.totalDomains }}</div>
+                                        <div style="font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em;">Domains</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    {# Per-Domain Breakdown #}
+                    {% if digest.domains|length > 0 %}
+                    <tr>
+                        <td style="padding: 0 32px 24px;">
+                            <h2 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #18181b;">Domain Breakdown</h2>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                                <tr style="background-color: #f8fafc;">
+                                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e4e4e7;">Domain</td>
+                                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e4e4e7; text-align: right;">Messages</td>
+                                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e4e4e7; text-align: right;">Pass Rate</td>
+                                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e4e4e7; text-align: right;">Trend</td>
+                                </tr>
+                                {% for domain in digest.domains %}
+                                <tr>
+                                    <td style="padding: 10px 12px; font-size: 13px; color: #18181b; border-bottom: 1px solid #f4f4f5; font-weight: 500;">{{ domain.domainName }}</td>
+                                    <td style="padding: 10px 12px; font-size: 13px; color: #52525b; border-bottom: 1px solid #f4f4f5; text-align: right;">{{ domain.totalMessages }}</td>
+                                    <td style="padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f4f4f5; text-align: right; color: {{ domain.passRate >= 95 ? '#16a34a' : (domain.passRate >= 80 ? '#d97706' : '#dc2626') }}; font-weight: 500;">{{ domain.passRate|number_format(1) }}%</td>
+                                    <td style="padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f4f4f5; text-align: right;">
+                                        {% if domain.passRateDelta is not null %}
+                                            <span style="color: {{ domain.passRateDelta >= 0 ? '#16a34a' : '#dc2626' }};">
+                                                {{ domain.passRateDelta >= 0 ? '+' : '' }}{{ domain.passRateDelta|number_format(1) }}%
+                                            </span>
+                                        {% else %}
+                                            <span style="color: #a1a1aa;">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {# Alerts This Week #}
+                    {% if digest.alertsCount > 0 %}
+                    <tr>
+                        <td style="padding: 0 32px 24px;">
+                            <h2 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #18181b;">
+                                Alerts This Week
+                                <span style="font-weight: 400; color: #71717a; font-size: 13px;">({{ digest.alertsCount }})</span>
+                            </h2>
+                            {% for domain in digest.domains %}
+                                {% for alert in domain.alerts %}
+                                <div style="padding: 8px 12px; margin-bottom: 4px; background-color: {{ alert.severity == 'critical' ? '#fef2f2' : (alert.severity == 'warning' ? '#fffbeb' : '#f0f9ff') }}; border-left: 3px solid {{ alert.severity == 'critical' ? '#dc2626' : (alert.severity == 'warning' ? '#d97706' : '#2563eb') }}; border-radius: 0 4px 4px 0;">
+                                    <span style="font-size: 12px; color: #71717a;">{{ domain.domainName }}</span>
+                                    <div style="font-size: 13px; color: #18181b;">{{ alert.title }}</div>
+                                </div>
+                                {% endfor %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {# New Senders #}
+                    {% set has_new_senders = false %}
+                    {% for domain in digest.domains %}
+                        {% if domain.newSenders|length > 0 %}
+                            {% set has_new_senders = true %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if has_new_senders %}
+                    <tr>
+                        <td style="padding: 0 32px 24px;">
+                            <h2 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #18181b;">New Senders Discovered</h2>
+                            {% for domain in digest.domains %}
+                                {% if domain.newSenders|length > 0 %}
+                                <div style="margin-bottom: 8px;">
+                                    <div style="font-size: 12px; color: #71717a; margin-bottom: 4px;">{{ domain.domainName }}</div>
+                                    {% for sender in domain.newSenders %}
+                                    <span style="display: inline-block; padding: 2px 8px; margin: 2px 4px 2px 0; background-color: #f0fdf4; color: #166534; border-radius: 12px; font-size: 12px;">{{ sender }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {# DNS Changes #}
+                    {% if digest.dnsChangesCount > 0 %}
+                    <tr>
+                        <td style="padding: 0 32px 24px;">
+                            <div style="padding: 12px 16px; background-color: #fffbeb; border-radius: 6px; border: 1px solid #fde68a;">
+                                <span style="font-size: 13px; color: #92400e; font-weight: 500;">{{ digest.dnsChangesCount }} DNS change{{ digest.dnsChangesCount != 1 ? 's' : '' }} detected this week</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+
+                    {# CTA Button #}
+                    <tr>
+                        <td style="padding: 8px 32px 32px; text-align: center;">
+                            <a href="{{ dashboardUrl }}" style="display: inline-block; padding: 12px 32px; background-color: #6366f1; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">
+                                View Full Dashboard
+                            </a>
+                        </td>
+                    </tr>
+
+                    {# Footer #}
+                    <tr>
+                        <td style="padding: 16px 32px; border-top: 1px solid #e4e4e7; background-color: #fafafa;">
+                            <p style="margin: 0; font-size: 12px; color: #a1a1aa;">
+                                Sent by <strong>Sendvery</strong> &mdash; Email Health Dashboard
+                            </p>
+                            <p style="margin: 4px 0 0 0; font-size: 11px; color: #a1a1aa;">
+                                You can manage your email preferences in your dashboard settings.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -1,0 +1,90 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Alert — {{ alert.title }}{% endblock %}
+
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_alerts') }}">Alerts</a></li>
+    <li>{{ alert.title|length > 40 ? alert.title[:40] ~ '...' : alert.title }}</li>
+{% endblock %}
+
+{% block content %}
+    <div class="max-w-3xl">
+        {# Header #}
+        <div class="flex items-start justify-between mb-6">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="badge {{ alert.severity == 'critical' ? 'badge-error' : (alert.severity == 'warning' ? 'badge-warning' : 'badge-info') }}">
+                        {{ alert.severity|capitalize }}
+                    </span>
+                    <span class="badge badge-ghost">{{ alert.type|replace({'_': ' '})|capitalize }}</span>
+                    {% if not alert.isRead %}
+                        <span class="badge badge-primary badge-sm">Unread</span>
+                    {% endif %}
+                </div>
+                <h1 class="text-xl font-bold">{{ alert.title }}</h1>
+                <p class="text-sm text-base-content/50 mt-1">{{ alert.createdAt|date('F j, Y \\a\\t H:i') }}</p>
+            </div>
+
+            {% if not alert.isRead %}
+                <form method="post" action="{{ path('dashboard_alert_mark_read', { id: alert.alertId }) }}">
+                    <button type="submit" class="btn btn-sm btn-ghost">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Mark as read
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+
+        {# Message #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+            <div class="card-body">
+                <p class="text-sm leading-relaxed">{{ alert.message }}</p>
+            </div>
+        </div>
+
+        {# Context data #}
+        {% if alert.data is not empty %}
+            <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+                <div class="card-body">
+                    <h3 class="text-sm font-semibold mb-3">Details</h3>
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <tbody>
+                                {% for key, value in alert.data %}
+                                    <tr>
+                                        <td class="font-medium text-base-content/70 w-48">{{ key|replace({'_': ' '})|capitalize }}</td>
+                                        <td>
+                                            {% if value is iterable %}
+                                                <div class="flex flex-wrap gap-1">
+                                                    {% for item in value %}
+                                                        <span class="badge badge-ghost badge-sm">{{ item }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                            {% else %}
+                                                <code class="text-sm">{{ value }}</code>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        {# Related domain link #}
+        {% if alert.domainId %}
+            <div class="flex gap-2">
+                <a href="{{ path('dashboard_domain_detail', { id: alert.domainId }) }}" class="btn btn-sm btn-ghost">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                    View domain: {{ alert.domainName }}
+                </a>
+                <a href="{{ path('dashboard_domain_dns_history', { id: alert.domainId }) }}" class="btn btn-sm btn-ghost">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    DNS History
+                </a>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

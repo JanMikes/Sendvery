@@ -4,7 +4,7 @@
 
 {% block content %}
     {# Stat cards #}
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <twig:StatCard
             title="Monitored Domains"
             value="{{ stats.totalDomains }}"
@@ -29,6 +29,14 @@
             variant="default"
             icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>'
         />
+        <a href="{{ path('dashboard_alerts') }}" class="block">
+            <twig:StatCard
+                title="Unread Alerts"
+                value="{{ unreadAlertCount }}"
+                variant="{{ unreadAlertCount > 0 ? 'warning' : 'default' }}"
+                icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>'
+            />
+        </a>
     </div>
 
     {# Trend chart #}
@@ -39,6 +47,35 @@
             :config="trendChartConfig"
         />
     </div>
+
+    {# Recent critical alerts #}
+    {% if recentAlerts is not empty %}
+        <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold">Recent Critical Alerts</h3>
+                    <a href="{{ path('dashboard_alerts') }}" class="text-xs text-primary hover:underline">View all</a>
+                </div>
+                <div class="space-y-2">
+                    {% for alert in recentAlerts %}
+                        <a href="{{ path('dashboard_alert_detail', { id: alert.alertId }) }}"
+                           class="flex items-center gap-3 p-2 rounded-btn hover:bg-base-200/50 transition-colors">
+                            <div class="w-6 h-6 rounded-full bg-error/10 flex items-center justify-center flex-shrink-0">
+                                <svg class="w-3 h-3 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium truncate">{{ alert.title }}</p>
+                                <p class="text-xs text-base-content/50">{{ alert.createdAt|date('M j, H:i') }}</p>
+                            </div>
+                            {% if not alert.isRead %}
+                                <span class="badge badge-xs badge-primary">New</span>
+                            {% endif %}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {# Recent reports #}

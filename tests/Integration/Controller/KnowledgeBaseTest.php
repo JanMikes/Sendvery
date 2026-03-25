@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\Test;
 final class KnowledgeBaseTest extends WebTestCase
 {
     #[Test]
-    public function index_returns_200(): void
+    public function indexReturns200(): void
     {
         $client = self::createClient();
         $client->request('GET', '/learn');
@@ -20,7 +20,7 @@ final class KnowledgeBaseTest extends WebTestCase
     }
 
     #[Test]
-    public function index_has_title_and_meta(): void
+    public function indexHasTitleAndMeta(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/learn');
@@ -34,7 +34,7 @@ final class KnowledgeBaseTest extends WebTestCase
     }
 
     #[Test]
-    public function index_lists_all_guides(): void
+    public function indexListsAllGuides(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/learn');
@@ -45,7 +45,7 @@ final class KnowledgeBaseTest extends WebTestCase
     }
 
     #[Test]
-    public function index_has_structured_data(): void
+    public function indexHasStructuredData(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/learn');
@@ -59,20 +59,20 @@ final class KnowledgeBaseTest extends WebTestCase
 
     #[Test]
     #[DataProvider('guideRoutes')]
-    public function guide_returns_200(string $slug): void
+    public function guideReturns200(string $slug): void
     {
         $client = self::createClient();
-        $client->request('GET', '/learn/' . $slug);
+        $client->request('GET', '/learn/'.$slug);
 
         self::assertResponseIsSuccessful();
     }
 
     #[Test]
     #[DataProvider('guideRoutes')]
-    public function guide_has_title_and_meta(string $slug): void
+    public function guideHasTitleAndMeta(string $slug): void
     {
         $client = self::createClient();
-        $crawler = $client->request('GET', '/learn/' . $slug);
+        $crawler = $client->request('GET', '/learn/'.$slug);
 
         $title = $crawler->filter('title')->text();
         self::assertNotEmpty($title);
@@ -85,10 +85,10 @@ final class KnowledgeBaseTest extends WebTestCase
 
     #[Test]
     #[DataProvider('guideRoutes')]
-    public function guide_has_article_structured_data(string $slug): void
+    public function guideHasArticleStructuredData(string $slug): void
     {
         $client = self::createClient();
-        $crawler = $client->request('GET', '/learn/' . $slug);
+        $crawler = $client->request('GET', '/learn/'.$slug);
 
         $jsonLdElements = $crawler->filter('script[type="application/ld+json"]');
         self::assertGreaterThanOrEqual(1, $jsonLdElements->count());
@@ -106,10 +106,10 @@ final class KnowledgeBaseTest extends WebTestCase
 
     #[Test]
     #[DataProvider('guideRoutes')]
-    public function guide_has_opengraph_article_type(string $slug): void
+    public function guideHasOpengraphArticleType(string $slug): void
     {
         $client = self::createClient();
-        $crawler = $client->request('GET', '/learn/' . $slug);
+        $crawler = $client->request('GET', '/learn/'.$slug);
 
         $ogType = $crawler->filter('meta[property="og:type"]')->attr('content');
         self::assertSame('article', $ogType);
@@ -117,20 +117,20 @@ final class KnowledgeBaseTest extends WebTestCase
 
     #[Test]
     #[DataProvider('guideRoutes')]
-    public function guide_has_more_guides_section(string $slug): void
+    public function guideHasMoreGuidesSection(string $slug): void
     {
         $client = self::createClient();
-        $crawler = $client->request('GET', '/learn/' . $slug);
+        $crawler = $client->request('GET', '/learn/'.$slug);
 
         self::assertSelectorTextContains('body', 'More guides');
     }
 
     #[Test]
     #[DataProvider('guideRoutes')]
-    public function guide_has_article_content(string $slug): void
+    public function guideHasArticleContent(string $slug): void
     {
         $client = self::createClient();
-        $crawler = $client->request('GET', '/learn/' . $slug);
+        $crawler = $client->request('GET', '/learn/'.$slug);
 
         $article = $crawler->filter('article');
         self::assertGreaterThanOrEqual(1, $article->count());
@@ -140,7 +140,7 @@ final class KnowledgeBaseTest extends WebTestCase
     }
 
     #[Test]
-    public function invalid_slug_returns_404(): void
+    public function invalidSlugReturns404(): void
     {
         $client = self::createClient();
         $client->request('GET', '/learn/nonexistent-guide');

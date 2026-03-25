@@ -24,7 +24,7 @@ final class HomeCheckerController extends AbstractController
     {
         $domain = $request->request->getString('domain');
 
-        if ($domain === '') {
+        if ('' === $domain) {
             return new Response('Domain is required.', Response::HTTP_BAD_REQUEST);
         }
 

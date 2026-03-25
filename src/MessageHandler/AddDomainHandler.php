@@ -12,7 +12,7 @@ use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
-readonly final class AddDomainHandler
+final readonly class AddDomainHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,

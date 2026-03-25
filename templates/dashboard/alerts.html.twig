@@ -1,0 +1,97 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Alerts{% endblock %}
+
+{% block breadcrumbs %}
+    <li>Alerts</li>
+{% endblock %}
+
+{% block content %}
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">Alerts</h1>
+            {% if unreadCount > 0 %}
+                <p class="text-sm text-base-content/50 mt-1">{{ unreadCount }} unread alert{{ unreadCount != 1 ? 's' : '' }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Filters #}
+    <div class="flex flex-wrap gap-2 mb-4">
+        <a href="{{ path('dashboard_alerts') }}"
+           class="btn btn-sm {{ currentSeverity is null and currentType is null and currentRead is null ? 'btn-primary' : 'btn-ghost' }}">
+            All
+        </a>
+        <a href="{{ path('dashboard_alerts', { read: 'false' }) }}"
+           class="btn btn-sm {{ currentRead == 'false' ? 'btn-primary' : 'btn-ghost' }}">
+            Unread
+        </a>
+        <div class="divider divider-horizontal mx-0"></div>
+        <a href="{{ path('dashboard_alerts', { severity: 'critical' }) }}"
+           class="btn btn-sm {{ currentSeverity == 'critical' ? 'btn-error' : 'btn-ghost' }}">
+            Critical
+        </a>
+        <a href="{{ path('dashboard_alerts', { severity: 'warning' }) }}"
+           class="btn btn-sm {{ currentSeverity == 'warning' ? 'btn-warning' : 'btn-ghost' }}">
+            Warning
+        </a>
+        <a href="{{ path('dashboard_alerts', { severity: 'info' }) }}"
+           class="btn btn-sm {{ currentSeverity == 'info' ? 'btn-info' : 'btn-ghost' }}">
+            Info
+        </a>
+    </div>
+
+    {% if alerts is empty %}
+        <twig:EmptyState
+            title="No alerts"
+            message="No alerts to show. Alerts will appear here when important events are detected for your domains."
+        />
+    {% else %}
+        <div class="space-y-2">
+            {% for alert in alerts %}
+                <a href="{{ path('dashboard_alert_detail', { id: alert.alertId }) }}"
+                   class="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow {{ not alert.isRead ? 'border-l-4' : '' }} {{ alert.severity == 'critical' ? 'border-l-error' : (alert.severity == 'warning' ? 'border-l-warning' : 'border-l-info') }}">
+                    <div class="card-body p-4 flex-row items-center gap-4">
+                        {# Severity icon #}
+                        <div class="flex-shrink-0">
+                            {% if alert.severity == 'critical' %}
+                                <div class="w-8 h-8 rounded-full bg-error/10 flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                                </div>
+                            {% elseif alert.severity == 'warning' %}
+                                <div class="w-8 h-8 rounded-full bg-warning/10 flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                                </div>
+                            {% else %}
+                                <div class="w-8 h-8 rounded-full bg-info/10 flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {# Content #}
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-sm font-semibold truncate {{ not alert.isRead ? 'text-base-content' : 'text-base-content/70' }}">
+                                    {{ alert.title }}
+                                </h3>
+                                {% if not alert.isRead %}
+                                    <span class="badge badge-xs badge-primary">New</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-xs text-base-content/50 mt-0.5 truncate">{{ alert.message }}</p>
+                        </div>
+
+                        {# Meta #}
+                        <div class="flex-shrink-0 text-right">
+                            {% if alert.domainName %}
+                                <span class="text-xs text-base-content/50 block">{{ alert.domainName }}</span>
+                            {% endif %}
+                            <span class="text-xs text-base-content/40">{{ alert.createdAt|date('M j, H:i') }}</span>
+                        </div>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}

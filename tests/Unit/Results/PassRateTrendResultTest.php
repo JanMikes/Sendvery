@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class PassRateTrendResultTest extends TestCase
 {
     #[Test]
-    public function it_can_be_constructed(): void
+    public function itCanBeConstructed(): void
     {
         $result = new PassRateTrendResult(
             date: '2025-06-15',
@@ -25,7 +25,7 @@ final class PassRateTrendResultTest extends TestCase
     }
 
     #[Test]
-    public function it_can_be_created_from_database_row(): void
+    public function itCanBeCreatedFromDatabaseRow(): void
     {
         $result = PassRateTrendResult::fromDatabaseRow([
             'date' => '2025-07-01',

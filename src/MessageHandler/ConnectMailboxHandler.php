@@ -15,7 +15,7 @@ use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
-readonly final class ConnectMailboxHandler
+final readonly class ConnectMailboxHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -30,7 +30,7 @@ readonly final class ConnectMailboxHandler
     public function __invoke(ConnectMailbox $message): void
     {
         $team = $this->teamRepository->get($message->teamId);
-        $domain = $message->domainId !== null
+        $domain = null !== $message->domainId
             ? $this->monitoredDomainRepository->get($message->domainId)
             : null;
 

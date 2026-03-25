@@ -28,7 +28,7 @@ final class GetDomainOverviewTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Overview Test',
-            slug: 'overview-test-' . Uuid::uuid7()->toString(),
+            slug: 'overview-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -91,7 +91,7 @@ final class GetDomainOverviewTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Empty Test',
-            slug: 'empty-test-' . Uuid::uuid7()->toString(),
+            slug: 'empty-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

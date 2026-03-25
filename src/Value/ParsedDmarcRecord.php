@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value;
 
-readonly final class ParsedDmarcRecord
+final readonly class ParsedDmarcRecord
 {
     public function __construct(
         public string $sourceIp,

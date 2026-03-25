@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class AddDomainDataTest extends TestCase
 {
     #[Test]
-    public function it_has_default_values(): void
+    public function itHasDefaultValues(): void
     {
         $data = new AddDomainData();
 
@@ -19,7 +19,7 @@ final class AddDomainDataTest extends TestCase
     }
 
     #[Test]
-    public function it_can_set_domain_name(): void
+    public function itCanSetDomainName(): void
     {
         $data = new AddDomainData();
         $data->domainName = 'example.com';

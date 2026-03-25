@@ -60,7 +60,7 @@ final class TestMailboxConnectionCommand extends Command
         $fakeTeam = new Team(
             id: Uuid::uuid7(),
             name: 'CLI Test',
-            slug: 'cli-test-' . Uuid::uuid7()->toString(),
+            slug: 'cli-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
 
@@ -72,7 +72,7 @@ final class TestMailboxConnectionCommand extends Command
             port: $port,
             encryptedUsername: $encryptedUsername,
             encryptedPassword: $encryptedPassword,
-            encryption: $port === 993 ? MailboxEncryption::Ssl : MailboxEncryption::StartTls,
+            encryption: 993 === $port ? MailboxEncryption::Ssl : MailboxEncryption::StartTls,
             createdAt: new \DateTimeImmutable(),
         );
 

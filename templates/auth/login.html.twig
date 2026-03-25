@@ -1,0 +1,58 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Sign in — Sendvery{% endblock %}
+{% block meta_description %}Sign in to your Sendvery account to monitor your email deliverability.{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <a href="{{ path('home') }}" class="text-3xl font-bold text-primary tracking-tight">Sendvery</a>
+            <p class="text-base-content/60 mt-2">Sign in to your account</p>
+        </div>
+
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                {% if errors is defined and errors|length > 0 %}
+                    <div class="alert alert-error mb-4">
+                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                        <div>
+                            {% for error in errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <form method="post" action="{{ path('auth_login') }}">
+                    <div class="form-control mb-4">
+                        <label class="label" for="email">
+                            <span class="label-text font-medium">Email address</span>
+                        </label>
+                        <input type="email"
+                               id="email"
+                               name="email"
+                               value="{{ email ?? '' }}"
+                               placeholder="you@example.com"
+                               class="input input-bordered w-full"
+                               required
+                               autofocus>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-full">
+                        Send magic link
+                    </button>
+                </form>
+
+                <p class="text-center text-sm text-base-content/50 mt-4">
+                    We'll email you a link to sign in. No password needed.
+                </p>
+            </div>
+        </div>
+
+        <p class="text-center text-sm text-base-content/40 mt-6">
+            <a href="{{ path('home') }}" class="hover:text-base-content">Back to homepage</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

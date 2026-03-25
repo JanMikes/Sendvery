@@ -27,7 +27,7 @@ final class DmarcSummaryCommandTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Summary Test',
-            slug: 'summary-test-' . Uuid::uuid7()->toString(),
+            slug: 'summary-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -91,7 +91,7 @@ final class DmarcSummaryCommandTest extends IntegrationTestCase
         $command = $application->find('sendvery:dmarc:summary');
         $tester = new CommandTester($command);
 
-        $tester->execute(['--days' => '1', '--domain' => 'nonexistent-' . Uuid::uuid7()->toString() . '.com']);
+        $tester->execute(['--days' => '1', '--domain' => 'nonexistent-'.Uuid::uuid7()->toString().'.com']);
 
         self::assertSame(0, $tester->getStatusCode());
         self::assertStringContainsString('No DMARC reports found', $tester->getDisplay());

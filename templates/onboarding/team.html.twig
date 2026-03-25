@@ -1,0 +1,37 @@
+{% extends 'onboarding/layout.html.twig' %}
+
+{% set step = 1 %}
+
+{% block page_title %}Team setup{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title text-2xl mb-2">Welcome to Sendvery!</h2>
+        <p class="text-base-content/60 mb-6">Let's set up your account. First, name your team.</p>
+
+        <form method="post" action="{{ path('onboarding_team') }}">
+            <div class="form-control mb-6">
+                <label class="label" for="team_name">
+                    <span class="label-text font-medium">Team name</span>
+                </label>
+                <input type="text"
+                       id="team_name"
+                       name="team_name"
+                       value="{{ suggestedName }}"
+                       placeholder="My Company"
+                       class="input input-bordered w-full"
+                       required
+                       autofocus>
+                <label class="label">
+                    <span class="label-text-alt text-base-content/40">You can change this later</span>
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-full">
+                Continue
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

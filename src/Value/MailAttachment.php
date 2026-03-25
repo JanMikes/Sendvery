@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value;
 
-readonly final class MailAttachment
+final readonly class MailAttachment
 {
     public function __construct(
         public string $filename,

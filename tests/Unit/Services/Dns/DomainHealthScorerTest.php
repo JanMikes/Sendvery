@@ -24,7 +24,7 @@ final class DomainHealthScorerTest extends TestCase
     }
 
     #[Test]
-    public function well_configured_domain_gets_grade_a(): void
+    public function wellConfiguredDomainGetsGradeA(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',
@@ -38,11 +38,11 @@ final class DomainHealthScorerTest extends TestCase
 
         self::assertSame('A', $score->grade);
         self::assertGreaterThanOrEqual(90, $score->score);
-        self::assertCount(4, $score->categories);
+        self::assertCount(5, $score->categories);
     }
 
     #[Test]
-    public function missing_everything_gets_grade_f(): void
+    public function missingEverythingGetsGradeFWithDefaultBlacklist(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',
@@ -54,12 +54,30 @@ final class DomainHealthScorerTest extends TestCase
 
         $score = $this->scorer->score($result);
 
+        // With blacklist defaulting to 100, 20% of 100 = 20 -> grade F
+        self::assertSame('F', $score->grade);
+        self::assertSame(20, $score->score);
+    }
+
+    #[Test]
+    public function missingEverythingWithZeroBlacklistGetsF(): void
+    {
+        $result = new EmailAuthCheckResult(
+            'example.com',
+            new SpfCheckResult(null, false, 0, 0, [], [], []),
+            [new DkimCheckResult(null, false, null, null, 'default', [], [])],
+            new DmarcCheckResult(null, null, null, [], [], null, null, null, [], []),
+            new MxCheckResult([], []),
+        );
+
+        $score = $this->scorer->score($result, blacklistScore: 0);
+
         self::assertSame('F', $score->grade);
         self::assertSame(0, $score->score);
     }
 
     #[Test]
-    public function dmarc_none_with_valid_spf_gets_c_or_d(): void
+    public function dmarcNoneWithValidSpfGetsCOrD(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',
@@ -75,7 +93,7 @@ final class DomainHealthScorerTest extends TestCase
     }
 
     #[Test]
-    public function quarantine_policy_gets_b(): void
+    public function quarantinePolicyGetsB(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',
@@ -92,7 +110,7 @@ final class DomainHealthScorerTest extends TestCase
     }
 
     #[Test]
-    public function categories_have_correct_structure(): void
+    public function categoriesHaveCorrectStructure(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',
@@ -105,7 +123,7 @@ final class DomainHealthScorerTest extends TestCase
         $score = $this->scorer->score($result);
 
         $categoryNames = array_map(fn ($cat) => $cat->name, $score->categories);
-        self::assertSame(['SPF', 'DKIM', 'DMARC', 'MX'], $categoryNames);
+        self::assertSame(['SPF', 'DKIM', 'DMARC', 'MX', 'Blacklist'], $categoryNames);
 
         foreach ($score->categories as $category) {
             self::assertContains($category->status, ['pass', 'warning', 'fail']);

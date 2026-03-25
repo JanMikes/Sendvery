@@ -6,7 +6,7 @@ namespace App\Events;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class MailboxConnectionCreated
+final readonly class MailboxConnectionCreated
 {
     public function __construct(
         public UuidInterface $connectionId,

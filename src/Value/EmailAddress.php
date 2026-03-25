@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value;
 
-readonly final class EmailAddress
+final readonly class EmailAddress
 {
     public string $value;
 
@@ -12,7 +12,7 @@ readonly final class EmailAddress
     {
         $normalized = mb_strtolower(trim($value));
 
-        if (filter_var($normalized, FILTER_VALIDATE_EMAIL) === false) {
+        if (false === filter_var($normalized, FILTER_VALIDATE_EMAIL)) {
             throw new \InvalidArgumentException(sprintf('Invalid email address: "%s"', $value));
         }
 

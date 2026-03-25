@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class DomainHealthScoreTest extends TestCase
 {
     #[Test]
-    public function grade_color_returns_correct_class(): void
+    public function gradeColorReturnsCorrectClass(): void
     {
         self::assertSame('text-success', (new DomainHealthScore('A', 95, []))->gradeColor());
         self::assertSame('text-info', (new DomainHealthScore('B', 80, []))->gradeColor());
@@ -22,7 +22,7 @@ final class DomainHealthScoreTest extends TestCase
     }
 
     #[Test]
-    public function health_category_is_constructed(): void
+    public function healthCategoryIsConstructed(): void
     {
         $cat = new HealthCategory('SPF', 85, 'pass');
 

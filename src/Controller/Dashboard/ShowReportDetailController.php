@@ -21,7 +21,7 @@ final class ShowReportDetailController extends AbstractController
     {
         $report = $this->getReportDetail->forReport($id);
 
-        if ($report === null) {
+        if (null === $report) {
             throw $this->createNotFoundException('Report not found.');
         }
 
@@ -29,7 +29,7 @@ final class ShowReportDetailController extends AbstractController
         $passMessages = 0;
         foreach ($report->records as $record) {
             $totalMessages += $record->count;
-            if ($record->dkimResult === 'pass' || $record->spfResult === 'pass') {
+            if ('pass' === $record->dkimResult || 'pass' === $record->spfResult) {
                 $passMessages += $record->count;
             }
         }

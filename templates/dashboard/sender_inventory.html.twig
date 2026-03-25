@@ -1,0 +1,95 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Senders — {{ domain.domainName }}{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_domains') }}">Domains</a></li>
+    <li><a href="{{ path('dashboard_domain_detail', { id: domain.domainId }) }}">{{ domain.domainName }}</a></li>
+    <li>Senders</li>
+{% endblock %}
+
+{% block content %}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">Sender Inventory</h1>
+            <p class="text-sm text-base-content/60 mt-1">All services and IPs sending email as {{ domain.domainName }}</p>
+        </div>
+    </div>
+
+    {# Filter tabs #}
+    <div class="tabs tabs-bordered mb-6">
+        <a href="{{ path('dashboard_sender_inventory', { id: domain.domainId }) }}"
+           class="tab {{ filter == '' or filter is null ? 'tab-active' : '' }}">All</a>
+        <a href="{{ path('dashboard_sender_inventory', { id: domain.domainId, filter: 'authorized' }) }}"
+           class="tab {{ filter == 'authorized' ? 'tab-active' : '' }}">Authorized</a>
+        <a href="{{ path('dashboard_sender_inventory', { id: domain.domainId, filter: 'unauthorized' }) }}"
+           class="tab {{ filter == 'unauthorized' ? 'tab-active' : '' }}">Unauthorized</a>
+    </div>
+
+    {% if senders is empty %}
+        <div class="card bg-base-100 shadow">
+            <div class="card-body text-center py-12">
+                <p class="text-base-content/60">No senders discovered yet. Senders will appear here after DMARC reports are processed.</p>
+            </div>
+        </div>
+    {% else %}
+        <div class="card bg-base-100 shadow overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>IP Address</th>
+                        <th>Hostname</th>
+                        <th>Organization</th>
+                        <th>Messages</th>
+                        <th>Pass Rate</th>
+                        <th>First Seen</th>
+                        <th>Last Seen</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sender in senders %}
+                        <tr>
+                            <td class="font-mono text-sm">{{ sender.sourceIp }}</td>
+                            <td class="text-sm">{{ sender.hostname ?? '-' }}</td>
+                            <td>
+                                {% if sender.organization %}
+                                    <span class="badge badge-sm badge-ghost">{{ sender.organization }}</span>
+                                {% else %}
+                                    <span class="text-base-content/40">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
+                            <td>
+                                <span class="{{ sender.passRate >= 90 ? 'text-success' : (sender.passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                    {{ sender.passRate|number_format(1) }}%
+                                </span>
+                            </td>
+                            <td class="text-sm text-base-content/60">{{ sender.firstSeenAt|date('M j, Y') }}</td>
+                            <td class="text-sm text-base-content/60">{{ sender.lastSeenAt|date('M j, Y') }}</td>
+                            <td>
+                                {% if sender.isAuthorized %}
+                                    <span class="badge badge-sm badge-success">Authorized</span>
+                                {% else %}
+                                    <span class="badge badge-sm badge-warning">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="post" action="{{ path('dashboard_sender_inventory', { id: domain.domainId }) }}">
+                                    <input type="hidden" name="sender_id" value="{{ sender.id }}">
+                                    {% if sender.isAuthorized %}
+                                        <input type="hidden" name="is_authorized" value="0">
+                                        <button type="submit" class="btn btn-ghost btn-xs">Revoke</button>
+                                    {% else %}
+                                        <input type="hidden" name="is_authorized" value="1">
+                                        <button type="submit" class="btn btn-primary btn-xs">Authorize</button>
+                                    {% endif %}
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}

@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 final class SpfCheckResultTest extends TestCase
 {
     #[Test]
-    public function has_record_returns_true_when_record_present(): void
+    public function hasRecordReturnsTrueWhenRecordPresent(): void
     {
         $result = new SpfCheckResult('v=spf1 ~all', true, 1, 0, [], [], []);
 
@@ -21,7 +21,7 @@ final class SpfCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function has_record_returns_false_when_null(): void
+    public function hasRecordReturnsFalseWhenNull(): void
     {
         $result = new SpfCheckResult(null, false, 0, 0, [], [], []);
 
@@ -29,7 +29,7 @@ final class SpfCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_passing_when_valid_and_under_limit(): void
+    public function isPassingWhenValidAndUnderLimit(): void
     {
         $result = new SpfCheckResult('v=spf1 ~all', true, 1, 5, [], [], []);
 
@@ -37,7 +37,7 @@ final class SpfCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_when_over_lookup_limit(): void
+    public function isNotPassingWhenOverLookupLimit(): void
     {
         $result = new SpfCheckResult('v=spf1 ~all', true, 1, 11, [], [], []);
 
@@ -45,7 +45,7 @@ final class SpfCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_when_invalid(): void
+    public function isNotPassingWhenInvalid(): void
     {
         $result = new SpfCheckResult('v=spf1 ~all', false, 1, 5, [], [], []);
 
@@ -53,7 +53,7 @@ final class SpfCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_with_critical_issues(): void
+    public function isNotPassingWithCriticalIssues(): void
     {
         $result = new SpfCheckResult(
             'v=spf1 +all',

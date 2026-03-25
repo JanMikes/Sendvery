@@ -7,7 +7,7 @@ namespace App\Services;
 use Ramsey\Uuid\Uuid;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class IdentityProvider
+final readonly class IdentityProvider
 {
     public function nextIdentity(): UuidInterface
     {

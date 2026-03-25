@@ -8,7 +8,7 @@ use App\Results\ReportDetailResult;
 use App\Results\ReportRecordResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetReportDetail
+final readonly class GetReportDetail
 {
     public function __construct(
         private Connection $database,
@@ -37,7 +37,7 @@ readonly final class GetReportDetail
             ['reportId' => $reportId],
         )->fetchAssociative();
 
-        if ($reportRow === false) {
+        if (false === $reportRow) {
             return null;
         }
 

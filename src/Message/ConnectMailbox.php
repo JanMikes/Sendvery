@@ -8,7 +8,7 @@ use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class ConnectMailbox
+final readonly class ConnectMailbox
 {
     public function __construct(
         public UuidInterface $connectionId,

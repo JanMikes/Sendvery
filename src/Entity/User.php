@@ -28,6 +28,15 @@ final class User implements EntityWithEvents, UserInterface
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     public ?\DateTimeImmutable $lastLoginAt;
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $onboardingCompletedAt;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    public bool $emailDigestEnabled;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    public bool $emailAlertsEnabled;
+
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
 
@@ -37,12 +46,18 @@ final class User implements EntityWithEvents, UserInterface
         \DateTimeImmutable $createdAt,
         string $locale = 'en',
         ?\DateTimeImmutable $lastLoginAt = null,
+        ?\DateTimeImmutable $onboardingCompletedAt = null,
+        bool $emailDigestEnabled = true,
+        bool $emailAlertsEnabled = true,
     ) {
         $this->id = $id;
         $this->email = $email;
         $this->createdAt = $createdAt;
         $this->locale = $locale;
         $this->lastLoginAt = $lastLoginAt;
+        $this->onboardingCompletedAt = $onboardingCompletedAt;
+        $this->emailDigestEnabled = $emailDigestEnabled;
+        $this->emailAlertsEnabled = $emailAlertsEnabled;
 
         $this->recordThat(new UserRegistered($this->id, $this->email));
     }

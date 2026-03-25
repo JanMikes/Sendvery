@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class DomainSenderResultTest extends TestCase
 {
     #[Test]
-    public function it_can_be_constructed(): void
+    public function itCanBeConstructed(): void
     {
         $result = new DomainSenderResult(
             sourceIp: '1.2.3.4',
@@ -29,7 +29,7 @@ final class DomainSenderResultTest extends TestCase
     }
 
     #[Test]
-    public function it_can_be_created_from_database_row(): void
+    public function itCanBeCreatedFromDatabaseRow(): void
     {
         $result = DomainSenderResult::fromDatabaseRow([
             'source_ip' => '10.0.0.1',

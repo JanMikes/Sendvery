@@ -14,7 +14,7 @@ use SPFLib\Term\Mechanism;
 use SPFLib\Term\Mechanism\IncludeMechanism;
 use SPFLib\Term\Modifier\RedirectModifier;
 
-readonly final class SpfChecker
+final readonly class SpfChecker
 {
     public function __construct(
         private Decoder $spfDecoder,
@@ -33,12 +33,12 @@ readonly final class SpfChecker
                 mechanismCount: 0,
                 lookupCount: 0,
                 includes: [],
-                issues: [new DnsIssue(IssueSeverity::Critical, 'Failed to query SPF record: ' . $e->getMessage())],
+                issues: [new DnsIssue(IssueSeverity::Critical, 'Failed to query SPF record: '.$e->getMessage())],
                 recommendations: ['Ensure your domain has a valid SPF TXT record.'],
             );
         }
 
-        if ($rawRecord === '') {
+        if ('' === $rawRecord) {
             return new SpfCheckResult(
                 rawRecord: null,
                 isValid: false,
@@ -59,7 +59,7 @@ readonly final class SpfChecker
                 mechanismCount: 0,
                 lookupCount: 0,
                 includes: [],
-                issues: [new DnsIssue(IssueSeverity::Critical, 'SPF record has syntax errors: ' . $e->getMessage())],
+                issues: [new DnsIssue(IssueSeverity::Critical, 'SPF record has syntax errors: '.$e->getMessage())],
                 recommendations: ['Fix the SPF record syntax. Use an SPF record generator tool.'],
             );
         }
@@ -73,19 +73,19 @@ readonly final class SpfChecker
 
         foreach ($record->getTerms() as $term) {
             if ($term instanceof Mechanism) {
-                $mechanismCount++;
+                ++$mechanismCount;
             }
 
             if ($term instanceof IncludeMechanism) {
                 $includes[] = (string) $term->getDomainSpec();
-                $lookupCount++;
+                ++$lookupCount;
             } elseif ($term instanceof Mechanism\AMechanism || $term instanceof Mechanism\MxMechanism || $term instanceof Mechanism\PtrMechanism || $term instanceof Mechanism\ExistsMechanism) {
-                $lookupCount++;
+                ++$lookupCount;
             } elseif ($term instanceof RedirectModifier) {
-                $lookupCount++;
+                ++$lookupCount;
             }
 
-            if ($term instanceof Mechanism\AllMechanism && $term->getQualifier() === Mechanism::QUALIFIER_PASS) {
+            if ($term instanceof Mechanism\AllMechanism && Mechanism::QUALIFIER_PASS === $term->getQualifier()) {
                 $hasAllPass = true;
             }
         }
@@ -127,8 +127,9 @@ readonly final class SpfChecker
 
         $isValid = true;
         foreach ($issues as $issue) {
-            if ($issue->severity === IssueSeverity::Critical) {
+            if (IssueSeverity::Critical === $issue->severity) {
                 $isValid = false;
+
                 break;
             }
         }

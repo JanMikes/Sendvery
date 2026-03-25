@@ -6,7 +6,7 @@ namespace App\Message;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class CreateTeam
+final readonly class CreateTeam
 {
     public function __construct(
         public UuidInterface $teamId,

@@ -9,7 +9,6 @@ use App\Repository\MonitoredDomainRepository;
 use App\Services\Dmarc\ReportAttachmentExtractor;
 use App\Services\IdentityProvider;
 use Doctrine\ORM\EntityManagerInterface;
-use Ramsey\Uuid\UuidInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -68,8 +67,9 @@ final class ImportDmarcReportCommand extends Command
         $this->monitoredDomainRepository->get($domainId);
 
         $content = file_get_contents($filePath);
-        if ($content === false) { // @codeCoverageIgnore
+        if (false === $content) { // @codeCoverageIgnore
             $io->error(sprintf('Could not read file: %s', $filePath)); // @codeCoverageIgnore
+
             return Command::FAILURE; // @codeCoverageIgnore
         }
 

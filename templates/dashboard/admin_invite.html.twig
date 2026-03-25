@@ -1,0 +1,55 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Invite Beta Users{% endblock %}
+
+{% block breadcrumbs %}
+    <li>Invite Beta Users</li>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">Invite Beta Users</h1>
+
+    {% if success is defined and success %}
+        <div class="alert alert-success mb-6">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <span>{{ success }}</span>
+        </div>
+    {% endif %}
+
+    {% if error is defined and error %}
+        <div class="alert alert-error mb-6">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            <span>{{ error }}</span>
+        </div>
+    {% endif %}
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <p class="text-base-content/60 mb-4">
+                Enter email addresses to invite to the Sendvery beta. Separate multiple emails with commas or new lines.
+            </p>
+
+            <form method="POST" action="{{ path('admin_invite_beta_user') }}">
+                <div class="form-control mb-4">
+                    <label class="label" for="emails">
+                        <span class="label-text">Email addresses</span>
+                    </label>
+                    <textarea
+                        id="emails"
+                        name="emails"
+                        class="textarea textarea-bordered h-32"
+                        placeholder="user1@example.com&#10;user2@example.com&#10;user3@example.com"
+                        required
+                    >{{ emailsRaw }}</textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    Send Invitations
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

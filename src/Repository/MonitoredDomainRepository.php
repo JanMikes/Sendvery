@@ -9,7 +9,7 @@ use App\Exceptions\MonitoredDomainNotFound;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class MonitoredDomainRepository
+final readonly class MonitoredDomainRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -20,7 +20,7 @@ readonly final class MonitoredDomainRepository
     {
         $domain = $this->entityManager->find(MonitoredDomain::class, $id);
 
-        if ($domain === null) {
+        if (null === $domain) {
             throw new MonitoredDomainNotFound(sprintf('Monitored domain with ID "%s" not found.', $id->toString()));
         }
 

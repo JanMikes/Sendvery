@@ -314,19 +314,16 @@
     {% endblock %}
 </twig:SectionContainer>
 
-{# === 13. Final CTA — Beta Signup === #}
+{# === 13. Final CTA — Get Started === #}
 <section class="py-24 lg:py-32 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
     <div class="container mx-auto text-center">
-        <h2 class="text-3xl md:text-4xl font-bold">Be the first to know when Sendvery launches</h2>
+        <h2 class="text-3xl md:text-4xl font-bold">Start monitoring your email health today</h2>
         <p class="mt-4 text-base-content/60 text-lg max-w-xl mx-auto">
-            Join the beta waitlist. We'll notify you when DMARC report parsing, DNS monitoring, and AI insights are ready.
+            DMARC report parsing, DNS monitoring, sender inventory, and blacklist checking. Free for 1 domain, no credit card required.
         </p>
-        <div class="max-w-md mx-auto mt-10">
-            <turbo-frame id="beta-signup-form" src="{{ path('beta_signup') }}" loading="lazy">
-                <div class="flex justify-center">
-                    <span class="loading loading-spinner loading-md text-primary"></span>
-                </div>
-            </turbo-frame>
+        <div class="mt-10">
+            <a href="{{ path('auth_login') }}" class="btn btn-primary btn-lg">Get started free</a>
+            <p class="text-sm text-base-content/50 mt-3">Self-host free forever. Hosted plans from $5.99/mo.</p>
         </div>
     </div>
 </section>

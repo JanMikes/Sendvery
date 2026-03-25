@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class DkimCheckResult
+final readonly class DkimCheckResult
 {
     /**
      * @param array<DnsIssue> $issues
-     * @param array<string> $recommendations
+     * @param array<string>   $recommendations
      */
     public function __construct(
         public ?string $rawRecord,
@@ -23,6 +23,6 @@ readonly final class DkimCheckResult
 
     public function isPassing(): bool
     {
-        return $this->keyExists && $this->keyBits !== null && $this->keyBits >= 2048;
+        return $this->keyExists && null !== $this->keyBits && $this->keyBits >= 2048;
     }
 }

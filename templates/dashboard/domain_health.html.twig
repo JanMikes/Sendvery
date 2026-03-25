@@ -1,0 +1,81 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Health — {{ domain.domainName }}{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_domains') }}">Domains</a></li>
+    <li><a href="{{ path('dashboard_domain_detail', { id: domain.domainId }) }}">{{ domain.domainName }}</a></li>
+    <li>Health</li>
+{% endblock %}
+
+{% block content %}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">Domain Health</h1>
+            <p class="text-sm text-base-content/60 mt-1">Health score and trend for {{ domain.domainName }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{{ path('dashboard_export_domain_pdf', { id: domain.domainId }) }}" class="btn btn-ghost btn-sm">
+                Export PDF
+            </a>
+            {% if latest and latest.shareHash %}
+                <a href="{{ path('public_domain_health', { hash: latest.shareHash }) }}" target="_blank" class="btn btn-ghost btn-sm">
+                    Share
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if latest %}
+        {# Current score #}
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="card bg-base-100 shadow">
+                <div class="card-body items-center text-center">
+                    <div class="text-7xl font-bold {{ latest.gradeColor() }}">{{ latest.grade }}</div>
+                    <div class="text-2xl font-semibold mt-2">{{ latest.score }}/100</div>
+                    <p class="text-sm text-base-content/60 mt-1">Overall Health Score</p>
+                </div>
+            </div>
+
+            <div class="col-span-2 card bg-base-100 shadow">
+                <div class="card-body">
+                    <h3 class="card-title text-lg mb-4">Category Scores</h3>
+                    <div class="space-y-3">
+                        {% set categories = [
+                            { name: 'SPF', score: latest.spfScore },
+                            { name: 'DKIM', score: latest.dkimScore },
+                            { name: 'DMARC', score: latest.dmarcScore },
+                            { name: 'MX', score: latest.mxScore },
+                            { name: 'Blacklist', score: latest.blacklistScore },
+                        ] %}
+                        {% for cat in categories %}
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span>{{ cat.name }}</span>
+                                    <span class="font-medium">{{ cat.score }}%</span>
+                                </div>
+                                <progress class="progress {{ cat.score >= 80 ? 'progress-success' : (cat.score >= 50 ? 'progress-warning' : 'progress-error') }} w-full" value="{{ cat.score }}" max="100"></progress>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Trend chart #}
+        {% if trendChartConfig %}
+            <div class="card bg-base-100 shadow mb-6">
+                <div class="card-body">
+                    <h3 class="card-title text-lg">Score Trend</h3>
+                    <div {{ stimulus_controller('chart') }} {{ stimulus_target('chart', 'canvas') }} data-chart-config-value="{{ trendChartConfig|json_encode }}"></div>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="card bg-base-100 shadow">
+            <div class="card-body text-center py-12">
+                <p class="text-base-content/60">No health snapshots yet. Run a DNS health check to generate the first score.</p>
+                <a href="{{ path('tools_domain_health') }}?domain={{ domain.domainName }}" class="btn btn-primary btn-sm mt-4">Run Health Check</a>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

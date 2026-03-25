@@ -27,7 +27,7 @@ final class ConnectMailboxHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Test',
-            slug: 'test-' . Uuid::uuid7()->toString(),
+            slug: 'test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -72,7 +72,7 @@ final class ConnectMailboxHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Test',
-            slug: 'test-domain-' . Uuid::uuid7()->toString(),
+            slug: 'test-domain-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -117,7 +117,7 @@ final class ConnectMailboxHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Test',
-            slug: 'test-fail-' . Uuid::uuid7()->toString(),
+            slug: 'test-fail-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

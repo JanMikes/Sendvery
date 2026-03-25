@@ -21,7 +21,7 @@ final class TeamRepositoryTest extends IntegrationTestCase
         $team = new Team(
             id: $id,
             name: 'Test Team',
-            slug: 'test-team-' . $id->toString(),
+            slug: 'test-team-'.$id->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -46,7 +46,7 @@ final class TeamRepositoryTest extends IntegrationTestCase
     {
         $em = $this->getService(EntityManagerInterface::class);
         $id = Uuid::uuid7();
-        $slug = 'unique-slug-' . $id->toString();
+        $slug = 'unique-slug-'.$id->toString();
 
         $team = new Team(
             id: $id,

@@ -10,7 +10,7 @@ use App\Value\Dns\MxCheckResult;
 use App\Value\Dns\MxRecord;
 use Spatie\Dns\Dns;
 
-readonly final class MxChecker
+final readonly class MxChecker
 {
     public function __construct(
         private Dns $dns,
@@ -31,12 +31,12 @@ readonly final class MxChecker
         $records = [];
         foreach ($dnsRecords as $dnsRecord) {
             $parsed = $this->parseMxRecord((string) $dnsRecord);
-            if ($parsed !== null) {
+            if (null !== $parsed) {
                 $records[] = $parsed;
             }
         }
 
-        if ($records === []) {
+        if ([] === $records) {
             return new MxCheckResult(
                 records: [],
                 issues: [new DnsIssue(IssueSeverity::Warning, 'No MX records found. This domain cannot receive email.', 'Add MX records pointing to your mail server.')],
@@ -60,7 +60,7 @@ readonly final class MxChecker
 
         $anyTlsMissing = false;
         foreach ($records as $record) {
-            if ($record->reachable && $record->tlsSupported === false) {
+            if ($record->reachable && false === $record->tlsSupported) {
                 $anyTlsMissing = true;
             }
         }
@@ -89,7 +89,7 @@ readonly final class MxChecker
         $reachable = false;
         $tlsSupported = null;
 
-        if ($ip !== null) {
+        if (null !== $ip) {
             $reachable = $this->checkPort25($ip);
             if ($reachable) {
                 $tlsSupported = $this->checkStartTls($ip);
@@ -126,20 +126,20 @@ readonly final class MxChecker
     private function checkPort25(string $ip): bool
     {
         $socket = @fsockopen($ip, 25, $errno, $errstr, 3);
-        if ($socket === false) {
+        if (false === $socket) {
             return false;
         }
 
         $response = @fgets($socket, 1024);
         fclose($socket);
 
-        return $response !== false && str_starts_with($response, '220');
+        return false !== $response && str_starts_with($response, '220');
     }
 
     private function checkStartTls(string $ip): bool
     {
         $socket = @fsockopen($ip, 25, $errno, $errstr, 3);
-        if ($socket === false) {
+        if (false === $socket) {
             return false;
         }
 
@@ -153,7 +153,7 @@ readonly final class MxChecker
         while ($line = @fgets($socket, 1024)) {
             $ehloResponse .= $line;
             // Multi-line responses have - after status code, last line has space
-            if (isset($line[3]) && $line[3] !== '-') {
+            if (isset($line[3]) && '-' !== $line[3]) {
                 break;
             }
         }
@@ -161,6 +161,6 @@ readonly final class MxChecker
         fwrite($socket, "QUIT\r\n");
         fclose($socket);
 
-        return stripos($ehloResponse, 'STARTTLS') !== false;
+        return false !== stripos($ehloResponse, 'STARTTLS');
     }
 }

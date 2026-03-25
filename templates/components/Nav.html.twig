@@ -39,9 +39,14 @@
                 <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
             </button>
 
-            <a href="{{ path('home') }}#dns-checker" class="btn btn-primary btn-sm" {{ stimulus_action('scroll-to', 'scroll', 'click') }} data-scroll-to-target-value="dns-checker">
-                Check your domain
-            </a>
+            {% if app.user %}
+                <a href="{{ path('dashboard_overview') }}" class="btn btn-primary btn-sm">Dashboard</a>
+            {% else %}
+                <a href="{{ path('auth_login') }}" class="btn btn-ghost btn-sm">Sign in</a>
+                <a href="{{ path('home') }}#dns-checker" class="btn btn-primary btn-sm" {{ stimulus_action('scroll-to', 'scroll', 'click') }} data-scroll-to-target-value="dns-checker">
+                    Check your domain
+                </a>
+            {% endif %}
         </div>
 
         {# Mobile hamburger #}
@@ -73,7 +78,12 @@
             <a href="{{ path('knowledge_base_index') }}" class="btn btn-ghost btn-sm justify-start">Learn</a>
             <a href="{{ path('pricing') }}" class="btn btn-ghost btn-sm justify-start">Pricing</a>
             <a href="{{ path('about_open_source') }}" class="btn btn-ghost btn-sm justify-start">Open Source</a>
-            <a href="{{ path('home') }}#dns-checker" class="btn btn-primary btn-sm mt-2">Check your domain</a>
+            {% if app.user %}
+                <a href="{{ path('dashboard_overview') }}" class="btn btn-primary btn-sm mt-2">Dashboard</a>
+            {% else %}
+                <a href="{{ path('auth_login') }}" class="btn btn-ghost btn-sm justify-start mt-2">Sign in</a>
+                <a href="{{ path('home') }}#dns-checker" class="btn btn-primary btn-sm">Check your domain</a>
+            {% endif %}
         </div>
     </div>
 </nav>

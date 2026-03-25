@@ -35,9 +35,9 @@ final class BetaSignupController extends AbstractController
         if ($request->isMethod('POST')) {
             $data->email = trim($request->request->getString('email'));
             $domainCount = $request->request->getString('domain_count');
-            $data->domainCount = $domainCount !== '' ? (int) $domainCount : null;
+            $data->domainCount = '' !== $domainCount ? (int) $domainCount : null;
             $painPoint = $request->request->getString('pain_point');
-            $data->painPoint = $painPoint !== '' ? $painPoint : null;
+            $data->painPoint = '' !== $painPoint ? $painPoint : null;
 
             $violations = $this->validator->validate($data);
 
@@ -48,7 +48,7 @@ final class BetaSignupController extends AbstractController
             } else {
                 $existing = $this->betaSignupRepository->findByEmail($data->email);
 
-                if ($existing !== null) {
+                if (null !== $existing) {
                     $success = true;
                 } else {
                     $signupId = $this->identityProvider->nextIdentity();

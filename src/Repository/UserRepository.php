@@ -9,7 +9,7 @@ use App\Exceptions\UserNotFound;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class UserRepository
+final readonly class UserRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -20,7 +20,7 @@ readonly final class UserRepository
     {
         $user = $this->entityManager->find(User::class, $id);
 
-        if ($user === null) {
+        if (null === $user) {
             throw new UserNotFound(sprintf('User with ID "%s" not found.', $id->toString()));
         }
 

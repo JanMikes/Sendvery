@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class DomainDetailResultTest extends TestCase
 {
     #[Test]
-    public function it_can_be_constructed(): void
+    public function itCanBeConstructed(): void
     {
         $result = new DomainDetailResult(
             domainId: 'abc-123',
@@ -36,7 +36,7 @@ final class DomainDetailResultTest extends TestCase
     }
 
     #[Test]
-    public function it_can_be_created_from_database_row(): void
+    public function itCanBeCreatedFromDatabaseRow(): void
     {
         $result = DomainDetailResult::fromDatabaseRow([
             'domain_id' => 'abc-123',

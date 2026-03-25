@@ -10,11 +10,12 @@ use PHPUnit\Framework\TestCase;
 final class CredentialEncryptorTest extends TestCase
 {
     private CredentialEncryptor $encryptor;
+    private string $rawKey;
 
     protected function setUp(): void
     {
-        $key = base64_encode(random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES));
-        $this->encryptor = new CredentialEncryptor($key);
+        $this->rawKey = base64_encode(random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES));
+        $this->encryptor = new CredentialEncryptor($this->rawKey);
     }
 
     public function testEncryptDecryptRoundtrip(): void
@@ -23,6 +24,7 @@ final class CredentialEncryptorTest extends TestCase
         $encrypted = $this->encryptor->encrypt($plaintext);
 
         self::assertNotSame($plaintext, $encrypted);
+        self::assertStringStartsWith('halite:', $encrypted);
 
         $decrypted = $this->encryptor->decrypt($encrypted);
 
@@ -41,23 +43,42 @@ final class CredentialEncryptorTest extends TestCase
         self::assertSame($plaintext, $this->encryptor->decrypt($encrypted2));
     }
 
-    public function testDecryptWithWrongKeyFails(): void
+    public function testBackwardCompatibilityWithLegacySodium(): void
     {
-        $encrypted = $this->encryptor->encrypt('secret');
+        // Encrypt using legacy sodium format
+        $key = base64_decode($this->rawKey);
+        $plaintext = 'legacy-password';
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $ciphertext = sodium_crypto_secretbox($plaintext, $nonce, $key);
+        $legacyEncrypted = base64_encode($nonce.$ciphertext);
 
-        $otherKey = base64_encode(random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES));
-        $otherEncryptor = new CredentialEncryptor($otherKey);
+        // Decrypt with the new encryptor should work
+        $decrypted = $this->encryptor->decrypt($legacyEncrypted);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Decryption failed');
-        $otherEncryptor->decrypt($encrypted);
+        self::assertSame($plaintext, $decrypted);
     }
 
-    public function testDecryptCorruptedDataFails(): void
+    public function testReEncryptMigratesLegacyToHalite(): void
     {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Decryption failed');
-        $this->encryptor->decrypt(base64_encode('corrupted-data-that-is-long-enough-to-pass'));
+        // Create legacy-encrypted value
+        $key = base64_decode($this->rawKey);
+        $plaintext = 'migrate-me';
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $ciphertext = sodium_crypto_secretbox($plaintext, $nonce, $key);
+        $legacyEncrypted = base64_encode($nonce.$ciphertext);
+
+        $reEncrypted = $this->encryptor->reEncrypt($legacyEncrypted);
+
+        self::assertNotNull($reEncrypted);
+        self::assertStringStartsWith('halite:', $reEncrypted);
+        self::assertSame($plaintext, $this->encryptor->decrypt($reEncrypted));
+    }
+
+    public function testReEncryptReturnsNullForHaliteFormat(): void
+    {
+        $encrypted = $this->encryptor->encrypt('already-halite');
+
+        self::assertNull($this->encryptor->reEncrypt($encrypted));
     }
 
     public function testEncryptsEmptyString(): void
@@ -75,5 +96,12 @@ final class CredentialEncryptorTest extends TestCase
         $decrypted = $this->encryptor->decrypt($encrypted);
 
         self::assertSame($plaintext, $decrypted);
+    }
+
+    public function testDecryptLegacyCorruptedDataFails(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Decryption failed');
+        $this->encryptor->decrypt(base64_encode('corrupted-data-that-is-long-enough-to-pass'));
     }
 }

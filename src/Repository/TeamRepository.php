@@ -9,7 +9,7 @@ use App\Exceptions\TeamNotFound;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class TeamRepository
+final readonly class TeamRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -20,7 +20,7 @@ readonly final class TeamRepository
     {
         $team = $this->entityManager->find(Team::class, $id);
 
-        if ($team === null) {
+        if (null === $team) {
             throw new TeamNotFound(sprintf('Team with ID "%s" not found.', $id->toString()));
         }
 

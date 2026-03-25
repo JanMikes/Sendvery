@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Results;
 
-readonly final class PassRateTrendResult
+final readonly class PassRateTrendResult
 {
     public function __construct(
         public string $date,

@@ -19,11 +19,12 @@ final class KnowledgeBaseArticleController extends AbstractController
         foreach (KnowledgeBaseIndexController::GUIDES as $g) {
             if ($g['slug'] === $slug) {
                 $guide = $g;
+
                 break;
             }
         }
 
-        if ($guide === null) {
+        if (null === $guide) {
             throw new NotFoundHttpException();
         }
 

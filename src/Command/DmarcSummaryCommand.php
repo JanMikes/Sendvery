@@ -63,7 +63,7 @@ final class DmarcSummaryCommand extends Command
             $params,
         )->fetchAssociative();
 
-        if ($summary === false || (int) $summary['total_reports'] === 0) {
+        if (false === $summary || 0 === (int) $summary['total_reports']) {
             $io->warning(sprintf('No DMARC reports found in the last %d days.', $days));
 
             return Command::SUCCESS;
@@ -102,13 +102,13 @@ final class DmarcSummaryCommand extends Command
             $params,
         )->fetchAllAssociative();
 
-        if ($topSenders !== []) {
+        if ([] !== $topSenders) {
             $io->section('Top senders');
             $rows = array_map(static fn (array $row): array => [
                 $row['source_ip'],
                 $row['total'],
                 $row['pass_count'],
-                (int) $row['total'] > 0 ? round((int) $row['pass_count'] / (int) $row['total'] * 100, 1) . '%' : '0%',
+                (int) $row['total'] > 0 ? round((int) $row['pass_count'] / (int) $row['total'] * 100, 1).'%' : '0%',
             ], $topSenders);
             $io->table(['IP', 'Messages', 'Pass', 'Rate'], $rows);
         }

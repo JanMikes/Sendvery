@@ -8,7 +8,6 @@ use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
-use App\Entity\User;
 use App\Message\ProcessDmarcReport;
 use App\MessageHandler\ProcessDmarcReportHandler;
 use App\Tests\IntegrationTestCase;
@@ -24,7 +23,7 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Test Team',
-            slug: 'test-team-' . Uuid::uuid7()->toString(),
+            slug: 'test-team-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -40,7 +39,7 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
-        $xml = file_get_contents(__DIR__ . '/../../Fixtures/google-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/google-report.xml');
         assert(is_string($xml));
 
         $reportId = Uuid::uuid7();
@@ -68,7 +67,7 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Dup Team',
-            slug: 'dup-team-' . Uuid::uuid7()->toString(),
+            slug: 'dup-team-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -84,7 +83,7 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
-        $xml = file_get_contents(__DIR__ . '/../../Fixtures/google-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/google-report.xml');
         assert(is_string($xml));
 
         $handler = $this->getService(ProcessDmarcReportHandler::class);
@@ -118,7 +117,7 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Compress Team',
-            slug: 'compress-team-' . Uuid::uuid7()->toString(),
+            slug: 'compress-team-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -134,7 +133,7 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
         $em->flush();
         $em->clear();
 
-        $xml = file_get_contents(__DIR__ . '/../../Fixtures/minimal-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/minimal-report.xml');
         assert(is_string($xml));
 
         $reportId = Uuid::uuid7();

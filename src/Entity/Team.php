@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Events\TeamCreated;
+use App\Value\SubscriptionPlan;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
 
@@ -30,6 +31,12 @@ final class Team implements EntityWithEvents
     #[ORM\Column(length: 50)]
     public string $plan;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    public ?string $stripeSubscriptionId;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $planWarningAt;
+
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
 
@@ -40,6 +47,8 @@ final class Team implements EntityWithEvents
         \DateTimeImmutable $createdAt,
         ?string $stripeCustomerId = null,
         string $plan = 'free',
+        ?string $stripeSubscriptionId = null,
+        ?\DateTimeImmutable $planWarningAt = null,
     ) {
         $this->id = $id;
         $this->name = $name;
@@ -47,7 +56,14 @@ final class Team implements EntityWithEvents
         $this->createdAt = $createdAt;
         $this->stripeCustomerId = $stripeCustomerId;
         $this->plan = $plan;
+        $this->stripeSubscriptionId = $stripeSubscriptionId;
+        $this->planWarningAt = $planWarningAt;
 
         $this->recordThat(new TeamCreated($this->id));
+    }
+
+    public function getSubscriptionPlan(): SubscriptionPlan
+    {
+        return SubscriptionPlan::from($this->plan);
     }
 }

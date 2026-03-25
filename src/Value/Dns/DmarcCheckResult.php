@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class DmarcCheckResult
+final readonly class DmarcCheckResult
 {
     /**
-     * @param array<string> $ruaAddresses
-     * @param array<string> $rufAddresses
+     * @param array<string>   $ruaAddresses
+     * @param array<string>   $rufAddresses
      * @param array<DnsIssue> $issues
-     * @param array<string> $recommendations
+     * @param array<string>   $recommendations
      */
     public function __construct(
         public ?string $rawRecord,
@@ -28,16 +28,16 @@ readonly final class DmarcCheckResult
 
     public function hasRecord(): bool
     {
-        return $this->rawRecord !== null;
+        return null !== $this->rawRecord;
     }
 
     public function isEnforcing(): bool
     {
-        return $this->policy === 'quarantine' || $this->policy === 'reject';
+        return 'quarantine' === $this->policy || 'reject' === $this->policy;
     }
 
     public function isPassing(): bool
     {
-        return $this->hasRecord() && $this->isEnforcing() && $this->ruaAddresses !== [];
+        return $this->hasRecord() && $this->isEnforcing() && [] !== $this->ruaAddresses;
     }
 }

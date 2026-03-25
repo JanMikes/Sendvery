@@ -27,6 +27,8 @@ final class UserTest extends TestCase
         self::assertSame($createdAt, $user->createdAt);
         self::assertSame('en', $user->locale);
         self::assertNull($user->lastLoginAt);
+        self::assertTrue($user->emailDigestEnabled);
+        self::assertTrue($user->emailAlertsEnabled);
     }
 
     public function testConstructorWithOptionalFields(): void
@@ -68,6 +70,20 @@ final class UserTest extends TestCase
         $user->eraseCredentials();
 
         self::assertSame('user@example.com', $user->email);
+    }
+
+    public function testEmailPreferencesCanBeDisabled(): void
+    {
+        $user = new User(
+            id: Uuid::uuid7(),
+            email: 'user@example.com',
+            createdAt: new \DateTimeImmutable(),
+            emailDigestEnabled: false,
+            emailAlertsEnabled: false,
+        );
+
+        self::assertFalse($user->emailDigestEnabled);
+        self::assertFalse($user->emailAlertsEnabled);
     }
 
     public function testRecordsUserRegisteredEvent(): void

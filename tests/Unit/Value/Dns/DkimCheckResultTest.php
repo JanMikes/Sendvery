@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class DkimCheckResultTest extends TestCase
 {
     #[Test]
-    public function is_passing_with_strong_key(): void
+    public function isPassingWithStrongKey(): void
     {
         $result = new DkimCheckResult('v=DKIM1; k=rsa; p=...', true, 'rsa', 2048, 'google', [], []);
 
@@ -19,7 +19,7 @@ final class DkimCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_with_weak_key(): void
+    public function isNotPassingWithWeakKey(): void
     {
         $result = new DkimCheckResult('v=DKIM1; k=rsa; p=...', true, 'rsa', 1024, 'google', [], []);
 
@@ -27,7 +27,7 @@ final class DkimCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_when_key_missing(): void
+    public function isNotPassingWhenKeyMissing(): void
     {
         $result = new DkimCheckResult(null, false, null, null, 'default', [], []);
 

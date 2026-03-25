@@ -12,7 +12,7 @@ final class MarketingPagesTest extends WebTestCase
 {
     #[Test]
     #[DataProvider('publicRoutes')]
-    public function page_returns_200(string $url): void
+    public function pageReturns200(string $url): void
     {
         $client = self::createClient();
         $client->request('GET', $url);
@@ -22,7 +22,7 @@ final class MarketingPagesTest extends WebTestCase
 
     #[Test]
     #[DataProvider('publicRoutes')]
-    public function page_has_title_and_meta_description(string $url): void
+    public function pageHasTitleAndMetaDescription(string $url): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', $url);
@@ -36,7 +36,7 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function homepage_contains_hero_section(): void
+    public function homepageContainsHeroSection(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -45,7 +45,7 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function homepage_contains_pricing_section(): void
+    public function homepageContainsPricingSection(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -54,7 +54,7 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function homepage_contains_faq_section(): void
+    public function homepageContainsFaqSection(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -63,7 +63,7 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function homepage_contains_cta(): void
+    public function homepageContainsCta(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -73,7 +73,7 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function homepage_has_structured_data(): void
+    public function homepageHasStructuredData(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -87,7 +87,7 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function navigation_contains_tool_links(): void
+    public function navigationContainsToolLinks(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -100,7 +100,7 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function footer_contains_all_tool_links(): void
+    public function footerContainsAllToolLinks(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
@@ -114,7 +114,7 @@ final class MarketingPagesTest extends WebTestCase
         self::assertStringContainsString('DNS Monitoring', $footer->text());
         self::assertStringContainsString('Domain Health', $footer->text());
         self::assertStringContainsString('Knowledge Base', $footer->text());
-        self::assertStringContainsString('Join Beta', $footer->text());
+        self::assertStringContainsString('Get Started', $footer->text());
     }
 
     /** @return iterable<string, array{string}> */

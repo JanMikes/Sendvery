@@ -18,7 +18,9 @@ abstract class WebTestCase extends SymfonyWebTestCase
 
     /**
      * @template T of object
+     *
      * @param class-string<T> $class
+     *
      * @return T
      */
     protected function getService(string $class): object

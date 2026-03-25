@@ -1,0 +1,30 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Login failed — Sendvery{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <a href="{{ path('home') }}" class="text-3xl font-bold text-primary tracking-tight">Sendvery</a>
+        </div>
+
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body text-center">
+                <div class="flex justify-center mb-4">
+                    <svg class="w-16 h-16 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                </div>
+
+                <h2 class="text-xl font-bold mb-2">Login failed</h2>
+                <p class="text-base-content/60 mb-6">
+                    {{ error }}
+                </p>
+
+                <a href="{{ path('auth_login') }}" class="btn btn-primary w-full">
+                    Request a new link
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

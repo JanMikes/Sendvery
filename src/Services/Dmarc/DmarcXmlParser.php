@@ -6,13 +6,13 @@ namespace App\Services\Dmarc;
 
 use App\Exceptions\InvalidDmarcReportXml;
 use App\Value\AuthResult;
+use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
-use App\Value\Disposition;
 use App\Value\ParsedDmarcRecord;
 use App\Value\ParsedDmarcReport;
 
-readonly final class DmarcXmlParser
+final readonly class DmarcXmlParser
 {
     public function parse(string $xml): ParsedDmarcReport
     {
@@ -21,8 +21,8 @@ readonly final class DmarcXmlParser
         try {
             $document = simplexml_load_string($xml);
 
-            if ($document === false) {
-                throw new InvalidDmarcReportXml('Failed to parse XML: ' . $this->getXmlErrors());
+            if (false === $document) {
+                throw new InvalidDmarcReportXml('Failed to parse XML: '.$this->getXmlErrors());
             }
 
             return $this->parseDocument($document);
@@ -48,7 +48,7 @@ readonly final class DmarcXmlParser
         $reporterEmail = (string) ($metadata->email ?? '');
         $reportId = (string) ($metadata->report_id ?? '');
 
-        if ($reportId === '') {
+        if ('' === $reportId) {
             throw new InvalidDmarcReportXml('Missing <report_id> in report metadata.');
         }
 
@@ -56,22 +56,22 @@ readonly final class DmarcXmlParser
         $dateRangeEnd = $this->parseTimestamp($metadata->date_range->end ?? null, 'date_range.end');
 
         $policyDomain = (string) ($policy->domain ?? '');
-        if ($policyDomain === '') {
+        if ('' === $policyDomain) {
             throw new InvalidDmarcReportXml('Missing <domain> in policy_published.');
         }
 
         $policyAdkim = DmarcAlignment::tryFrom((string) ($policy->adkim ?? 'r')) ?? DmarcAlignment::Relaxed;
         $policyAspf = DmarcAlignment::tryFrom((string) ($policy->aspf ?? 'r')) ?? DmarcAlignment::Relaxed;
         $policyP = DmarcPolicy::tryFrom((string) ($policy->p ?? ''));
-        if ($policyP === null) {
+        if (null === $policyP) {
             throw new InvalidDmarcReportXml('Invalid or missing <p> in policy_published.');
         }
 
         $spValue = (string) ($policy->sp ?? '');
-        $policySp = $spValue !== '' ? DmarcPolicy::tryFrom($spValue) : null;
+        $policySp = '' !== $spValue ? DmarcPolicy::tryFrom($spValue) : null;
 
         $pctValue = (string) ($policy->pct ?? '100');
-        $policyPct = $pctValue !== '' ? (int) $pctValue : 100;
+        $policyPct = '' !== $pctValue ? (int) $pctValue : 100;
 
         $records = [];
         foreach ($document->record as $record) {
@@ -132,9 +132,9 @@ readonly final class DmarcXmlParser
         );
     }
 
-    private function parseTimestamp(\SimpleXMLElement|null $element, string $fieldName): \DateTimeImmutable
+    private function parseTimestamp(?\SimpleXMLElement $element, string $fieldName): \DateTimeImmutable
     {
-        if ($element === null) {
+        if (null === $element) {
             throw new InvalidDmarcReportXml(sprintf('Missing <%s> in report metadata.', $fieldName));
         }
 

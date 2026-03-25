@@ -21,11 +21,11 @@ final class GetUserTeamsTest extends IntegrationTestCase
         $now = new \DateTimeImmutable();
 
         $userId = Uuid::uuid7();
-        $user = new User(id: $userId, email: 'query-' . $userId->toString() . '@test.com', createdAt: $now);
+        $user = new User(id: $userId, email: 'query-'.$userId->toString().'@test.com', createdAt: $now);
         $em->persist($user);
 
         $teamId = Uuid::uuid7();
-        $team = new Team(id: $teamId, name: 'Query Team', slug: 'query-team-' . $teamId->toString(), createdAt: $now);
+        $team = new Team(id: $teamId, name: 'Query Team', slug: 'query-team-'.$teamId->toString(), createdAt: $now);
         $em->persist($team);
 
         $membership = new TeamMembership(

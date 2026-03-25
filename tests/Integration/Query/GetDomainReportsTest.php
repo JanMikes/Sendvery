@@ -27,7 +27,7 @@ final class GetDomainReportsTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Reports Query',
-            slug: 'reports-query-' . Uuid::uuid7()->toString(),
+            slug: 'reports-query-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -89,7 +89,7 @@ final class GetDomainReportsTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Paging',
-            slug: 'paging-' . Uuid::uuid7()->toString(),
+            slug: 'paging-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -103,15 +103,15 @@ final class GetDomainReportsTest extends IntegrationTestCase
         );
         $em->persist($domain);
 
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 3; ++$i) {
             $report = new DmarcReport(
                 id: Uuid::uuid7(),
                 monitoredDomain: $domain,
-                reporterOrg: 'reporter-' . $i,
+                reporterOrg: 'reporter-'.$i,
                 reporterEmail: 'test@test.com',
-                externalReportId: 'ext-page-' . $i,
-                dateRangeBegin: new \DateTimeImmutable('2024-04-0' . ($i + 1)),
-                dateRangeEnd: new \DateTimeImmutable('2024-04-0' . ($i + 2)),
+                externalReportId: 'ext-page-'.$i,
+                dateRangeBegin: new \DateTimeImmutable('2024-04-0'.($i + 1)),
+                dateRangeEnd: new \DateTimeImmutable('2024-04-0'.($i + 2)),
                 policyDomain: 'paging-test.com',
                 policyAdkim: DmarcAlignment::Relaxed,
                 policyAspf: DmarcAlignment::Relaxed,

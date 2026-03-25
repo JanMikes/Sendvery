@@ -1,0 +1,27 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Checkout Cancelled{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_billing') }}">Billing</a></li>
+    <li>Cancelled</li>
+{% endblock %}
+
+{% block content %}
+    <div class="max-w-lg mx-auto">
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-6 text-center">
+                <div class="text-base-content/30 mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </div>
+                <h2 class="text-xl font-bold mb-2">No changes made</h2>
+                <p class="text-base-content/60 mb-6">
+                    Your checkout was cancelled. Your current plan remains unchanged.
+                </p>
+                <div class="flex justify-center gap-3">
+                    <a href="{{ path('dashboard_billing') }}" class="btn btn-outline btn-sm">Back to billing</a>
+                    <a href="{{ path('dashboard_overview') }}" class="btn btn-primary btn-sm">Go to dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

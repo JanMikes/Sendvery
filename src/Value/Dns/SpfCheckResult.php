@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class SpfCheckResult
+final readonly class SpfCheckResult
 {
     /**
      * @param array<DnsIssue> $issues
-     * @param array<string> $recommendations
-     * @param array<string> $includes
+     * @param array<string>   $recommendations
+     * @param array<string>   $includes
      */
     public function __construct(
         public ?string $rawRecord,
@@ -24,7 +24,7 @@ readonly final class SpfCheckResult
 
     public function hasRecord(): bool
     {
-        return $this->rawRecord !== null;
+        return null !== $this->rawRecord;
     }
 
     public function isPassing(): bool
@@ -35,7 +35,7 @@ readonly final class SpfCheckResult
     private function noCriticalIssues(): bool
     {
         foreach ($this->issues as $issue) {
-            if ($issue->severity === IssueSeverity::Critical) {
+            if (IssueSeverity::Critical === $issue->severity) {
                 return false;
             }
         }

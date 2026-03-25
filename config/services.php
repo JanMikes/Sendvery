@@ -26,6 +26,16 @@ return App::config([
         'App\Services\Mail\MailClient' => [
             'alias' => 'App\Services\Mail\ImapMailClient',
         ],
+        'App\Services\Stripe\SubscriptionManager' => [
+            'arguments' => [
+                '$defaultUri' => '%env(DEFAULT_URI)%',
+            ],
+        ],
+        'App\Controller\Webhook\StripeWebhookController' => [
+            'arguments' => [
+                '$stripeWebhookSecret' => '%env(STRIPE_WEBHOOK_SECRET)%',
+            ],
+        ],
     ],
     'when@test' => [
         'services' => [
@@ -133,6 +143,72 @@ return App::config([
                 'public' => true,
             ],
             'App\MessageHandler\AddDomainHandler' => [
+                'public' => true,
+            ],
+            'App\Repository\MagicLinkTokenRepository' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\RequestMagicLinkHandler' => [
+                'public' => true,
+            ],
+            'App\Services\OnboardingTracker' => [
+                'public' => true,
+            ],
+            'App\Security\MagicLinkAuthenticator' => [
+                'public' => true,
+            ],
+            'App\Services\Stripe\PlanEnforcement' => [
+                'public' => true,
+            ],
+            'App\Services\Stripe\PlanLimits' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\UpgradeTeamPlanHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\DowngradeTeamPlanHandler' => [
+                'public' => true,
+            ],
+            'App\Query\GetBillingOverview' => [
+                'public' => true,
+            ],
+            'App\Query\GetTeamPlan' => [
+                'public' => true,
+            ],
+            'App\Services\SenderDiscovery' => [
+                'public' => true,
+            ],
+            'App\Services\OrganizationMapper' => [
+                'public' => true,
+            ],
+            'App\Services\BlacklistChecker' => [
+                'public' => true,
+            ],
+            'App\Services\PdfReportGenerator' => [
+                'public' => true,
+            ],
+            'App\Repository\KnownSenderRepository' => [
+                'public' => true,
+            ],
+            'App\Query\GetSenderInventory' => [
+                'public' => true,
+            ],
+            'App\Query\GetBlacklistStatus' => [
+                'public' => true,
+            ],
+            'App\Query\GetDomainHealthHistory' => [
+                'public' => true,
+            ],
+            'App\Query\GetDomainReportData' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\UpdateSenderInventoryOnReport' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\CheckBlacklistHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\MarkSenderAuthorizedHandler' => [
                 'public' => true,
             ],
         ],

@@ -4,41 +4,33 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use Doctrine\DBAL\Connection;
-use Ramsey\Uuid\Uuid;
+use App\Entity\User;
+use App\Repository\TeamMembershipRepository;
 use Ramsey\Uuid\UuidInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 
-readonly final class DashboardContext
+final readonly class DashboardContext
 {
     public function __construct(
-        private Connection $database,
-        private IdentityProvider $identityProvider,
+        private Security $security,
+        private TeamMembershipRepository $teamMembershipRepository,
     ) {
     }
 
     public function getTeamId(): UuidInterface
     {
-        $teamId = $this->database->executeQuery(
-            'SELECT id FROM team ORDER BY created_at ASC LIMIT 1',
-        )->fetchOne();
+        $user = $this->security->getUser();
 
-        if ($teamId !== false) {
-            return Uuid::fromString((string) $teamId);
+        if (!$user instanceof User) {
+            throw new \RuntimeException('No authenticated user found. Dashboard requires authentication.');
         }
 
-        // Auto-create a personal team for the unsecured dashboard
-        $newTeamId = $this->identityProvider->nextIdentity();
-        $this->database->executeStatement(
-            'INSERT INTO team (id, name, slug, plan, created_at) VALUES (:id, :name, :slug, :plan, :createdAt)',
-            [
-                'id' => $newTeamId->toString(),
-                'name' => 'Personal',
-                'slug' => 'personal',
-                'plan' => 'free',
-                'createdAt' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
-            ],
-        );
+        $memberships = $this->teamMembershipRepository->findForUser($user->id);
 
-        return $newTeamId;
+        if ([] === $memberships) {
+            throw new \RuntimeException('User has no team memberships.');
+        }
+
+        return $memberships[0]->team->id;
     }
 }

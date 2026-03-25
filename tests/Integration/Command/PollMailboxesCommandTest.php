@@ -30,7 +30,7 @@ final class PollMailboxesCommandTest extends IntegrationTestCase
         $team = new \App\Entity\Team(
             id: \Ramsey\Uuid\Uuid::uuid7(),
             name: 'CMD Poll Test',
-            slug: 'cmd-poll-test-' . \Ramsey\Uuid\Uuid::uuid7()->toString(),
+            slug: 'cmd-poll-test-'.\Ramsey\Uuid\Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -67,7 +67,7 @@ final class PollMailboxesCommandTest extends IntegrationTestCase
         $team = new \App\Entity\Team(
             id: \Ramsey\Uuid\Uuid::uuid7(),
             name: 'CMD Specific',
-            slug: 'cmd-specific-' . \Ramsey\Uuid\Uuid::uuid7()->toString(),
+            slug: 'cmd-specific-'.\Ramsey\Uuid\Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

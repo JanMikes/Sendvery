@@ -10,7 +10,7 @@ use Symfony\Component\HttpKernel\KernelInterface;
 
 final class TestingDatabaseCaching
 {
-    private const string CACHE_FILE = __DIR__ . '/../var/test-db-hash.cache';
+    private const string CACHE_FILE = __DIR__.'/../var/test-db-hash.cache';
 
     public static function refresh(KernelInterface $kernel): void
     {
@@ -29,20 +29,20 @@ final class TestingDatabaseCaching
     {
         $files = [];
 
-        $migrationsDir = __DIR__ . '/../migrations';
+        $migrationsDir = __DIR__.'/../migrations';
         if (is_dir($migrationsDir)) {
-            $files = array_merge($files, glob($migrationsDir . '/*.php') ?: []);
+            $files = array_merge($files, glob($migrationsDir.'/*.php') ?: []);
         }
 
-        $fixturesDir = __DIR__ . '/Fixtures';
+        $fixturesDir = __DIR__.'/Fixtures';
         if (is_dir($fixturesDir)) {
-            $files = array_merge($files, glob($fixturesDir . '/*.php') ?: []);
+            $files = array_merge($files, glob($fixturesDir.'/*.php') ?: []);
         }
 
         // Include entity files to detect schema changes
-        $entityDir = __DIR__ . '/../src/Entity';
+        $entityDir = __DIR__.'/../src/Entity';
         if (is_dir($entityDir)) {
-            $files = array_merge($files, glob($entityDir . '/*.php') ?: []);
+            $files = array_merge($files, glob($entityDir.'/*.php') ?: []);
         }
 
         sort($files);
@@ -84,7 +84,7 @@ final class TestingDatabaseCaching
         $schemaTool = new SchemaTool($entityManager);
         $schemaTool->dropDatabase();
 
-        if ($metadata !== []) {
+        if ([] !== $metadata) {
             $schemaTool->createSchema($metadata);
         }
     }

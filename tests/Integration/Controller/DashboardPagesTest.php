@@ -6,34 +6,61 @@ namespace App\Tests\Integration\Controller;
 
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
-use App\Entity\MailboxConnection;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
+use App\Entity\TeamMembership;
+use App\Entity\User;
 use App\Tests\WebTestCase;
 use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
-use App\Value\MailboxEncryption;
-use App\Value\MailboxType;
+use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 final class DashboardPagesTest extends WebTestCase
 {
-    private function createTeamWithData(): array
+    /**
+     * @return array{client: KernelBrowser, domainId: \Ramsey\Uuid\UuidInterface, reportId: \Ramsey\Uuid\UuidInterface}
+     */
+    private function createAuthenticatedClientWithData(): array
     {
-        $em = $this->getService(EntityManagerInterface::class);
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $userId = Uuid::uuid7();
+        $user = new User(
+            id: $userId,
+            email: 'dash-'.$userId->toString().'@example.com',
+            createdAt: new \DateTimeImmutable(),
+            onboardingCompletedAt: new \DateTimeImmutable(),
+        );
+        $user->popEvents();
+        $em->persist($user);
 
         $teamId = Uuid::uuid7();
         $team = new Team(
             id: $teamId,
             name: 'Dashboard Test',
-            slug: 'dashboard-test-' . Uuid::uuid7()->toString(),
+            slug: 'dashboard-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable('2000-01-01'),
+            plan: 'personal',
         );
+        $team->popEvents();
         $em->persist($team);
+
+        $membership = new TeamMembership(
+            id: Uuid::uuid7(),
+            user: $user,
+            team: $team,
+            role: TeamRole::Owner,
+            joinedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($membership);
 
         $domainId = Uuid::uuid7();
         $domain = new MonitoredDomain(
@@ -43,6 +70,7 @@ final class DashboardPagesTest extends WebTestCase
             createdAt: new \DateTimeImmutable(),
             dmarcPolicy: DmarcPolicy::Reject,
         );
+        $domain->popEvents();
         $em->persist($domain);
 
         $reportId = Uuid::uuid7();
@@ -51,7 +79,7 @@ final class DashboardPagesTest extends WebTestCase
             monitoredDomain: $domain,
             reporterOrg: 'google.com',
             reporterEmail: 'noreply@google.com',
-            externalReportId: 'ext-dash-' . Uuid::uuid7()->toString(),
+            externalReportId: 'ext-dash-'.Uuid::uuid7()->toString(),
             dateRangeBegin: new \DateTimeImmutable('-2 days'),
             dateRangeEnd: new \DateTimeImmutable('-1 day'),
             policyDomain: 'dashboard-test.com',
@@ -78,32 +106,72 @@ final class DashboardPagesTest extends WebTestCase
         $em->persist($record);
         $em->flush();
 
+        $client->loginUser($user);
+
         return [
-            'teamId' => $teamId,
+            'client' => $client,
             'domainId' => $domainId,
             'reportId' => $reportId,
         ];
     }
 
-    #[Test]
-    public function dashboard_overview_returns_200(): void
+    private function createAuthenticatedClientEmpty(): KernelBrowser
     {
         $client = self::createClient();
-        $this->createTeamWithData();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
 
-        $client->request('GET', '/app');
+        $userId = Uuid::uuid7();
+        $user = new User(
+            id: $userId,
+            email: 'empty-dash-'.$userId->toString().'@example.com',
+            createdAt: new \DateTimeImmutable(),
+            onboardingCompletedAt: new \DateTimeImmutable(),
+        );
+        $user->popEvents();
+        $em->persist($user);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Empty Dashboard',
+            slug: 'empty-dashboard-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $team->popEvents();
+        $em->persist($team);
+
+        $membership = new TeamMembership(
+            id: Uuid::uuid7(),
+            user: $user,
+            team: $team,
+            role: TeamRole::Owner,
+            joinedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($membership);
+        $em->flush();
+
+        $client->loginUser($user);
+
+        return $client;
+    }
+
+    #[Test]
+    public function dashboardOverviewReturns200(): void
+    {
+        $data = $this->createAuthenticatedClientWithData();
+
+        $data['client']->request('GET', '/app');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h3', 'Monitored Domains');
     }
 
     #[Test]
-    public function dashboard_overview_shows_stat_cards(): void
+    public function dashboardOverviewShowsStatCards(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $crawler = $client->request('GET', '/app');
+        $data['client']->request('GET', '/app');
 
         self::assertSelectorExists('.card');
         self::assertSelectorTextContains('body', 'DMARC Pass Rate');
@@ -112,14 +180,12 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function dashboard_overview_uses_dashboard_layout(): void
+    public function dashboardOverviewUsesDashboardLayout(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $crawler = $client->request('GET', '/app');
+        $data['client']->request('GET', '/app');
 
-        // Dashboard layout has sidebar with navigation
         self::assertSelectorExists('aside');
         self::assertSelectorTextContains('aside', 'Dashboard');
         self::assertSelectorTextContains('aside', 'Domains');
@@ -128,47 +194,43 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function domains_list_returns_200(): void
+    public function domainsListReturns200(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/domains');
+        $data['client']->request('GET', '/app/domains');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('body', 'dashboard-test.com');
     }
 
     #[Test]
-    public function domains_list_shows_add_button(): void
+    public function domainsListShowsAddButton(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $crawler = $client->request('GET', '/app/domains');
+        $data['client']->request('GET', '/app/domains');
 
         self::assertSelectorExists('a[href="/app/domains/add"]');
     }
 
     #[Test]
-    public function domain_detail_returns_200(): void
+    public function domainDetailReturns200(): void
     {
-        $client = self::createClient();
-        $data = $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/domains/' . $data['domainId']);
+        $data['client']->request('GET', '/app/domains/'.$data['domainId']);
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'dashboard-test.com');
     }
 
     #[Test]
-    public function domain_detail_shows_charts_and_stats(): void
+    public function domainDetailShowsChartsAndStats(): void
     {
-        $client = self::createClient();
-        $data = $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $crawler = $client->request('GET', '/app/domains/' . $data['domainId']);
+        $data['client']->request('GET', '/app/domains/'.$data['domainId']);
 
         self::assertSelectorTextContains('body', 'Pass Rate');
         self::assertSelectorTextContains('body', 'Unique Senders');
@@ -177,108 +239,99 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function domain_detail_returns_404_for_nonexistent(): void
+    public function domainDetailReturns404ForNonexistent(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/domains/' . Uuid::uuid7());
+        $data['client']->request('GET', '/app/domains/'.Uuid::uuid7());
 
         self::assertResponseStatusCodeSame(404);
     }
 
     #[Test]
-    public function reports_list_returns_200(): void
+    public function reportsListReturns200(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/reports');
+        $data['client']->request('GET', '/app/reports');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('body', 'google.com');
     }
 
     #[Test]
-    public function domain_reports_returns_200(): void
+    public function domainReportsReturns200(): void
     {
-        $client = self::createClient();
-        $data = $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/domains/' . $data['domainId'] . '/reports');
+        $data['client']->request('GET', '/app/domains/'.$data['domainId'].'/reports');
 
         self::assertResponseIsSuccessful();
     }
 
     #[Test]
-    public function report_detail_returns_200(): void
+    public function reportDetailReturns200(): void
     {
-        $client = self::createClient();
-        $data = $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/reports/' . $data['reportId']);
+        $data['client']->request('GET', '/app/reports/'.$data['reportId']);
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Report from google.com');
     }
 
     #[Test]
-    public function report_detail_shows_records_table(): void
+    public function reportDetailShowsRecordsTable(): void
     {
-        $client = self::createClient();
-        $data = $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $crawler = $client->request('GET', '/app/reports/' . $data['reportId']);
+        $data['client']->request('GET', '/app/reports/'.$data['reportId']);
 
         self::assertSelectorTextContains('body', '1.2.3.4');
         self::assertSelectorTextContains('body', 'Published Policy');
     }
 
     #[Test]
-    public function report_detail_returns_404_for_nonexistent(): void
+    public function reportDetailReturns404ForNonexistent(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/reports/' . Uuid::uuid7());
+        $data['client']->request('GET', '/app/reports/'.Uuid::uuid7());
 
         self::assertResponseStatusCodeSame(404);
     }
 
     #[Test]
-    public function add_domain_page_returns_200(): void
+    public function addDomainPageReturns200(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/domains/add');
+        $data['client']->request('GET', '/app/domains/add');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h2', 'Add a domain');
     }
 
     #[Test]
-    public function add_domain_form_creates_domain_and_redirects(): void
+    public function addDomainFormCreatesDomainAndRedirects(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('POST', '/app/domains/add', [
+        $data['client']->request('POST', '/app/domains/add', [
             'domain_name' => 'new-added.com',
         ]);
 
         self::assertResponseRedirects();
-        $location = $client->getResponse()->headers->get('Location');
+        $location = $data['client']->getResponse()->headers->get('Location');
         self::assertStringContainsString('/app/domains/', $location);
     }
 
     #[Test]
-    public function add_domain_form_shows_errors_for_invalid_input(): void
+    public function addDomainFormShowsErrorsForInvalidInput(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('POST', '/app/domains/add', [
+        $data['client']->request('POST', '/app/domains/add', [
             'domain_name' => 'not a valid domain',
         ]);
 
@@ -287,54 +340,40 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function mailboxes_list_returns_200(): void
+    public function mailboxesListReturns200(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/mailboxes');
+        $data['client']->request('GET', '/app/mailboxes');
 
         self::assertResponseIsSuccessful();
     }
 
     #[Test]
-    public function mailboxes_list_shows_empty_state(): void
+    public function mailboxesListShowsEmptyState(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $crawler = $client->request('GET', '/app/mailboxes');
+        $data['client']->request('GET', '/app/mailboxes');
 
         self::assertSelectorTextContains('body', 'No mailboxes connected');
     }
 
     #[Test]
-    public function add_mailbox_page_returns_200(): void
+    public function addMailboxPageReturns200(): void
     {
-        $client = self::createClient();
-        $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
 
-        $client->request('GET', '/app/mailboxes/add');
+        $data['client']->request('GET', '/app/mailboxes/add');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h2', 'Connect a mailbox');
     }
 
     #[Test]
-    public function empty_domain_list_shows_empty_state(): void
+    public function emptyDomainListShowsEmptyState(): void
     {
-        $client = self::createClient();
-        $em = $this->getService(EntityManagerInterface::class);
-
-        // Create team with no domains
-        $team = new Team(
-            id: Uuid::uuid7(),
-            name: 'Empty Dashboard',
-            slug: 'empty-dashboard-' . Uuid::uuid7()->toString(),
-            createdAt: new \DateTimeImmutable(),
-        );
-        $em->persist($team);
-        $em->flush();
+        $client = $this->createAuthenticatedClientEmpty();
 
         $client->request('GET', '/app/domains');
 
@@ -343,19 +382,9 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function empty_reports_list_shows_empty_state(): void
+    public function emptyReportsListShowsEmptyState(): void
     {
-        $client = self::createClient();
-        $em = $this->getService(EntityManagerInterface::class);
-
-        $team = new Team(
-            id: Uuid::uuid7(),
-            name: 'Empty Reports',
-            slug: 'empty-reports-' . Uuid::uuid7()->toString(),
-            createdAt: new \DateTimeImmutable(),
-        );
-        $em->persist($team);
-        $em->flush();
+        $client = $this->createAuthenticatedClientEmpty();
 
         $client->request('GET', '/app/reports');
 
@@ -364,31 +393,30 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function all_dashboard_pages_use_dashboard_layout(): void
+    public function allDashboardPagesUseDashboardLayout(): void
     {
-        $client = self::createClient();
-        $data = $this->createTeamWithData();
+        $data = $this->createAuthenticatedClientWithData();
+        $client = $data['client'];
 
         $pages = [
             '/app',
             '/app/domains',
-            '/app/domains/' . $data['domainId'],
+            '/app/domains/'.$data['domainId'],
             '/app/reports',
-            '/app/reports/' . $data['reportId'],
+            '/app/reports/'.$data['reportId'],
             '/app/domains/add',
             '/app/mailboxes',
             '/app/mailboxes/add',
         ];
 
         foreach ($pages as $page) {
-            $crawler = $client->request('GET', $page);
+            $client->request('GET', $page);
 
             if ($client->getResponse()->isRedirection()) {
                 continue;
             }
 
             self::assertResponseIsSuccessful();
-            // Dashboard layout always has sidebar
             self::assertSelectorExists('aside', sprintf('Page %s missing sidebar from dashboard layout', $page));
         }
     }

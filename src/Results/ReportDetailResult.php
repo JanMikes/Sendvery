@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Results;
 
-readonly final class ReportDetailResult
+final readonly class ReportDetailResult
 {
     /**
      * @param array<ReportRecordResult> $records
@@ -29,7 +29,7 @@ readonly final class ReportDetailResult
 
     /**
      * @param array{report_id: string, reporter_org: string, reporter_email: string, external_report_id: string, date_range_begin: string, date_range_end: string, policy_domain: string, policy_adkim: string, policy_aspf: string, policy_p: string, policy_sp: ?string, policy_pct: int, processed_at: string} $row
-     * @param array<ReportRecordResult> $records
+     * @param array<ReportRecordResult>                                                                                                                                                                                                                                                                           $records
      */
     public static function fromDatabaseRow(array $row, array $records): self
     {

@@ -27,7 +27,7 @@ final class GetReportDetailTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Detail Test',
-            slug: 'detail-test-' . Uuid::uuid7()->toString(),
+            slug: 'detail-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

@@ -18,7 +18,7 @@ use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
-readonly final class ProcessDmarcReportHandler
+final readonly class ProcessDmarcReportHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -83,7 +83,7 @@ readonly final class ProcessDmarcReportHandler
 
             $this->entityManager->persist($record);
 
-            if ($parsedRecord->dkimResult === AuthResult::Pass || $parsedRecord->spfResult === AuthResult::Pass) {
+            if (AuthResult::Pass === $parsedRecord->dkimResult || AuthResult::Pass === $parsedRecord->spfResult) {
                 $passCount += $parsedRecord->count;
             } else {
                 $failCount += $parsedRecord->count;

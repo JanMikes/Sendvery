@@ -6,7 +6,7 @@ namespace App\Events;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class BetaSignupCreated
+final readonly class BetaSignupCreated
 {
     public function __construct(
         public UuidInterface $signupId,

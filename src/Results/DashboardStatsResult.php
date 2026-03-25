@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Results;
 
-readonly final class DashboardStatsResult
+final readonly class DashboardStatsResult
 {
     public function __construct(
         public int $totalDomains,

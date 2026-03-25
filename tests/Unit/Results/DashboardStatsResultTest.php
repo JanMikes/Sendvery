@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class DashboardStatsResultTest extends TestCase
 {
     #[Test]
-    public function it_can_be_constructed(): void
+    public function itCanBeConstructed(): void
     {
         $result = new DashboardStatsResult(
             totalDomains: 5,

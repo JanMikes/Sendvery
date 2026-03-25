@@ -28,7 +28,7 @@ final class GetDashboardStatsTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Stats Test',
-            slug: 'stats-test-' . Uuid::uuid7()->toString(),
+            slug: 'stats-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -90,7 +90,7 @@ final class GetDashboardStatsTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Empty Stats',
-            slug: 'empty-stats-' . Uuid::uuid7()->toString(),
+            slug: 'empty-stats-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

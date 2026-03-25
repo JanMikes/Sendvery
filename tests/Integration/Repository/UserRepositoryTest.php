@@ -20,7 +20,7 @@ final class UserRepositoryTest extends IntegrationTestCase
 
         $user = new User(
             id: $id,
-            email: 'get-' . $id->toString() . '@test.com',
+            email: 'get-'.$id->toString().'@test.com',
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($user);
@@ -44,7 +44,7 @@ final class UserRepositoryTest extends IntegrationTestCase
     {
         $em = $this->getService(EntityManagerInterface::class);
         $id = Uuid::uuid7();
-        $email = 'find-' . $id->toString() . '@test.com';
+        $email = 'find-'.$id->toString().'@test.com';
 
         $user = new User(
             id: $id,

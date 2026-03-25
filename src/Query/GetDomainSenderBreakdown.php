@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\DomainSenderResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetDomainSenderBreakdown
+final readonly class GetDomainSenderBreakdown
 {
     public function __construct(
         private Connection $database,

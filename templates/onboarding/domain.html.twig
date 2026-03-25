@@ -1,0 +1,89 @@
+{% extends 'onboarding/layout.html.twig' %}
+
+{% set step = 2 %}
+
+{% block page_title %}Add domain{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title text-2xl mb-2">Add your first domain</h2>
+        <p class="text-base-content/60 mb-6">We'll check your DNS records and start monitoring.</p>
+
+        {% if errors|length > 0 %}
+            <div class="alert alert-error mb-4">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                <div>
+                    {% for error in errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        <form method="post" action="{{ path('onboarding_domain') }}">
+            <div class="form-control mb-6">
+                <label class="label" for="domain_name">
+                    <span class="label-text font-medium">Domain name</span>
+                </label>
+                <input type="text"
+                       id="domain_name"
+                       name="domain_name"
+                       value="{{ data.domainName }}"
+                       placeholder="example.com"
+                       class="input input-bordered w-full"
+                       required
+                       autofocus>
+            </div>
+
+            {% if dnsResults is not null %}
+                <div class="space-y-3 mb-6">
+                    <h3 class="font-semibold">DNS Check Results</h3>
+
+                    <div class="flex items-center gap-2 text-sm">
+                        {% if dnsResults.spf.rawRecord %}
+                            <span class="badge badge-success badge-sm">SPF</span>
+                            <span class="text-success">Record found</span>
+                        {% else %}
+                            <span class="badge badge-warning badge-sm">SPF</span>
+                            <span class="text-warning">No record found</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-center gap-2 text-sm">
+                        {% if dnsResults.dkim.keyExists %}
+                            <span class="badge badge-success badge-sm">DKIM</span>
+                            <span class="text-success">Record found</span>
+                        {% else %}
+                            <span class="badge badge-warning badge-sm">DKIM</span>
+                            <span class="text-warning">No record found (common — selector-specific)</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-center gap-2 text-sm">
+                        {% if dnsResults.dmarc.rawRecord %}
+                            <span class="badge badge-success badge-sm">DMARC</span>
+                            <span class="text-success">Record found ({{ dnsResults.dmarc.policy }})</span>
+                        {% else %}
+                            <span class="badge badge-error badge-sm">DMARC</span>
+                            <span class="text-error">No record found</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <button type="submit" name="continue" value="1" class="btn btn-primary w-full">
+                    Continue
+                </button>
+            {% else %}
+                <button type="submit" class="btn btn-primary w-full">
+                    Add domain & check DNS
+                </button>
+            {% endif %}
+        </form>
+
+        <div class="text-center mt-4">
+            <a href="{{ path('onboarding_ingestion') }}" class="link link-ghost text-sm">Skip for now</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

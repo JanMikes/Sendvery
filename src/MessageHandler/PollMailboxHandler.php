@@ -18,7 +18,7 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 #[AsMessageHandler]
-readonly final class PollMailboxHandler
+final readonly class PollMailboxHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -55,11 +55,12 @@ readonly final class PollMailboxHandler
                             $reportId = $this->identityProvider->nextIdentity();
                             $domainId = $connection->monitoredDomain?->id;
 
-                            if ($domainId === null) {
+                            if (null === $domainId) {
                                 $this->logger->warning('Mailbox connection {connectionId} has no monitored domain, skipping report.', [
                                     'connectionId' => $connection->id->toString(),
                                 ]);
-                                $errors++;
+                                ++$errors;
+
                                 continue;
                             }
 
@@ -69,7 +70,7 @@ readonly final class PollMailboxHandler
                                 xmlContent: $xmlContent,
                             ));
 
-                            $reportsFound++;
+                            ++$reportsFound;
                         }
                     } catch (\Throwable $e) {
                         $this->logger->warning('Failed to process attachment {filename}: {error}', [
@@ -77,7 +78,7 @@ readonly final class PollMailboxHandler
                             'error' => $e->getMessage(),
                             'connectionId' => $connection->id->toString(),
                         ]);
-                        $errors++;
+                        ++$errors;
                     }
                 }
 

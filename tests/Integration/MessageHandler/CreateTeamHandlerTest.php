@@ -23,7 +23,7 @@ final class CreateTeamHandlerTest extends IntegrationTestCase
         $userId = Uuid::uuid7();
         $user = new User(
             id: $userId,
-            email: 'owner-' . $userId->toString() . '@test.com',
+            email: 'owner-'.$userId->toString().'@test.com',
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($user);

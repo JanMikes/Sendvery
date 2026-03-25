@@ -21,7 +21,7 @@ final class GetDomainPassRateTrendTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Trend Test',
-            slug: 'trend-test-' . Uuid::uuid7()->toString(),
+            slug: 'trend-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -55,7 +55,7 @@ final class GetDomainPassRateTrendTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Team Trend',
-            slug: 'team-trend-' . Uuid::uuid7()->toString(),
+            slug: 'team-trend-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

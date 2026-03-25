@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class IssueSeverityTest extends TestCase
 {
     #[Test]
-    public function has_expected_cases(): void
+    public function hasExpectedCases(): void
     {
         self::assertSame('info', IssueSeverity::Info->value);
         self::assertSame('warning', IssueSeverity::Warning->value);
@@ -19,7 +19,7 @@ final class IssueSeverityTest extends TestCase
     }
 
     #[Test]
-    public function can_be_created_from_string(): void
+    public function canBeCreatedFromString(): void
     {
         self::assertSame(IssueSeverity::Critical, IssueSeverity::from('critical'));
     }

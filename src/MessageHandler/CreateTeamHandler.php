@@ -16,7 +16,7 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\String\Slugger\AsciiSlugger;
 
 #[AsMessageHandler]
-readonly final class CreateTeamHandler
+final readonly class CreateTeamHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,

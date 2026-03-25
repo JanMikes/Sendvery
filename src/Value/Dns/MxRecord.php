@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class MxRecord
+final readonly class MxRecord
 {
     public function __construct(
         public string $host,

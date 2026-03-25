@@ -19,7 +19,7 @@ final class ReportAttachmentExtractorTest extends TestCase
 
     public function testExtractsPlainXml(): void
     {
-        $xml = file_get_contents(__DIR__ . '/../../../Fixtures/google-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../../Fixtures/google-report.xml');
         assert(is_string($xml));
 
         $result = $this->extractor->extract($xml, 'report.xml');
@@ -30,7 +30,7 @@ final class ReportAttachmentExtractorTest extends TestCase
 
     public function testExtractsGzipByExtension(): void
     {
-        $gzContent = file_get_contents(__DIR__ . '/../../../Fixtures/google-report.xml.gz');
+        $gzContent = file_get_contents(__DIR__.'/../../../Fixtures/google-report.xml.gz');
         assert(is_string($gzContent));
 
         $result = $this->extractor->extract($gzContent, 'report.xml.gz');
@@ -42,7 +42,7 @@ final class ReportAttachmentExtractorTest extends TestCase
 
     public function testExtractsGzipByMagicBytes(): void
     {
-        $gzContent = file_get_contents(__DIR__ . '/../../../Fixtures/google-report.xml.gz');
+        $gzContent = file_get_contents(__DIR__.'/../../../Fixtures/google-report.xml.gz');
         assert(is_string($gzContent));
 
         $result = $this->extractor->extract($gzContent, 'unknown-file');
@@ -53,7 +53,7 @@ final class ReportAttachmentExtractorTest extends TestCase
 
     public function testExtractsZipByExtension(): void
     {
-        $zipContent = file_get_contents(__DIR__ . '/../../../Fixtures/yahoo-report.zip');
+        $zipContent = file_get_contents(__DIR__.'/../../../Fixtures/yahoo-report.zip');
         assert(is_string($zipContent));
 
         $result = $this->extractor->extract($zipContent, 'report.zip');
@@ -65,7 +65,7 @@ final class ReportAttachmentExtractorTest extends TestCase
 
     public function testExtractsZipByMagicBytes(): void
     {
-        $zipContent = file_get_contents(__DIR__ . '/../../../Fixtures/yahoo-report.zip');
+        $zipContent = file_get_contents(__DIR__.'/../../../Fixtures/yahoo-report.zip');
         assert(is_string($zipContent));
 
         $result = $this->extractor->extract($zipContent, 'unknown-file');
@@ -107,7 +107,7 @@ final class ReportAttachmentExtractorTest extends TestCase
         $this->expectException(InvalidDmarcReportXml::class);
         $this->expectExceptionMessage('Failed to decompress gzip');
 
-        $this->extractor->extract("\x1f\x8b" . 'corrupted data', 'report.gz');
+        $this->extractor->extract("\x1f\x8b".'corrupted data', 'report.gz');
     }
 
     public function testThrowsOnInvalidZip(): void
@@ -120,7 +120,7 @@ final class ReportAttachmentExtractorTest extends TestCase
 
     public function testThrowsOnZipWithNoXmlFiles(): void
     {
-        $zipContent = file_get_contents(__DIR__ . '/../../../Fixtures/no-xml.zip');
+        $zipContent = file_get_contents(__DIR__.'/../../../Fixtures/no-xml.zip');
         assert(is_string($zipContent));
 
         $this->expectException(InvalidDmarcReportXml::class);
@@ -131,7 +131,7 @@ final class ReportAttachmentExtractorTest extends TestCase
 
     public function testExtractsGzipByGzipExtension(): void
     {
-        $gzContent = file_get_contents(__DIR__ . '/../../../Fixtures/google-report.xml.gz');
+        $gzContent = file_get_contents(__DIR__.'/../../../Fixtures/google-report.xml.gz');
         assert(is_string($gzContent));
 
         $result = $this->extractor->extract($gzContent, 'report.gzip');

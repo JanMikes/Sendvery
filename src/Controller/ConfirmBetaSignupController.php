@@ -26,11 +26,11 @@ final class ConfirmBetaSignupController extends AbstractController
     {
         $signup = $this->betaSignupRepository->findByToken($token);
 
-        if ($signup === null) {
+        if (null === $signup) {
             throw new NotFoundHttpException();
         }
 
-        if ($signup->confirmedAt === null) {
+        if (null === $signup->confirmedAt) {
             $signup->confirm($this->clock->now());
             $this->entityManager->flush();
         }

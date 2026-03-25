@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\DomainReportListResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetDomainReports
+final readonly class GetDomainReports
 {
     public function __construct(
         private Connection $database,

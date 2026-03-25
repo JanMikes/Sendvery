@@ -1,0 +1,27 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Upgrade Successful{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_billing') }}">Billing</a></li>
+    <li>Success</li>
+{% endblock %}
+
+{% block content %}
+    <div class="max-w-lg mx-auto">
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-6 text-center">
+                <div class="text-success mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h2 class="text-xl font-bold mb-2">Welcome to your new plan!</h2>
+                <p class="text-base-content/60 mb-6">
+                    Your subscription is now active. Enjoy your upgraded features and increased limits.
+                </p>
+                <div class="flex justify-center gap-3">
+                    <a href="{{ path('dashboard_billing') }}" class="btn btn-outline btn-sm">View billing</a>
+                    <a href="{{ path('dashboard_overview') }}" class="btn btn-primary btn-sm">Go to dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -51,7 +51,7 @@ final class PollMailboxesCommand extends Command
 
         $connections = $this->connectionRepository->findActiveConnections();
 
-        if ($connections === []) {
+        if ([] === $connections) {
             $io->info('No active mailbox connections found.');
 
             return Command::SUCCESS;

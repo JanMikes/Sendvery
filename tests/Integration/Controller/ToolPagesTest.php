@@ -12,7 +12,7 @@ final class ToolPagesTest extends WebTestCase
 {
     #[Test]
     #[DataProvider('toolPagesWithCheckers')]
-    public function tool_page_has_interactive_checker(string $url): void
+    public function toolPageHasInteractiveChecker(string $url): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', $url);
@@ -24,7 +24,7 @@ final class ToolPagesTest extends WebTestCase
 
     #[Test]
     #[DataProvider('toolPagesWithCheckers')]
-    public function tool_page_has_faq_section(string $url): void
+    public function toolPageHasFaqSection(string $url): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', $url);
@@ -35,7 +35,7 @@ final class ToolPagesTest extends WebTestCase
 
     #[Test]
     #[DataProvider('toolPagesWithCheckers')]
-    public function tool_page_has_faq_structured_data(string $url): void
+    public function toolPageHasFaqStructuredData(string $url): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', $url);
@@ -56,7 +56,7 @@ final class ToolPagesTest extends WebTestCase
 
     #[Test]
     #[DataProvider('toolPagesWithCheckers')]
-    public function tool_page_has_breadcrumb_structured_data(string $url): void
+    public function toolPageHasBreadcrumbStructuredData(string $url): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', $url);
@@ -76,7 +76,7 @@ final class ToolPagesTest extends WebTestCase
 
     #[Test]
     #[DataProvider('toolPagesWithCheckers')]
-    public function tool_page_has_related_tools_links(string $url): void
+    public function toolPageHasRelatedToolsLinks(string $url): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', $url);
@@ -87,7 +87,7 @@ final class ToolPagesTest extends WebTestCase
 
     #[Test]
     #[DataProvider('allToolPages')]
-    public function tool_page_has_seo_content(string $url): void
+    public function toolPageHasSeoContent(string $url): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', $url);
@@ -104,7 +104,7 @@ final class ToolPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function spf_checker_has_correct_h1(): void
+    public function spfCheckerHasCorrectH1(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/tools/spf-checker');
@@ -113,7 +113,7 @@ final class ToolPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function dkim_checker_has_selector_input(): void
+    public function dkimCheckerHasSelectorInput(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/tools/dkim-checker');
@@ -122,7 +122,7 @@ final class ToolPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function domain_health_has_correct_h1(): void
+    public function domainHealthHasCorrectH1(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/tools/domain-health');
@@ -131,7 +131,7 @@ final class ToolPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function blacklist_checker_shows_coming_soon(): void
+    public function blacklistCheckerShowsComingSoon(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/tools/blacklist-checker');
@@ -141,7 +141,7 @@ final class ToolPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function dns_monitoring_shows_beta_cta(): void
+    public function dnsMonitoringShowsBetaCta(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/tools/dns-monitoring');

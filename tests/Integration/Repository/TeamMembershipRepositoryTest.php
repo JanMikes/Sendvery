@@ -21,8 +21,8 @@ final class TeamMembershipRepositoryTest extends IntegrationTestCase
         $teamId = Uuid::uuid7();
         $now = new \DateTimeImmutable();
 
-        $user = new User(id: $userId, email: 'member-' . $userId->toString() . '@test.com', createdAt: $now);
-        $team = new Team(id: $teamId, name: 'Team ' . $teamId->toString(), slug: 'team-' . $teamId->toString(), createdAt: $now);
+        $user = new User(id: $userId, email: 'member-'.$userId->toString().'@test.com', createdAt: $now);
+        $team = new Team(id: $teamId, name: 'Team '.$teamId->toString(), slug: 'team-'.$teamId->toString(), createdAt: $now);
 
         $em->persist($user);
         $em->persist($team);

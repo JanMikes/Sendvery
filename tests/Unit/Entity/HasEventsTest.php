@@ -63,7 +63,7 @@ final class HasEventsTest extends TestCase
 
     private function createEntityWithEvents(): EntityWithEvents
     {
-        return new class implements EntityWithEvents {
+        return new class () implements EntityWithEvents {
             use HasEvents;
         };
     }

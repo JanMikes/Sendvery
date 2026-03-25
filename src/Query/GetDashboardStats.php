@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\DashboardStatsResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetDashboardStats
+final readonly class GetDashboardStats
 {
     public function __construct(
         private Connection $database,

@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\ReportListResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetAllReports
+final readonly class GetAllReports
 {
     public function __construct(
         private Connection $database,

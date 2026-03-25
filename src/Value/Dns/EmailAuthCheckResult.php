@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class EmailAuthCheckResult
+final readonly class EmailAuthCheckResult
 {
     /**
      * @param array<DkimCheckResult> $dkim

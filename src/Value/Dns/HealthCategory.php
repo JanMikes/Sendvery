@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class HealthCategory
+final readonly class HealthCategory
 {
     public function __construct(
         public string $name,

@@ -12,7 +12,7 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Twig\Environment;
 
 #[AsMessageHandler]
-readonly final class SendBetaConfirmationEmail
+final readonly class SendBetaConfirmationEmail
 {
     public function __construct(
         private MailerInterface $mailer,

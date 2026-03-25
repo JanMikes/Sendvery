@@ -22,7 +22,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Import Test',
-            slug: 'import-test-' . Uuid::uuid7()->toString(),
+            slug: 'import-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -43,7 +43,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
         $tester = new CommandTester($command);
 
         $tester->execute([
-            'file' => __DIR__ . '/../../Fixtures/google-report.xml',
+            'file' => __DIR__.'/../../Fixtures/google-report.xml',
             '--domain-id' => $domainId->toString(),
         ]);
 
@@ -61,7 +61,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'GZ Import',
-            slug: 'gz-import-' . Uuid::uuid7()->toString(),
+            slug: 'gz-import-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -82,7 +82,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
         $tester = new CommandTester($command);
 
         $tester->execute([
-            'file' => __DIR__ . '/../../Fixtures/google-report.xml.gz',
+            'file' => __DIR__.'/../../Fixtures/google-report.xml.gz',
             '--domain-id' => $domainId->toString(),
         ]);
 
@@ -114,7 +114,7 @@ final class ImportDmarcReportCommandTest extends IntegrationTestCase
         $tester = new CommandTester($command);
 
         $tester->execute([
-            'file' => __DIR__ . '/../../Fixtures/google-report.xml',
+            'file' => __DIR__.'/../../Fixtures/google-report.xml',
         ]);
 
         self::assertSame(1, $tester->getStatusCode());

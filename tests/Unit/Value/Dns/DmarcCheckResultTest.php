@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class DmarcCheckResultTest extends TestCase
 {
     #[Test]
-    public function is_passing_with_reject_policy_and_rua(): void
+    public function isPassingWithRejectPolicyAndRua(): void
     {
         $result = new DmarcCheckResult(
             'v=DMARC1; p=reject; rua=mailto:d@ex.com',
@@ -31,7 +31,7 @@ final class DmarcCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_with_none_policy(): void
+    public function isNotPassingWithNonePolicy(): void
     {
         $result = new DmarcCheckResult(
             'v=DMARC1; p=none',
@@ -51,7 +51,7 @@ final class DmarcCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function quarantine_is_enforcing(): void
+    public function quarantineIsEnforcing(): void
     {
         $result = new DmarcCheckResult(
             'v=DMARC1; p=quarantine; rua=mailto:d@ex.com',
@@ -71,7 +71,7 @@ final class DmarcCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function has_record_returns_false_when_null(): void
+    public function hasRecordReturnsFalseWhenNull(): void
     {
         $result = new DmarcCheckResult(null, null, null, [], [], null, null, null, [], []);
 

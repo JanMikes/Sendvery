@@ -25,7 +25,7 @@ final class DmarcReportRepositoryTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Report Test',
-            slug: 'report-test-' . Uuid::uuid7()->toString(),
+            slug: 'report-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -80,7 +80,7 @@ final class DmarcReportRepositoryTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Exists Test',
-            slug: 'exists-test-' . Uuid::uuid7()->toString(),
+            slug: 'exists-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

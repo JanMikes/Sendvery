@@ -22,7 +22,7 @@ final class MonitoredDomainRepositoryTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Repo Test',
-            slug: 'repo-test-' . Uuid::uuid7()->toString(),
+            slug: 'repo-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);
@@ -60,7 +60,7 @@ final class MonitoredDomainRepositoryTest extends IntegrationTestCase
         $team = new Team(
             id: $teamId,
             name: 'Find Test',
-            slug: 'find-test-' . Uuid::uuid7()->toString(),
+            slug: 'find-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

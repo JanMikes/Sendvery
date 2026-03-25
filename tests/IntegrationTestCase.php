@@ -12,7 +12,9 @@ abstract class IntegrationTestCase extends KernelTestCase
 {
     /**
      * @template T of object
+     *
      * @param class-string<T> $class
+     *
      * @return T
      */
     protected function getService(string $class): object

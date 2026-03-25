@@ -51,14 +51,14 @@ final class TeamVoter extends Voter
 
         $membership = $this->membershipRepository->findMembership($user->id, $subject->id);
 
-        if ($membership === null) {
+        if (null === $membership) {
             return false;
         }
 
         return match ($attribute) {
             self::VIEW => true,
             self::EDIT => in_array($membership->role, [TeamRole::Owner, TeamRole::Admin], true),
-            self::DELETE => $membership->role === TeamRole::Owner,
+            self::DELETE => TeamRole::Owner === $membership->role,
             self::MANAGE_MEMBERS => in_array($membership->role, [TeamRole::Owner, TeamRole::Admin], true),
             default => false,
         };

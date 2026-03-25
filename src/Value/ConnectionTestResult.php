@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value;
 
-readonly final class ConnectionTestResult
+final readonly class ConnectionTestResult
 {
     public function __construct(
         public bool $success,

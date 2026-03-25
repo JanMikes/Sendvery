@@ -19,7 +19,7 @@ final class BetaSignupRepositoryTest extends IntegrationTestCase
 
         $signup = new BetaSignup(
             id: Uuid::uuid7(),
-            email: 'token-test-' . Uuid::uuid7()->toString() . '@example.com',
+            email: 'token-test-'.Uuid::uuid7()->toString().'@example.com',
             domainCount: null,
             painPoint: null,
             source: 'test',
@@ -48,7 +48,7 @@ final class BetaSignupRepositoryTest extends IntegrationTestCase
         $em = $this->getService(EntityManagerInterface::class);
         $repository = $this->getService(BetaSignupRepository::class);
 
-        $email = 'email-test-' . Uuid::uuid7()->toString() . '@example.com';
+        $email = 'email-test-'.Uuid::uuid7()->toString().'@example.com';
         $signup = new BetaSignup(
             id: Uuid::uuid7(),
             email: $email,
@@ -56,7 +56,7 @@ final class BetaSignupRepositoryTest extends IntegrationTestCase
             painPoint: null,
             source: 'test',
             signedUpAt: new \DateTimeImmutable(),
-            confirmationToken: 'emailtoken' . Uuid::uuid7()->toString(),
+            confirmationToken: 'emailtoken'.Uuid::uuid7()->toString(),
         );
         $signup->popEvents();
         $em->persist($signup);

@@ -53,7 +53,7 @@ final class PollMailboxHandlerTest extends IntegrationTestCase
         $this->em->flush();
         $this->em->clear();
 
-        $xml = file_get_contents(__DIR__ . '/../../Fixtures/minimal-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/minimal-report.xml');
         assert(is_string($xml));
 
         $this->fakeClient->addMessage(new MailMessage(
@@ -103,7 +103,7 @@ final class PollMailboxHandlerTest extends IntegrationTestCase
         $this->em->flush();
         $this->em->clear();
 
-        $xml = file_get_contents(__DIR__ . '/../../Fixtures/minimal-report.xml');
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/minimal-report.xml');
         assert(is_string($xml));
 
         $this->fakeClient->addMessage(new MailMessage(
@@ -126,7 +126,7 @@ final class PollMailboxHandlerTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Poll Test',
-            slug: 'poll-test-' . Uuid::uuid7()->toString(),
+            slug: 'poll-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $this->em->persist($team);

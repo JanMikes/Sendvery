@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sendvery Beta Invitation</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 32px 16px;">
+        <tr>
+            <td align="center">
+                <table width="560" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    {# Header #}
+                    <tr>
+                        <td style="padding: 24px 32px; background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                            <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff;">You're Invited to Sendvery Beta!</h1>
+                        </td>
+                    </tr>
+
+                    {# Content #}
+                    <tr>
+                        <td style="padding: 32px;">
+                            {% if invitedByEmail %}
+                                <p style="margin: 0 0 16px 0; font-size: 15px; color: #3f3f46; line-height: 1.6;">
+                                    <strong>{{ invitedByEmail }}</strong> has invited you to try Sendvery &mdash; the email health and deliverability dashboard.
+                                </p>
+                            {% else %}
+                                <p style="margin: 0 0 16px 0; font-size: 15px; color: #3f3f46; line-height: 1.6;">
+                                    You've been invited to try Sendvery &mdash; the email health and deliverability dashboard.
+                                </p>
+                            {% endif %}
+
+                            <p style="margin: 0 0 24px 0; font-size: 14px; color: #71717a; line-height: 1.6;">
+                                Monitor your DMARC reports, track DNS changes, and keep your email deliverability healthy &mdash; all in one place.
+                            </p>
+
+                            <div style="text-align: center; margin: 32px 0;">
+                                <a href="{{ acceptUrl }}" style="display: inline-block; padding: 14px 36px; background-color: #6366f1; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 600;">
+                                    Accept Invitation
+                                </a>
+                            </div>
+
+                            <p style="margin: 0; font-size: 12px; color: #a1a1aa; text-align: center;">
+                                This invitation expires in 7 days.
+                            </p>
+                        </td>
+                    </tr>
+
+                    {# Footer #}
+                    <tr>
+                        <td style="padding: 16px 32px; border-top: 1px solid #e4e4e7;">
+                            <p style="margin: 0; font-size: 12px; color: #a1a1aa;">
+                                Sent by <strong>Sendvery</strong> &mdash; Email Health Dashboard
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

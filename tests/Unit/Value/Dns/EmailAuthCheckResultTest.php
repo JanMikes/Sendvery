@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 final class EmailAuthCheckResultTest extends TestCase
 {
     #[Test]
-    public function has_dkim_key_returns_true_when_found(): void
+    public function hasDkimKeyReturnsTrueWhenFound(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',
@@ -29,7 +29,7 @@ final class EmailAuthCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function has_dkim_key_returns_false_when_not_found(): void
+    public function hasDkimKeyReturnsFalseWhenNotFound(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',

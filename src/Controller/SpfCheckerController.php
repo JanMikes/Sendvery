@@ -23,7 +23,7 @@ final class SpfCheckerController extends AbstractController
         $result = null;
         $domain = $request->request->getString('domain');
 
-        if ($request->isMethod('POST') && $domain !== '') {
+        if ($request->isMethod('POST') && '' !== $domain) {
             $result = $this->spfChecker->check($domain);
 
             if ($request->isXmlHttpRequest()) {

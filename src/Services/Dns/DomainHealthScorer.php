@@ -8,21 +8,23 @@ use App\Value\Dns\DomainHealthScore;
 use App\Value\Dns\EmailAuthCheckResult;
 use App\Value\Dns\HealthCategory;
 
-readonly final class DomainHealthScorer
+final readonly class DomainHealthScorer
 {
-    public function score(EmailAuthCheckResult $result): DomainHealthScore
+    public function score(EmailAuthCheckResult $result, ?int $blacklistScore = null): DomainHealthScore
     {
         $spfScore = $this->scoreSpf($result);
         $dkimScore = $this->scoreDkim($result);
         $dmarcScore = $this->scoreDmarc($result);
         $mxScore = $this->scoreMx($result);
+        $blScore = $blacklistScore ?? 100;
 
-        // Weighted average: DMARC 30%, SPF 25%, DKIM 25%, MX 20%
+        // Weighted average: DMARC 25%, SPF 20%, DKIM 20%, MX 15%, Blacklist 20%
         $totalScore = (int) round(
-            $dmarcScore * 0.30
-            + $spfScore * 0.25
-            + $dkimScore * 0.25
-            + $mxScore * 0.20,
+            $dmarcScore * 0.25
+            + $spfScore * 0.20
+            + $dkimScore * 0.20
+            + $mxScore * 0.15
+            + $blScore * 0.20,
         );
 
         $grade = match (true) {
@@ -41,6 +43,7 @@ readonly final class DomainHealthScorer
                 new HealthCategory('DKIM', $dkimScore, $this->statusFromScore($dkimScore)),
                 new HealthCategory('DMARC', $dmarcScore, $this->statusFromScore($dmarcScore)),
                 new HealthCategory('MX', $mxScore, $this->statusFromScore($mxScore)),
+                new HealthCategory('Blacklist', $blScore, $this->statusFromScore($blScore)),
             ],
         );
     }
@@ -80,24 +83,24 @@ readonly final class DomainHealthScorer
 
         $bestResult = null;
         foreach ($result->dkim as $dkimResult) {
-            if ($dkimResult->keyExists && ($bestResult === null || ($dkimResult->keyBits ?? 0) > ($bestResult->keyBits ?? 0))) {
+            if ($dkimResult->keyExists && (null === $bestResult || ($dkimResult->keyBits ?? 0) > ($bestResult->keyBits ?? 0))) {
                 $bestResult = $dkimResult;
             }
         }
 
-        if ($bestResult === null) {
+        if (null === $bestResult) {
             return 0;
         }
 
         $score = 50;
 
-        if ($bestResult->keyBits !== null && $bestResult->keyBits >= 2048) {
+        if (null !== $bestResult->keyBits && $bestResult->keyBits >= 2048) {
             $score += 35;
-        } elseif ($bestResult->keyBits !== null && $bestResult->keyBits >= 1024) {
+        } elseif (null !== $bestResult->keyBits && $bestResult->keyBits >= 1024) {
             $score += 15;
         }
 
-        if ($bestResult->issues === []) {
+        if ([] === $bestResult->issues) {
             $score += 15;
         }
 
@@ -114,23 +117,23 @@ readonly final class DomainHealthScorer
 
         $score = 30;
 
-        if ($dmarc->policy === 'reject') {
+        if ('reject' === $dmarc->policy) {
             $score += 40;
-        } elseif ($dmarc->policy === 'quarantine') {
+        } elseif ('quarantine' === $dmarc->policy) {
             $score += 25;
-        } elseif ($dmarc->policy === 'none') {
+        } elseif ('none' === $dmarc->policy) {
             $score += 5;
         }
 
-        if ($dmarc->ruaAddresses !== []) {
+        if ([] !== $dmarc->ruaAddresses) {
             $score += 15;
         }
 
-        if ($dmarc->pct === null || $dmarc->pct === 100) {
+        if (null === $dmarc->pct || 100 === $dmarc->pct) {
             $score += 10;
         }
 
-        if ($dmarc->issues === []) {
+        if ([] === $dmarc->issues) {
             $score += 5;
         }
 
@@ -153,7 +156,7 @@ readonly final class DomainHealthScorer
             if ($record->reachable) {
                 $anyReachable = true;
             }
-            if ($record->reachable && $record->tlsSupported !== true) {
+            if ($record->reachable && true !== $record->tlsSupported) {
                 $allTls = false;
             }
         }
@@ -166,7 +169,7 @@ readonly final class DomainHealthScorer
             $score += 20;
         }
 
-        if ($mx->issues === []) {
+        if ([] === $mx->issues) {
             $score += 10;
         }
 

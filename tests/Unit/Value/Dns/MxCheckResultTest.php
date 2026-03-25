@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class MxCheckResultTest extends TestCase
 {
     #[Test]
-    public function is_passing_with_reachable_server(): void
+    public function isPassingWithReachableServer(): void
     {
         $records = [new MxRecord('mail.example.com', 10, '1.2.3.4', true, true)];
         $result = new MxCheckResult($records, []);
@@ -22,7 +22,7 @@ final class MxCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_with_no_records(): void
+    public function isNotPassingWithNoRecords(): void
     {
         $result = new MxCheckResult([], []);
 
@@ -31,7 +31,7 @@ final class MxCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function is_not_passing_when_all_unreachable(): void
+    public function isNotPassingWhenAllUnreachable(): void
     {
         $records = [new MxRecord('mail.example.com', 10, '1.2.3.4', false, null)];
         $result = new MxCheckResult($records, []);

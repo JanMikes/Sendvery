@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Entity;
 
 use App\Entity\Team;
 use App\Events\TeamCreated;
+use App\Value\SubscriptionPlan;
 use PHPUnit\Framework\TestCase;
 use Ramsey\Uuid\Uuid;
 
@@ -29,12 +30,15 @@ final class TeamTest extends TestCase
         self::assertSame($createdAt, $team->createdAt);
         self::assertNull($team->stripeCustomerId);
         self::assertSame('free', $team->plan);
+        self::assertNull($team->stripeSubscriptionId);
+        self::assertNull($team->planWarningAt);
     }
 
     public function testConstructorWithOptionalFields(): void
     {
         $id = Uuid::uuid7();
         $createdAt = new \DateTimeImmutable();
+        $warningAt = new \DateTimeImmutable('2026-03-20');
 
         $team = new Team(
             id: $id,
@@ -42,11 +46,15 @@ final class TeamTest extends TestCase
             slug: 'pro-team',
             createdAt: $createdAt,
             stripeCustomerId: 'cus_123',
-            plan: 'pro',
+            plan: 'personal',
+            stripeSubscriptionId: 'sub_456',
+            planWarningAt: $warningAt,
         );
 
         self::assertSame('cus_123', $team->stripeCustomerId);
-        self::assertSame('pro', $team->plan);
+        self::assertSame('personal', $team->plan);
+        self::assertSame('sub_456', $team->stripeSubscriptionId);
+        self::assertSame($warningAt, $team->planWarningAt);
     }
 
     public function testRecordsTeamCreatedEvent(): void
@@ -65,5 +73,30 @@ final class TeamTest extends TestCase
         self::assertCount(1, $events);
         self::assertInstanceOf(TeamCreated::class, $events[0]);
         self::assertSame($id, $events[0]->teamId);
+    }
+
+    public function testGetSubscriptionPlan(): void
+    {
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Plan Test',
+            slug: 'plan-test',
+            createdAt: new \DateTimeImmutable(),
+            plan: 'personal',
+        );
+
+        self::assertSame(SubscriptionPlan::Personal, $team->getSubscriptionPlan());
+    }
+
+    public function testGetSubscriptionPlanDefaultsFree(): void
+    {
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Free Test',
+            slug: 'free-test',
+            createdAt: new \DateTimeImmutable(),
+        );
+
+        self::assertSame(SubscriptionPlan::Free, $team->getSubscriptionPlan());
     }
 }

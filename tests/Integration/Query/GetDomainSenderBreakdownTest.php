@@ -27,7 +27,7 @@ final class GetDomainSenderBreakdownTest extends IntegrationTestCase
         $team = new Team(
             id: Uuid::uuid7(),
             name: 'Sender Test',
-            slug: 'sender-test-' . Uuid::uuid7()->toString(),
+            slug: 'sender-test-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

@@ -7,7 +7,7 @@ namespace App\Query;
 use App\Results\PassRateTrendResult;
 use Doctrine\DBAL\Connection;
 
-readonly final class GetDomainPassRateTrend
+final readonly class GetDomainPassRateTrend
 {
     public function __construct(
         private Connection $database,

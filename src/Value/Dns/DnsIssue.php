@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class DnsIssue
+final readonly class DnsIssue
 {
     public function __construct(
         public IssueSeverity $severity,

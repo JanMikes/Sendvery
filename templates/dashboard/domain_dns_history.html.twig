@@ -1,0 +1,94 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}DNS History — {{ domain.domainName }}{% endblock %}
+
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_domains') }}">Domains</a></li>
+    <li><a href="{{ path('dashboard_domain_detail', { id: domain.domainId }) }}">{{ domain.domainName }}</a></li>
+    <li>DNS History</li>
+{% endblock %}
+
+{% block content %}
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">DNS History</h1>
+            <p class="text-sm text-base-content/50 mt-1">{{ domain.domainName }}</p>
+        </div>
+    </div>
+
+    {% if history is empty %}
+        <twig:EmptyState
+            title="No DNS checks yet"
+            message="DNS checks run automatically once a day. Results will appear here after the first check."
+        />
+    {% else %}
+        {# Group by date #}
+        <div class="space-y-4">
+            {% set current_date = null %}
+            {% for check in history %}
+                {% set check_date = check.checkedAt|date('Y-m-d') %}
+
+                {% if check_date != current_date %}
+                    {% set current_date = check_date %}
+                    <div class="divider text-xs text-base-content/40">{{ check.checkedAt|date('F j, Y') }}</div>
+                {% endif %}
+
+                <div class="card bg-base-100 border border-base-200 shadow-sm {{ check.hasChanged ? 'border-l-4 border-l-warning' : '' }}">
+                    <div class="card-body p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="badge badge-sm {{ check.type == 'spf' ? 'badge-primary' : (check.type == 'dkim' ? 'badge-secondary' : (check.type == 'dmarc' ? 'badge-accent' : 'badge-ghost')) }}">
+                                    {{ check.type|upper }}
+                                </span>
+                                {% if check.isValid %}
+                                    <span class="badge badge-sm badge-success badge-outline">Valid</span>
+                                {% else %}
+                                    <span class="badge badge-sm badge-error badge-outline">Invalid</span>
+                                {% endif %}
+                                {% if check.hasChanged %}
+                                    <span class="badge badge-sm badge-warning">Changed</span>
+                                {% endif %}
+                            </div>
+                            <span class="text-xs text-base-content/50">{{ check.checkedAt|date('H:i') }}</span>
+                        </div>
+
+                        {# Current record #}
+                        {% if check.rawRecord %}
+                            <div class="bg-base-200 rounded-btn px-3 py-2 mb-2">
+                                <code class="text-xs break-all">{{ check.rawRecord }}</code>
+                            </div>
+                        {% else %}
+                            <p class="text-sm text-base-content/50 italic mb-2">No record found</p>
+                        {% endif %}
+
+                        {# Change diff #}
+                        {% if check.hasChanged and check.previousRawRecord %}
+                            <div class="text-xs text-base-content/50">
+                                <span class="font-medium">Previous:</span>
+                                <code class="break-all">{{ check.previousRawRecord }}</code>
+                            </div>
+                        {% endif %}
+
+                        {# Issues #}
+                        {% if check.issues is not empty %}
+                            <div class="mt-2 space-y-1">
+                                {% for issue in check.issues %}
+                                    <div class="text-xs flex items-center gap-1">
+                                        {% if issue.severity == 'critical' %}
+                                            <span class="text-error">&#x2716;</span>
+                                        {% elseif issue.severity == 'warning' %}
+                                            <span class="text-warning">&#x26A0;</span>
+                                        {% else %}
+                                            <span class="text-info">&#x2139;</span>
+                                        {% endif %}
+                                        <span class="text-base-content/70">{{ issue.message }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}

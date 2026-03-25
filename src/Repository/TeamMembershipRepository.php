@@ -8,7 +8,7 @@ use App\Entity\TeamMembership;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class TeamMembershipRepository
+final readonly class TeamMembershipRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,

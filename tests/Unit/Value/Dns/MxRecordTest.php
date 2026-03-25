@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class MxRecordTest extends TestCase
 {
     #[Test]
-    public function can_be_constructed(): void
+    public function canBeConstructed(): void
     {
         $record = new MxRecord('mail.example.com', 10, '1.2.3.4', true, true);
 
@@ -23,7 +23,7 @@ final class MxRecordTest extends TestCase
     }
 
     #[Test]
-    public function nullable_fields_can_be_null(): void
+    public function nullableFieldsCanBeNull(): void
     {
         $record = new MxRecord('mail.example.com', 10, null, false, null);
 

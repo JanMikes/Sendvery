@@ -12,7 +12,7 @@ use Ramsey\Uuid\Uuid;
 final class AddDomainTest extends TestCase
 {
     #[Test]
-    public function it_can_be_constructed(): void
+    public function itCanBeConstructed(): void
     {
         $domainId = Uuid::uuid7();
         $teamId = Uuid::uuid7();

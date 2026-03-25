@@ -6,7 +6,7 @@ namespace App\Events;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class UserRegistered
+final readonly class UserRegistered
 {
     public function __construct(
         public UuidInterface $userId,

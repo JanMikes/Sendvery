@@ -9,7 +9,7 @@ use App\Value\Dns\DnsIssue;
 use App\Value\Dns\IssueSeverity;
 use Spatie\Dns\Dns;
 
-readonly final class DkimChecker
+final readonly class DkimChecker
 {
     private const array COMMON_SELECTORS = ['default', 'google', 'selector1', 'selector2', 'k1', 's1', 'dkim', 'mail', 'smtp'];
 
@@ -20,7 +20,7 @@ readonly final class DkimChecker
 
     public function check(string $domain, ?string $selector = null): DkimCheckResult
     {
-        if ($selector !== null) {
+        if (null !== $selector) {
             return $this->checkSelector($domain, $selector);
         }
 
@@ -66,11 +66,12 @@ readonly final class DkimChecker
             $txt = (string) $record;
             if (str_contains($txt, 'p=')) {
                 $rawRecord = $this->extractTxtValue($txt);
+
                 break;
             }
         }
 
-        if ($rawRecord === null) {
+        if (null === $rawRecord) {
             return new DkimCheckResult(
                 rawRecord: null,
                 keyExists: false,
@@ -92,13 +93,13 @@ readonly final class DkimChecker
         $keyType = $tags['k'] ?? 'rsa';
 
         $publicKeyData = $tags['p'] ?? '';
-        if ($publicKeyData === '') {
+        if ('' === $publicKeyData) {
             $issues[] = new DnsIssue(IssueSeverity::Critical, 'DKIM key has been revoked (empty p= tag).', 'This DKIM selector has been explicitly revoked. Configure a new DKIM key.');
             $recommendations[] = 'Set up a new DKIM key with your email provider.';
         } else {
             $keyBits = $this->estimateKeyBits($publicKeyData, $keyType);
 
-            if ($keyType === 'rsa' && $keyBits !== null && $keyBits < 2048) {
+            if ('rsa' === $keyType && null !== $keyBits && $keyBits < 2048) {
                 $issues[] = new DnsIssue(
                     IssueSeverity::Warning,
                     "DKIM key is {$keyBits}-bit RSA. 2048-bit or stronger is recommended.",
@@ -127,11 +128,11 @@ readonly final class DkimChecker
 
         foreach ($parts as $part) {
             $part = trim($part);
-            if ($part === '') {
+            if ('' === $part) {
                 continue;
             }
             $eqPos = strpos($part, '=');
-            if ($eqPos === false) {
+            if (false === $eqPos) {
                 continue;
             }
             $key = trim(substr($part, 0, $eqPos));
@@ -145,22 +146,22 @@ readonly final class DkimChecker
     private function estimateKeyBits(string $publicKeyBase64, string $keyType): ?int
     {
         $cleanKey = preg_replace('/\s+/', '', $publicKeyBase64);
-        if ($cleanKey === null || $cleanKey === '') {
+        if (null === $cleanKey || '' === $cleanKey) {
             return null;
         }
 
         $decoded = base64_decode($cleanKey, true);
-        if ($decoded === false) {
+        if (false === $decoded) {
             return null;
         }
 
-        if ($keyType === 'ed25519') {
+        if ('ed25519' === $keyType) {
             return 256;
         }
 
-        $pem = "-----BEGIN PUBLIC KEY-----\n" . chunk_split($cleanKey, 64) . "-----END PUBLIC KEY-----\n";
+        $pem = "-----BEGIN PUBLIC KEY-----\n".chunk_split($cleanKey, 64)."-----END PUBLIC KEY-----\n";
         $key = @openssl_pkey_get_public($pem);
-        if ($key === false) {
+        if (false === $key) {
             // Estimate from decoded length for RSA: key bytes ≈ modulus + overhead
             $len = strlen($decoded);
 

@@ -6,7 +6,7 @@ namespace App\Services\Dns;
 
 use App\Value\Dns\EmailAuthCheckResult;
 
-readonly final class EmailAuthChecker
+final readonly class EmailAuthChecker
 {
     public function __construct(
         private SpfChecker $spfChecker,

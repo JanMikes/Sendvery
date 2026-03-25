@@ -1,0 +1,107 @@
+{% extends 'onboarding/layout.html.twig' %}
+
+{% set step = 3 %}
+
+{% block page_title %}Connect reports{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-xl">
+    <div class="card-body">
+        <h2 class="card-title text-2xl mb-2">How should we receive reports?</h2>
+        <p class="text-base-content/60 mb-6">Choose how Sendvery will receive your DMARC aggregate reports.</p>
+
+        {% if errors|length > 0 %}
+            <div class="alert alert-error mb-4">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                <div>
+                    {% for error in errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        {# Option 1: Forward reports #}
+        <div class="collapse collapse-arrow bg-base-200 mb-4">
+            <input type="radio" name="ingestion-accordion" checked>
+            <div class="collapse-title font-medium">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    I'll forward reports
+                </div>
+            </div>
+            <div class="collapse-content">
+                <p class="text-sm text-base-content/60 mb-4">
+                    Update your DMARC record to send reports to Sendvery. Add this to your <code class="kbd kbd-sm">rua</code> tag:
+                </p>
+                <div class="mockup-code text-sm mb-4">
+                    <pre><code>rua=mailto:reports@sendvery.com</code></pre>
+                </div>
+                <form method="post" action="{{ path('onboarding_ingestion') }}">
+                    <input type="hidden" name="method" value="forward">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        I've updated my DMARC record
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {# Option 2: Connect mailbox #}
+        <div class="collapse collapse-arrow bg-base-200">
+            <input type="radio" name="ingestion-accordion">
+            <div class="collapse-title font-medium">
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"></path></svg>
+                    Connect my mailbox
+                </div>
+            </div>
+            <div class="collapse-content">
+                <p class="text-sm text-base-content/60 mb-4">
+                    We'll connect to your mailbox via IMAP and automatically fetch DMARC reports.
+                </p>
+                <form method="post" action="{{ path('onboarding_ingestion') }}">
+                    <input type="hidden" name="method" value="mailbox">
+
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div class="form-control col-span-2 sm:col-span-1">
+                            <label class="label"><span class="label-text text-sm">Host</span></label>
+                            <input type="text" name="host" placeholder="imap.example.com" class="input input-bordered input-sm w-full">
+                        </div>
+                        <div class="form-control col-span-2 sm:col-span-1">
+                            <label class="label"><span class="label-text text-sm">Port</span></label>
+                            <input type="number" name="port" value="993" class="input input-bordered input-sm w-full">
+                        </div>
+                    </div>
+
+                    <div class="form-control mb-3">
+                        <label class="label"><span class="label-text text-sm">Username</span></label>
+                        <input type="text" name="username" placeholder="dmarc@example.com" class="input input-bordered input-sm w-full">
+                    </div>
+
+                    <div class="form-control mb-3">
+                        <label class="label"><span class="label-text text-sm">Password</span></label>
+                        <input type="password" name="password" class="input input-bordered input-sm w-full">
+                    </div>
+
+                    <div class="form-control mb-4">
+                        <label class="label"><span class="label-text text-sm">Encryption</span></label>
+                        <select name="encryption" class="select select-bordered select-sm w-full">
+                            <option value="ssl">SSL</option>
+                            <option value="tls">TLS</option>
+                            <option value="none">None</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        Connect & finish
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="text-center mt-6">
+            <a href="{{ path('onboarding_complete') }}" class="link link-ghost text-sm">Skip for now</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

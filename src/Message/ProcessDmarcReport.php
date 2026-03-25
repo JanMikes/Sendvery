@@ -6,7 +6,7 @@ namespace App\Message;
 
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class ProcessDmarcReport
+final readonly class ProcessDmarcReport
 {
     public function __construct(
         public UuidInterface $reportId,

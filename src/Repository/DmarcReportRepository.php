@@ -9,7 +9,7 @@ use App\Exceptions\DmarcReportNotFound;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-readonly final class DmarcReportRepository
+final readonly class DmarcReportRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -20,7 +20,7 @@ readonly final class DmarcReportRepository
     {
         $report = $this->entityManager->find(DmarcReport::class, $id);
 
-        if ($report === null) {
+        if (null === $report) {
             throw new DmarcReportNotFound(sprintf('DMARC report with ID "%s" not found.', $id->toString()));
         }
 

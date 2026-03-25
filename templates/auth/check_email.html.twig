@@ -1,0 +1,35 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Check your email — Sendvery{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <a href="{{ path('home') }}" class="text-3xl font-bold text-primary tracking-tight">Sendvery</a>
+        </div>
+
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body text-center">
+                <div class="flex justify-center mb-4">
+                    <svg class="w-16 h-16 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                </div>
+
+                <h2 class="text-xl font-bold mb-2">Check your email</h2>
+                <p class="text-base-content/60 mb-4">
+                    We sent a sign-in link to <strong class="text-base-content">{{ email }}</strong>
+                </p>
+                <p class="text-sm text-base-content/40">
+                    The link expires in 15 minutes. Check your spam folder if you don't see it.
+                </p>
+
+                <div class="divider"></div>
+
+                <a href="{{ path('auth_login') }}" class="link link-primary text-sm">
+                    Try a different email
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

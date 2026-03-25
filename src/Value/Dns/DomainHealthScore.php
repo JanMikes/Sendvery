@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class DomainHealthScore
+final readonly class DomainHealthScore
 {
     /**
      * @param array<HealthCategory> $categories

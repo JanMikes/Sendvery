@@ -13,7 +13,7 @@ use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Exceptions\ConnectionFailedException;
 use Webklex\PHPIMAP\Message;
 
-readonly final class ImapMailClient implements MailClient
+final readonly class ImapMailClient implements MailClient
 {
     private const array DMARC_SUBJECT_KEYWORDS = ['dmarc', 'report domain'];
     private const array DMARC_SENDER_PATTERNS = [
@@ -38,7 +38,7 @@ readonly final class ImapMailClient implements MailClient
         try {
             $folder = $client->getFolderByName('INBOX') ?? $client->getFolderByPath('INBOX');
 
-            if ($folder === null) {
+            if (null === $folder) {
                 return;
             }
 
@@ -53,7 +53,7 @@ readonly final class ImapMailClient implements MailClient
 
                 $attachments = $this->extractReportAttachments($message);
 
-                if ($attachments === []) {
+                if ([] === $attachments) {
                     continue;
                 }
 
@@ -78,7 +78,7 @@ readonly final class ImapMailClient implements MailClient
         try {
             $folder = $client->getFolderByName('INBOX') ?? $client->getFolderByPath('INBOX');
 
-            if ($folder === null) {
+            if (null === $folder) {
                 return;
             }
 
@@ -87,13 +87,13 @@ readonly final class ImapMailClient implements MailClient
                 ->get()
                 ->first();
 
-            if ($imapMessage !== null) {
+            if (null !== $imapMessage) {
                 assert($imapMessage instanceof Message);
                 $imapMessage->setFlag('Seen');
 
                 // Try to move to a "Processed" folder if it exists
                 $processedFolder = $client->getFolderByName('Processed', soft_fail: true);
-                if ($processedFolder !== null) {
+                if (null !== $processedFolder) {
                     $imapMessage->move($processedFolder->path);
                 }
             }
@@ -183,6 +183,7 @@ readonly final class ImapMailClient implements MailClient
             foreach (self::REPORT_EXTENSIONS as $ext) {
                 if (str_ends_with($filename, $ext)) {
                     $isReport = true;
+
                     break;
                 }
             }

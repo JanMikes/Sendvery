@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value\Dns;
 
-readonly final class MxCheckResult
+final readonly class MxCheckResult
 {
     /**
      * @param array<MxRecord> $records
@@ -18,7 +18,7 @@ readonly final class MxCheckResult
 
     public function hasRecords(): bool
     {
-        return $this->records !== [];
+        return [] !== $this->records;
     }
 
     public function isPassing(): bool

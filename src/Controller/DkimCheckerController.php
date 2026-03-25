@@ -24,8 +24,8 @@ final class DkimCheckerController extends AbstractController
         $domain = $request->request->getString('domain');
         $selector = $request->request->getString('selector');
 
-        if ($request->isMethod('POST') && $domain !== '') {
-            $result = $this->dkimChecker->check($domain, $selector !== '' ? $selector : null);
+        if ($request->isMethod('POST') && '' !== $domain) {
+            $result = $this->dkimChecker->check($domain, '' !== $selector ? $selector : null);
 
             if ($request->isXmlHttpRequest()) {
                 return $this->render('tools/_results/dkim-results.html.twig', [

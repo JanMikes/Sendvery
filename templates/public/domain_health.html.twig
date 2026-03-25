@@ -1,0 +1,50 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}{{ domainName }} Domain Health — Sendvery{% endblock %}
+{% block meta_description %}Domain health score for {{ domainName }}: Grade {{ snapshot.grade }} ({{ snapshot.score }}/100). Check your own domain's email authentication health.{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-base-200">
+    <div class="container mx-auto px-4 py-12 max-w-2xl">
+        <div class="text-center mb-8">
+            <a href="{{ path('home') }}" class="text-2xl font-bold text-primary tracking-tight">Sendvery</a>
+            <p class="text-sm text-base-content/60 mt-1">Email Health Report</p>
+        </div>
+
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body items-center text-center">
+                <h1 class="text-xl font-semibold mb-2">{{ domainName }}</h1>
+
+                <div class="text-8xl font-bold {{ snapshot.gradeColor() }} my-4">{{ snapshot.grade }}</div>
+                <div class="text-3xl font-semibold">{{ snapshot.score }}/100</div>
+                <p class="text-sm text-base-content/60 mt-2">Checked on {{ snapshot.checkedAt|date('M j, Y') }}</p>
+
+                <div class="divider"></div>
+
+                <div class="w-full space-y-3">
+                    {% set categories = [
+                        { name: 'SPF', score: snapshot.spfScore },
+                        { name: 'DKIM', score: snapshot.dkimScore },
+                        { name: 'DMARC', score: snapshot.dmarcScore },
+                        { name: 'MX', score: snapshot.mxScore },
+                        { name: 'Blacklist', score: snapshot.blacklistScore },
+                    ] %}
+                    {% for cat in categories %}
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>{{ cat.name }}</span>
+                                <span class="font-medium">{{ cat.score }}%</span>
+                            </div>
+                            <progress class="progress {{ cat.score >= 80 ? 'progress-success' : (cat.score >= 50 ? 'progress-warning' : 'progress-error') }} w-full" value="{{ cat.score }}" max="100"></progress>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="divider"></div>
+
+                <a href="{{ path('tools_domain_health') }}" class="btn btn-primary">Check your own domain</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

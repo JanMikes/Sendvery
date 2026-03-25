@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Value;
 
-readonly final class ParsedDmarcReport
+final readonly class ParsedDmarcReport
 {
     /**
      * @param array<ParsedDmarcRecord> $records

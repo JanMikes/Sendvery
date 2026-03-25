@@ -13,7 +13,7 @@ use Ramsey\Uuid\Uuid;
 final class BetaSignupTest extends WebTestCase
 {
     #[Test]
-    public function beta_page_returns_200(): void
+    public function betaPageReturns200(): void
     {
         $client = self::createClient();
         $client->request('GET', '/beta');
@@ -22,7 +22,7 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function beta_page_has_signup_form(): void
+    public function betaPageHasSignupForm(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/beta');
@@ -32,7 +32,7 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function beta_page_has_title_and_meta(): void
+    public function betaPageHasTitleAndMeta(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/beta');
@@ -45,11 +45,11 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function submit_valid_signup_shows_success(): void
+    public function submitValidSignupShowsSuccess(): void
     {
         $client = self::createClient();
         $client->request('POST', '/beta', [
-            'email' => 'test-signup-' . Uuid::uuid7()->toString() . '@example.com',
+            'email' => 'test-signup-'.Uuid::uuid7()->toString().'@example.com',
             'source' => 'beta-page',
         ]);
 
@@ -58,10 +58,10 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function submit_valid_signup_creates_entity(): void
+    public function submitValidSignupCreatesEntity(): void
     {
         $client = self::createClient();
-        $email = 'entity-test-' . Uuid::uuid7()->toString() . '@example.com';
+        $email = 'entity-test-'.Uuid::uuid7()->toString().'@example.com';
 
         $client->request('POST', '/beta', [
             'email' => $email,
@@ -83,7 +83,7 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function submit_invalid_email_shows_error(): void
+    public function submitInvalidEmailShowsError(): void
     {
         $client = self::createClient();
         $client->request('POST', '/beta', [
@@ -96,7 +96,7 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function submit_empty_email_shows_error(): void
+    public function submitEmptyEmailShowsError(): void
     {
         $client = self::createClient();
         $client->request('POST', '/beta', [
@@ -109,10 +109,10 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function duplicate_email_shows_success_silently(): void
+    public function duplicateEmailShowsSuccessSilently(): void
     {
         $client = self::createClient();
-        $email = 'duplicate-' . Uuid::uuid7()->toString() . '@example.com';
+        $email = 'duplicate-'.Uuid::uuid7()->toString().'@example.com';
 
         $client->request('POST', '/beta', [
             'email' => $email,
@@ -129,7 +129,7 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function confirm_with_valid_token(): void
+    public function confirmWithValidToken(): void
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -138,7 +138,7 @@ final class BetaSignupTest extends WebTestCase
         $token = bin2hex(random_bytes(32));
         $signup = new BetaSignup(
             id: Uuid::uuid7(),
-            email: 'confirm-' . Uuid::uuid7()->toString() . '@example.com',
+            email: 'confirm-'.Uuid::uuid7()->toString().'@example.com',
             domainCount: null,
             painPoint: null,
             source: 'test',
@@ -149,7 +149,7 @@ final class BetaSignupTest extends WebTestCase
         $em->persist($signup);
         $em->flush();
 
-        $client->request('GET', '/beta/confirm/' . $token);
+        $client->request('GET', '/beta/confirm/'.$token);
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', "You're confirmed");
@@ -161,7 +161,7 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function confirm_with_invalid_token_returns_404(): void
+    public function confirmWithInvalidTokenReturns404(): void
     {
         $client = self::createClient();
         $client->request('GET', '/beta/confirm/nonexistenttoken');
@@ -170,7 +170,7 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function confirm_already_confirmed_does_not_change_date(): void
+    public function confirmAlreadyConfirmedDoesNotChangeDate(): void
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -180,7 +180,7 @@ final class BetaSignupTest extends WebTestCase
         $confirmedAt = new \DateTimeImmutable('2026-03-20 10:00:00');
         $signup = new BetaSignup(
             id: Uuid::uuid7(),
-            email: 'already-confirmed-' . Uuid::uuid7()->toString() . '@example.com',
+            email: 'already-confirmed-'.Uuid::uuid7()->toString().'@example.com',
             domainCount: null,
             painPoint: null,
             source: 'test',
@@ -192,7 +192,7 @@ final class BetaSignupTest extends WebTestCase
         $em->persist($signup);
         $em->flush();
 
-        $client->request('GET', '/beta/confirm/' . $token);
+        $client->request('GET', '/beta/confirm/'.$token);
 
         self::assertResponseIsSuccessful();
 

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Tests\Integration\Repository;
 
 use App\Entity\MailboxConnection;
-use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Exceptions\MailboxConnectionNotFound;
 use App\Repository\MailboxConnectionRepository;
@@ -95,8 +94,8 @@ final class MailboxConnectionRepositoryTest extends IntegrationTestCase
     {
         $team = new Team(
             id: Uuid::uuid7(),
-            name: 'Test Team ' . $suffix,
-            slug: 'test-team-' . Uuid::uuid7()->toString(),
+            name: 'Test Team '.$suffix,
+            slug: 'test-team-'.Uuid::uuid7()->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $em->persist($team);

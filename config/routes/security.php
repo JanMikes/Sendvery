@@ -5,5 +5,6 @@ declare(strict_types=1);
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 
 return function (RoutingConfigurator $routes): void {
-    $routes->import('security.route_loader.logout', 'service');
+    $routes->add('auth_logout', '/logout')
+        ->methods(['GET']);
 };

@@ -2,6 +2,19 @@
 
 This file contains architecture conventions, coding standards, and project context for vibecoding. Follow these rules strictly when generating code.
 
+## Running Commands
+
+Always run PHP commands (composer, phpunit, bin/console, php-cs-fixer, phpstan, infection) inside the Docker app container using `docker compose exec`:
+
+```bash
+docker compose exec app <command>
+```
+
+**After every code change**, always run the quality tools to verify:
+1. `docker compose exec app vendor/bin/phpunit` — tests
+2. `docker compose exec app vendor/bin/phpstan` — static analysis
+3. `docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff` — code style
+
 ## Project
 
 Sendvery is an email health & deliverability micro-SaaS. DMARC report parsing with AI-powered insights. Open source (AGPL-3.0), self-hosted always free.
