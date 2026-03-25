@@ -19,7 +19,7 @@ Sendvery is an email health & deliverability micro-SaaS. DMARC report parsing wi
 - **API Platform** for REST API
 - **Stripe** for subscriptions
 - **Sentry** for error tracking
-- **Docker base image:** `ghcr.io/thedevs-cz/php8.5:latest` from https://github.com/thedevs-cz/docker
+- **Docker base image:** `ghcr.io/thedevs-cz/php:8.5` from https://github.com/thedevs-cz/docker
 
 ## Core Principles
 
@@ -337,7 +337,7 @@ readonly final class DnsRecord
 
 ## Docker
 
-- Base image: `ghcr.io/thedevs-cz/php8.5:latest`
+- Base image: `ghcr.io/thedevs-cz/php:8.5`
 - Production Dockerfile pattern: https://github.com/JanMikes/fajnesklady.cz/blob/main/Dockerfile
 - Local compose.yaml pattern: https://github.com/JanMikes/fajnesklady.cz/blob/main/compose.yaml
 - FrankenPHP serves HTTP, Traefik (existing on server) handles TLS

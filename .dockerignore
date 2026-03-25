@@ -1,0 +1,10 @@
+.git
+.idea
+.vscode
+docs
+prompts
+var
+vendor
+.phpunit.cache
+docker-compose.yml
+compose.override.yml

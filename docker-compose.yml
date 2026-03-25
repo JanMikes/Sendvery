@@ -1,0 +1,85 @@
+# Production docker-compose.yml
+# Assumes Traefik is running on the host as the reverse proxy (TLS, routing)
+# FrankenPHP serves HTTP only — Traefik terminates TLS
+
+services:
+  app:
+    build: .
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      FRANKENPHP_WORKER: "1"
+      DATABASE_URL: "postgresql://app:secret@database:5432/sendvery?serverVersion=17"
+      MESSENGER_TRANSPORT_DSN: "doctrine://default?queue_name=messages"
+      MAILER_DSN: "smtp://user:pass@smtp.seznam.cz:465"
+      SENTRY_DSN: ""
+      STRIPE_SECRET_KEY: ""
+      ENCRYPTION_KEY: ""
+      APP_SECRET: "change-me-in-production"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sendvery.rule=Host(`sendvery.com`)"
+      - "traefik.http.routers.sendvery.entrypoints=websecure"
+      - "traefik.http.routers.sendvery.tls.certresolver=letsencrypt"
+      - "traefik.http.services.sendvery.loadbalancer.server.port=80"
+    networks:
+      - traefik
+      - default
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: php bin/console messenger:consume async --time-limit=3600
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://app:secret@database:5432/sendvery?serverVersion=17"
+      MESSENGER_TRANSPORT_DSN: "doctrine://default?queue_name=messages"
+      MAILER_DSN: "smtp://user:pass@smtp.seznam.cz:465"
+      SENTRY_DSN: ""
+      STRIPE_SECRET_KEY: ""
+      ENCRYPTION_KEY: ""
+      APP_SECRET: "change-me-in-production"
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    command: php bin/console messenger:consume scheduler_default --time-limit=3600
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://app:secret@database:5432/sendvery?serverVersion=17"
+      MESSENGER_TRANSPORT_DSN: "doctrine://default?queue_name=messages"
+      MAILER_DSN: "smtp://user:pass@smtp.seznam.cz:465"
+      SENTRY_DSN: ""
+      STRIPE_SECRET_KEY: ""
+      ENCRYPTION_KEY: ""
+      APP_SECRET: "change-me-in-production"
+    restart: unless-stopped
+
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: sendvery
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d sendvery"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - default
+
+volumes:
+  pgdata:
+
+networks:
+  traefik:
+    external: true

@@ -1,0 +1,109 @@
+{
+    "name": "sendvery/sendvery",
+    "description": "Email health & deliverability micro-SaaS — DMARC report parsing with AI-powered insights",
+    "license": "AGPL-3.0-or-later",
+    "type": "project",
+    "require": {
+        "php": ">=8.5",
+        "ext-ctype": "*",
+        "ext-iconv": "*",
+        "api-platform/core": "^4.0",
+        "doctrine/dbal": "^4.0",
+        "doctrine/doctrine-bundle": "^3.0",
+        "doctrine/doctrine-migrations-bundle": "^4.0",
+        "doctrine/orm": "^3.3",
+        "ramsey/uuid": "^4.7",
+        "ramsey/uuid-doctrine": "^2.1",
+        "sentry/sentry-symfony": "^5.0",
+        "symfony/asset": "8.0.*",
+        "symfony/asset-mapper": "^8.0",
+        "symfony/clock": "^8.0",
+        "symfony/console": "^8.0",
+        "symfony/doctrine-messenger": "^8.0",
+        "symfony/dotenv": "^8.0",
+        "symfony/flex": "^2.4",
+        "symfony/framework-bundle": "^8.0",
+        "symfony/mailer": "^8.0",
+        "symfony/messenger": "^8.0",
+        "symfony/runtime": "^8.0",
+        "symfony/scheduler": "^8.0",
+        "symfony/security-bundle": "^8.0",
+        "symfony/stimulus-bundle": "^2.0",
+        "symfony/translation": "^8.0",
+        "symfony/twig-bridge": "^8.0",
+        "symfony/twig-bundle": "^8.0",
+        "symfony/ux-turbo": "^2.0",
+        "symfony/yaml": "^8.0",
+        "symfonycasts/tailwind-bundle": "^0.12"
+    },
+    "require-dev": {
+        "dama/doctrine-test-bundle": "^8.0",
+        "infection/infection": "^0.32",
+        "phpunit/phpunit": "^13.0",
+        "symfony/browser-kit": "^8.0",
+        "symfony/css-selector": "^8.0",
+        "symfony/debug-bundle": "^8.0",
+        "symfony/maker-bundle": "^1.0",
+        "symfony/phpunit-bridge": "^8.0",
+        "symfony/web-profiler-bundle": "^8.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "symfony/flex": true,
+            "symfony/runtime": true,
+            "infection/extension-installer": true
+        },
+        "optimize-autoloader": true,
+        "preferred-install": {
+            "*": "dist"
+        },
+        "sort-packages": true
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "App\\Tests\\": "tests/"
+        }
+    },
+    "replace": {
+        "symfony/polyfill-ctype": "*",
+        "symfony/polyfill-iconv": "*",
+        "symfony/polyfill-php72": "*",
+        "symfony/polyfill-php73": "*",
+        "symfony/polyfill-php74": "*",
+        "symfony/polyfill-php80": "*",
+        "symfony/polyfill-php81": "*",
+        "symfony/polyfill-php82": "*",
+        "symfony/polyfill-php83": "*",
+        "symfony/polyfill-php84": "*",
+        "symfony/polyfill-php85": "*"
+    },
+    "scripts": {
+        "auto-scripts": {
+            "cache:clear": "symfony-cmd",
+            "assets:install %PUBLIC_DIR%": "symfony-cmd",
+            "importmap:install": "symfony-cmd"
+        },
+        "post-install-cmd": [
+            "@auto-scripts"
+        ],
+        "post-update-cmd": [
+            "@auto-scripts"
+        ]
+    },
+    "conflict": {
+        "symfony/symfony": "*"
+    },
+    "extra": {
+        "symfony": {
+            "allow-contrib": true,
+            "require": "8.0.*"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
