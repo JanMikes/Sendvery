@@ -74,21 +74,19 @@
 
 {# 4. Related Tools #}
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="text-center mb-8">
-            <h2 class="text-xl font-bold">Related tools</h2>
-        </div>
-        <div class="flex flex-wrap justify-center gap-3">
-            {% block related_tools %}
-                <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm">SPF Checker</a>
-                <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm">DKIM Checker</a>
-                <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm">DMARC Checker</a>
-                <a href="{{ path('tools_mx_checker') }}" class="btn btn-outline btn-sm">MX Checker</a>
-                <a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm">Email Auth Checker</a>
-                <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm">Domain Health</a>
-                <a href="{{ path('tools_blacklist_checker') }}" class="btn btn-outline btn-sm">Blacklist Checker</a>
-                <a href="{{ path('tools_dns_monitoring') }}" class="btn btn-outline btn-sm">DNS Monitoring</a>
-            {% endblock %}
+    <div class="text-center mb-8">
+        <h2 class="text-xl font-bold">Related tools</h2>
+    </div>
+    <div class="flex flex-wrap justify-center gap-3">
+        {% block related_tools %}
+            <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm">SPF Checker</a>
+            <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm">DKIM Checker</a>
+            <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm">DMARC Checker</a>
+            <a href="{{ path('tools_mx_checker') }}" class="btn btn-outline btn-sm">MX Checker</a>
+            <a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm">Email Auth Checker</a>
+            <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm">Domain Health</a>
+            <a href="{{ path('tools_blacklist_checker') }}" class="btn btn-outline btn-sm">Blacklist Checker</a>
+            <a href="{{ path('tools_dns_monitoring') }}" class="btn btn-outline btn-sm">DNS Monitoring</a>
         </div>
     {% endblock %}
 </twig:SectionContainer>

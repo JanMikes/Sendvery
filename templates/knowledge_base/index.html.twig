@@ -43,26 +43,24 @@
 
 {% for category, categoryGuides in categories %}
 <twig:SectionContainer bgClass="{{ loop.index is odd ? '' : 'bg-base-200/50' }}">
-    {% block content %}
-        <div class="max-w-4xl mx-auto">
-            <h2 class="text-xl md:text-2xl font-bold mb-8">{{ category }}</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {% for guide in categoryGuides %}
-                    <a href="{{ path('knowledge_base_article', {slug: guide.slug}) }}"
-                       class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/30 hover:shadow-md transition-all">
-                        <div class="card-body">
-                            <div class="badge badge-outline badge-sm mb-2">{{ guide.category }}</div>
-                            <h3 class="card-title text-lg">{{ guide.title }}</h3>
-                            <p class="text-base-content/60 text-sm">{{ guide.excerpt }}</p>
-                            <div class="card-actions justify-end mt-4">
-                                <span class="text-primary text-sm font-medium">Read guide &rarr;</span>
-                            </div>
+    <div class="max-w-4xl mx-auto">
+        <h2 class="text-xl md:text-2xl font-bold mb-8">{{ category }}</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for guide in categoryGuides %}
+                <a href="{{ path('knowledge_base_article', {slug: guide.slug}) }}"
+                   class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/30 hover:shadow-md transition-all">
+                    <div class="card-body">
+                        <div class="badge badge-outline badge-sm mb-2">{{ guide.category }}</div>
+                        <h3 class="card-title text-lg">{{ guide.title }}</h3>
+                        <p class="text-base-content/60 text-sm">{{ guide.excerpt }}</p>
+                        <div class="card-actions justify-end mt-4">
+                            <span class="text-primary text-sm font-medium">Read guide &rarr;</span>
                         </div>
-                    </a>
-                {% endfor %}
-            </div>
+                    </div>
+                </a>
+            {% endfor %}
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 {% endfor %}
 

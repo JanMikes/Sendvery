@@ -93,85 +93,77 @@
 
 {% block seo_content %}
 <twig:SectionContainer>
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-bold mb-6">What is DKIM?</h2>
-            <div class="prose prose-lg max-w-none text-base-content/80">
-                <p>
-                    DKIM (DomainKeys Identified Mail) is an email authentication protocol defined in <strong>RFC 6376</strong>. It uses public-key cryptography to digitally sign outgoing emails, allowing receiving servers to verify that the message was authorized by the domain owner and hasn't been modified in transit.
-                </p>
-                <p>
-                    The sending server adds a cryptographic signature to each email's headers using a private key. The corresponding public key is published as a DNS TXT record at <code class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-sm">selector._domainkey.yourdomain.com</code>. When a receiving server gets the email, it retrieves the public key from DNS and verifies the signature.
-                </p>
-                <p>
-                    Unlike SPF (which validates the sending server's IP), DKIM validates the message content itself. This means DKIM survives email forwarding, which SPF often does not.
-                </p>
-            </div>
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-bold mb-6">What is DKIM?</h2>
+        <div class="prose prose-lg max-w-none text-base-content/80">
+            <p>
+                DKIM (DomainKeys Identified Mail) is an email authentication protocol defined in <strong>RFC 6376</strong>. It uses public-key cryptography to digitally sign outgoing emails, allowing receiving servers to verify that the message was authorized by the domain owner and hasn't been modified in transit.
+            </p>
+            <p>
+                The sending server adds a cryptographic signature to each email's headers using a private key. The corresponding public key is published as a DNS TXT record at <code class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-sm">selector._domainkey.yourdomain.com</code>. When a receiving server gets the email, it retrieves the public key from DNS and verifies the signature.
+            </p>
+            <p>
+                Unlike SPF (which validates the sending server's IP), DKIM validates the message content itself. This means DKIM survives email forwarding, which SPF often does not.
+            </p>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-bold mb-6">Security risks & attack vectors</h2>
-            <div class="space-y-4">
-                <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
-                    <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
-                    <div>
-                        <h3 class="font-bold">Weak 1024-bit keys</h3>
-                        <p class="text-sm text-base-content/60 mt-1">Many domains still use 1024-bit RSA keys, which are increasingly vulnerable. Upgrade to 2048-bit keys for adequate protection against modern threats.</p>
-                    </div>
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-bold mb-6">Security risks & attack vectors</h2>
+        <div class="space-y-4">
+            <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
+                <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                <div>
+                    <h3 class="font-bold">Weak 1024-bit keys</h3>
+                    <p class="text-sm text-base-content/60 mt-1">Many domains still use 1024-bit RSA keys, which are increasingly vulnerable. Upgrade to 2048-bit keys for adequate protection against modern threats.</p>
                 </div>
-                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
-                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <div>
-                        <h3 class="font-bold">Keys lost after DNS migration</h3>
-                        <p class="text-sm text-base-content/60 mt-1">You migrated DNS providers last year. Your DKIM key didn't follow. Receiving servers have been silently marking your email as unverified ever since.</p>
-                    </div>
+            </div>
+            <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div>
+                    <h3 class="font-bold">Keys lost after DNS migration</h3>
+                    <p class="text-sm text-base-content/60 mt-1">You migrated DNS providers last year. Your DKIM key didn't follow. Receiving servers have been silently marking your email as unverified ever since.</p>
                 </div>
-                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
-                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <div>
-                        <h3 class="font-bold">No key rotation</h3>
-                        <p class="text-sm text-base-content/60 mt-1">The same DKIM key has been in use for 3 years. If it's ever compromised, attackers can forge perfectly authenticated emails from your domain.</p>
-                    </div>
+            </div>
+            <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div>
+                    <h3 class="font-bold">No key rotation</h3>
+                    <p class="text-sm text-base-content/60 mt-1">The same DKIM key has been in use for 3 years. If it's ever compromised, attackers can forge perfectly authenticated emails from your domain.</p>
                 </div>
             </div>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 <twig:SectionContainer>
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-bold mb-6">The set-and-forget trap</h2>
-            <div class="prose prose-lg max-w-none text-base-content/80">
-                <p>
-                    DKIM keys are configured once during email setup and then never checked again. But keys can disappear during DNS migrations, expire after provider changes, or remain at weak 1024-bit strength while the rest of the industry moves to 2048-bit.
-                </p>
-                <p>
-                    Third-party services like marketing tools and CRMs publish their own DKIM keys on your behalf using specific selectors. If any of these services change their signing configuration, your DKIM can break without warning.
-                </p>
-                <p class="font-medium">
-                    Monitor all your DKIM selectors across providers. <a href="{{ path('home') }}#pricing" class="link link-primary">Join the Sendvery beta</a> to know the moment a key expires or disappears.
-                </p>
-            </div>
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-bold mb-6">The set-and-forget trap</h2>
+        <div class="prose prose-lg max-w-none text-base-content/80">
+            <p>
+                DKIM keys are configured once during email setup and then never checked again. But keys can disappear during DNS migrations, expire after provider changes, or remain at weak 1024-bit strength while the rest of the industry moves to 2048-bit.
+            </p>
+            <p>
+                Third-party services like marketing tools and CRMs publish their own DKIM keys on your behalf using specific selectors. If any of these services change their signing configuration, your DKIM can break without warning.
+            </p>
+            <p class="font-medium">
+                Monitor all your DKIM selectors across providers. <a href="{{ path('home') }}#pricing" class="link link-primary">Join the Sendvery beta</a> to know the moment a key expires or disappears.
+            </p>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="text-center mb-8">
-            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
-        </div>
-        <twig:FaqAccordion :items="[
-            {question: 'What is DKIM?', answer: 'DKIM (DomainKeys Identified Mail) uses cryptographic signatures to verify that an email was authorized by the domain owner and hasn&apos;t been tampered with in transit. It publishes a public key in DNS for receivers to verify.'},
-            {question: 'What is a DKIM selector?', answer: 'A selector is a string used to look up the DKIM public key in DNS. The full query is selector._domainkey.domain.com. Different email services use different selectors (e.g., google for Google Workspace, selector1 for Microsoft 365).'},
-            {question: 'Why is 1024-bit RSA considered weak?', answer: '1024-bit RSA keys are the minimum viable length and increasingly vulnerable. 2048-bit RSA is recommended by all major email providers and security standards. Consider Ed25519 for even stronger, more efficient signing.'},
-            {question: 'How often should DKIM keys be rotated?', answer: 'Rotate DKIM keys at least every 12 months. Use a new selector for each rotation so the transition is seamless. Immediately rotate if you suspect a key has been compromised.'}
-        ]" />
-    {% endblock %}
+    <div class="text-center mb-8">
+        <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+    </div>
+    <twig:FaqAccordion :items="[
+        {question: 'What is DKIM?', answer: 'DKIM (DomainKeys Identified Mail) uses cryptographic signatures to verify that an email was authorized by the domain owner and hasn&apos;t been tampered with in transit. It publishes a public key in DNS for receivers to verify.'},
+        {question: 'What is a DKIM selector?', answer: 'A selector is a string used to look up the DKIM public key in DNS. The full query is selector._domainkey.domain.com. Different email services use different selectors (e.g., google for Google Workspace, selector1 for Microsoft 365).'},
+        {question: 'Why is 1024-bit RSA considered weak?', answer: '1024-bit RSA keys are the minimum viable length and increasingly vulnerable. 2048-bit RSA is recommended by all major email providers and security standards. Consider Ed25519 for even stronger, more efficient signing.'},
+        {question: 'How often should DKIM keys be rotated?', answer: 'Rotate DKIM keys at least every 12 months. Use a new selector for each rotation so the transition is seamless. Immediately rotate if you suspect a key has been compromised.'}
+    ]" />
 </twig:SectionContainer>
 {% endblock %}

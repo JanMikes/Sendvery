@@ -5,42 +5,40 @@
 
 {% block content %}
 <twig:SectionContainer>
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h1 class="text-3xl md:text-4xl font-bold">What is Sendvery?</h1>
+    <div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-bold">What is Sendvery?</h1>
 
-            <div class="mt-8 prose prose-lg max-w-none text-base-content/80">
-                <p>
-                    Sendvery is an email health and deliverability monitoring platform. It watches your domain's email authentication (SPF, DKIM, DMARC) continuously, parses your DMARC aggregate reports, and alerts you the moment something changes or breaks.
-                </p>
+        <div class="mt-8 prose prose-lg max-w-none text-base-content/80">
+            <p>
+                Sendvery is an email health and deliverability monitoring platform. It watches your domain's email authentication (SPF, DKIM, DMARC) continuously, parses your DMARC aggregate reports, and alerts you the moment something changes or breaks.
+            </p>
 
-                <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">The problem</h2>
-                <p>
-                    Email authentication records are set once and forgotten. Then services get added, DNS providers get migrated, keys expire, and records break — silently. You only find out when customers complain about missing emails, or worse, when someone spoofs your domain in a phishing campaign.
-                </p>
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">The problem</h2>
+            <p>
+                Email authentication records are set once and forgotten. Then services get added, DNS providers get migrated, keys expire, and records break — silently. You only find out when customers complain about missing emails, or worse, when someone spoofs your domain in a phishing campaign.
+            </p>
 
-                <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">The founder's story</h2>
-                <p>
-                    "I was deleting my DMARC reports for years. They'd arrive as XML attachments from Google and Yahoo, I'd glance at the subject line, and delete them. I had no idea what was in them or whether anything was wrong. Turns out, quite a lot was." — Jan, founder
-                </p>
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">The founder's story</h2>
+            <p>
+                "I was deleting my DMARC reports for years. They'd arrive as XML attachments from Google and Yahoo, I'd glance at the subject line, and delete them. I had no idea what was in them or whether anything was wrong. Turns out, quite a lot was." — Jan, founder
+            </p>
 
-                <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Who it's for</h2>
-                <ul>
-                    <li><strong>Developers and sysadmins</strong> who manage email infrastructure and want visibility without the enterprise price tag</li>
-                    <li><strong>Small business owners</strong> who want to make sure their email actually arrives and nobody is spoofing their domain</li>
-                    <li><strong>Agencies and MSPs</strong> managing email authentication across many client domains</li>
-                </ul>
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Who it's for</h2>
+            <ul>
+                <li><strong>Developers and sysadmins</strong> who manage email infrastructure and want visibility without the enterprise price tag</li>
+                <li><strong>Small business owners</strong> who want to make sure their email actually arrives and nobody is spoofing their domain</li>
+                <li><strong>Agencies and MSPs</strong> managing email authentication across many client domains</li>
+            </ul>
 
-                <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Why open source?</h2>
-                <p>
-                    Your email infrastructure deserves transparency. Sendvery is AGPL-3.0 licensed — you can inspect every line of code, self-host it on your own servers, and never worry about vendor lock-in. The hosted version simply saves you the infrastructure work.
-                </p>
-            </div>
-
-            <div class="mt-12">
-                <a href="{{ path('home') }}#dns-checker" class="btn btn-primary">Check your domain now</a>
-            </div>
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Why open source?</h2>
+            <p>
+                Your email infrastructure deserves transparency. Sendvery is AGPL-3.0 licensed — you can inspect every line of code, self-host it on your own servers, and never worry about vendor lock-in. The hosted version simply saves you the infrastructure work.
+            </p>
         </div>
-    {% endblock %}
+
+        <div class="mt-12">
+            <a href="{{ path('home') }}#dns-checker" class="btn btn-primary">Check your domain now</a>
+        </div>
+    </div>
 </twig:SectionContainer>
 {% endblock %}

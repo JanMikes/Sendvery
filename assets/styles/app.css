@@ -1,6 +1,95 @@
 @import "tailwindcss";
-@plugin "../vendor/daisyui/daisyui.index.js" {
-    themes: sendvery --default, sendvery-dark --prefersdark;
+@plugin "daisyui";
+
+
+/* Sendvery light theme — teal primary, indigo secondary, amber accent */
+@plugin "daisyui/theme" {
+    name: "sendvery";
+    default: true;
+    color-scheme: light;
+
+    --color-base-100: oklch(98.5% 0.002 247);
+    --color-base-200: oklch(96% 0.009 260);
+    --color-base-300: oklch(93% 0.016 260);
+    --color-base-content: oklch(21% 0.042 266);
+
+    --color-primary: oklch(49% 0.13 176);
+    --color-primary-content: oklch(98% 0.002 176);
+
+    --color-secondary: oklch(45% 0.175 273);
+    --color-secondary-content: oklch(96% 0.01 273);
+
+    --color-accent: oklch(78% 0.155 77);
+    --color-accent-content: oklch(20% 0.03 77);
+
+    --color-neutral: oklch(28% 0.029 260);
+    --color-neutral-content: oklch(96% 0.009 260);
+
+    --color-info: oklch(74% 0.16 233);
+    --color-info-content: oklch(29% 0.066 243);
+
+    --color-success: oklch(60% 0.169 162);
+    --color-success-content: oklch(98% 0.01 162);
+
+    --color-warning: oklch(78% 0.155 77);
+    --color-warning-content: oklch(20% 0.05 77);
+
+    --color-error: oklch(58% 0.245 27);
+    --color-error-content: oklch(98% 0.01 27);
+
+    --radius-selector: 0.5rem;
+    --radius-field: 0.5rem;
+    --radius-box: 0.75rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 1;
+    --noise: 0;
+}
+
+/* Sendvery dark theme */
+@plugin "daisyui/theme" {
+    name: "sendvery-dark";
+    prefersdark: true;
+    color-scheme: dark;
+
+    --color-base-100: oklch(21% 0.042 266);
+    --color-base-200: oklch(17% 0.038 266);
+    --color-base-300: oklch(13% 0.032 266);
+    --color-base-content: oklch(93% 0.016 260);
+
+    --color-primary: oklch(55% 0.14 176);
+    --color-primary-content: oklch(98% 0.002 176);
+
+    --color-secondary: oklch(52% 0.18 273);
+    --color-secondary-content: oklch(96% 0.01 273);
+
+    --color-accent: oklch(78% 0.155 77);
+    --color-accent-content: oklch(20% 0.03 77);
+
+    --color-neutral: oklch(28% 0.029 260);
+    --color-neutral-content: oklch(93% 0.016 260);
+
+    --color-info: oklch(74% 0.16 233);
+    --color-info-content: oklch(29% 0.066 243);
+
+    --color-success: oklch(60% 0.169 162);
+    --color-success-content: oklch(98% 0.01 162);
+
+    --color-warning: oklch(78% 0.155 77);
+    --color-warning-content: oklch(20% 0.05 77);
+
+    --color-error: oklch(58% 0.245 27);
+    --color-error-content: oklch(98% 0.01 27);
+
+    --radius-selector: 0.5rem;
+    --radius-field: 0.5rem;
+    --radius-box: 0.75rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 1;
+    --noise: 0;
 }
 
 @theme {
@@ -50,56 +139,4 @@
     margin-inline: auto;
     padding-inline: 1.5rem;
     max-width: 80rem;
-}
-
-/* daisyUI theme: sendvery (light) */
-[data-theme="sendvery"] {
-    --p: 0.058 0.141 175.66;        /* brand-500 teal */
-    --pf: 0.051 0.125 175.66;       /* brand-600 */
-    --pc: 0.985 0.002 175.66;       /* white on primary */
-    --s: 0.284 0.175 272.83;        /* accent indigo */
-    --sf: 0.239 0.163 272.83;
-    --sc: 0.985 0.002 272.83;
-    --a: 0.669 0.152 77.17;         /* amber */
-    --af: 0.605 0.142 77.17;
-    --ac: 0.2 0.03 77.17;
-    --n: 0.279 0.029 260;           /* slate-800 */
-    --nf: 0.208 0.042 265.75;       /* slate-900 */
-    --nc: 0.961 0.009 260;
-    --b1: 0.985 0.002 247.86;       /* base backgrounds */
-    --b2: 0.961 0.009 260;
-    --b3: 0.929 0.016 260;
-    --bc: 0.208 0.042 265.75;
-    --su: 0.598 0.169 162.48;       /* success green */
-    --wa: 0.669 0.152 77.17;        /* warning amber */
-    --er: 0.577 0.245 27.33;        /* error red */
-    --rounded-box: 0.75rem;
-    --rounded-btn: 0.5rem;
-    --animation-btn: 0.2s;
-}
-
-/* daisyUI theme: sendvery-dark */
-[data-theme="sendvery-dark"] {
-    --p: 0.058 0.141 175.66;
-    --pf: 0.07 0.152 175.66;
-    --pc: 0.985 0.002 175.66;
-    --s: 0.284 0.175 272.83;
-    --sf: 0.34 0.18 272.83;
-    --sc: 0.985 0.002 272.83;
-    --a: 0.669 0.152 77.17;
-    --af: 0.72 0.14 77.17;
-    --ac: 0.2 0.03 77.17;
-    --n: 0.279 0.029 260;
-    --nf: 0.208 0.042 265.75;
-    --nc: 0.929 0.016 260;
-    --b1: 0.208 0.042 265.75;       /* slate-900 base */
-    --b2: 0.165 0.038 265.75;
-    --b3: 0.13 0.032 265.75;
-    --bc: 0.929 0.016 260;
-    --su: 0.598 0.169 162.48;
-    --wa: 0.669 0.152 77.17;
-    --er: 0.577 0.245 27.33;
-    --rounded-box: 0.75rem;
-    --rounded-btn: 0.5rem;
-    --animation-btn: 0.2s;
 }

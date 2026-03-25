@@ -54,264 +54,236 @@
 
 {# === 2. Live DNS Checker Widget === #}
 <twig:SectionContainer id="dns-checker" bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="text-center mb-10">
-            <h2 class="text-2xl md:text-3xl font-bold">Check your domain's email authentication</h2>
-            <p class="mt-3 text-base-content/60">Free, instant SPF, DKIM, and DMARC analysis. No signup required.</p>
-        </div>
-        <twig:DnsCheckerWidget />
-    {% endblock %}
+    <div class="text-center mb-10">
+        <h2 class="text-2xl md:text-3xl font-bold">Check your domain's email authentication</h2>
+        <p class="mt-3 text-base-content/60">Free, instant SPF, DKIM, and DMARC analysis. No signup required.</p>
+    </div>
+    <twig:DnsCheckerWidget />
 </twig:SectionContainer>
 
 {# === 3. "Used by" Logo Bar === #}
 <twig:SectionContainer class="text-center" bgClass="border-y border-base-200">
-    {% block content %}
-        <p class="text-sm text-base-content/40 uppercase tracking-wider font-medium mb-8">Trusted by the founder's own companies</p>
-        <div class="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-40">
-            <span class="text-lg font-semibold text-base-content/70">TheDevs.cz</span>
-            <span class="text-lg font-semibold text-base-content/70">SpeedPuzzling.com</span>
-            <span class="text-lg font-semibold text-base-content/70">FajneSklady.cz</span>
-        </div>
-    {% endblock %}
+    <p class="text-sm text-base-content/40 uppercase tracking-wider font-medium mb-8">Trusted by the founder's own companies</p>
+    <div class="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-40">
+        <span class="text-lg font-semibold text-base-content/70">TheDevs.cz</span>
+        <span class="text-lg font-semibold text-base-content/70">SpeedPuzzling.com</span>
+        <span class="text-lg font-semibold text-base-content/70">FajneSklady.cz</span>
+    </div>
 </twig:SectionContainer>
 
 {# === 4. Problem Statement === #}
 <twig:SectionContainer>
-    {% block content %}
-        <div class="max-w-3xl mx-auto text-center">
-            <h2 class="text-2xl md:text-3xl font-bold">Email authentication is set once and forgotten.<br>Then things break silently.</h2>
-            <p class="mt-6 text-base-content/60 text-lg">
-                You added a new email service 6 months ago and broke your SPF without knowing.
-                Your DKIM key expired after a DNS migration. Your DMARC is on <code class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-sm">p=none</code> — anyone can send as your domain right now.
-            </p>
-            <p class="mt-4 text-base-content/60 text-lg">
-                These problems exist for weeks or months before anyone notices. Sendvery catches them the moment they happen.
-            </p>
-        </div>
-    {% endblock %}
+    <div class="max-w-3xl mx-auto text-center">
+        <h2 class="text-2xl md:text-3xl font-bold">Email authentication is set once and forgotten.<br>Then things break silently.</h2>
+        <p class="mt-6 text-base-content/60 text-lg">
+            You added a new email service 6 months ago and broke your SPF without knowing.
+            Your DKIM key expired after a DNS migration. Your DMARC is on <code class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-sm">p=none</code> — anyone can send as your domain right now.
+        </p>
+        <p class="mt-4 text-base-content/60 text-lg">
+            These problems exist for weeks or months before anyone notices. Sendvery catches them the moment they happen.
+        </p>
+    </div>
 </twig:SectionContainer>
 
 {# === 5. How it Works === #}
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="text-center mb-16">
-            <h2 class="text-2xl md:text-3xl font-bold">How it works</h2>
-            <p class="mt-3 text-base-content/60">Three steps to email authentication peace of mind.</p>
+    <div class="text-center mb-16">
+        <h2 class="text-2xl md:text-3xl font-bold">How it works</h2>
+        <p class="mt-3 text-base-content/60">Three steps to email authentication peace of mind.</p>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+        <div class="text-center">
+            <img src="{{ asset('images/how-connect.webp') }}" alt="Connect your domain" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
+            <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 1</div>
+            <h3 class="text-lg font-bold mb-2">Connect</h3>
+            <p class="text-base-content/60 text-sm">Add your domain and connect your DMARC report mailbox. Takes 2 minutes.</p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div class="text-center">
-                <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
-                </div>
-                <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 1</div>
-                <h3 class="text-lg font-bold mb-2">Connect</h3>
-                <p class="text-base-content/60 text-sm">Add your domain and connect your DMARC report mailbox. Takes 2 minutes.</p>
-            </div>
-            <div class="text-center">
-                <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                </div>
-                <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 2</div>
-                <h3 class="text-lg font-bold mb-2">Monitor</h3>
-                <p class="text-base-content/60 text-sm">We parse your DMARC reports, monitor DNS records, and track changes continuously.</p>
-            </div>
-            <div class="text-center">
-                <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                </div>
-                <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 3</div>
-                <h3 class="text-lg font-bold mb-2">Act</h3>
-                <p class="text-base-content/60 text-sm">Get alerts when something changes or breaks. AI explains what happened and how to fix it.</p>
-            </div>
+        <div class="text-center">
+            <img src="{{ asset('images/how-monitor.webp') }}" alt="Monitor your email authentication" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
+            <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 2</div>
+            <h3 class="text-lg font-bold mb-2">Monitor</h3>
+            <p class="text-base-content/60 text-sm">We parse your DMARC reports, monitor DNS records, and track changes continuously.</p>
         </div>
-    {% endblock %}
+        <div class="text-center">
+            <img src="{{ asset('images/how-act.webp') }}" alt="Act on alerts" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
+            <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 3</div>
+            <h3 class="text-lg font-bold mb-2">Act</h3>
+            <p class="text-base-content/60 text-sm">Get alerts when something changes or breaks. AI explains what happened and how to fix it.</p>
+        </div>
+    </div>
 </twig:SectionContainer>
 
 {# === 6. Feature Highlights === #}
 <twig:SectionContainer>
-    {% block content %}
-        <div class="text-center mb-12">
-            <h2 class="text-2xl md:text-3xl font-bold">Everything you need for email authentication</h2>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            <twig:FeatureCard
-                title="8 Free DNS Tools"
-                description="SPF, DKIM, DMARC, MX, blacklist, and domain health checks. Instant results, no signup."
-                icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>'
-            />
-            <twig:FeatureCard
-                title="DMARC Report Parsing"
-                description="Automatic ingestion and parsing of aggregate reports. Visual pass/fail rates and sender breakdown."
-                icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
-            />
-            <twig:FeatureCard
-                title="DNS Change Monitoring"
-                description="Continuous monitoring of SPF, DKIM, and DMARC records. Instant alerts when anything changes."
-                icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>'
-            />
-            <twig:FeatureCard
-                title="AI-Powered Insights"
-                description="Plain-English explanations of your DMARC data. Anomaly detection and remediation guidance."
-                icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>'
-            />
-        </div>
-    {% endblock %}
+    <div class="text-center mb-12">
+        <h2 class="text-2xl md:text-3xl font-bold">Everything you need for email authentication</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <twig:FeatureCard
+            title="8 Free DNS Tools"
+            description="SPF, DKIM, DMARC, MX, blacklist, and domain health checks. Instant results, no signup."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>'
+        />
+        <twig:FeatureCard
+            title="DMARC Report Parsing"
+            description="Automatic ingestion and parsing of aggregate reports. Visual pass/fail rates and sender breakdown."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
+        />
+        <twig:FeatureCard
+            title="DNS Change Monitoring"
+            description="Continuous monitoring of SPF, DKIM, and DMARC records. Instant alerts when anything changes."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>'
+        />
+        <twig:FeatureCard
+            title="AI-Powered Insights"
+            description="Plain-English explanations of your DMARC data. Anomaly detection and remediation guidance."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>'
+        />
+    </div>
 </twig:SectionContainer>
 
 {# === 7. Security Expertise Section === #}
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="max-w-4xl mx-auto">
-            <div class="text-center mb-12">
-                <h2 class="text-2xl md:text-3xl font-bold">Your email security, explained</h2>
-                <p class="mt-3 text-base-content/60">These are the risks hiding in your DNS right now.</p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <twig:ToolCard
-                    title="SPF Record Checker"
-                    description="Is your SPF record over the 10-lookup limit? Did you leave old includes from services you no longer use?"
-                    href="{{ path('tools_spf_checker') }}"
-                    icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>'
-                />
-                <twig:ToolCard
-                    title="DKIM Key Checker"
-                    description="Stale 1024-bit keys? Selectors broken after DNS migration? Third-party services publishing weak keys?"
-                    href="{{ path('tools_dkim_checker') }}"
-                    icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>'
-                />
-                <twig:ToolCard
-                    title="DMARC Policy Analyzer"
-                    description='Still on p=none? Your DMARC says "watch but don&apos;t block." Attackers can send as your domain right now.'
-                    href="{{ path('tools_dmarc_checker') }}"
-                    icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>'
-                />
-                <twig:ToolCard
-                    title="Domain Health Score"
-                    description="Every check shows 'mostly okay.' But combined, your domain scores a D. Find out your real grade."
-                    href="{{ path('tools_domain_health') }}"
-                    icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path></svg>'
-                />
-            </div>
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-12">
+            <h2 class="text-2xl md:text-3xl font-bold">Your email security, explained</h2>
+            <p class="mt-3 text-base-content/60">These are the risks hiding in your DNS right now.</p>
         </div>
-    {% endblock %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <twig:ToolCard
+                title="SPF Record Checker"
+                description="Is your SPF record over the 10-lookup limit? Did you leave old includes from services you no longer use?"
+                href="{{ path('tools_spf_checker') }}"
+                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>'
+            />
+            <twig:ToolCard
+                title="DKIM Key Checker"
+                description="Stale 1024-bit keys? Selectors broken after DNS migration? Third-party services publishing weak keys?"
+                href="{{ path('tools_dkim_checker') }}"
+                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>'
+            />
+            <twig:ToolCard
+                title="DMARC Policy Analyzer"
+                description='Still on p=none? Your DMARC says "watch but don&apos;t block." Attackers can send as your domain right now.'
+                href="{{ path('tools_dmarc_checker') }}"
+                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>'
+            />
+            <twig:ToolCard
+                title="Domain Health Score"
+                description="Every check shows 'mostly okay.' But combined, your domain scores a D. Find out your real grade."
+                href="{{ path('tools_domain_health') }}"
+                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path></svg>'
+            />
+        </div>
+    </div>
 </twig:SectionContainer>
 
 {# === 8. Domain Health Score Preview === #}
 <twig:SectionContainer>
-    {% block content %}
-        <div class="max-w-4xl mx-auto text-center">
-            <h2 class="text-2xl md:text-3xl font-bold">What's your domain's health grade?</h2>
-            <p class="mt-3 text-base-content/60 mb-12">A single score that tells you everything about your email authentication posture.</p>
+    <div class="max-w-4xl mx-auto text-center">
+        <h2 class="text-2xl md:text-3xl font-bold">What's your domain's health grade?</h2>
+        <p class="mt-3 text-base-content/60 mb-12">A single score that tells you everything about your email authentication posture.</p>
 
-            <div class="flex justify-center gap-4 md:gap-8 flex-wrap">
-                {% for grade, config in {
-                    'A': {color: 'text-success', label: 'Excellent'},
-                    'B': {color: 'text-info', label: 'Good'},
-                    'C': {color: 'text-warning', label: 'Fair'},
-                    'D': {color: 'text-error', label: 'Poor'},
-                    'F': {color: 'text-error/50', label: 'Critical'}
-                } %}
-                    <div class="flex flex-col items-center">
-                        <div class="w-16 h-16 md:w-20 md:h-20 rounded-xl border-2 border-base-300 flex items-center justify-center {{ config.color }} font-bold text-3xl md:text-4xl {% if grade == 'A' %}border-success bg-success/10 scale-110{% endif %}">
-                            {{ grade }}
-                        </div>
-                        <span class="text-xs text-base-content/50 mt-2">{{ config.label }}</span>
+        <div class="flex justify-center gap-4 md:gap-8 flex-wrap">
+            {% for grade, config in {
+                'A': {color: 'text-success', label: 'Excellent'},
+                'B': {color: 'text-info', label: 'Good'},
+                'C': {color: 'text-warning', label: 'Fair'},
+                'D': {color: 'text-error', label: 'Poor'},
+                'F': {color: 'text-error/50', label: 'Critical'}
+            } %}
+                <div class="flex flex-col items-center">
+                    <div class="w-16 h-16 md:w-20 md:h-20 rounded-xl border-2 border-base-300 flex items-center justify-center {{ config.color }} font-bold text-3xl md:text-4xl {% if grade == 'A' %}border-success bg-success/10 scale-110{% endif %}">
+                        {{ grade }}
                     </div>
-                {% endfor %}
-            </div>
-
-            <div class="mt-12">
-                <a href="{{ path('tools_domain_health') }}" class="btn btn-primary">Check your domain's grade</a>
-            </div>
+                    <span class="text-xs text-base-content/50 mt-2">{{ config.label }}</span>
+                </div>
+            {% endfor %}
         </div>
-    {% endblock %}
+
+        <div class="mt-12">
+            <a href="{{ path('tools_domain_health') }}" class="btn btn-primary">Check your domain's grade</a>
+        </div>
+    </div>
 </twig:SectionContainer>
 
 {# === 9. Open Source Callout === #}
 <twig:SectionContainer bgClass="bg-primary/5 border-y border-primary/10">
-    {% block content %}
-        <div class="max-w-3xl mx-auto text-center">
-            <div class="text-4xl mb-4">&#128272;</div>
-            <h2 class="text-2xl md:text-3xl font-bold">Free forever if you self-host</h2>
-            <p class="mt-4 text-base-content/60 text-lg">
-                Sendvery is open source under AGPL-3.0. Run it on your own server with Docker.
-                All features included, no limits, no phone-home. We have nothing to hide.
-            </p>
-            <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                <a href="https://github.com/janmikes/sendvery" target="_blank" rel="noopener" class="btn btn-outline">
-                    <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"></path></svg>
-                    Star on GitHub
-                </a>
-                <a href="{{ path('about_open_source') }}" class="btn btn-ghost">Self-hosting guide</a>
-            </div>
+    <div class="max-w-3xl mx-auto text-center">
+        <div class="text-4xl mb-4">&#128272;</div>
+        <h2 class="text-2xl md:text-3xl font-bold">Free forever if you self-host</h2>
+        <p class="mt-4 text-base-content/60 text-lg">
+            Sendvery is open source under AGPL-3.0. Run it on your own server with Docker.
+            All features included, no limits, no phone-home. We have nothing to hide.
+        </p>
+        <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+            <a href="https://github.com/janmikes/sendvery" target="_blank" rel="noopener" class="btn btn-outline">
+                <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"></path></svg>
+                Star on GitHub
+            </a>
+            <a href="{{ path('about_open_source') }}" class="btn btn-ghost">Self-hosting guide</a>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 {# === 10. Pricing === #}
 <twig:SectionContainer id="pricing">
-    {% block content %}
-        <div class="text-center mb-12">
-            <h2 class="text-2xl md:text-3xl font-bold">Simple, transparent pricing</h2>
-            <p class="mt-3 text-base-content/60">Start free. Self-host free forever. Scale as you grow.</p>
-        </div>
-        <twig:PricingTable />
-    {% endblock %}
+    <div class="text-center mb-12">
+        <h2 class="text-2xl md:text-3xl font-bold">Simple, transparent pricing</h2>
+        <p class="mt-3 text-base-content/60">Start free. Self-host free forever. Scale as you grow.</p>
+    </div>
+    <twig:PricingTable />
 </twig:SectionContainer>
 
 {# === 11. Technical Credibility === #}
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="max-w-3xl mx-auto text-center">
-            <h2 class="text-xl md:text-2xl font-bold mb-8">Built for developers who care about infrastructure</h2>
-            <div class="flex flex-wrap justify-center gap-3">
-                <span class="badge badge-lg badge-outline gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                    Symfony 8
-                </span>
-                <span class="badge badge-lg badge-outline gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path></svg>
-                    PostgreSQL
-                </span>
-                <span class="badge badge-lg badge-outline gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    FrankenPHP
-                </span>
-                <span class="badge badge-lg badge-outline gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                    AES-256-GCM Encrypted
-                </span>
-                <span class="badge badge-lg badge-outline gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"></path></svg>
-                    Docker
-                </span>
-                <span class="badge badge-lg badge-outline gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                    AI-Powered
-                </span>
-            </div>
-            <p class="mt-6 text-base-content/50 text-sm">
-                All data encrypted at rest. IMAP credentials protected with AES-256-GCM. Your data stays yours.
-            </p>
+    <div class="max-w-3xl mx-auto text-center">
+        <h2 class="text-xl md:text-2xl font-bold mb-8">Built for developers who care about infrastructure</h2>
+        <div class="flex flex-wrap justify-center gap-3">
+            <span class="badge badge-lg badge-outline gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                Symfony 8
+            </span>
+            <span class="badge badge-lg badge-outline gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path></svg>
+                PostgreSQL
+            </span>
+            <span class="badge badge-lg badge-outline gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                FrankenPHP
+            </span>
+            <span class="badge badge-lg badge-outline gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                AES-256-GCM Encrypted
+            </span>
+            <span class="badge badge-lg badge-outline gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"></path></svg>
+                Docker
+            </span>
+            <span class="badge badge-lg badge-outline gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                AI-Powered
+            </span>
         </div>
-    {% endblock %}
+        <p class="mt-6 text-base-content/50 text-sm">
+            All data encrypted at rest. IMAP credentials protected with AES-256-GCM. Your data stays yours.
+        </p>
+    </div>
 </twig:SectionContainer>
 
 {# === 12. FAQ === #}
 <twig:SectionContainer id="faq">
-    {% block content %}
-        <div class="text-center mb-12">
-            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
-        </div>
-        <twig:FaqAccordion :items="[
-            {question: 'Is my data safe?', answer: 'Yes. All data is encrypted at rest. IMAP credentials are protected with AES-256-GCM encryption. We never store your email content — only DMARC report metadata. Self-hosters keep everything on their own infrastructure.'},
-            {question: 'How does IMAP ingestion work?', answer: 'You point your DMARC aggregate reports to a mailbox (or use our receiving address). Sendvery connects via IMAP, downloads the report attachments (XML files), parses them, and stores the structured data. The raw emails are never stored.'},
-            {question: 'Can I self-host Sendvery?', answer: 'Absolutely. Sendvery is open source under AGPL-3.0. Pull the Docker image, run it on your server, and you get all features with no limits. The hosted version simply saves you the infrastructure work.'},
-            {question: 'What makes Sendvery different from MXToolbox?', answer: 'MXToolbox is a great diagnostic tool. Sendvery adds continuous monitoring — we watch your DNS records 24/7 and alert you the moment something changes. Plus DMARC report parsing, AI insights in plain English, and a modern interface.'},
-            {question: 'Do I need to be technical?', answer: 'No. The free DNS checker tools work for anyone — just enter your domain. For ongoing monitoring, basic familiarity with DNS is helpful, but our AI insights explain everything in plain English.'},
-            {question: 'How does AI analysis work?', answer: 'Our AI analyzes your DMARC reports and DNS records to produce plain-English summaries, detect anomalies, and suggest remediation steps. Powered by Claude (Anthropic). Available as an add-on for $3.99/mo or included in the Team plan.'}
-        ]" />
-    {% endblock %}
+    <div class="text-center mb-12">
+        <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+    </div>
+    <twig:FaqAccordion :items="[
+        {question: 'Is my data safe?', answer: 'Yes. All data is encrypted at rest. IMAP credentials are protected with AES-256-GCM encryption. We never store your email content — only DMARC report metadata. Self-hosters keep everything on their own infrastructure.'},
+        {question: 'How does IMAP ingestion work?', answer: 'You point your DMARC aggregate reports to a mailbox (or use our receiving address). Sendvery connects via IMAP, downloads the report attachments (XML files), parses them, and stores the structured data. The raw emails are never stored.'},
+        {question: 'Can I self-host Sendvery?', answer: 'Absolutely. Sendvery is open source under AGPL-3.0. Pull the Docker image, run it on your server, and you get all features with no limits. The hosted version simply saves you the infrastructure work.'},
+        {question: 'What makes Sendvery different from MXToolbox?', answer: 'MXToolbox is a great diagnostic tool. Sendvery adds continuous monitoring — we watch your DNS records 24/7 and alert you the moment something changes. Plus DMARC report parsing, AI insights in plain English, and a modern interface.'},
+        {question: 'Do I need to be technical?', answer: 'No. The free DNS checker tools work for anyone — just enter your domain. For ongoing monitoring, basic familiarity with DNS is helpful, but our AI insights explain everything in plain English.'},
+        {question: 'How does AI analysis work?', answer: 'Our AI analyzes your DMARC reports and DNS records to produce plain-English summaries, detect anomalies, and suggest remediation steps. Powered by Claude (Anthropic). Available as an add-on for $3.99/mo or included in the Team plan.'}
+    ]" />
 </twig:SectionContainer>
 
 {# === 13. Final CTA — Get Started === #}

@@ -68,56 +68,50 @@
 
 {% block seo_content %}
 <twig:SectionContainer>
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-bold mb-6">What is email authentication?</h2>
-            <div class="prose prose-lg max-w-none text-base-content/80">
-                <p>
-                    Email authentication is a set of DNS-based protocols that work together to verify that an email was actually sent by someone authorized by the domain owner. The three core protocols are:
-                </p>
-                <ul>
-                    <li><strong>SPF</strong> — verifies the sending server's IP address is authorized</li>
-                    <li><strong>DKIM</strong> — verifies the message hasn't been tampered with using cryptographic signatures</li>
-                    <li><strong>DMARC</strong> — ties SPF and DKIM together with a policy and reporting</li>
-                </ul>
-                <p>
-                    Each protocol covers a different attack vector. SPF alone can be bypassed by email forwarding. DKIM alone doesn't prevent unauthorized servers from sending. DMARC alone is useless without SPF or DKIM. Together, they provide defense in depth.
-                </p>
-            </div>
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-bold mb-6">What is email authentication?</h2>
+        <div class="prose prose-lg max-w-none text-base-content/80">
+            <p>
+                Email authentication is a set of DNS-based protocols that work together to verify that an email was actually sent by someone authorized by the domain owner. The three core protocols are:
+            </p>
+            <ul>
+                <li><strong>SPF</strong> — verifies the sending server's IP address is authorized</li>
+                <li><strong>DKIM</strong> — verifies the message hasn't been tampered with using cryptographic signatures</li>
+                <li><strong>DMARC</strong> — ties SPF and DKIM together with a policy and reporting</li>
+            </ul>
+            <p>
+                Each protocol covers a different attack vector. SPF alone can be bypassed by email forwarding. DKIM alone doesn't prevent unauthorized servers from sending. DMARC alone is useless without SPF or DKIM. Together, they provide defense in depth.
+            </p>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-bold mb-6">The alignment trap</h2>
-            <div class="prose prose-lg max-w-none text-base-content/80">
-                <p>
-                    Your SPF is green. Your DKIM is green. But DMARC still fails. How? Because of <strong>domain alignment</strong> — the most commonly missed aspect of email authentication.
-                </p>
-                <p>
-                    DMARC requires that at least one of SPF or DKIM not only passes but also <em>aligns</em> with the From: header domain. If your SPF passes for <code>sendgrid.net</code> but your email's From: says <code>@yourdomain.com</code>, DMARC alignment fails. Most single-protocol checkers won't tell you this.
-                </p>
-                <p class="font-medium">
-                    Full-stack email authentication monitoring — one dashboard, all protocols, all domains. <a href="{{ path('home') }}#pricing" class="link link-primary">Join the Sendvery beta</a>.
-                </p>
-            </div>
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-bold mb-6">The alignment trap</h2>
+        <div class="prose prose-lg max-w-none text-base-content/80">
+            <p>
+                Your SPF is green. Your DKIM is green. But DMARC still fails. How? Because of <strong>domain alignment</strong> — the most commonly missed aspect of email authentication.
+            </p>
+            <p>
+                DMARC requires that at least one of SPF or DKIM not only passes but also <em>aligns</em> with the From: header domain. If your SPF passes for <code>sendgrid.net</code> but your email's From: says <code>@yourdomain.com</code>, DMARC alignment fails. Most single-protocol checkers won't tell you this.
+            </p>
+            <p class="font-medium">
+                Full-stack email authentication monitoring — one dashboard, all protocols, all domains. <a href="{{ path('home') }}#pricing" class="link link-primary">Join the Sendvery beta</a>.
+            </p>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 <twig:SectionContainer>
-    {% block content %}
-        <div class="text-center mb-8">
-            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
-        </div>
-        <twig:FaqAccordion :items="[
-            {question: 'What is email authentication?', answer: 'Email authentication is a set of DNS-based protocols (SPF, DKIM, DMARC) that verify the sender is authorized by the domain owner. Together they prevent spoofing and improve deliverability.'},
-            {question: 'Why do I need all three protocols?', answer: 'SPF validates the sending server, DKIM validates message integrity, DMARC ties them together with policy and reporting. Each alone has weaknesses — together they provide comprehensive protection.'},
-            {question: 'What is DMARC alignment?', answer: 'Alignment means the domain used by SPF or DKIM matches the From: header domain. Even if SPF and DKIM pass, DMARC fails if neither is aligned with the visible sender domain.'},
-            {question: 'My SPF and DKIM pass but DMARC fails. Why?', answer: 'SPF passes for the sending service domain (e.g., sendgrid.net) but not aligned with your From: domain. Configure your sending service to use your domain for SPF and DKIM signing.'}
-        ]" />
-    {% endblock %}
+    <div class="text-center mb-8">
+        <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+    </div>
+    <twig:FaqAccordion :items="[
+        {question: 'What is email authentication?', answer: 'Email authentication is a set of DNS-based protocols (SPF, DKIM, DMARC) that verify the sender is authorized by the domain owner. Together they prevent spoofing and improve deliverability.'},
+        {question: 'Why do I need all three protocols?', answer: 'SPF validates the sending server, DKIM validates message integrity, DMARC ties them together with policy and reporting. Each alone has weaknesses — together they provide comprehensive protection.'},
+        {question: 'What is DMARC alignment?', answer: 'Alignment means the domain used by SPF or DKIM matches the From: header domain. Even if SPF and DKIM pass, DMARC fails if neither is aligned with the visible sender domain.'},
+        {question: 'My SPF and DKIM pass but DMARC fails. Why?', answer: 'SPF passes for the sending service domain (e.g., sendgrid.net) but not aligned with your From: domain. Configure your sending service to use your domain for SPF and DKIM signing.'}
+    ]" />
 </twig:SectionContainer>
 {% endblock %}

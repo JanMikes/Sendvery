@@ -27,7 +27,7 @@ Sendvery is an email health & deliverability micro-SaaS. DMARC report parsing wi
 - **PostgreSQL 16** (single DB for app data + Messenger queue transport)
 - **Doctrine ORM** + **DBAL** (ORM for writes, DBAL for reads)
 - **Symfony Messenger** (Doctrine transport) for async commands and domain events
-- **Tailwind CSS 4** + **daisyUI** + **ApexCharts** for frontend
+- **Tailwind CSS 4** + **daisyUI 5** + **ApexCharts** for frontend
 - **Stimulus + Turbo (Hotwire)** via Symfony UX
 - **API Platform** for REST API
 - **Stripe** for subscriptions
@@ -347,6 +347,57 @@ readonly final class DnsRecord
 - **ClockInterface** (PSR-20) mocked for deterministic timestamps
 - **Infection mutation testing** from the start
 - Tests describe business requirements — they are the specification
+
+## Frontend: daisyUI 5 + Tailwind CSS 4
+
+daisyUI is installed via npm (`package.json`) — NOT via Composer or the asset mapper importmap. The Tailwind CSS compiler (run by `symfonycasts/tailwind-bundle`) needs the Node.js daisyUI package to resolve `@plugin "daisyui"` and `@plugin "daisyui/theme"`.
+
+### Theme definition (CRITICAL — v5 format)
+
+daisyUI v5 uses `@plugin "daisyui/theme" {}` blocks with `--color-*` variables in oklch format. **Do NOT use the old v3/v4 format** (`--p`, `--pf`, `--pc`, `--b1`, `--b2`, etc.) — those variables are ignored by v5 and will produce a black-and-white broken UI.
+
+Correct v5 format in `assets/styles/app.css`:
+```css
+@import "tailwindcss";
+@plugin "daisyui";
+
+@plugin "daisyui/theme" {
+    name: "sendvery";
+    default: true;
+    color-scheme: light;
+    --color-base-100: oklch(98.5% 0.002 247);
+    --color-primary: oklch(49% 0.13 176);
+    /* ... all --color-* variables ... */
+    --radius-box: 0.75rem;
+    --border: 1px;
+    --depth: 1;
+    --noise: 0;
+}
+```
+
+Required variables: `--color-base-100`, `--color-base-200`, `--color-base-300`, `--color-base-content`, `--color-primary`, `--color-primary-content`, `--color-secondary`, `--color-secondary-content`, `--color-accent`, `--color-accent-content`, `--color-neutral`, `--color-neutral-content`, `--color-info`, `--color-success`, `--color-warning`, `--color-error` (each with `-content` variant), plus `--radius-selector`, `--radius-field`, `--radius-box`, `--size-selector`, `--size-field`, `--border`, `--depth`, `--noise`.
+
+### Twig Components (`<twig:>` syntax)
+
+Do NOT use `{% block content %}...{% endblock %}` inside `<twig:Component>` tags. The `TwigPreLexer` breaks when `<twig:>` tags are nested inside explicit `{% block %}` wrappers within component tags. Content inside `<twig:Component>...</twig:Component>` automatically goes into the default `content` block.
+
+```twig
+{# WRONG — breaks nested <twig:> tags #}
+<twig:SectionContainer>
+    {% block content %}
+        <twig:PricingTable />
+    {% endblock %}
+</twig:SectionContainer>
+
+{# CORRECT — content auto-maps to the content block #}
+<twig:SectionContainer>
+    <twig:PricingTable />
+</twig:SectionContainer>
+```
+
+### Dark mode
+
+Dark mode uses `data-theme` attribute (not CSS `dark:` class). The `dark-mode` Stimulus controller toggles `data-theme="sendvery"` / `data-theme="sendvery-dark"` on `<html>`. Do NOT use Tailwind `dark:` prefix for theme-dependent styling — it won't work with daisyUI's data-theme approach.
 
 ## Docker
 

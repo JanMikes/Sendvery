@@ -71,57 +71,51 @@
 </section>
 
 <twig:SectionContainer>
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-bold mb-6">What are email blacklists?</h2>
-            <div class="prose prose-lg max-w-none text-base-content/80">
-                <p>
-                    Email blacklists (DNSBLs — DNS-based Block Lists) are real-time databases of IP addresses and domains known to send spam or malicious email. Major email providers like Gmail, Outlook, and Yahoo check these lists when deciding whether to deliver, spam, or reject an incoming email.
-                </p>
-                <p>
-                    Being on a blacklist means your emails may be silently rejected before they even reach your recipient's inbox. The worst part? You often don't find out until customers complain they aren't receiving your emails.
-                </p>
-            </div>
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-bold mb-6">What are email blacklists?</h2>
+        <div class="prose prose-lg max-w-none text-base-content/80">
+            <p>
+                Email blacklists (DNSBLs — DNS-based Block Lists) are real-time databases of IP addresses and domains known to send spam or malicious email. Major email providers like Gmail, Outlook, and Yahoo check these lists when deciding whether to deliver, spam, or reject an incoming email.
+            </p>
+            <p>
+                Being on a blacklist means your emails may be silently rejected before they even reach your recipient's inbox. The worst part? You often don't find out until customers complain they aren't receiving your emails.
+            </p>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="max-w-3xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-bold mb-6">Common causes of blacklisting</h2>
-            <div class="space-y-4">
-                <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
-                    <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
-                    <div>
-                        <h3 class="font-bold">Compromised account sending spam</h3>
-                        <p class="text-sm text-base-content/60 mt-1">An employee's email credentials were phished. The attacker sent thousands of spam emails from your domain before anyone noticed. Your IP is now on multiple blacklists.</p>
-                    </div>
+    <div class="max-w-3xl mx-auto">
+        <h2 class="text-2xl md:text-3xl font-bold mb-6">Common causes of blacklisting</h2>
+        <div class="space-y-4">
+            <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
+                <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                <div>
+                    <h3 class="font-bold">Compromised account sending spam</h3>
+                    <p class="text-sm text-base-content/60 mt-1">An employee's email credentials were phished. The attacker sent thousands of spam emails from your domain before anyone noticed. Your IP is now on multiple blacklists.</p>
                 </div>
-                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
-                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <div>
-                        <h3 class="font-bold">Shared hosting IP tainted by others</h3>
-                        <p class="text-sm text-base-content/60 mt-1">Your sending IP was blacklisted 5 days ago because another tenant on your shared server sent spam. Your legitimate emails have been bouncing ever since.</p>
-                    </div>
+            </div>
+            <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div>
+                    <h3 class="font-bold">Shared hosting IP tainted by others</h3>
+                    <p class="text-sm text-base-content/60 mt-1">Your sending IP was blacklisted 5 days ago because another tenant on your shared server sent spam. Your legitimate emails have been bouncing ever since.</p>
                 </div>
             </div>
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 <twig:SectionContainer>
-    {% block content %}
-        <div class="text-center mb-8">
-            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
-        </div>
-        <twig:FaqAccordion :items="[
-            {question: 'What is an email blacklist?', answer: 'A real-time database (DNSBL) of IPs and domains known to send spam. Mail servers check these lists to decide whether to accept, spam, or reject incoming email.'},
-            {question: 'Why is my domain blacklisted?', answer: 'Common causes: compromised accounts sending spam, shared hosting IP tainted by others, high bounce rates, or being reported for unsolicited email.'},
-            {question: 'How do I get delisted?', answer: 'Fix the root cause first (compromised account, open relay). Then request delisting from each blacklist. Some auto-delist after the issue stops. Each list has its own process.'},
-            {question: 'How long does delisting take?', answer: 'It varies. Some lists auto-delist within 24-48 hours. Others require manual review. Spamhaus and Barracuda typically process requests within a few days.'}
-        ]" />
-    {% endblock %}
+    <div class="text-center mb-8">
+        <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+    </div>
+    <twig:FaqAccordion :items="[
+        {question: 'What is an email blacklist?', answer: 'A real-time database (DNSBL) of IPs and domains known to send spam. Mail servers check these lists to decide whether to accept, spam, or reject incoming email.'},
+        {question: 'Why is my domain blacklisted?', answer: 'Common causes: compromised accounts sending spam, shared hosting IP tainted by others, high bounce rates, or being reported for unsolicited email.'},
+        {question: 'How do I get delisted?', answer: 'Fix the root cause first (compromised account, open relay). Then request delisting from each blacklist. Some auto-delist after the issue stops. Each list has its own process.'},
+        {question: 'How long does delisting take?', answer: 'It varies. Some lists auto-delist within 24-48 hours. Others require manual review. Spamhaus and Barracuda typically process requests within a few days.'}
+    ]" />
 </twig:SectionContainer>
 
 <section class="py-16 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
@@ -135,19 +129,17 @@
 </section>
 
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="text-center mb-8">
-            <h2 class="text-xl font-bold">Related tools</h2>
-        </div>
-        <div class="flex flex-wrap justify-center gap-3">
-            <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm">SPF Checker</a>
-            <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm">DKIM Checker</a>
-            <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm">DMARC Checker</a>
-            <a href="{{ path('tools_mx_checker') }}" class="btn btn-outline btn-sm">MX Checker</a>
-            <a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm">Email Auth Checker</a>
-            <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm">Domain Health</a>
-            <a href="{{ path('tools_dns_monitoring') }}" class="btn btn-outline btn-sm">DNS Monitoring</a>
-        </div>
-    {% endblock %}
+    <div class="text-center mb-8">
+        <h2 class="text-xl font-bold">Related tools</h2>
+    </div>
+    <div class="flex flex-wrap justify-center gap-3">
+        <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm">SPF Checker</a>
+        <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm">DKIM Checker</a>
+        <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm">DMARC Checker</a>
+        <a href="{{ path('tools_mx_checker') }}" class="btn btn-outline btn-sm">MX Checker</a>
+        <a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm">Email Auth Checker</a>
+        <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm">Domain Health</a>
+        <a href="{{ path('tools_dns_monitoring') }}" class="btn btn-outline btn-sm">DNS Monitoring</a>
+    </div>
 </twig:SectionContainer>
 {% endblock %}

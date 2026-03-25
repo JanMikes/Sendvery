@@ -94,25 +94,23 @@
 
 {# More Guides #}
 <twig:SectionContainer bgClass="bg-base-200/50">
-    {% block content %}
-        <div class="max-w-4xl mx-auto">
-            <h2 class="text-xl font-bold mb-8 text-center">More guides</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {% for otherGuide in guides %}
-                    {% if otherGuide.slug != guide.slug %}
-                        <a href="{{ path('knowledge_base_article', {slug: otherGuide.slug}) }}"
-                           class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/30 hover:shadow-md transition-all">
-                            <div class="card-body p-5">
-                                <div class="badge badge-outline badge-sm mb-1">{{ otherGuide.category }}</div>
-                                <h3 class="font-semibold text-sm">{{ otherGuide.title }}</h3>
-                                <span class="text-primary text-xs font-medium mt-2">Read &rarr;</span>
-                            </div>
-                        </a>
-                    {% endif %}
-                {% endfor %}
-            </div>
+    <div class="max-w-4xl mx-auto">
+        <h2 class="text-xl font-bold mb-8 text-center">More guides</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {% for otherGuide in guides %}
+                {% if otherGuide.slug != guide.slug %}
+                    <a href="{{ path('knowledge_base_article', {slug: otherGuide.slug}) }}"
+                       class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/30 hover:shadow-md transition-all">
+                        <div class="card-body p-5">
+                            <div class="badge badge-outline badge-sm mb-1">{{ otherGuide.category }}</div>
+                            <h3 class="font-semibold text-sm">{{ otherGuide.title }}</h3>
+                            <span class="text-primary text-xs font-medium mt-2">Read &rarr;</span>
+                        </div>
+                    </a>
+                {% endif %}
+            {% endfor %}
         </div>
-    {% endblock %}
+    </div>
 </twig:SectionContainer>
 
 {# Beta Signup CTA #}
