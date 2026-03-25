@@ -1,0 +1,1177 @@
+parameters:
+	ignoreErrors:
+		-
+			rawMessage: Using nullsafe property access "?->name" on left side of ?? is unnecessary. Use -> instead.
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/Controller/Onboarding/OnboardingTeamController.php
+
+		-
+			rawMessage: 'Method App\Entity\User::getUserIdentifier() should return non-empty-string but returns string.'
+			identifier: return.type
+			count: 1
+			path: src/Entity/User.php
+
+		-
+			rawMessage: 'Parameter #1 $string of function base64_encode expects string, string|false given.'
+			identifier: argument.type
+			count: 1
+			path: src/MessageHandler/ProcessDmarcReportHandler.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\AlertDetailResult::fromDatabaseRow() expects array{alert_id: string, type: string, severity: string, title: string, message: string, data: string, is_read: bool, created_at: string, ...}, array<string, mixed> given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetAlertDetail.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool, created_at: string, domain_id: string|null, domain_name: string|null}): App\Results\AlertListResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetAlerts.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{report_id: string, domain_name: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int, pass_rate: float}): App\Results\ReportListResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetAllReports.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\BillingOverviewResult::fromDatabaseRow() expects array{plan: string, stripe_customer_id: string|null, stripe_subscription_id: string|null, plan_warning_at: string|null, domain_count: int|string, member_count: int|string}, array<string, mixed> given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetBillingOverview.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{id: string, ip_address: string, checked_at: string, results: string, is_listed: bool|string}): App\Results\BlacklistStatusResult given.'
+			identifier: argument.type
+			count: 2
+			path: src/Query/GetBlacklistStatus.php
+
+		-
+			rawMessage: 'Cannot access offset ''pass_rate'' on array<string, mixed>|false.'
+			identifier: offsetAccess.nonOffsetAccessible
+			count: 1
+			path: src/Query/GetDashboardStats.php
+
+		-
+			rawMessage: 'Cannot access offset ''total_domains'' on array<string, mixed>|false.'
+			identifier: offsetAccess.nonOffsetAccessible
+			count: 1
+			path: src/Query/GetDashboardStats.php
+
+		-
+			rawMessage: 'Cannot access offset ''total_messages'' on array<string, mixed>|false.'
+			identifier: offsetAccess.nonOffsetAccessible
+			count: 1
+			path: src/Query/GetDashboardStats.php
+
+		-
+			rawMessage: 'Cannot access offset ''total_reports_30d'' on array<string, mixed>|false.'
+			identifier: offsetAccess.nonOffsetAccessible
+			count: 1
+			path: src/Query/GetDashboardStats.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\DomainDetailResult::fromDatabaseRow() expects array{domain_id: string, domain_name: string, dmarc_policy: string|null, is_verified: bool, created_at: string, total_reports: int, total_messages: int, pass_rate: float, ...}, array<string, mixed> given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetDomainDetail.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{id: string, type: string, checked_at: string, raw_record: string|null, is_valid: bool, issues: string, details: string, previous_raw_record: string|null, has_changed: bool}): App\Results\DnsCheckHistoryResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetDomainDnsHistory.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, checked_at: string, recommendations: string, share_hash: string|null}): App\Results\DomainHealthSnapshotResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetDomainHealthHistory.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\DomainHealthSnapshotResult::fromDatabaseRow() expects array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, ...}, array<string, mixed> given.'
+			identifier: argument.type
+			count: 2
+			path: src/Query/GetDomainHealthHistory.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{domain_id: string, domain_name: string, total_reports: int, latest_report_date: string|null, pass_rate: float}): App\Results\DomainOverviewResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetDomainOverview.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{date: string, pass_count: int, fail_count: int}): App\Results\PassRateTrendResult given.'
+			identifier: argument.type
+			count: 2
+			path: src/Query/GetDomainPassRateTrend.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{report_id: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int, pass_rate: float}): App\Results\DomainReportListResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetDomainReports.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{source_ip: string, resolved_org: string|null, total_messages: int, pass_count: int, fail_count: int}): App\Results\DomainSenderResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetDomainSenderBreakdown.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{record_id: string, source_ip: string, count: int, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: string|null, dkim_selector: string|null, spf_domain: string|null, resolved_hostname: string|null, resolved_org: string|null}): App\Results\ReportRecordResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetReportDetail.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\ReportDetailResult::fromDatabaseRow() expects array{report_id: string, reporter_org: string, reporter_email: string, external_report_id: string, date_range_begin: string, date_range_end: string, policy_domain: string, policy_adkim: string, ...}, array<string, mixed> given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetReportDetail.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{id: string, source_ip: string, hostname: string|null, organization: string|null, label: string|null, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string}): App\Results\SenderInventoryResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetSenderInventory.php
+
+		-
+			rawMessage: 'Parameter #1 $callback of function array_map expects (callable(array<string, mixed>): mixed)|null, Closure(array{team_id: string, team_name: string, team_slug: string, role: string, member_count: int}): App\Results\UserTeamResult given.'
+			identifier: argument.type
+			count: 1
+			path: src/Query/GetUserTeams.php
+
+		-
+			rawMessage: 'Method App\Security\MagicLinkAuthenticator::onAuthenticationFailure() never returns null so it can be removed from the return type.'
+			identifier: return.unusedType
+			count: 1
+			path: src/Security/MagicLinkAuthenticator.php
+
+		-
+			rawMessage: 'Method App\Security\MagicLinkAuthenticator::onAuthenticationSuccess() never returns null so it can be removed from the return type.'
+			identifier: return.unusedType
+			count: 1
+			path: src/Security/MagicLinkAuthenticator.php
+
+		-
+			rawMessage: 'Method App\Security\MagicLinkAuthenticator::supports() never returns null so it can be removed from the return type.'
+			identifier: return.unusedType
+			count: 1
+			path: src/Security/MagicLinkAuthenticator.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Security/TeamVoter.php
+
+		-
+			rawMessage: Instanceof between App\Entity\Team and App\Entity\Team will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Security/TeamVoter.php
+
+		-
+			rawMessage: Variable $selector on left side of ?? always exists and is always null.
+			identifier: nullCoalesce.variable
+			count: 1
+			path: src/Services/Dns/DkimChecker.php
+
+		-
+			rawMessage: 'Cannot call method getTerms() on SPFLib\Record|null.'
+			identifier: method.nonObject
+			count: 1
+			path: src/Services/Dns/SpfChecker.php
+
+		-
+			rawMessage: 'Parameter #1 $record of method SPFLib\SemanticValidator::validate() expects SPFLib\Record, SPFLib\Record|null given.'
+			identifier: argument.type
+			count: 1
+			path: src/Services/Dns/SpfChecker.php
+
+		-
+			rawMessage: 'Cannot call method get() on array.'
+			identifier: method.nonObject
+			count: 1
+			path: src/Services/Mail/ImapMailClient.php
+
+		-
+			rawMessage: 'Parameter $mimeType of class App\Value\MailAttachment constructor expects string, string|null given.'
+			identifier: argument.type
+			count: 1
+			path: src/Services/Mail/ImapMailClient.php
+
+		-
+			rawMessage: Using nullsafe property access "?->mail" on left side of ?? is unnecessary. Use -> instead.
+			identifier: nullsafe.neverNull
+			count: 2
+			path: src/Services/Mail/ImapMailClient.php
+
+		-
+			rawMessage: 'Parameter #1 $kernel of class Symfony\Bundle\FrameworkBundle\Console\Application constructor expects Symfony\Component\HttpKernel\KernelInterface, Symfony\Component\HttpKernel\KernelInterface|null given.'
+			identifier: argument.type
+			count: 2
+			path: tests/Integration/Command/CheckAllDomainsDnsCommandTest.php
+
+		-
+			rawMessage: 'Parameter #1 $kernel of class Symfony\Bundle\FrameworkBundle\Console\Application constructor expects Symfony\Component\HttpKernel\KernelInterface, Symfony\Component\HttpKernel\KernelInterface|null given.'
+			identifier: argument.type
+			count: 2
+			path: tests/Integration/Command/DmarcSummaryCommandTest.php
+
+		-
+			rawMessage: 'Parameter #1 $kernel of class Symfony\Bundle\FrameworkBundle\Console\Application constructor expects Symfony\Component\HttpKernel\KernelInterface, Symfony\Component\HttpKernel\KernelInterface|null given.'
+			identifier: argument.type
+			count: 4
+			path: tests/Integration/Command/ImportDmarcReportCommandTest.php
+
+		-
+			rawMessage: 'Parameter #1 $kernel of class Symfony\Bundle\FrameworkBundle\Console\Application constructor expects Symfony\Component\HttpKernel\KernelInterface, Symfony\Component\HttpKernel\KernelInterface|null given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Integration/Command/MigrateCredentialsCommandTest.php
+
+		-
+			rawMessage: 'Parameter #1 $kernel of class Symfony\Bundle\FrameworkBundle\Console\Application constructor expects Symfony\Component\HttpKernel\KernelInterface, Symfony\Component\HttpKernel\KernelInterface|null given.'
+			identifier: argument.type
+			count: 3
+			path: tests/Integration/Command/PollMailboxesCommandTest.php
+
+		-
+			rawMessage: 'Parameter #1 $kernel of class Symfony\Bundle\FrameworkBundle\Console\Application constructor expects Symfony\Component\HttpKernel\KernelInterface, Symfony\Component\HttpKernel\KernelInterface|null given.'
+			identifier: argument.type
+			count: 2
+			path: tests/Integration/Command/SendAllWeeklyDigestsCommandTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/Integration/Command/TestMailboxConnectionCommandTest.php
+
+		-
+			rawMessage: Instanceof between App\Services\Mail\FakeMailClient and App\Services\Mail\FakeMailClient will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: tests/Integration/Command/TestMailboxConnectionCommandTest.php
+
+		-
+			rawMessage: 'Parameter #1 $kernel of class Symfony\Bundle\FrameworkBundle\Console\Application constructor expects Symfony\Component\HttpKernel\KernelInterface, Symfony\Component\HttpKernel\KernelInterface|null given.'
+			identifier: argument.type
+			count: 2
+			path: tests/Integration/Command/TestMailboxConnectionCommandTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/Integration/Controller/AlertPagesTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: tests/Integration/Controller/AlertPagesTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 5
+			path: tests/Integration/Controller/AuthTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 5
+			path: tests/Integration/Controller/AuthTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 4
+			path: tests/Integration/Controller/BetaInvitationTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 4
+			path: tests/Integration/Controller/BetaInvitationTest.php
+
+		-
+			rawMessage: 'Parameter #2 $haystack of static method PHPUnit\Framework\Assert::assertStringContainsString() expects string, string|null given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Integration/Controller/BetaInvitationTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: tests/Integration/Controller/BetaSignupTest.php
+
+		-
+			rawMessage: 'Cannot call method format() on DateTimeImmutable|null.'
+			identifier: method.nonObject
+			count: 1
+			path: tests/Integration/Controller/BetaSignupTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 3
+			path: tests/Integration/Controller/BetaSignupTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: tests/Integration/Controller/BillingPagesTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 3
+			path: tests/Integration/Controller/BillingPagesTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: tests/Integration/Controller/DashboardPagesTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: tests/Integration/Controller/DashboardPagesTest.php
+
+		-
+			rawMessage: 'Parameter #2 $haystack of static method PHPUnit\Framework\Assert::assertStringContainsString() expects string, string|null given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Integration/Controller/DashboardPagesTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/Integration/Controller/FeedbackTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: tests/Integration/Controller/FeedbackTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: tests/Integration/Controller/OnboardingTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 3
+			path: tests/Integration/Controller/OnboardingTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: tests/Integration/Controller/PreferencesTest.php
+
+		-
+			rawMessage: Cannot access property $emailAlertsEnabled on App\Entity\User|null.
+			identifier: property.nonObject
+			count: 1
+			path: tests/Integration/Controller/PreferencesTest.php
+
+		-
+			rawMessage: Cannot access property $emailDigestEnabled on App\Entity\User|null.
+			identifier: property.nonObject
+			count: 1
+			path: tests/Integration/Controller/PreferencesTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: tests/Integration/Controller/PreferencesTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/Integration/Controller/Stage14PagesTest.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: tests/Integration/Controller/Stage14PagesTest.php
+
+		-
+			rawMessage: 'Method App\Tests\Integration\MessageHandler\AlertOnDnsChangeTest::createTeamAndDomain() return type has no value type specified in iterable type array.'
+			identifier: missingType.iterableValue
+			count: 1
+			path: tests/Integration/MessageHandler/AlertOnDnsChangeTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/Integration/MessageHandler/CreateTeamHandlerTest.php
+
+		-
+			rawMessage: Instanceof between App\MessageHandler\CreateTeamHandler and App\MessageHandler\CreateTeamHandler will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: tests/Integration/MessageHandler/CreateTeamHandlerTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 2
+			path: tests/Integration/MessageHandler/RegisterBetaSignupHandlerTest.php
+
+		-
+			rawMessage: Instanceof between App\MessageHandler\RegisterBetaSignupHandler and App\MessageHandler\RegisterBetaSignupHandler will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 2
+			path: tests/Integration/MessageHandler/RegisterBetaSignupHandlerTest.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 3
+			path: tests/Integration/MessageHandler/RequestMagicLinkHandlerTest.php
+
+		-
+			rawMessage: Instanceof between App\MessageHandler\RequestMagicLinkHandler and App\MessageHandler\RequestMagicLinkHandler will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 3
+			path: tests/Integration/MessageHandler/RequestMagicLinkHandlerTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertTrue() with true will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 2
+			path: tests/Integration/MessageHandler/SendWeeklyDigestHandlerTest.php
+
+		-
+			rawMessage: 'Method App\Tests\Integration\Repository\TeamMembershipRepositoryTest::createUserAndTeam() return type has no value type specified in iterable type array.'
+			identifier: missingType.iterableValue
+			count: 1
+			path: tests/Integration/Repository/TeamMembershipRepositoryTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with array{} and array{} will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Integration/Services/DomainEventsSubscriberTest.php
+
+		-
+			rawMessage: 'Property Symfony\Component\Messenger\MessageBusInterface@anonymous/tests/Integration/Services/DomainEventsSubscriberTest.php:47::$dispatched is never read, only written.'
+			identifier: property.onlyWritten
+			count: 1
+			path: tests/Integration/Services/DomainEventsSubscriberTest.php
+
+		-
+			rawMessage: 'Property Symfony\Component\Messenger\MessageBusInterface@anonymous/tests/Integration/Services/DomainEventsSubscriberTest.php:90::$dispatched is never read, only written.'
+			identifier: property.onlyWritten
+			count: 1
+			path: tests/Integration/Services/DomainEventsSubscriberTest.php
+
+		-
+			rawMessage: 'Call to function assert() with false will always evaluate to false.'
+			identifier: function.impossibleType
+			count: 1
+			path: tests/IntegrationTestCase.php
+
+		-
+			rawMessage: Instanceof between Symfony\Component\Clock\Clock and Symfony\Component\Clock\MockClock will always evaluate to false.
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: tests/IntegrationTestCase.php
+
+		-
+			rawMessage: 'Call to function assert() with true will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/TestingDatabaseCaching.php
+
+		-
+			rawMessage: Instanceof between Doctrine\ORM\EntityManager and Doctrine\ORM\EntityManagerInterface will always evaluate to true.
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: tests/TestingDatabaseCaching.php
+
+		-
+			rawMessage: Access to an undefined property object::$domainName.
+			identifier: property.notFound
+			count: 1
+			path: tests/Unit/Entity/AlertTest.php
+
+		-
+			rawMessage: 'Method App\Tests\Unit\Entity\AlertTest::createTeamAndDomain() return type has no value type specified in iterable type array.'
+			identifier: missingType.iterableValue
+			count: 1
+			path: tests/Unit/Entity/AlertTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with array{''Upgrade DKIM key to…''} and array<string, mixed> will always evaluate to false.'
+			identifier: staticMethod.impossibleType
+			count: 1
+			path: tests/Unit/Entity/DomainHealthSnapshotTest.php
+
+		-
+			rawMessage: 'Parameter $recommendations of class App\Entity\DomainHealthSnapshot constructor expects array<string, mixed>, array<int, string> given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Entity/DomainHealthSnapshotTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''DomainException'' and App\Exceptions\BetaSignupNotFound will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Exceptions/BetaSignupNotFoundTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''DomainException'' and App\Exceptions\DmarcReportNotFound will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Exceptions/DmarcReportNotFoundTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''RuntimeException'' and App\Exceptions\InvalidDmarcReportXml will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Exceptions/InvalidDmarcReportXmlTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''DomainException'' and App\Exceptions\MailboxConnectionNotFound will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Exceptions/MailboxConnectionNotFoundTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''DomainException'' and App\Exceptions\MonitoredDomainNotFound will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Exceptions/MonitoredDomainNotFoundTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''DomainException'' and App\Exceptions\TeamNotFound will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Exceptions/TeamNotFoundTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''DomainException'' and App\Exceptions\UserNotFound will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Exceptions/UserNotFoundTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNotNull() with Symfony\Component\DependencyInjection\ContainerInterface will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/KernelBootTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\BlacklistStatusResult::fromDatabaseRow() expects array{id: string, ip_address: string, checked_at: string, results: string, is_listed: bool|string}, array{id: ''550e8400-e29b-41d4…'', ip_address: ''1.2.3.4'', checked_at: ''2026-03-25 10:00:00'', results: non-empty-string|false, is_listed: true} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/BlacklistStatusResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\DomainDetailResult::fromDatabaseRow() expects array{domain_id: string, domain_name: string, dmarc_policy: string|null, is_verified: bool, created_at: string, total_reports: int, total_messages: int, pass_rate: float, ...}, array{domain_id: ''abc-123'', domain_name: ''test.com'', dmarc_policy: ''none'', is_verified: false, created_at: ''2025-06-01 12:00:00'', total_reports: ''3'', total_messages: ''100'', pass_rate: ''87.5'', ...} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/DomainDetailResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with array{''Upgrade DKIM key''} and array<string, mixed> will always evaluate to false.'
+			identifier: staticMethod.impossibleType
+			count: 1
+			path: tests/Unit/Results/DomainHealthSnapshotResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\DomainOverviewResult::fromDatabaseRow() expects array{domain_id: string, domain_name: string, total_reports: int, latest_report_date: string|null, pass_rate: float}, array{domain_id: ''abc-123'', domain_name: ''example.com'', total_reports: ''5'', latest_report_date: ''2024-04-02 00:00:00'', pass_rate: ''95.5''} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/DomainOverviewResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\DomainOverviewResult::fromDatabaseRow() expects array{domain_id: string, domain_name: string, total_reports: int, latest_report_date: string|null, pass_rate: float}, array{domain_id: ''abc-456'', domain_name: ''test.com'', total_reports: ''0'', latest_report_date: null, pass_rate: ''0''} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/DomainOverviewResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\DomainReportListResult::fromDatabaseRow() expects array{report_id: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int, pass_rate: float}, array{report_id: ''rep-123'', reporter_org: ''google.com'', date_range_begin: ''2024-04-01 00:00:00'', date_range_end: ''2024-04-02 00:00:00'', record_count: ''3'', pass_rate: ''98.2''} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/DomainReportListResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\DomainSenderResult::fromDatabaseRow() expects array{source_ip: string, resolved_org: string|null, total_messages: int, pass_count: int, fail_count: int}, array{source_ip: ''10.0.0.1'', resolved_org: null, total_messages: ''200'', pass_count: ''190'', fail_count: ''10''} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/DomainSenderResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\PassRateTrendResult::fromDatabaseRow() expects array{date: string, pass_count: int, fail_count: int}, array{date: ''2025-07-01'', pass_count: ''42'', fail_count: ''3''} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/PassRateTrendResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\ReportDetailResult::fromDatabaseRow() expects array{report_id: string, reporter_org: string, reporter_email: string, external_report_id: string, date_range_begin: string, date_range_end: string, policy_domain: string, policy_adkim: string, ...}, array{report_id: ''rep-123'', reporter_org: ''google.com'', reporter_email: ''noreply@google.com'', external_report_id: ''ext-123'', date_range_begin: ''2024-04-01 00:00:00'', date_range_end: ''2024-04-02 00:00:00'', policy_domain: ''example.com'', policy_adkim: ''r'', ...} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/ReportDetailResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\ReportDetailResult::fromDatabaseRow() expects array{report_id: string, reporter_org: string, reporter_email: string, external_report_id: string, date_range_begin: string, date_range_end: string, policy_domain: string, policy_adkim: string, ...}, array{report_id: ''rep-456'', reporter_org: ''yahoo.com'', reporter_email: ''dmarc@yahoo.com'', external_report_id: ''ext-456'', date_range_begin: ''2024-04-01'', date_range_end: ''2024-04-02'', policy_domain: ''test.com'', policy_adkim: ''s'', ...} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/ReportDetailResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\ReportListResult::fromDatabaseRow() expects array{report_id: string, domain_name: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int, pass_rate: float}, array{report_id: ''rpt-2'', domain_name: ''test.com'', reporter_org: ''yahoo.com'', date_range_begin: ''2025-07-01'', date_range_end: ''2025-07-02'', record_count: ''3'', pass_rate: ''100.0''} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/ReportListResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\ReportRecordResult::fromDatabaseRow() expects array{record_id: string, source_ip: string, count: int, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: string|null, ...}, array{record_id: ''rec-123'', source_ip: ''209.85.220.41'', count: ''150'', disposition: ''none'', dkim_result: ''pass'', spf_result: ''pass'', header_from: ''example.com'', dkim_domain: ''example.com'', ...} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/ReportRecordResultTest.php
+
+		-
+			rawMessage: 'Parameter #1 $row of static method App\Results\ReportRecordResult::fromDatabaseRow() expects array{record_id: string, source_ip: string, count: int, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: string|null, ...}, array{record_id: ''rec-456'', source_ip: ''1.2.3.4'', count: ''1'', disposition: ''reject'', dkim_result: ''fail'', spf_result: ''fail'', header_from: ''test.com'', dkim_domain: null, ...} given.'
+			identifier: argument.type
+			count: 1
+			path: tests/Unit/Results/ReportRecordResultTest.php
+
+		-
+			rawMessage: 'Method App\Tests\Unit\Security\TeamVoterTest::createTeamAndUser() return type has no value type specified in iterable type array.'
+			identifier: missingType.iterableValue
+			count: 1
+			path: tests/Unit/Security/TeamVoterTest.php
+
+		-
+			rawMessage: 'Call to an undefined method Ramsey\Uuid\Fields\FieldsInterface::getVersion().'
+			identifier: method.notFound
+			count: 1
+			path: tests/Unit/Services/IdentityProviderTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertInstanceOf() with ''Ramsey\\Uuid\\UuidInterface'' and Ramsey\Uuid\UuidInterface will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Services/IdentityProviderTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertCount() with 3 and array{App\Value\AlertSeverity::Info, App\Value\AlertSeverity::Warning, App\Value\AlertSeverity::Critical} will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''critical'' and ''critical'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''info'' and ''info'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''warning'' and ''warning'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertCount() with 8 and array{App\Value\AlertType::NewUnknownSender, App\Value\AlertType::FailureSpike, App\Value\AlertType::PolicyRecommendation, App\Value\AlertType::DnsRecordChanged, App\Value\AlertType::DnsRecordInvalid, App\Value\AlertType::DnsRecordMissing, App\Value\AlertType::MailboxConnectionError, App\Value\AlertType::IpBlacklisted} will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''dns_record_changed'' and ''dns_record_changed'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''dns_record_invalid'' and ''dns_record_invalid'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''dns_record_missing'' and ''dns_record_missing'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''failure_spike'' and ''failure_spike'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''ip_blacklisted'' and ''ip_blacklisted'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''mailbox_connection…'' and ''mailbox_connection…'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''new_unknown_sender'' and ''new_unknown_sender'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''policy…'' and ''policy…'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AlertTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNull() with null will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''fail'' and ''fail'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''neutral'' and ''neutral'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''none'' and ''none'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''pass'' and ''pass'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''permerror'' and ''permerror'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''softfail'' and ''softfail'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''temperror'' and ''temperror'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\AuthResult::Pass and App\Value\AuthResult::Pass will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/AuthResultTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNull() with null will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DispositionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''none'' and ''none'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DispositionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''quarantine'' and ''quarantine'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DispositionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''reject'' and ''reject'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DispositionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\Disposition::Quarantine and App\Value\Disposition::Quarantine will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DispositionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNull() with null will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcAlignmentTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''r'' and ''r'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcAlignmentTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''s'' and ''s'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcAlignmentTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\DmarcAlignment::Strict and App\Value\DmarcAlignment::Strict will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcAlignmentTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNull() with null will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcPolicyTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''none'' and ''none'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcPolicyTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''quarantine'' and ''quarantine'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcPolicyTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''reject'' and ''reject'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcPolicyTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\DmarcPolicy::Reject and App\Value\DmarcPolicy::Reject will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DmarcPolicyTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''critical'' and ''critical'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/Dns/IssueSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''info'' and ''info'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/Dns/IssueSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''warning'' and ''warning'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/Dns/IssueSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\Dns\IssueSeverity::Critical and App\Value\Dns\IssueSeverity::Critical will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/Dns/IssueSeverityTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertCount() with 4 and array{App\Value\DnsCheckType::Spf, App\Value\DnsCheckType::Dkim, App\Value\DnsCheckType::Dmarc, App\Value\DnsCheckType::Mx} will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DnsCheckTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''dkim'' and ''dkim'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DnsCheckTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''dmarc'' and ''dmarc'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DnsCheckTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''mx'' and ''mx'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DnsCheckTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''spf'' and ''spf'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DnsCheckTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\DnsCheckType::Dmarc and App\Value\DnsCheckType::Dmarc will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DnsCheckTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\DnsCheckType::Spf and App\Value\DnsCheckType::Spf will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/DnsCheckTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertCount() with 3 and array{App\Value\FeedbackType::Bug, App\Value\FeedbackType::FeatureRequest, App\Value\FeedbackType::General} will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/FeedbackTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''bug'' and ''bug'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/FeedbackTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''feature_request'' and ''feature_request'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/FeedbackTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''general'' and ''general'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/FeedbackTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertCount() with 3 and array{App\Value\InvitationStatus::Pending, App\Value\InvitationStatus::Accepted, App\Value\InvitationStatus::Expired} will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/InvitationStatusTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''accepted'' and ''accepted'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/InvitationStatusTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''expired'' and ''expired'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/InvitationStatusTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''pending'' and ''pending'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/InvitationStatusTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNull() with null will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxEncryptionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''none'' and ''none'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxEncryptionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''ssl'' and ''ssl'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxEncryptionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''starttls'' and ''starttls'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxEncryptionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''tls'' and ''tls'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxEncryptionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\MailboxEncryption::Ssl and App\Value\MailboxEncryption::Ssl will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxEncryptionTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNull() with null will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''imap_hosted'' and ''imap_hosted'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''imap_user'' and ''imap_user'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''pop3_user'' and ''pop3_user'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\MailboxType::ImapUser and App\Value\MailboxType::ImapUser will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/MailboxTypeTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertNull() with null will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/SubscriptionPlanTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''free'' and ''free'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/SubscriptionPlanTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''personal'' and ''personal'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/SubscriptionPlanTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''team'' and ''team'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/SubscriptionPlanTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\SubscriptionPlan::Personal and App\Value\SubscriptionPlan::Personal will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/SubscriptionPlanTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertCount() with 4 and array{App\Value\TeamRole::Owner, App\Value\TeamRole::Admin, App\Value\TeamRole::Member, App\Value\TeamRole::Viewer} will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''admin'' and ''admin'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''member'' and ''member'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''owner'' and ''owner'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with ''viewer'' and ''viewer'' will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\TeamRole::Admin and App\Value\TeamRole::Admin will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\TeamRole::Member and App\Value\TeamRole::Member will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\TeamRole::Owner and App\Value\TeamRole::Owner will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to static method PHPUnit\Framework\Assert::assertSame() with App\Value\TeamRole::Viewer and App\Value\TeamRole::Viewer will always evaluate to true.'
+			identifier: staticMethod.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/Value/TeamRoleTest.php
+
+		-
+			rawMessage: 'Call to function assert() with false will always evaluate to false.'
+			identifier: function.impossibleType
+			count: 1
+			path: tests/WebTestCase.php
+
+		-
+			rawMessage: Instanceof between Symfony\Component\Clock\Clock and Symfony\Component\Clock\MockClock will always evaluate to false.
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: tests/WebTestCase.php
+
+		-
+			rawMessage: 'Call to function method_exists() with ''Symfony\\Component\\Dotenv\\Dotenv'' and ''bootEnv'' will always evaluate to true.'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: tests/bootstrap.php
