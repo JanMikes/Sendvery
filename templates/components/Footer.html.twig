@@ -1,0 +1,58 @@
+{# Footer with SEO internal links to all tool pages #}
+<footer class="bg-base-200 border-t border-base-300">
+    <div class="container mx-auto py-16">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+            {# Brand #}
+            <div>
+                <a href="{{ path('home') }}" class="text-xl font-bold text-primary tracking-tight">Sendvery</a>
+                <p class="mt-3 text-sm text-base-content/60 max-w-xs">
+                    Email health & deliverability monitoring. DMARC report parsing with AI-powered insights. Open source.
+                </p>
+                <div class="mt-4 flex items-center gap-2">
+                    <span class="badge badge-outline badge-sm">AGPL-3.0</span>
+                    <span class="badge badge-outline badge-sm">Self-hostable</span>
+                </div>
+            </div>
+
+            {# Free Tools #}
+            <div>
+                <h3 class="font-semibold text-sm uppercase tracking-wider text-base-content/50 mb-4">Free Tools</h3>
+                <ul class="space-y-2 text-sm">
+                    <li><a href="{{ path('tools_spf_checker') }}" class="link link-hover text-base-content/70">SPF Checker</a></li>
+                    <li><a href="{{ path('tools_dkim_checker') }}" class="link link-hover text-base-content/70">DKIM Checker</a></li>
+                    <li><a href="{{ path('tools_dmarc_checker') }}" class="link link-hover text-base-content/70">DMARC Checker</a></li>
+                    <li><a href="{{ path('tools_email_auth_checker') }}" class="link link-hover text-base-content/70">Email Auth Checker</a></li>
+                    <li><a href="{{ path('tools_mx_checker') }}" class="link link-hover text-base-content/70">MX Checker</a></li>
+                    <li><a href="{{ path('tools_blacklist_checker') }}" class="link link-hover text-base-content/70">Blacklist Checker</a></li>
+                    <li><a href="{{ path('tools_dns_monitoring') }}" class="link link-hover text-base-content/70">DNS Monitoring</a></li>
+                    <li><a href="{{ path('tools_domain_health') }}" class="link link-hover text-base-content/70">Domain Health</a></li>
+                </ul>
+            </div>
+
+            {# Product #}
+            <div>
+                <h3 class="font-semibold text-sm uppercase tracking-wider text-base-content/50 mb-4">Product</h3>
+                <ul class="space-y-2 text-sm">
+                    <li><a href="{{ path('pricing') }}" class="link link-hover text-base-content/70">Pricing</a></li>
+                    <li><a href="{{ path('about_what_is_sendvery') }}" class="link link-hover text-base-content/70">What is Sendvery</a></li>
+                    <li><a href="{{ path('about_open_source') }}" class="link link-hover text-base-content/70">Open Source</a></li>
+                </ul>
+            </div>
+
+            {# Connect #}
+            <div>
+                <h3 class="font-semibold text-sm uppercase tracking-wider text-base-content/50 mb-4">Connect</h3>
+                <ul class="space-y-2 text-sm">
+                    <li><a href="https://github.com/janmikes/sendvery" target="_blank" rel="noopener" class="link link-hover text-base-content/70">GitHub</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="divider my-8"></div>
+
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-base-content/50">
+            <p>&copy; {{ "now"|date("Y") }} Sendvery. All rights reserved.</p>
+            <p>Built with Symfony &amp; FrankenPHP</p>
+        </div>
+    </div>
+</footer>

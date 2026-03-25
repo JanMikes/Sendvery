@@ -1,0 +1,53 @@
+<div class="card bg-base-100 border border-base-300 mt-6">
+    <div class="card-body">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title text-lg">SPF Results for <span class="font-mono text-primary">{{ domain }}</span></h3>
+            {% if result.isPassing %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'pass'} %}
+            {% elseif result.hasRecord %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'warning'} %}
+            {% else %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'fail'} %}
+            {% endif %}
+        </div>
+
+        {% if result.rawRecord %}
+            <div class="bg-base-200 rounded-lg p-4 mb-4">
+                <p class="text-xs text-base-content/50 mb-1">Raw SPF Record</p>
+                <code class="text-sm font-mono break-all">{{ result.rawRecord }}</code>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Mechanisms</div>
+                    <div class="stat-value text-lg">{{ result.mechanismCount }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">DNS Lookups</div>
+                    <div class="stat-value text-lg {% if result.lookupCount > 10 %}text-error{% elseif result.lookupCount >= 8 %}text-warning{% else %}text-success{% endif %}">{{ result.lookupCount }}/10</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Includes</div>
+                    <div class="stat-value text-lg">{{ result.includes|length }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Valid</div>
+                    <div class="stat-value text-lg {% if result.isValid %}text-success{% else %}text-error{% endif %}">{{ result.isValid ? 'Yes' : 'No' }}</div>
+                </div>
+            </div>
+
+            {% if result.includes is not empty %}
+                <div class="mb-4">
+                    <p class="text-sm font-medium mb-2">Included domains:</p>
+                    <div class="flex flex-wrap gap-2">
+                        {% for include in result.includes %}
+                            <span class="badge badge-outline badge-sm font-mono">{{ include }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+
+        {% include 'tools/_results/_issues.html.twig' with {issues: result.issues} %}
+    </div>
+</div>

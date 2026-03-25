@@ -34,7 +34,7 @@ Sendvery is an email health & deliverability micro-SaaS. DMARC report parsing wi
 
 ## PHP Class Conventions
 
-All classes are `readonly final` by default unless there's a specific reason not to (e.g., Doctrine entities can't be readonly due to lazy loading, but their properties should be readonly where possible).
+Classes are `readonly final` by default. `final` is preferred but can be removed when needed (e.g., for test mocking/stubbing). Doctrine entities can't be readonly due to lazy loading, but their properties should be readonly where possible.
 
 ```php
 // Good

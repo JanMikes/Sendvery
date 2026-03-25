@@ -13,7 +13,13 @@ return App::config([
                         'doctrine_transaction',
                     ],
                 ],
+                'event_bus' => [
+                    'default_middleware' => [
+                        'allow_no_handlers' => true,
+                    ],
+                ],
             ],
+            'default_bus' => 'command_bus',
             'failure_transport' => 'failed',
             'transports' => [
                 'sync' => ['dsn' => 'sync://'],

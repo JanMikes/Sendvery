@@ -1,0 +1,160 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}DNS Record Monitoring — Detect Changes & Get Alerts | Sendvery{% endblock %}
+{% block meta_description %}Monitor your DNS records for unauthorized changes. Get instant alerts when SPF, DKIM, DMARC, or MX records change. Continuous DNS surveillance.{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "What is DNS monitoring?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "DNS monitoring continuously checks your DNS records (SPF, DKIM, DMARC, MX, A, NS) for changes and alerts you when something is modified, added, or removed. It catches unauthorized or accidental changes before they impact email delivery."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Why do DNS records change unexpectedly?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Common causes include: accidental edits by team members, DNS provider migrations that don't copy all records, compromised registrar accounts, domain hijacking, and automated changes by third-party services."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "How quickly can DNS changes be detected?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Sendvery checks DNS records at regular intervals (as frequently as every 5 minutes on higher plans). Changes are detected and alerts sent within minutes of propagation."
+            }
+        }
+    ]
+}
+</script>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Tools", "item": "{{ url('tools_domain_health') }}"},
+        {"@type": "ListItem", "position": 3, "name": "DNS Monitoring"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<section class="bg-gradient-to-br from-base-100 via-base-100 to-primary/5 py-16 lg:py-20">
+    <div class="container mx-auto">
+        <nav class="text-sm breadcrumbs mb-6">
+            <ul>
+                <li><a href="{{ path('home') }}">Home</a></li>
+                <li><a href="{{ path('tools_domain_health') }}">Tools</a></li>
+                <li>DNS Monitoring</li>
+            </ul>
+        </nav>
+        <div class="max-w-3xl mx-auto text-center">
+            <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight">DNS Record Monitoring</h1>
+            <p class="mt-4 text-base-content/60 text-lg">Continuous monitoring of your DNS records. Get instant alerts when SPF, DKIM, DMARC, or MX records change unexpectedly.</p>
+            <div class="mt-10 alert alert-info max-w-xl mx-auto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>DNS monitoring is available in the beta. <a href="{{ path('home') }}#pricing" class="link font-medium">Join now</a> to start monitoring.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<twig:SectionContainer>
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">What is DNS monitoring?</h2>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    DNS monitoring is the practice of continuously checking your domain's DNS records for changes. When a record is modified, added, or removed, you receive an immediate alert. This catches unauthorized changes, accidental edits, and DNS hijacking before they impact your email delivery or security.
+                </p>
+                <p>
+                    For email security specifically, monitoring SPF, DKIM, DMARC, and MX records is critical. A single unauthorized change to your MX record could redirect all your email to an attacker-controlled server. A broken SPF record could silently fail authentication for weeks.
+                </p>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">What DNS monitoring catches</h2>
+            <div class="space-y-4">
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
+                    <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">MX record hijacking</h3>
+                        <p class="text-sm text-base-content/60 mt-1">Someone changed your MX record 3 days ago. Your email has been silently routing to a server you don't control. Every message — invoices, contracts, passwords — intercepted.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">Accidental SPF changes</h3>
+                        <p class="text-sm text-base-content/60 mt-1">A colleague updated the SPF record to add a new service and accidentally removed an existing include. Half your email has been failing authentication since Monday.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">NS delegation changes</h3>
+                        <p class="text-sm text-base-content/60 mt-1">Your registrar account was compromised and the nameservers were changed. All your DNS records now resolve to attacker-controlled infrastructure.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+<twig:SectionContainer>
+    {% block content %}
+        <div class="text-center mb-8">
+            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+        </div>
+        <twig:FaqAccordion :items="[
+            {question: 'What is DNS monitoring?', answer: 'Continuous checking of DNS records for changes. When SPF, DKIM, DMARC, MX, or NS records are modified, you get an instant alert — catching unauthorized or accidental changes before they cause damage.'},
+            {question: 'Why do DNS records change unexpectedly?', answer: 'Accidental edits, DNS migrations that drop records, compromised registrar accounts, automated changes by third-party services, or expired domains being re-registered by someone else.'},
+            {question: 'How quickly are changes detected?', answer: 'Sendvery checks records at regular intervals (5 minutes to 1 hour depending on your plan). Changes are detected and alerts sent within minutes of DNS propagation.'},
+            {question: 'What record types are monitored?', answer: 'SPF (TXT), DKIM (_domainkey TXT), DMARC (_dmarc TXT), MX, A, AAAA, NS, and CNAME records. Full DNS surveillance for email-critical records.'}
+        ]" />
+    {% endblock %}
+</twig:SectionContainer>
+
+<section class="py-16 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
+    <div class="container mx-auto text-center">
+        <h2 class="text-2xl md:text-3xl font-bold">Continuous DNS surveillance</h2>
+        <p class="mt-3 text-base-content/60 max-w-xl mx-auto">Every record type, every change, instant alert. Know what's happening with your DNS before it impacts your email.</p>
+        <div class="mt-8">
+            <a href="{{ path('home') }}#pricing" class="btn btn-primary">Join the beta</a>
+        </div>
+    </div>
+</section>
+
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="text-center mb-8">
+            <h2 class="text-xl font-bold">Related tools</h2>
+        </div>
+        <div class="flex flex-wrap justify-center gap-3">
+            <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm">SPF Checker</a>
+            <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm">DKIM Checker</a>
+            <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm">DMARC Checker</a>
+            <a href="{{ path('tools_mx_checker') }}" class="btn btn-outline btn-sm">MX Checker</a>
+            <a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm">Email Auth Checker</a>
+            <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm">Domain Health</a>
+            <a href="{{ path('tools_blacklist_checker') }}" class="btn btn-outline btn-sm">Blacklist Checker</a>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+{% endblock %}

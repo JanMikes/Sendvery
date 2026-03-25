@@ -1,0 +1,24 @@
+{# DNS checker widget — used on homepage and embeddable #}
+
+<div class="w-full max-w-xl mx-auto" {{ stimulus_controller('dns-checker', { url: path('api_check_domain') }) }}>
+    <form {{ stimulus_action('dns-checker', 'submit', 'submit') }}>
+        <div class="join w-full shadow-lg">
+            <input type="text"
+                   name="domain"
+                   placeholder="Enter your domain (e.g. example.com)"
+                   class="input input-bordered join-item flex-1 bg-base-100 focus:outline-primary"
+                   aria-label="Domain name"
+                   {{ stimulus_target('dns-checker', 'input') }}>
+            <button type="submit" class="btn btn-primary join-item" {{ stimulus_target('dns-checker', 'submitBtn') }}>
+                <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                Check
+            </button>
+        </div>
+        <div class="text-center mt-3">
+            <span class="loading loading-spinner loading-sm text-primary hidden" {{ stimulus_target('dns-checker', 'spinner') }}></span>
+            <p class="text-error text-sm hidden" {{ stimulus_target('dns-checker', 'error') }}></p>
+        </div>
+    </form>
+    <p class="text-center text-sm text-base-content/50 mt-3">Free, instant results. No signup required.</p>
+    <div {{ stimulus_target('dns-checker', 'results') }} class="hidden"></div>
+</div>

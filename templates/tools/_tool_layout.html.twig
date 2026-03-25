@@ -1,0 +1,95 @@
+{# Shared layout for tool pages with full SEO content #}
+{% extends 'marketing_layout.html.twig' %}
+
+{% block structured_data %}
+    {% block tool_structured_data %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+
+{# 1. Hero + Checker #}
+<section class="bg-gradient-to-br from-base-100 via-base-100 to-primary/5 py-16 lg:py-20">
+    <div class="container mx-auto">
+        <nav class="text-sm breadcrumbs mb-6">
+            <ul>
+                <li><a href="{{ path('home') }}">Home</a></li>
+                <li><a href="{{ path('tools_domain_health') }}">Tools</a></li>
+                <li>{% block breadcrumb_title %}{% endblock %}</li>
+            </ul>
+        </nav>
+
+        <div class="max-w-3xl mx-auto text-center">
+            <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight">{% block tool_title %}{% endblock %}</h1>
+            <p class="mt-4 text-base-content/60 text-lg">{% block tool_description %}{% endblock %}</p>
+        </div>
+
+        <div class="max-w-2xl mx-auto mt-10" {{ stimulus_controller('dns-checker', { url: block('checker_url') }) }}>
+            <form {{ stimulus_action('dns-checker', 'submit', 'submit') }}>
+                {% block checker_form %}
+                    <div class="join w-full shadow-lg">
+                        <input type="text"
+                               name="domain"
+                               placeholder="Enter your domain (e.g. example.com)"
+                               value="{{ domain|default('') }}"
+                               class="input input-bordered join-item flex-1 bg-base-100 focus:outline-primary"
+                               aria-label="Domain name"
+                               {{ stimulus_target('dns-checker', 'input') }}>
+                        <button type="submit" class="btn btn-primary join-item" {{ stimulus_target('dns-checker', 'submitBtn') }}>
+                            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            Check
+                        </button>
+                    </div>
+                {% endblock %}
+                <div class="text-center mt-3">
+                    <span class="loading loading-spinner loading-sm text-primary hidden" {{ stimulus_target('dns-checker', 'spinner') }}></span>
+                    <p class="text-error text-sm hidden" {{ stimulus_target('dns-checker', 'error') }}></p>
+                </div>
+            </form>
+
+            <div {{ stimulus_target('dns-checker', 'results') }} class="{% if result is not defined or result is null %}hidden{% endif %}">
+                {% if result is defined and result is not null %}
+                    {% block inline_results %}{% endblock %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+{# 2. SEO Content Sections #}
+{% block seo_content %}{% endblock %}
+
+{# 3. CTA #}
+<section class="py-16 lg:py-20 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
+    <div class="container mx-auto text-center">
+        <h2 class="text-2xl md:text-3xl font-bold">Want ongoing monitoring?</h2>
+        <p class="mt-3 text-base-content/60 max-w-xl mx-auto">
+            Checking once is a start. But email authentication breaks silently over time. Get alerted the moment something changes.
+        </p>
+        <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+            <a href="{{ path('tools_domain_health') }}" class="btn btn-primary">Check your domain health</a>
+            <a href="{{ path('home') }}#pricing" class="btn btn-ghost">View pricing</a>
+        </div>
+    </div>
+</section>
+
+{# 4. Related Tools #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="text-center mb-8">
+            <h2 class="text-xl font-bold">Related tools</h2>
+        </div>
+        <div class="flex flex-wrap justify-center gap-3">
+            {% block related_tools %}
+                <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm">SPF Checker</a>
+                <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm">DKIM Checker</a>
+                <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm">DMARC Checker</a>
+                <a href="{{ path('tools_mx_checker') }}" class="btn btn-outline btn-sm">MX Checker</a>
+                <a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm">Email Auth Checker</a>
+                <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm">Domain Health</a>
+                <a href="{{ path('tools_blacklist_checker') }}" class="btn btn-outline btn-sm">Blacklist Checker</a>
+                <a href="{{ path('tools_dns_monitoring') }}" class="btn btn-outline btn-sm">DNS Monitoring</a>
+            {% endblock %}
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+{% endblock %}

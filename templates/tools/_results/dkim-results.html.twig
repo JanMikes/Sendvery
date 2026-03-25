@@ -1,0 +1,45 @@
+<div class="card bg-base-100 border border-base-300 mt-6">
+    <div class="card-body">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title text-lg">DKIM Results for <span class="font-mono text-primary">{{ domain }}</span></h3>
+            {% if result.isPassing %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'pass'} %}
+            {% elseif result.keyExists %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'warning'} %}
+            {% else %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'fail', label: 'Not Found'} %}
+            {% endif %}
+        </div>
+
+        {% if result.keyExists %}
+            {% if result.rawRecord %}
+                <div class="bg-base-200 rounded-lg p-4 mb-4">
+                    <p class="text-xs text-base-content/50 mb-1">Raw DKIM Record (selector: <span class="font-mono">{{ result.selector }}</span>)</p>
+                    <code class="text-sm font-mono break-all">{{ result.rawRecord }}</code>
+                </div>
+            {% endif %}
+
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Selector</div>
+                    <div class="stat-value text-lg font-mono">{{ result.selector }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Key Type</div>
+                    <div class="stat-value text-lg">{{ result.keyType|upper|default('Unknown') }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Key Strength</div>
+                    <div class="stat-value text-lg {% if result.keyBits >= 2048 %}text-success{% elseif result.keyBits >= 1024 %}text-warning{% else %}text-error{% endif %}">{{ result.keyBits ? result.keyBits ~ '-bit' : 'Unknown' }}</div>
+                </div>
+            </div>
+        {% else %}
+            <div class="bg-base-200 rounded-lg p-4 mb-4 text-center">
+                <p class="text-base-content/60">No DKIM key found for selector <span class="font-mono font-medium">{{ result.selector }}</span></p>
+                <p class="text-sm text-base-content/40 mt-1">Try specifying your email provider's selector (e.g., google, selector1, k1)</p>
+            </div>
+        {% endif %}
+
+        {% include 'tools/_results/_issues.html.twig' with {issues: result.issues} %}
+    </div>
+</div>

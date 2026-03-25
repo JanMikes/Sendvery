@@ -1,0 +1,133 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Integration\Controller;
+
+use App\Tests\WebTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
+
+final class MarketingPagesTest extends WebTestCase
+{
+    #[Test]
+    #[DataProvider('publicRoutes')]
+    public function page_returns_200(string $url): void
+    {
+        $client = self::createClient();
+        $client->request('GET', $url);
+
+        self::assertResponseIsSuccessful();
+    }
+
+    #[Test]
+    #[DataProvider('publicRoutes')]
+    public function page_has_title_and_meta_description(string $url): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', $url);
+
+        $title = $crawler->filter('title')->text();
+        self::assertNotEmpty($title);
+        self::assertStringContainsString('Sendvery', $title);
+
+        $metaDescription = $crawler->filter('meta[name="description"]')->attr('content');
+        self::assertNotEmpty($metaDescription);
+    }
+
+    #[Test]
+    public function homepage_contains_hero_section(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        self::assertSelectorTextContains('h1', 'Do you know who else is');
+    }
+
+    #[Test]
+    public function homepage_contains_pricing_section(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        self::assertSelectorTextContains('#pricing h2', 'Simple, transparent pricing');
+    }
+
+    #[Test]
+    public function homepage_contains_faq_section(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        self::assertSelectorTextContains('#faq h2', 'Frequently asked questions');
+    }
+
+    #[Test]
+    public function homepage_contains_cta(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $ctaButtons = $crawler->filter('a.btn-primary');
+        self::assertGreaterThanOrEqual(1, $ctaButtons->count());
+    }
+
+    #[Test]
+    public function homepage_has_structured_data(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $jsonLd = $crawler->filter('script[type="application/ld+json"]');
+        self::assertGreaterThanOrEqual(1, $jsonLd->count());
+
+        $data = json_decode($jsonLd->text(), true);
+        self::assertSame('Organization', $data['@type']);
+        self::assertSame('Sendvery', $data['name']);
+    }
+
+    #[Test]
+    public function navigation_contains_tool_links(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        self::assertSelectorExists('a[href="/tools/spf-checker"]');
+        self::assertSelectorExists('a[href="/tools/dkim-checker"]');
+        self::assertSelectorExists('a[href="/tools/dmarc-checker"]');
+        self::assertSelectorExists('a[href="/tools/domain-health"]');
+    }
+
+    #[Test]
+    public function footer_contains_all_tool_links(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $footer = $crawler->filter('footer');
+        self::assertStringContainsString('SPF Checker', $footer->text());
+        self::assertStringContainsString('DKIM Checker', $footer->text());
+        self::assertStringContainsString('DMARC Checker', $footer->text());
+        self::assertStringContainsString('MX Checker', $footer->text());
+        self::assertStringContainsString('Blacklist Checker', $footer->text());
+        self::assertStringContainsString('DNS Monitoring', $footer->text());
+        self::assertStringContainsString('Domain Health', $footer->text());
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function publicRoutes(): iterable
+    {
+        yield 'homepage' => ['/'];
+        yield 'spf-checker' => ['/tools/spf-checker'];
+        yield 'dkim-checker' => ['/tools/dkim-checker'];
+        yield 'dmarc-checker' => ['/tools/dmarc-checker'];
+        yield 'email-auth-checker' => ['/tools/email-auth-checker'];
+        yield 'dns-monitoring' => ['/tools/dns-monitoring'];
+        yield 'mx-checker' => ['/tools/mx-checker'];
+        yield 'blacklist-checker' => ['/tools/blacklist-checker'];
+        yield 'domain-health' => ['/tools/domain-health'];
+        yield 'pricing' => ['/pricing'];
+        yield 'what-is-sendvery' => ['/about/what-is-sendvery'];
+        yield 'open-source' => ['/about/open-source'];
+    }
+}

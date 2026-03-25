@@ -1,0 +1,7 @@
+{% props id = '', class = '', bgClass = '' %}
+
+<section{% if id %} id="{{ id }}"{% endif %} class="{{ bgClass }} py-20 lg:py-24">
+    <div class="container mx-auto {{ class }}">
+        {% block content %}{% endblock %}
+    </div>
+</section>

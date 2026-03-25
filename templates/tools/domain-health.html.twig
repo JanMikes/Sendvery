@@ -1,0 +1,136 @@
+{% extends 'tools/_tool_layout.html.twig' %}
+
+{% block title %}Domain Health Check — Email Security Score & Report Card | Sendvery{% endblock %}
+{% block meta_description %}Get your domain's email health grade (A-F). Comprehensive report combining SPF, DKIM, DMARC, MX, and TLS checks. Free domain health score.{% endblock %}
+
+{% block tool_structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "What is a domain health score?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "A domain health score is a comprehensive grade (A-F) that evaluates all aspects of your email authentication: SPF, DKIM, DMARC, MX records, and TLS configuration. It gives you a single number that represents your overall email security posture."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "How is the domain health grade calculated?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The grade is a weighted average of four categories: DMARC (30%), SPF (25%), DKIM (25%), and MX (20%). Each category scores 0-100 based on record presence, validity, configuration strength, and absence of issues."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What does a D or F grade mean?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "A D or F grade indicates serious email authentication problems. Your domain is likely vulnerable to spoofing, and your legitimate emails may be landing in spam. Common causes: missing DMARC, SPF over lookup limit, no DKIM key, DMARC on p=none."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "How do I improve my domain health score?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Fix issues in priority order: 1) Add missing records (SPF, DKIM, DMARC), 2) Fix SPF lookup limit issues, 3) Upgrade DKIM to 2048-bit keys, 4) Move DMARC from p=none to p=quarantine then p=reject, 5) Enable TLS on mail servers."
+            }
+        }
+    ]
+}
+</script>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Tools", "item": "{{ url('tools_domain_health') }}"},
+        {"@type": "ListItem", "position": 3, "name": "Domain Health"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block breadcrumb_title %}Domain Health{% endblock %}
+{% block tool_title %}Domain Health Check{% endblock %}
+{% block tool_description %}Get your domain's email health grade. A comprehensive report card combining SPF, DKIM, DMARC, MX, and TLS analysis into a single A-F score.{% endblock %}
+{% block checker_url %}{{ path('tools_domain_health') }}{% endblock %}
+
+{% block inline_results %}
+    {% include 'tools/_results/domain-health-results.html.twig' with {result: result, healthScore: healthScore, domain: domain} %}
+{% endblock %}
+
+{% block seo_content %}
+<twig:SectionContainer>
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">What is a domain health score?</h2>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    A domain health score is a comprehensive evaluation of your email authentication posture. Instead of checking SPF, DKIM, DMARC, and MX separately, the health score combines all checks into a single <strong>A-F grade</strong> and a numeric score (0-100).
+                </p>
+                <p>
+                    The grade is calculated as a weighted average: DMARC (30%), SPF (25%), DKIM (25%), and MX (20%). Each category evaluates not just whether a record exists, but how well it's configured — a domain with SPF but over the lookup limit scores lower than one with a clean, optimized record.
+                </p>
+                <p>
+                    Every single check might show "mostly okay." But combined, your domain might score a D. That's why 15% of your email lands in spam — cumulative small issues creating a major deliverability problem.
+                </p>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">Why your grade matters</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="card bg-success/5 border border-success/20">
+                    <div class="card-body">
+                        <div class="text-3xl font-bold text-success">A / B</div>
+                        <p class="text-sm text-base-content/70">Strong email authentication. Your domain is well-protected against spoofing. Emails are delivered reliably. Keep monitoring to maintain this score.</p>
+                    </div>
+                </div>
+                <div class="card bg-warning/5 border border-warning/20">
+                    <div class="card-body">
+                        <div class="text-3xl font-bold text-warning">C</div>
+                        <p class="text-sm text-base-content/70">Partial protection. Some records are configured but with issues — SPF near the limit, DMARC on p=none, or weak DKIM keys. Attackers could exploit the gaps.</p>
+                    </div>
+                </div>
+                <div class="card bg-error/5 border border-error/20">
+                    <div class="card-body">
+                        <div class="text-3xl font-bold text-error">D</div>
+                        <p class="text-sm text-base-content/70">Significant vulnerabilities. Missing records or critical misconfigurations. Email deliverability is likely impacted. Spoofing is possible.</p>
+                    </div>
+                </div>
+                <div class="card bg-error/5 border border-error/20">
+                    <div class="card-body">
+                        <div class="text-3xl font-bold text-error">F</div>
+                        <p class="text-sm text-base-content/70">Critical. Little to no email authentication. Your domain is an easy target for phishing and spoofing. Immediate action required.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+<twig:SectionContainer>
+    {% block content %}
+        <div class="text-center mb-8">
+            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+        </div>
+        <twig:FaqAccordion :items="[
+            {question: 'What is a domain health score?', answer: 'A comprehensive A-F grade evaluating your email authentication: SPF, DKIM, DMARC, MX, and TLS. One score that tells you everything about your email security posture.'},
+            {question: 'How is the grade calculated?', answer: 'Weighted average: DMARC (30%), SPF (25%), DKIM (25%), MX (20%). Each category scores 0-100 based on record presence, validity, configuration strength, and absence of issues.'},
+            {question: 'What does a D or F grade mean?', answer: 'Serious email authentication problems. Your domain is vulnerable to spoofing and your emails likely land in spam. Common causes: missing DMARC, SPF over lookup limit, no DKIM, weak policies.'},
+            {question: 'How do I improve my score?', answer: 'Fix in priority order: 1) Add missing records, 2) Fix SPF lookup issues, 3) Upgrade DKIM to 2048-bit, 4) Move DMARC to p=reject, 5) Enable TLS on mail servers.'}
+        ]" />
+    {% endblock %}
+</twig:SectionContainer>
+{% endblock %}

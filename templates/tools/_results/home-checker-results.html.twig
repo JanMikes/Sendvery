@@ -1,0 +1,28 @@
+<div class="mt-6 max-w-xl mx-auto">
+    <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+            <div class="flex items-center gap-6">
+                <div class="w-20 h-20 rounded-2xl border-4 flex items-center justify-center {{ healthScore.gradeColor }} font-bold text-4xl {% if healthScore.grade == 'A' %}border-success bg-success/10{% elseif healthScore.grade == 'B' %}border-info bg-info/10{% elseif healthScore.grade == 'C' %}border-warning bg-warning/10{% else %}border-error bg-error/10{% endif %}">
+                    {{ healthScore.grade }}
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-lg">{{ domain }}</h3>
+                    <p class="text-sm text-base-content/60">Score: {{ healthScore.score }}/100</p>
+                    <div class="flex flex-wrap gap-1.5 mt-2">
+                        {% include 'tools/_results/_status_badge.html.twig' with {status: result.spf.isPassing ? 'pass' : (result.spf.hasRecord ? 'warning' : 'fail'), label: 'SPF'} %}
+                        {% include 'tools/_results/_status_badge.html.twig' with {status: result.hasDkimKey ? 'pass' : 'fail', label: 'DKIM'} %}
+                        {% include 'tools/_results/_status_badge.html.twig' with {status: result.dmarc.isPassing ? 'pass' : (result.dmarc.hasRecord ? 'warning' : 'fail'), label: 'DMARC'} %}
+                        {% include 'tools/_results/_status_badge.html.twig' with {status: result.mx.isPassing ? 'pass' : 'fail', label: 'MX'} %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 mt-4">
+                <a href="{{ path('tools_spf_checker') }}" class="btn btn-xs btn-outline">SPF Details</a>
+                <a href="{{ path('tools_dkim_checker') }}" class="btn btn-xs btn-outline">DKIM Details</a>
+                <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-xs btn-outline">DMARC Details</a>
+                <a href="{{ path('tools_domain_health') }}" class="btn btn-xs btn-primary">Full Report</a>
+            </div>
+        </div>
+    </div>
+</div>

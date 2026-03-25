@@ -24,6 +24,12 @@ return App::config([
                     'alias' => 'App',
                 ],
             ],
+            'filters' => [
+                'team_filter' => [
+                    'class' => 'App\Doctrine\TeamFilter',
+                    'enabled' => true,
+                ],
+            ],
         ],
     ],
 ]);

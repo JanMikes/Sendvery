@@ -1,0 +1,37 @@
+<div class="space-y-6 mt-6">
+    {# Grade card #}
+    <div class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+            <div class="flex flex-col md:flex-row items-center gap-8">
+                <div class="w-32 h-32 rounded-3xl border-4 flex items-center justify-center {{ healthScore.gradeColor }} font-extrabold text-7xl {% if healthScore.grade == 'A' %}border-success bg-success/10{% elseif healthScore.grade == 'B' %}border-info bg-info/10{% elseif healthScore.grade == 'C' %}border-warning bg-warning/10{% else %}border-error bg-error/10{% endif %}">
+                    {{ healthScore.grade }}
+                </div>
+                <div class="text-center md:text-left">
+                    <h3 class="text-2xl font-bold">{{ domain }}</h3>
+                    <p class="text-base-content/60 text-lg">Email health score: <strong>{{ healthScore.score }}/100</strong></p>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                        {% for category in healthScore.categories %}
+                            <div class="text-center">
+                                <div class="radial-progress {% if category.status == 'pass' %}text-success{% elseif category.status == 'warning' %}text-warning{% else %}text-error{% endif %}" style="--value:{{ category.score }}; --size:3rem; --thickness:4px;" role="progressbar">
+                                    <span class="text-xs font-bold">{{ category.score }}</span>
+                                </div>
+                                <p class="text-xs mt-1 text-base-content/60">{{ category.name }}</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Detailed results #}
+    {% include 'tools/_results/spf-results.html.twig' with {result: result.spf, domain: domain} %}
+
+    {% for dkimResult in result.dkim %}
+        {% include 'tools/_results/dkim-results.html.twig' with {result: dkimResult, domain: domain} %}
+    {% endfor %}
+
+    {% include 'tools/_results/dmarc-results.html.twig' with {result: result.dmarc, domain: domain} %}
+    {% include 'tools/_results/mx-results.html.twig' with {result: result.mx, domain: domain} %}
+</div>

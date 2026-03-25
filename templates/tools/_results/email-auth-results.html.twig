@@ -1,0 +1,31 @@
+<div class="space-y-4 mt-6">
+    {# Health score summary #}
+    <div class="card bg-base-100 border border-base-300">
+        <div class="card-body text-center">
+            <div class="flex items-center justify-center gap-6">
+                <div class="w-24 h-24 rounded-2xl border-4 flex items-center justify-center {{ healthScore.gradeColor }} font-bold text-5xl {% if healthScore.grade == 'A' %}border-success bg-success/10{% elseif healthScore.grade == 'B' %}border-info bg-info/10{% elseif healthScore.grade == 'C' %}border-warning bg-warning/10{% else %}border-error bg-error/10{% endif %}">
+                    {{ healthScore.grade }}
+                </div>
+                <div class="text-left">
+                    <h3 class="text-lg font-bold">{{ domain }}</h3>
+                    <p class="text-base-content/60">Overall score: {{ healthScore.score }}/100</p>
+                    <div class="flex gap-2 mt-2">
+                        {% for category in healthScore.categories %}
+                            {% include 'tools/_results/_status_badge.html.twig' with {status: category.status, label: category.name ~ ' ' ~ category.score ~ '%'} %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Individual results #}
+    {% include 'tools/_results/spf-results.html.twig' with {result: result.spf, domain: domain} %}
+
+    {% for dkimResult in result.dkim %}
+        {% include 'tools/_results/dkim-results.html.twig' with {result: dkimResult, domain: domain} %}
+    {% endfor %}
+
+    {% include 'tools/_results/dmarc-results.html.twig' with {result: result.dmarc, domain: domain} %}
+    {% include 'tools/_results/mx-results.html.twig' with {result: result.mx, domain: domain} %}
+</div>

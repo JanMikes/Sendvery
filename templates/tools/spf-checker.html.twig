@@ -1,0 +1,182 @@
+{% extends 'tools/_tool_layout.html.twig' %}
+
+{% block title %}Free SPF Record Checker — SPF Lookup & Validator | Sendvery{% endblock %}
+{% block meta_description %}Check your SPF record instantly. Validate syntax, count DNS lookups (10-limit), detect misconfigurations. Free SPF checker tool by Sendvery.{% endblock %}
+
+{% block tool_structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "What is an SPF record?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "SPF (Sender Policy Framework) is a DNS TXT record that lists which mail servers are authorized to send email on behalf of your domain. Receiving servers check SPF to verify the sender is legitimate."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What is the SPF 10 DNS lookup limit?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "RFC 7208 limits SPF records to 10 DNS lookups (include, a, mx, ptr, exists, redirect). Exceeding this limit causes SPF to return a permanent error (permerror), which means your emails may fail authentication."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Why is +all dangerous in SPF?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The +all mechanism tells receiving servers that ANY server is authorized to send email as your domain. This completely defeats the purpose of SPF and allows anyone to spoof your domain."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "How do I fix too many DNS lookups in SPF?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "You can flatten your SPF record by replacing include statements with the actual IP addresses they resolve to, remove unused includes from services you no longer use, or use an SPF flattening service that automatically maintains the flattened record."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What is the difference between ~all and -all?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "~all (softfail) tells receivers that unauthorized senders should be treated with suspicion but not outright rejected. -all (hardfail) tells receivers to reject email from unauthorized senders. Both are valid; ~all is more forgiving during migration."
+            }
+        }
+    ]
+}
+</script>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Tools", "item": "{{ url('tools_domain_health') }}"},
+        {"@type": "ListItem", "position": 3, "name": "SPF Checker"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block breadcrumb_title %}SPF Checker{% endblock %}
+{% block tool_title %}SPF Record Checker{% endblock %}
+{% block tool_description %}Look up and validate your SPF record. Check syntax, count DNS lookups against the 10-lookup limit, and detect misconfigurations that could break your email delivery.{% endblock %}
+{% block checker_url %}{{ path('tools_spf_checker') }}{% endblock %}
+
+{% block inline_results %}
+    {% include 'tools/_results/spf-results.html.twig' with {result: result, domain: domain} %}
+{% endblock %}
+
+{% block seo_content %}
+{# What is SPF #}
+<twig:SectionContainer>
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">What is SPF?</h2>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    SPF (Sender Policy Framework) is a DNS-based email authentication protocol defined in <strong>RFC 7208</strong>. It allows domain owners to specify which mail servers are authorized to send email on behalf of their domain by publishing a TXT record in DNS.
+                </p>
+                <p>
+                    When a receiving mail server gets an email claiming to be from your domain, it looks up your SPF record and checks whether the sending server's IP address is listed as authorized. If it's not, the email may be marked as spam, quarantined, or rejected — depending on the receiving server's policy and your DMARC configuration.
+                </p>
+                <p>
+                    A typical SPF record looks like this: <code class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-sm">v=spf1 include:_spf.google.com include:sendgrid.net ~all</code>. This says: "Google and SendGrid are authorized to send email as my domain. Softfail everything else."
+                </p>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+{# Why it matters #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">Why SPF matters</h2>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    Without SPF, anyone can send email that appears to come from your domain. Phishing attacks, business email compromise, and brand impersonation all exploit domains without proper email authentication. SPF is your first line of defense.
+                </p>
+                <p>
+                    But SPF is also fragile. Every time you add a new email service — HubSpot, Zendesk, Mailchimp, Salesforce — you add another <code>include:</code> to your SPF record. Each include triggers DNS lookups. Cross the <strong>10-lookup limit</strong>, and your SPF record breaks silently. Every email you send starts failing authentication, and you won't know until deliverability drops or customers complain.
+                </p>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+{# Security risks #}
+<twig:SectionContainer>
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">Security risks & attack vectors</h2>
+            <div class="space-y-4">
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
+                    <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">DNS lookup limit exceeded</h3>
+                        <p class="text-sm text-base-content/60 mt-1">You added HubSpot 6 months ago and broke your SPF without knowing. Every email since has been failing authentication. The 10-lookup limit is cumulative across all nested includes.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
+                    <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">+all misconfiguration</h3>
+                        <p class="text-sm text-base-content/60 mt-1">Using <code>+all</code> instead of <code>~all</code> or <code>-all</code> means any server in the world is authorized to send as your domain. This completely negates SPF protection.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">Stale includes from old services</h3>
+                        <p class="text-sm text-base-content/60 mt-1">You switched from Mailchimp to Brevo last year but forgot to remove the old include. It still counts toward your 10-lookup limit and authorizes servers you no longer use.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+{# Set-and-forget trap #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">The set-and-forget trap</h2>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    SPF records are configured once and then forgotten. But your email infrastructure changes constantly. New marketing tools, new CRM, new support desk — each one needs to be added to your SPF. And when you stop using a service, the old include stays behind, wasting precious DNS lookups.
+                </p>
+                <p>
+                    The worst part? When your SPF breaks, there's no error message. No notification. Your emails just silently start failing authentication. Deliverability drops. Emails land in spam. Customers stop receiving invoices and notifications. And you don't find out for weeks.
+                </p>
+                <p class="font-medium">
+                    Get alerted when your SPF record changes or breaks the lookup limit. <a href="{{ path('home') }}#pricing" class="link link-primary">Join the Sendvery beta</a>.
+                </p>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+{# FAQ #}
+<twig:SectionContainer>
+    {% block content %}
+        <div class="text-center mb-8">
+            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+        </div>
+        <twig:FaqAccordion :items="[
+            {question: 'What is an SPF record?', answer: 'SPF (Sender Policy Framework) is a DNS TXT record that lists which mail servers are authorized to send email on behalf of your domain. Receiving servers check SPF to verify the sender is legitimate.'},
+            {question: 'What is the SPF 10 DNS lookup limit?', answer: 'RFC 7208 limits SPF records to 10 DNS lookups. Mechanisms like include, a, mx, ptr, exists, and the redirect modifier each count as one lookup. Exceeding this limit causes a permanent error (permerror).'},
+            {question: 'Why is +all dangerous in SPF?', answer: 'The +all mechanism tells receiving servers that ANY server is authorized to send email as your domain. This completely defeats the purpose of SPF. Use ~all (softfail) or -all (hardfail) instead.'},
+            {question: 'How do I fix too many DNS lookups?', answer: 'Remove unused includes from old services, flatten your SPF record by replacing includes with IP addresses, or use an SPF flattening service that automatically maintains the record.'},
+            {question: 'What is the difference between ~all and -all?', answer: '~all (softfail) suggests unauthorized senders should be treated with suspicion. -all (hardfail) says to reject unauthorized senders outright. ~all is safer during migration; -all provides stronger protection.'}
+        ]" />
+    {% endblock %}
+</twig:SectionContainer>
+{% endblock %}

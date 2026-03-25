@@ -11,6 +11,7 @@ use Doctrine\ORM\Event\PostPersistEventArgs;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
 use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\ORM\Events;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 #[AsDoctrineListener(event: Events::postPersist)]
@@ -23,6 +24,7 @@ final class DomainEventsSubscriber
     private array $events = [];
 
     public function __construct(
+        #[Target('event_bus')]
         private readonly MessageBusInterface $messageBus,
     ) {
     }

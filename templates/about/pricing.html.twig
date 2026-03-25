@@ -1,0 +1,21 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}Pricing — Sendvery Email Monitoring{% endblock %}
+{% block meta_description %}Sendvery pricing: self-host free forever. Hosted plans from $0/mo. 5 domains for $5.99/mo. AI insights add-on $3.99/mo. Simple, transparent pricing.{% endblock %}
+
+{% block content %}
+<twig:SectionContainer>
+    {% block content %}
+        <div class="text-center mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold">Simple, transparent pricing</h1>
+            <p class="mt-4 text-base-content/60 text-lg">Start free. Self-host free forever. Scale as you grow.</p>
+        </div>
+        <twig:PricingTable />
+
+        <div class="max-w-2xl mx-auto mt-16 text-center">
+            <h2 class="text-xl font-bold mb-4">Enterprise needs?</h2>
+            <p class="text-base-content/60">Custom domain limits, SLA, dedicated support, and custom integrations. <a href="mailto:jan.mikes@sendvery.com" class="link link-primary">Contact us</a>.</p>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+{% endblock %}

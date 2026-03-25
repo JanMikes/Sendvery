@@ -1,0 +1,69 @@
+<div class="card bg-base-100 border border-base-300 mt-6">
+    <div class="card-body">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="card-title text-lg">DMARC Results for <span class="font-mono text-primary">{{ domain }}</span></h3>
+            {% if result.isPassing %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'pass'} %}
+            {% elseif result.hasRecord %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'warning'} %}
+            {% else %}
+                {% include 'tools/_results/_status_badge.html.twig' with {status: 'fail'} %}
+            {% endif %}
+        </div>
+
+        {% if result.rawRecord %}
+            <div class="bg-base-200 rounded-lg p-4 mb-4">
+                <p class="text-xs text-base-content/50 mb-1">Raw DMARC Record</p>
+                <code class="text-sm font-mono break-all">{{ result.rawRecord }}</code>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Policy</div>
+                    <div class="stat-value text-lg {% if result.policy == 'reject' %}text-success{% elseif result.policy == 'quarantine' %}text-warning{% else %}text-error{% endif %}">{{ result.policy|default('Missing') }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Subdomain Policy</div>
+                    <div class="stat-value text-lg">{{ result.subdomainPolicy|default('Inherit') }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Percentage</div>
+                    <div class="stat-value text-lg">{{ result.pct is not null ? result.pct ~ '%' : '100%' }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg p-3">
+                    <div class="stat-title text-xs">Report Addresses</div>
+                    <div class="stat-value text-lg">{{ result.ruaAddresses|length }}</div>
+                </div>
+            </div>
+
+            {% if result.ruaAddresses is not empty %}
+                <div class="mb-3">
+                    <p class="text-sm font-medium mb-1">Aggregate reports (rua):</p>
+                    <div class="flex flex-wrap gap-2">
+                        {% for addr in result.ruaAddresses %}
+                            <span class="badge badge-outline badge-sm font-mono">{{ addr }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if result.rufAddresses is not empty %}
+                <div class="mb-3">
+                    <p class="text-sm font-medium mb-1">Forensic reports (ruf):</p>
+                    <div class="flex flex-wrap gap-2">
+                        {% for addr in result.rufAddresses %}
+                            <span class="badge badge-outline badge-sm font-mono">{{ addr }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="flex flex-wrap gap-4 text-sm text-base-content/60 mb-4">
+                <span>DKIM alignment: <strong>{{ result.adkim == 's' ? 'Strict' : 'Relaxed' }}</strong></span>
+                <span>SPF alignment: <strong>{{ result.aspf == 's' ? 'Strict' : 'Relaxed' }}</strong></span>
+            </div>
+        {% endif %}
+
+        {% include 'tools/_results/_issues.html.twig' with {issues: result.issues} %}
+    </div>
+</div>

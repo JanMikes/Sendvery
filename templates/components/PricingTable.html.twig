@@ -1,0 +1,104 @@
+{% props showComingSoon = true %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+    {# Self-Hosted (Free) #}
+    <div class="card bg-base-200/50 border border-base-300">
+        <div class="card-body">
+            <h3 class="card-title text-lg">Self-Hosted</h3>
+            <div class="mt-2">
+                <span class="text-3xl font-bold">Free</span>
+                <span class="text-base-content/50 text-sm"> forever</span>
+            </div>
+            <p class="text-sm text-base-content/60 mt-2">Run on your own infrastructure. All features included.</p>
+            <ul class="mt-4 space-y-2 text-sm">
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Unlimited domains</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> All features</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> AGPL-3.0 licensed</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Docker image</li>
+            </ul>
+            <div class="card-actions mt-6">
+                <a href="{{ path('about_open_source') }}" class="btn btn-outline btn-sm w-full">Learn more</a>
+            </div>
+        </div>
+    </div>
+
+    {# Free Hosted #}
+    <div class="card bg-base-200/50 border border-base-300">
+        <div class="card-body">
+            <h3 class="card-title text-lg">Free</h3>
+            <div class="mt-2">
+                <span class="text-3xl font-bold">$0</span>
+                <span class="text-base-content/50 text-sm">/month</span>
+            </div>
+            <p class="text-sm text-base-content/60 mt-2">Get started with 1 domain. No credit card required.</p>
+            <ul class="mt-4 space-y-2 text-sm">
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 1 domain</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> DMARC parsing</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Basic email digest</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 30-day retention</li>
+            </ul>
+            <div class="card-actions mt-6">
+                {% if showComingSoon %}
+                    <button class="btn btn-primary btn-sm w-full" disabled>Coming soon</button>
+                {% else %}
+                    <a href="#" class="btn btn-primary btn-sm w-full">Get started</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Personal #}
+    <div class="card bg-base-200/50 border-2 border-primary shadow-lg relative">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+            <span class="badge badge-primary badge-sm">Most popular</span>
+        </div>
+        <div class="card-body">
+            <h3 class="card-title text-lg">Personal</h3>
+            <div class="mt-2">
+                <span class="text-3xl font-bold">$5.99</span>
+                <span class="text-base-content/50 text-sm">/month</span>
+            </div>
+            <p class="text-sm text-base-content/60 mt-2">Full monitoring for up to 5 domains.</p>
+            <ul class="mt-4 space-y-2 text-sm">
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Up to 5 domains</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Real-time alerts</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Blacklist monitoring</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 1-year retention</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-base-content/30 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> <span class="text-base-content/50">AI Insights +$3.99/mo</span></li>
+            </ul>
+            <div class="card-actions mt-6">
+                {% if showComingSoon %}
+                    <button class="btn btn-primary btn-sm w-full" disabled>Coming soon</button>
+                {% else %}
+                    <a href="#" class="btn btn-primary btn-sm w-full">Start free trial</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Team #}
+    <div class="card bg-base-200/50 border border-base-300">
+        <div class="card-body">
+            <h3 class="card-title text-lg">Team</h3>
+            <div class="mt-2">
+                <span class="text-3xl font-bold">$49.99</span>
+                <span class="text-base-content/50 text-sm">/month</span>
+            </div>
+            <p class="text-sm text-base-content/60 mt-2">For teams managing many domains.</p>
+            <ul class="mt-4 space-y-2 text-sm">
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Up to 50 domains</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 10 team members</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> AI Insights included</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> API access</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Unlimited retention</li>
+            </ul>
+            <div class="card-actions mt-6">
+                {% if showComingSoon %}
+                    <button class="btn btn-primary btn-sm w-full" disabled>Coming soon</button>
+                {% else %}
+                    <a href="#" class="btn btn-primary btn-sm w-full">Start free trial</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

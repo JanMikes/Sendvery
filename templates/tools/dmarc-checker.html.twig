@@ -1,0 +1,153 @@
+{% extends 'tools/_tool_layout.html.twig' %}
+
+{% block title %}Free DMARC Record Checker — DMARC Lookup & Analyzer | Sendvery{% endblock %}
+{% block meta_description %}Check your DMARC record instantly. Analyze policy (none/quarantine/reject), verify reporting addresses, get actionable recommendations. Free DMARC checker.{% endblock %}
+
+{% block tool_structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "What is DMARC?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "DMARC (Domain-based Message Authentication, Reporting, and Conformance) is an email authentication protocol that builds on SPF and DKIM. It tells receiving servers what to do when authentication fails and sends you reports about who is sending email as your domain."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What does p=none mean in DMARC?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "p=none means monitoring only. Receiving servers will send you reports about authentication results but won't take any action against failing emails. It's a starting point, but attackers can still send email as your domain."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What is the difference between p=quarantine and p=reject?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "p=quarantine tells receiving servers to mark failing emails as suspicious (usually sent to spam). p=reject tells them to outright reject failing emails. Reject provides the strongest protection against domain spoofing."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What are rua and ruf in DMARC?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "rua specifies where aggregate DMARC reports should be sent (daily XML summaries). ruf specifies where forensic reports should be sent (individual failure details). At minimum, you should configure rua to receive aggregate reports."
+            }
+        }
+    ]
+}
+</script>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Tools", "item": "{{ url('tools_domain_health') }}"},
+        {"@type": "ListItem", "position": 3, "name": "DMARC Checker"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block breadcrumb_title %}DMARC Checker{% endblock %}
+{% block tool_title %}DMARC Record Checker{% endblock %}
+{% block tool_description %}Look up and analyze your DMARC record. Check your policy enforcement level, verify reporting addresses, and get recommendations for improvement.{% endblock %}
+{% block checker_url %}{{ path('tools_dmarc_checker') }}{% endblock %}
+
+{% block inline_results %}
+    {% include 'tools/_results/dmarc-results.html.twig' with {result: result, domain: domain} %}
+{% endblock %}
+
+{% block seo_content %}
+<twig:SectionContainer>
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">What is DMARC?</h2>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    DMARC (Domain-based Message Authentication, Reporting, and Conformance) is defined in <strong>RFC 7489</strong>. It builds on top of SPF and DKIM to provide a unified email authentication framework. DMARC does two critical things: it tells receiving servers what to do when SPF and DKIM fail, and it sends you reports about who is sending email as your domain.
+                </p>
+                <p>
+                    A DMARC record is a DNS TXT record published at <code class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-sm">_dmarc.yourdomain.com</code>. It specifies your policy (<code>p=</code>), where to send aggregate reports (<code>rua=</code>), and optional alignment requirements for SPF and DKIM.
+                </p>
+                <p>
+                    The three policy levels — <code>none</code>, <code>quarantine</code>, <code>reject</code> — represent increasing levels of enforcement. Most domains should aim to reach <code>p=reject</code>, but it's a journey that requires monitoring your DMARC reports first.
+                </p>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">Security risks & attack vectors</h2>
+            <div class="space-y-4">
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-error/5 border border-error/10">
+                    <svg class="w-6 h-6 text-error shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">p=none means no protection</h3>
+                        <p class="text-sm text-base-content/60 mt-1">Your DMARC policy says "none" — that means you're watching but not blocking. Attackers can still send email as your domain right now. Many domains stay on p=none indefinitely because nobody reads the reports.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">Reports going to an unmonitored mailbox</h3>
+                        <p class="text-sm text-base-content/60 mt-1">You set up rua= to a mailbox that nobody checks. DMARC reports pile up as unread XML files. You're generating data but gaining zero insight from it.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/5 border border-warning/10">
+                    <svg class="w-6 h-6 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <div>
+                        <h3 class="font-bold">pct set below 100%</h3>
+                        <p class="text-sm text-base-content/60 mt-1">If pct=25, your DMARC policy only applies to 25% of messages. The other 75% are unprotected. This is meant for gradual rollout but is often left at a low value permanently.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+<twig:SectionContainer>
+    {% block content %}
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold mb-6">The set-and-forget trap</h2>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    The most common DMARC failure is the domain that set up <code>p=none</code> years ago "to start monitoring" — and never moved beyond it. The DMARC reports arrive as XML attachments to an inbox nobody reads. Meanwhile, attackers send phishing emails as the domain with zero consequences.
+                </p>
+                <p>
+                    Even domains that reach <code>p=reject</code> need ongoing monitoring. New email services that aren't properly authorized will have their emails rejected. Changes to SPF or DKIM can break DMARC alignment without warning.
+                </p>
+                <p class="font-medium">
+                    Track your DMARC enforcement journey from p=none to p=reject. <a href="{{ path('home') }}#pricing" class="link link-primary">Join the Sendvery beta</a> for guided steps and automated report parsing.
+                </p>
+            </div>
+        </div>
+    {% endblock %}
+</twig:SectionContainer>
+
+<twig:SectionContainer bgClass="bg-base-200/50">
+    {% block content %}
+        <div class="text-center mb-8">
+            <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
+        </div>
+        <twig:FaqAccordion :items="[
+            {question: 'What is DMARC?', answer: 'DMARC builds on SPF and DKIM to tell receiving servers what to do when authentication fails. It also sends you reports about who is sending email as your domain, making unauthorized use visible.'},
+            {question: 'What does p=none mean?', answer: 'p=none means monitoring only. Receiving servers send you reports but take no action on failing emails. Attackers can still spoof your domain. It is a starting point, not a destination.'},
+            {question: 'What is the difference between quarantine and reject?', answer: 'p=quarantine sends failing emails to spam. p=reject blocks them entirely. Reject provides the strongest protection but requires confidence that all legitimate senders are properly authenticated.'},
+            {question: 'What are rua and ruf?', answer: 'rua=mailto:... tells receivers where to send aggregate XML reports (daily summaries). ruf=mailto:... requests forensic reports (individual failure details). At minimum, configure rua.'},
+            {question: 'How do I move from p=none to p=reject?', answer: 'First, analyze your DMARC reports to identify all legitimate senders. Ensure they pass SPF and DKIM with proper alignment. Then move to p=quarantine, monitor for issues, and finally p=reject.'}
+        ]" />
+    {% endblock %}
+</twig:SectionContainer>
+{% endblock %}
