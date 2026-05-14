@@ -92,9 +92,10 @@ final class BillingPagesTest extends WebTestCase
         $data['client']->request('GET', '/app/settings/billing');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'Upgrade Your Plan');
+        self::assertSelectorTextContains('body', 'Paid plans are in private beta');
         self::assertSelectorTextContains('body', 'Personal');
         self::assertSelectorTextContains('body', 'Team');
+        self::assertSelectorTextContains('body', 'Request beta access');
     }
 
     #[Test]
@@ -105,7 +106,7 @@ final class BillingPagesTest extends WebTestCase
         $data['client']->request('GET', '/app/settings/billing');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'Upgrade Your Plan');
+        self::assertSelectorTextContains('body', 'Paid plans are in private beta');
         self::assertSelectorTextContains('body', 'Team');
     }
 
@@ -253,7 +254,7 @@ final class BillingPagesTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('body', 'Domain limit reached');
-        self::assertSelectorTextContains('body', 'Upgrade plan');
+        self::assertSelectorTextContains('body', 'Request beta access');
     }
 
     #[Test]

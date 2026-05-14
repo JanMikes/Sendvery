@@ -32,12 +32,12 @@
                             <p class="text-sm font-medium">Domain limit reached ({{ domainCount }}/{{ maxDomains }})</p>
                             <p class="text-sm mt-1">
                                 {% if currentPlan.value == 'free' %}
-                                    Upgrade to Personal for up to 5 domains at $5.99/mo.
+                                    Personal plan ($5.99/mo, up to 5 domains) is in private beta — request access below.
                                 {% elseif currentPlan.value == 'personal' %}
-                                    Upgrade to Team for up to 50 domains at $49.99/mo.
+                                    Team plan ($49.99/mo, up to 50 domains) is in private beta — request access below.
                                 {% endif %}
                             </p>
-                            <a href="{{ path('dashboard_billing') }}" class="btn btn-sm btn-primary mt-2">Upgrade plan</a>
+                            <a href="{{ path('request_beta_access', {plan: currentPlan.value == 'free' ? 'personal' : 'team', source: 'dashboard-domain-add'}) }}" class="btn btn-sm btn-primary mt-2">Request beta access</a>
                         </div>
                     </div>
                 {% endif %}

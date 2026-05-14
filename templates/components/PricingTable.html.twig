@@ -1,3 +1,10 @@
+<div class="text-center mb-8">
+    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-warning/10 text-warning-content text-sm font-medium">
+        <span class="w-2 h-2 rounded-full bg-warning animate-pulse"></span>
+        Hosted plans are in private beta — request access below
+    </div>
+</div>
+
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
     {# Self-Hosted (Free) #}
     <div class="card bg-base-200/50 border border-base-300">
@@ -20,7 +27,7 @@
         </div>
     </div>
 
-    {# Free Hosted #}
+    {# Free Hosted — beta #}
     <div class="card bg-base-200/50 border border-base-300">
         <div class="card-body">
             <h3 class="card-title text-lg">Free</h3>
@@ -36,12 +43,12 @@
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 30-day retention</li>
             </ul>
             <div class="card-actions mt-6">
-                <a href="{{ path('auth_login') }}" class="btn btn-primary btn-sm w-full">Get started</a>
+                <a href="{{ path('beta_signup') }}" class="btn btn-outline btn-sm w-full">Join the wait list</a>
             </div>
         </div>
     </div>
 
-    {# Personal #}
+    {# Personal — beta access #}
     <div class="card bg-base-200/50 border-2 border-primary shadow-lg relative">
         <div class="absolute -top-3 left-1/2 -translate-x-1/2">
             <span class="badge badge-primary badge-sm">Most popular</span>
@@ -52,21 +59,21 @@
                 <span class="text-3xl font-bold">$5.99</span>
                 <span class="text-base-content/50 text-sm">/month</span>
             </div>
+            <p class="text-xs text-base-content/50">VAT included where applicable</p>
             <p class="text-sm text-base-content/60 mt-2">Full monitoring for up to 5 domains.</p>
             <ul class="mt-4 space-y-2 text-sm">
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Up to 5 domains</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Real-time alerts</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Blacklist monitoring</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 1-year retention</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-base-content/30 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> <span class="text-base-content/50">AI Insights +$3.99/mo</span></li>
             </ul>
             <div class="card-actions mt-6">
-                <a href="{{ path('auth_login') }}" class="btn btn-primary btn-sm w-full">Get started</a>
+                <a href="{{ path('request_beta_access', {plan: 'personal'}) }}" class="btn btn-primary btn-sm w-full">Request beta access</a>
             </div>
         </div>
     </div>
 
-    {# Team #}
+    {# Team — beta access #}
     <div class="card bg-base-200/50 border border-base-300">
         <div class="card-body">
             <h3 class="card-title text-lg">Team</h3>
@@ -74,6 +81,7 @@
                 <span class="text-3xl font-bold">$49.99</span>
                 <span class="text-base-content/50 text-sm">/month</span>
             </div>
+            <p class="text-xs text-base-content/50">VAT included where applicable</p>
             <p class="text-sm text-base-content/60 mt-2">For teams managing many domains.</p>
             <ul class="mt-4 space-y-2 text-sm">
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Up to 50 domains</li>
@@ -83,7 +91,7 @@
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Unlimited retention</li>
             </ul>
             <div class="card-actions mt-6">
-                <a href="{{ path('auth_login') }}" class="btn btn-primary btn-sm w-full">Get started</a>
+                <a href="{{ path('request_beta_access', {plan: 'team'}) }}" class="btn btn-primary btn-sm w-full">Request beta access</a>
             </div>
         </div>
     </div>

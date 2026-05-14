@@ -9,10 +9,10 @@ return App::config([
         'mailer' => [
             'dsn' => '%env(MAILER_DSN)%',
             'envelope' => [
-                'sender' => 'noreply@sendvery.com',
+                'sender' => 'robot@sendvery.com',
             ],
             'headers' => [
-                'From' => 'Sendvery <noreply@sendvery.com>',
+                'From' => 'Sendvery <robot@sendvery.com>',
             ],
         ],
     ],

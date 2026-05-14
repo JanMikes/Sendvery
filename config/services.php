@@ -36,6 +36,11 @@ return App::config([
                 '$stripeWebhookSecret' => '%env(STRIPE_WEBHOOK_SECRET)%',
             ],
         ],
+        'App\MessageHandler\SendBetaAccessNotification' => [
+            'arguments' => [
+                '$betaRequestsEmail' => '%env(BETA_REQUESTS_EMAIL)%',
+            ],
+        ],
     ],
     'when@test' => [
         'services' => [
