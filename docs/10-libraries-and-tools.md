@@ -19,26 +19,22 @@ Research into what exists that can do heavy lifting for Sendvery.
 
 ### IMAP / POP3 Client
 
-**Note on ext-imap:** Unbundled from PHP core in 8.4, moved to PECL. Still installable in Docker images via `pecl install imap`. Not a hard blocker, but pure PHP solutions are preferable to avoid PECL build dependencies.
+**Chosen:** `webklex/php-imap` ^6.2 (see DEC-049).
 
-**POP3 support is required** — some users may use POP3 mailboxes for DMARC reports.
+**Why webklex:** Pure-PHP IMAP (no `ext-imap` required in the Docker image), active maintenance, OAuth2 support for Gmail/Microsoft 365, IMAP IDLE for long-poll. We wrap it behind `App\Services\Mail\MailClient` so callers depend on an interface — swap the library or add a POP3 backend later without touching pollers.
+
+**POP3 status:** Not currently used by Sendvery. If a beta tester needs it, the cheapest path is to install `ext-imap` via PECL in the Dockerfile and re-evaluate switching to Horde/Imap_Client or barbushin/php-imap. Until then we don't pay the dependency cost.
+
+**Note on ext-imap:** Unbundled from PHP core in 8.4, moved to PECL. Still installable in Docker images via `pecl install imap`. We have not needed it so far.
 
 | Library | Stars | Status | Packagist | IMAP | POP3 | Needs ext-imap | Notes |
 |---------|-------|--------|-----------|------|------|---------------|-------|
-| **Webklex/php-imap** | 436 | Active (v6.2.0, Apr 2025) | webklex/php-imap | ✓ native | ✓ (needs ext-imap) | Only for POP3 | Pure PHP for IMAP. OAuth2. IMAP IDLE. |
-| **barbushin/php-imap** | 1,700+ | Active (v5.0.1) | php-imap/php-imap | ✓ | ✓ | Yes (all) | Mature, well-known. IMAP + POP3 + NNTP. Requires ext-imap for everything. |
-| **Horde/Imap_Client** | — | Active | horde/imap-client | ✓ native | ✓ native | No | Most feature-complete. Fully native PHP for both IMAP and POP3. Enterprise-grade (used by Horde groupware for decades). |
+| **Webklex/php-imap** *(in use)* | 436 | Active (v6.2.0, Apr 2025) | webklex/php-imap | ✓ native | ✓ (needs ext-imap) | Only for POP3 | Pure PHP for IMAP. OAuth2. IMAP IDLE. |
+| barbushin/php-imap | 1,700+ | Active (v5.0.1) | php-imap/php-imap | ✓ | ✓ | Yes (all) | Mature, well-known. IMAP + POP3 + NNTP. Requires ext-imap for everything. |
+| Horde/Imap_Client | — | Active | horde/imap-client | ✓ native | ✓ native | No | Most feature-complete. Fully native PHP for both IMAP and POP3. Enterprise-grade (used by Horde groupware for decades). |
 | ddeboer/imap | 916 | Active (Dec 2025) | ddeboer/imap | ✓ | ✗ | Yes | Well-tested but IMAP only, requires ext-imap. |
 | phpfui/php-imap | — | Active (v0.5.1, Feb 2026) | phpfui/php-imap | ✓ | ✓ | Falls back | Drop-in replacement for imap_* functions. PHP 8.2+. Uses ext-imap if available, native otherwise. |
 | bartv2/imap-bundle | — | Active | bartv2/imap-bundle | ✓ | ? | ? | Symfony 8.0 bundle. Less documented. |
-
-**Recommendation — decide during vibecoding, but top candidates:**
-
-1. **Horde/Imap_Client** — best choice if we want both IMAP and POP3 without ext-imap. Most mature native PHP implementation. Downside: heavier dependency tree (Horde ecosystem).
-2. **Webklex/php-imap + ext-imap in Docker** — use Webklex for IMAP (pure PHP), install ext-imap via PECL in Docker for POP3 fallback. Pragmatic approach.
-3. **barbushin/php-imap (php-imap/php-imap) + ext-imap in Docker** — proven library, IMAP + POP3, just needs PECL ext-imap installed in the Docker image. Simple and battle-tested.
-
-Since we control the Docker image, installing ext-imap from PECL is a one-liner in the Dockerfile. This makes barbushin/php-imap or Webklex viable even on PHP 8.5. The "no ext-imap" advantage matters less in Docker than on shared hosting.
 
 ### SPF Validation
 

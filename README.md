@@ -35,8 +35,10 @@ git clone https://github.com/janmikes/sendvery.git
 cd sendvery
 cp .env .env.local
 # Edit .env.local with your settings (DATABASE_URL, MAILER_DSN, etc.)
-docker compose -f compose.production.yaml up -d
+docker compose up -d
 ```
+
+The hosted production deployment uses a separate compose file maintained alongside the deploy script in `~/www/spare.srv/deployment/sendvery/`. Self-hosters use the `docker-compose.yml` in this repo and supply env vars via `.env.local`.
 
 ### Environment Variables
 
@@ -46,8 +48,9 @@ docker compose -f compose.production.yaml up -d
 | `APP_SECRET` | Symfony secret (generate random) | Yes |
 | `MAILER_DSN` | Email sending DSN (smtp://...) | Yes |
 | `DEFAULT_URI` | Your app's public URL | Yes |
-| `ENCRYPTION_KEY` | Key for IMAP credential encryption | Yes |
-| `STRIPE_SECRET_KEY` | Stripe API key (optional for self-hosted) | No |
+| `ENCRYPTION_KEY` | Key for IMAP credential encryption (base64-encoded 32 bytes) | Yes |
+| `BETA_REQUESTS_EMAIL` | Where the beta access request form sends notifications | Yes |
+| `STRIPE_SECRET_KEY` | Stripe API key (only when paid plans are enabled) | No |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook secret | No |
 | `SENTRY_DSN` | Sentry error tracking DSN | No |
 

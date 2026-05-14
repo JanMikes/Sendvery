@@ -419,6 +419,30 @@ Track key decisions, their rationale, and any alternatives considered.
 **Alternatives considered:** Separate test database per run, no mutation testing initially
 **Impact:** Test infrastructure, CI pipeline, development workflow
 
+### DEC-049: IMAP library — webklex/php-imap
+**Date:** 2026-05-14
+**Status:** Decided
+**Decision:** Use `webklex/php-imap` ^6.2 as the IMAP client library. POP3 is not used by Sendvery in the current iteration.
+**Rationale:** Pure-PHP IMAP (no `ext-imap` needed in the Docker image), active maintenance, OAuth2 support for Gmail/Microsoft 365, IMAP IDLE for long-poll mailboxes. Wrapped behind `App\Services\Mail\MailClient` interface so a different library or POP3 backend can be swapped in later without touching callers.
+**Alternatives considered:** Horde/Imap_Client (heavier dep tree), barbushin/php-imap (requires `ext-imap`).
+**Impact:** Mailbox polling pipeline, OAuth flow for hosted Gmail/Microsoft connections.
+
+### DEC-050: Fake-door Stripe — beta access request form
+**Date:** 2026-05-14
+**Status:** Decided
+**Decision:** Replace the Stripe checkout CTAs on the pricing page and dashboard billing with a beta access request contact form (`/request-access`). The form persists a `BetaAccessRequest` entity and sends an email notification to `BETA_REQUESTS_EMAIL` (default `jan.mikes@sendvery.com`) plus an acknowledgement to the requester via Symfony Mailer. All existing Stripe code (`SubscriptionManager`, `PlanEnforcement`, webhook controller, upgrade/manage controllers, billing routes) is left in place so the switch is one PR away.
+**Rationale:** Sendvery is not yet ready for paid customers — better to validate plan demand and qualify leads than to take card details we may not be able to honor. The "request access" framing communicates limited beta capacity honestly while still letting us collect signal on which plan visitors actually want. Implementation reuses the project's CQRS + domain-events pattern (entity → command → event → notification handler) for consistency.
+**Alternatives considered:** Show "Coming soon" with no form (loses lead capture); send to `mailto:` link (no persistence, no record); keep Stripe live and absorb refund risk; gate behind invite codes (more friction).
+**Impact:** Pricing page CTAs, dashboard billing page, domain-limit-reached banner, marketing copy. See `docs/12-fake-door-stripe.md` for the runbook on switching Stripe back on.
+
+### DEC-051: Free DNS-based blacklists only
+**Date:** 2026-05-14
+**Status:** Decided
+**Decision:** Blacklist monitoring uses **free public DNS RBLs only** — Spamhaus ZEN, Barracuda BRBL, SORBS, SpamCop. No paid services (Talos Intelligence, SenderScore, MultiRBL.valli.org commercial tiers).
+**Rationale:** Free RBLs already cover the lists ESPs actually consult when deciding to deliver. Paid intelligence feeds are most valuable for security-operations teams, which is not Sendvery's audience. Avoids per-domain API costs that would erode margin on the $5.99 Personal plan. Re-evaluate if (a) RBL operators start rate-limiting us, or (b) users specifically request paid feeds.
+**Alternatives considered:** Commercial multi-RBL APIs (MXToolbox, MultiRBL paid), Talos Intelligence reputation.
+**Impact:** `App\Services\BlacklistChecker` implementation, pricing structure (no need for a blacklist-API-costs line item), Phase 2 launch scope.
+
 ---
 
 *Add new decisions above this line*

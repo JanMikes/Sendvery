@@ -1,6 +1,10 @@
 # Monetization & Marketing Strategy
 
-**Last updated:** 2026-03-24
+**Last updated:** 2026-05-14
+
+> **Current state (May 2026):** Hosted paid plans are **not yet open for self-serve checkout**. The pricing page advertises tiers but the upgrade CTAs lead to `/request-access` — a contact form that captures lead details (name, email, requested plan, domain count, free-text message), persists a `BetaAccessRequest` entity, and emails `jan.mikes@sendvery.com`. Stripe code (`SubscriptionManager`, `PlanEnforcement`, webhook controller, billing/upgrade/manage routes) is fully implemented and tested — it's gated by the absence of UI links, not by feature flags. See `docs/12-fake-door-stripe.md` for the switch-back runbook and DEC-050 for the rationale.
+>
+> **Price display policy:** all advertised hosted prices are USD and shown as "VAT included where applicable". Jan is OSVČ in CZ and below the VAT threshold, so we collect a flat sticker price and do not break out VAT. If we cross the CZ threshold or expand to EU B2C scale, enable Stripe Tax + OSS at that point (no code changes required).
 
 ## Pricing Model
 
