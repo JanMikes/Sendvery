@@ -21,17 +21,17 @@
                placeholder="Enter your domain (e.g. example.com)"
                class="input input-bordered join-item flex-1 bg-base-100 focus:outline-primary"
                aria-label="Domain name"
-               data-loading="addAttr:disabled">
+               data-loading="addAttribute(disabled)">
         <button type="button"
                 data-action="live#action"
                 data-live-action-param="check"
                 class="btn btn-primary join-item"
-                data-loading="addAttr:disabled">
-            <span data-loading="addClass:hidden">
+                data-loading="addAttribute(disabled)">
+            <span data-loading="addClass(hidden)">
                 <svg class="w-5 h-5 mr-1 inline-block align-text-bottom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 Check
             </span>
-            <span class="hidden" data-loading="removeClass:hidden">
+            <span class="hidden" data-loading="removeClass(hidden)">
                 <span class="loading loading-spinner loading-sm mr-2 align-middle"></span>
                 Checking…
             </span>
@@ -47,6 +47,6 @@
                placeholder="DKIM selector (optional — leave empty to try common selectors)"
                class="input input-bordered w-full bg-base-100 focus:outline-primary text-sm"
                aria-label="DKIM selector"
-               data-loading="addAttr:disabled">
+               data-loading="addAttribute(disabled)">
     {% endif %}
 </div>

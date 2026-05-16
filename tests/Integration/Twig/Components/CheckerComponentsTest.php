@@ -92,4 +92,46 @@ final class CheckerComponentsTest extends WebTestCase
         self::assertStringContainsString('keydown.enter->live#action', $inputAction, 'Input must trigger check on Enter');
         self::assertStringContainsString(':prevent', $inputAction, 'Enter handler must preventDefault');
     }
+
+    /**
+     * v3 of ux-live-component requires the parentheses syntax for data-loading
+     * directives — `addClass(foo)` / `removeClass(foo)` / `addAttribute(foo)`.
+     * The colon shorthand (`addClass:foo`) is rejected by parseDirectives,
+     * which makes the live controller throw during init — net effect on the
+     * page: NO action handlers attach and clicks do nothing. This regressed
+     * silently once already; this test pins the correct syntax so any future
+     * regression breaks CI instead of just breaking production UX.
+     */
+    #[Test]
+    public function checkerTemplatesUseValidDataLoadingSyntax(): void
+    {
+        $templatesDir = \dirname(__DIR__, 4).'/templates/components';
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($templatesDir, \RecursiveDirectoryIterator::SKIP_DOTS),
+        );
+
+        $offenders = [];
+        /** @var \SplFileInfo $file */
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || 'twig' !== $file->getExtension()) {
+                continue;
+            }
+
+            $contents = file_get_contents($file->getPathname());
+            self::assertIsString($contents);
+
+            // Match `data-loading="<action>:<arg>"` — invalid colon syntax.
+            if (preg_match_all('/data-loading="(addClass|removeClass|addAttribute|removeAttribute|addAttr|removeAttr)[:][^"]+"/', $contents, $matches, \PREG_OFFSET_CAPTURE) > 0) {
+                $offenders[$file->getFilename()] = array_column($matches[0], 0);
+            }
+        }
+
+        self::assertSame(
+            [],
+            $offenders,
+            "data-loading attribute uses invalid colon syntax (v3 requires parentheses).\n".
+            "Fix: change `addClass:foo` -> `addClass(foo)`, `addAttr:foo` -> `addAttribute(foo)`, etc.\n".
+            'Offenders: '.json_encode($offenders, \JSON_PRETTY_PRINT),
+        );
+    }
 }

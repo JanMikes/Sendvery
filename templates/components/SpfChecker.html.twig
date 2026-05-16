@@ -1,13 +1,13 @@
-<div {{ attributes }} data-loading="addClass:opacity-95">
+<div {{ attributes }} data-loading="addClass(opacity-95)">
     {% include 'components/_CheckerForm.html.twig' with {domain: this.domain} %}
 
     {# Loading skeleton — visible only while the LiveAction is in flight #}
-    <div class="hidden" data-loading="removeClass:hidden">
+    <div class="hidden" data-loading="removeClass(hidden)">
         {% include 'components/_CheckerSkeleton.html.twig' %}
     </div>
 
     {% if this.result %}
-        <div data-loading="addClass:hidden">
+        <div data-loading="addClass(hidden)">
             {% include 'tools/_results/spf-results.html.twig' with {result: this.result, domain: this.domain} %}
         </div>
     {% endif %}

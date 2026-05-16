@@ -1,14 +1,14 @@
-<div {{ attributes }} class="w-full max-w-xl mx-auto" data-loading="addClass:opacity-95">
+<div {{ attributes }} class="w-full max-w-xl mx-auto" data-loading="addClass(opacity-95)">
     {% include 'components/_CheckerForm.html.twig' with {domain: this.domain} %}
 
     <p class="text-center text-sm text-base-content/50 mt-3">Free, instant results. No signup required.</p>
 
-    <div class="hidden" data-loading="removeClass:hidden">
+    <div class="hidden" data-loading="removeClass(hidden)">
         {% include 'components/_CheckerSkeleton.html.twig' %}
     </div>
 
     {% if this.result %}
-        <div data-loading="addClass:hidden">
+        <div data-loading="addClass(hidden)">
             {% include 'tools/_results/home-checker-results.html.twig' with {
                 result: this.result,
                 healthScore: this.healthScore,
