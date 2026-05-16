@@ -60,23 +60,36 @@ final class CheckerComponentsTest extends WebTestCase
     }
 
     /**
-     * End-to-end: rendered markup must wire the submit event to the live
-     * controller. Earlier bug — `data-action` relied on Stimulus' default-event
-     * detection, which silently failed in some browsers; this test pins the
-     * explicit `submit->live#action:prevent` form to prevent regression.
+     * End-to-end: rendered markup must NOT use a <form> element for the checker
+     * widget. Root cause of an earlier prod bug: Turbo Drive intercepts form
+     * submissions and beats Stimulus' preventDefault, so submitting the checker
+     * form did a native GET to the current URL (redirect to `/?domain=…`) with
+     * no AJAX. Fix: bind `live#action` to the button click + input Enter key,
+     * with no <form> wrapper. This test pins both halves of the contract.
      */
     #[Test]
-    public function homeDomainCheckerWiresExplicitSubmitEvent(): void
+    public function homeDomainCheckerWiresButtonClickAndEnterKey(): void
     {
         $client = self::createClient();
         $client->request('GET', '/');
 
         $crawler = $client->getCrawler();
-        $form = $crawler->filter('form[data-live-action-param="check"]');
-        self::assertGreaterThan(0, $form->count(), 'Homepage must contain a checker form');
 
-        $action = (string) $form->attr('data-action');
-        self::assertStringContainsString('submit->live#action', $action, 'Form must explicitly bind to submit event');
-        self::assertStringContainsString(':prevent', $action, 'Form submission must call preventDefault');
+        $widget = $crawler->filter('[data-live-name-value="HomeDomainChecker"]');
+        self::assertGreaterThan(0, $widget->count(), 'Homepage must contain the HomeDomainChecker live component');
+
+        // No <form> inside the checker widget — that's the whole point.
+        self::assertCount(0, $widget->filter('form'), 'Checker widget must not use a <form> element (Turbo intercepts submissions)');
+
+        $button = $widget->filter('button[data-live-action-param="check"]');
+        self::assertGreaterThan(0, $button->count(), 'Checker widget must have a button bound to the check action');
+        self::assertSame('button', $button->attr('type'), 'Button must be type="button" so no implicit form submission occurs');
+        self::assertStringContainsString('live#action', (string) $button->attr('data-action'));
+
+        $input = $widget->filter('input[data-model*="domain"]');
+        self::assertGreaterThan(0, $input->count(), 'Checker widget must have a domain input');
+        $inputAction = (string) $input->attr('data-action');
+        self::assertStringContainsString('keydown.enter->live#action', $inputAction, 'Input must trigger check on Enter');
+        self::assertStringContainsString(':prevent', $inputAction, 'Enter handler must preventDefault');
     }
 }

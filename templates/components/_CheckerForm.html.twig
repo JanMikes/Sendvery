@@ -7,17 +7,24 @@
 #}
 {% set showSelector = showSelector|default(false) %}
 
-<form data-action="submit->live#action:prevent" data-live-action-param="check" class="space-y-3">
+{# Intentionally NOT a <form>: Turbo Drive intercepts form submissions and
+   reliably defeats Stimulus' preventDefault on submit (root cause of the
+   "redirect with ?domain=… and no AJAX" bug). With a plain div + button
+   click + Enter keydown, the LiveAction is the only handler in the chain. #}
+<div class="space-y-3">
     <div class="join w-full shadow-lg">
         <input type="text"
-               name="domain"
                data-model="norender|domain"
+               data-action="keydown.enter->live#action:prevent"
+               data-live-action-param="check"
                value="{{ domain|default('') }}"
                placeholder="Enter your domain (e.g. example.com)"
                class="input input-bordered join-item flex-1 bg-base-100 focus:outline-primary"
                aria-label="Domain name"
                data-loading="addAttr:disabled">
-        <button type="submit"
+        <button type="button"
+                data-action="live#action"
+                data-live-action-param="check"
                 class="btn btn-primary join-item"
                 data-loading="addAttr:disabled">
             <span data-loading="addClass:hidden">
@@ -33,12 +40,13 @@
 
     {% if showSelector %}
         <input type="text"
-               name="selector"
                data-model="norender|selector"
+               data-action="keydown.enter->live#action:prevent"
+               data-live-action-param="check"
                value="{{ selector|default('') }}"
                placeholder="DKIM selector (optional — leave empty to try common selectors)"
                class="input input-bordered w-full bg-base-100 focus:outline-primary text-sm"
                aria-label="DKIM selector"
                data-loading="addAttr:disabled">
     {% endif %}
-</form>
+</div>

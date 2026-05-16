@@ -18,8 +18,11 @@ final class ToolPagesTest extends WebTestCase
         $crawler = $client->request('GET', $url);
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorExists('input[name="domain"]');
-        self::assertSelectorExists('button[type="submit"]');
+        // Checker widgets are Live Components (no <form>, no submit button) —
+        // see CheckerComponentsTest for the rationale. Look for the LiveProp-bound
+        // domain input and the click-triggered action button.
+        self::assertSelectorExists('input[data-model*="domain"]');
+        self::assertSelectorExists('button[data-live-action-param="check"]');
     }
 
     #[Test]
@@ -118,7 +121,7 @@ final class ToolPagesTest extends WebTestCase
         $client = self::createClient();
         $crawler = $client->request('GET', '/tools/dkim-checker');
 
-        self::assertSelectorExists('input[name="selector"]');
+        self::assertSelectorExists('input[data-model*="selector"]');
     }
 
     #[Test]
