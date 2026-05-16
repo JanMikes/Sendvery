@@ -58,4 +58,25 @@ final class CheckerComponentsTest extends WebTestCase
         self::assertNull($instance->result);
         self::assertFalse($instance->unresolved);
     }
+
+    /**
+     * End-to-end: rendered markup must wire the submit event to the live
+     * controller. Earlier bug — `data-action` relied on Stimulus' default-event
+     * detection, which silently failed in some browsers; this test pins the
+     * explicit `submit->live#action:prevent` form to prevent regression.
+     */
+    #[Test]
+    public function homeDomainCheckerWiresExplicitSubmitEvent(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/');
+
+        $crawler = $client->getCrawler();
+        $form = $crawler->filter('form[data-live-action-param="check"]');
+        self::assertGreaterThan(0, $form->count(), 'Homepage must contain a checker form');
+
+        $action = (string) $form->attr('data-action');
+        self::assertStringContainsString('submit->live#action', $action, 'Form must explicitly bind to submit event');
+        self::assertStringContainsString(':prevent', $action, 'Form submission must call preventDefault');
+    }
 }
