@@ -23,34 +23,8 @@
             <p class="mt-4 text-base-content/60 text-lg">{% block tool_description %}{% endblock %}</p>
         </div>
 
-        <div class="max-w-2xl mx-auto mt-10" {{ stimulus_controller('dns-checker', { url: block('checker_url') }) }}>
-            <form {{ stimulus_action('dns-checker', 'submit', 'submit') }}>
-                {% block checker_form %}
-                    <div class="join w-full shadow-lg">
-                        <input type="text"
-                               name="domain"
-                               placeholder="Enter your domain (e.g. example.com)"
-                               value="{{ domain|default('') }}"
-                               class="input input-bordered join-item flex-1 bg-base-100 focus:outline-primary"
-                               aria-label="Domain name"
-                               {{ stimulus_target('dns-checker', 'input') }}>
-                        <button type="submit" class="btn btn-primary join-item" {{ stimulus_target('dns-checker', 'submitBtn') }}>
-                            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                            Check
-                        </button>
-                    </div>
-                {% endblock %}
-                <div class="text-center mt-3">
-                    <span class="loading loading-spinner loading-sm text-primary hidden" {{ stimulus_target('dns-checker', 'spinner') }}></span>
-                    <p class="text-error text-sm hidden" {{ stimulus_target('dns-checker', 'error') }}></p>
-                </div>
-            </form>
-
-            <div {{ stimulus_target('dns-checker', 'results') }} class="{% if result is not defined or result is null %}hidden{% endif %}">
-                {% if result is defined and result is not null %}
-                    {% block inline_results %}{% endblock %}
-                {% endif %}
-            </div>
+        <div class="max-w-2xl mx-auto mt-10">
+            {% block checker_card %}{% endblock %}
         </div>
     </div>
 </section>

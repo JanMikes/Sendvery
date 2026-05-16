@@ -60,11 +60,8 @@
 {% block breadcrumb_title %}Email Auth Checker{% endblock %}
 {% block tool_title %}Email Authentication Checker{% endblock %}
 {% block tool_description %}Check SPF, DKIM, and DMARC in one go. Verify alignment, detect inconsistencies between protocols, and get a complete authentication overview.{% endblock %}
-{% block checker_url %}{{ path('tools_email_auth_checker') }}{% endblock %}
 
-{% block inline_results %}
-    {% include 'tools/_results/email-auth-results.html.twig' with {result: result, healthScore: healthScore, domain: domain} %}
-{% endblock %}
+{% block checker_card %}<twig:EmailAuthChecker />{% endblock %}
 
 {% block seo_content %}
 <twig:SectionContainer>

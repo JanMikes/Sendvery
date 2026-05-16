@@ -1,0 +1,13 @@
+<div {{ attributes }} data-loading="addClass:opacity-95">
+    {% include 'components/_CheckerForm.html.twig' with {domain: this.domain} %}
+
+    <div class="hidden" data-loading="removeClass:hidden">
+        {% include 'components/_CheckerSkeleton.html.twig' %}
+    </div>
+
+    {% if this.result %}
+        <div data-loading="addClass:hidden">
+            {% include 'tools/_results/mx-results.html.twig' with {result: this.result, domain: this.domain} %}
+        </div>
+    {% endif %}
+</div>

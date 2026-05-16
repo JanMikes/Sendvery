@@ -62,10 +62,10 @@
         <div class="max-w-3xl mx-auto text-center">
             <h1 class="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight">Blacklist Checker</h1>
             <p class="mt-4 text-base-content/60 text-lg">Check if your domain or IP address is listed on any major email blacklist. Scan against Spamhaus, Barracuda, SORBS, and more.</p>
-            <div class="mt-10 max-w-xl mx-auto">
-                <p class="text-base-content/60 mb-4">Enter an IP address to check against major blacklists.</p>
-                <a href="{{ path('auth_login') }}" class="btn btn-primary">Get started free</a>
-            </div>
+        </div>
+
+        <div class="max-w-2xl mx-auto mt-10">
+            <twig:BlacklistChecker />
         </div>
     </div>
 </section>

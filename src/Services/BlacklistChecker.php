@@ -20,6 +20,27 @@ final readonly class BlacklistChecker
         'dnsbl.dronebl.org',
     ];
 
+    /**
+     * Accepts a domain or IP. Resolves a domain to its A record before checking.
+     * Returns null when the host cannot be resolved.
+     */
+    public function checkHostOrIp(string $hostOrIp): ?BlacklistResult
+    {
+        $hostOrIp = trim($hostOrIp);
+
+        if (false !== filter_var($hostOrIp, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4)) {
+            return $this->check($hostOrIp);
+        }
+
+        $ip = gethostbyname($hostOrIp);
+
+        if ($ip === $hostOrIp || false === filter_var($ip, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4)) {
+            return null;
+        }
+
+        return $this->check($ip);
+    }
+
     public function check(string $ipAddress): BlacklistResult
     {
         $reversedIp = implode('.', array_reverse(explode('.', $ipAddress)));

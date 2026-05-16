@@ -68,11 +68,8 @@
 {% block breadcrumb_title %}SPF Checker{% endblock %}
 {% block tool_title %}SPF Record Checker{% endblock %}
 {% block tool_description %}Look up and validate your SPF record. Check syntax, count DNS lookups against the 10-lookup limit, and detect misconfigurations that could break your email delivery.{% endblock %}
-{% block checker_url %}{{ path('tools_spf_checker') }}{% endblock %}
 
-{% block inline_results %}
-    {% include 'tools/_results/spf-results.html.twig' with {result: result, domain: domain} %}
-{% endblock %}
+{% block checker_card %}<twig:SpfChecker />{% endblock %}
 
 {% block seo_content %}
 {# What is SPF #}

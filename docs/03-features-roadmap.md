@@ -19,6 +19,7 @@
   - `/tools/dmarc-checker` — DMARC record lookup + "What is DMARC?" explainer + FAQ
   - `/tools/email-auth-checker` — combined all-in-one check
   - `/tools/dns-monitoring` — DNS record change monitoring explainer + "enter domain to see current records" + CTA for ongoing monitoring alerts
+    - [ ] **TODO:** the interactive part is auth-only by nature. A one-shot DNS snapshot has no value without history to diff against, and persisting per-visitor snapshots in the public tool would duplicate the authenticated `MonitoredDomain → DnsSnapshot` flow. Current `/tools/dns-monitoring` page is intentionally a marketing CTA pointing to sign-in. When the authenticated snapshot/diff UI lands in the dashboard, link to it from this page.
   - `/tools/mx-checker` — MX record lookup + mail server connectivity check + TLS verification
   - `/tools/blacklist-checker` — check if domain/IP is on any major blacklists (Spamhaus, Barracuda, SORBS, etc.)
   - `/tools/domain-health` — all-in-one domain health report card (A-F grade), shareable URL, combines all checks

@@ -1,0 +1,18 @@
+<div {{ attributes }} data-loading="addClass:opacity-95">
+    {% include 'components/_CheckerForm.html.twig' with {domain: this.domain} %}
+
+    <div class="hidden" data-loading="removeClass:hidden">
+        {% include 'components/_CheckerSkeleton.html.twig' %}
+    </div>
+
+    {% if this.unresolved %}
+        <div class="alert alert-warning mt-6" data-loading="addClass:hidden">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>Could not resolve <code class="font-mono">{{ this.domain }}</code> to an IPv4 address. Try a different host or use the IP directly.</span>
+        </div>
+    {% elseif this.result %}
+        <div data-loading="addClass:hidden">
+            {% include 'tools/_results/blacklist-results.html.twig' with {result: this.result, domain: this.domain} %}
+        </div>
+    {% endif %}
+</div>

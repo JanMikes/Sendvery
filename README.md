@@ -85,6 +85,16 @@ docker compose exec app composer install
 docker compose exec app bin/console doctrine:migrations:migrate --no-interaction
 ```
 
+### Port conflicts
+
+The compose stack publishes ports `80` (app), `5432` (Postgres), and `8026` (Mailpit) by default. If another project on your host already holds one of these, override the mapping inline:
+
+```bash
+WEB_PORT=8081 DATABASE_PORT=5433 MAILPIT_PORT=8027 docker compose up -d
+```
+
+Or `export` those vars in your shell profile.
+
 ### Running Tests
 
 ```bash
