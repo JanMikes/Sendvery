@@ -10,15 +10,15 @@ use PHPUnit\Framework\TestCase;
 /**
  * Guards a hard project convention: ALL Symfony config is PHP, never YAML.
  *
- * The production Dockerfile does `find config -name "*.yaml" -delete` to remove
- * any YAML configs that Flex recipes drop in (the project standardised on PHP via
- * App::config()). Any YAML file shipped by a recipe that we forget to convert
- * gets silently deleted in the prod image, leaving broken routes / configs that
- * pass in dev and test but blow up in production.
+ * The project standardised on PHP via `App::config()` — every package is
+ * configured through `config/packages/*.php` and routes through
+ * `config/routes/*.php`. Flex recipes occasionally drop YAML files (e.g. the
+ * symfony/ux-live-component recipe ships `config/routes/ux_live_component.yaml`).
  *
- * Tests run against the source tree, so the YAML is still there during testing —
- * this guard fails CI the moment a recipe adds a YAML config, forcing us to
- * convert it to PHP before merging.
+ * This test fires the moment any such file lands, forcing conversion to PHP
+ * before merge. An earlier "fix" deleted YAML at Docker-build time with a
+ * `find -delete` — that silently broke production when a recipe-shipped route
+ * was nuked. We removed the prune; this test is now the only enforcement.
  */
 final class NoYamlConfigTest extends TestCase
 {
