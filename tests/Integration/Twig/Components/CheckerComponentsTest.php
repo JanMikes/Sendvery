@@ -60,12 +60,11 @@ final class CheckerComponentsTest extends WebTestCase
     }
 
     /**
-     * End-to-end: rendered markup must NOT use a <form> element for the checker
-     * widget. Root cause of an earlier prod bug: Turbo Drive intercepts form
-     * submissions and beats Stimulus' preventDefault, so submitting the checker
-     * form did a native GET to the current URL (redirect to `/?domain=…`) with
-     * no AJAX. Fix: bind `live#action` to the button click + input Enter key,
-     * with no <form> wrapper. This test pins both halves of the contract.
+     * Rendered markup contract for the checker widget: no <form>, a button with
+     * data-action="live#action", and an input that triggers the same action on
+     * Enter. This pattern matches the Live Component v3 docs example and keeps
+     * the LiveAction the only handler in the chain (no submit semantics to
+     * intercept, no implicit form posts).
      */
     #[Test]
     public function homeDomainCheckerWiresButtonClickAndEnterKey(): void
@@ -78,8 +77,7 @@ final class CheckerComponentsTest extends WebTestCase
         $widget = $crawler->filter('[data-live-name-value="HomeDomainChecker"]');
         self::assertGreaterThan(0, $widget->count(), 'Homepage must contain the HomeDomainChecker live component');
 
-        // No <form> inside the checker widget — that's the whole point.
-        self::assertCount(0, $widget->filter('form'), 'Checker widget must not use a <form> element (Turbo intercepts submissions)');
+        self::assertCount(0, $widget->filter('form'), 'Checker widget must not use a <form> element');
 
         $button = $widget->filter('button[data-live-action-param="check"]');
         self::assertGreaterThan(0, $button->count(), 'Checker widget must have a button bound to the check action');
@@ -132,6 +130,32 @@ final class CheckerComponentsTest extends WebTestCase
             "data-loading attribute uses invalid colon syntax (v3 requires parentheses).\n".
             "Fix: change `addClass:foo` -> `addClass(foo)`, `addAttr:foo` -> `addAttribute(foo)`, etc.\n".
             'Offenders: '.json_encode($offenders, \JSON_PRETTY_PRINT),
+        );
+    }
+
+    /**
+     * `import '@symfony/stimulus-bundle';` is a NO-OP — the bundle's loader only
+     * exports `startStimulusApp` / `loadControllers`, it does not auto-start.
+     * Without an explicit `startStimulusApp()` call the Stimulus application
+     * never boots, no controllers register, and every Live Component on the
+     * site silently does nothing on click. That's exactly the bug this test
+     * exists to prevent.
+     */
+    #[Test]
+    public function appJsActuallyStartsStimulus(): void
+    {
+        $appJs = file_get_contents(\dirname(__DIR__, 4).'/assets/app.js');
+        self::assertIsString($appJs);
+
+        self::assertMatchesRegularExpression(
+            '/import\s*\{\s*startStimulusApp\s*\}\s*from\s*[\'"]@symfony\/stimulus-bundle[\'"]/',
+            $appJs,
+            'assets/app.js must import startStimulusApp from @symfony/stimulus-bundle',
+        );
+        self::assertMatchesRegularExpression(
+            '/startStimulusApp\s*\(\s*\)/',
+            $appJs,
+            'assets/app.js must call startStimulusApp() — a bare `import "@symfony/stimulus-bundle"` does NOT auto-start Stimulus and silently breaks every Live Component',
         );
     }
 }

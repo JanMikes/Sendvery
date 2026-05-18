@@ -7,10 +7,9 @@
 #}
 {% set showSelector = showSelector|default(false) %}
 
-{# Intentionally NOT a <form>: Turbo Drive intercepts form submissions and
-   reliably defeats Stimulus' preventDefault on submit (root cause of the
-   "redirect with ?domain=… and no AJAX" bug). With a plain div + button
-   click + Enter keydown, the LiveAction is the only handler in the chain. #}
+{# No <form> wrapper: a plain div + button click + Enter keydown is the
+   minimal pattern that mirrors the upstream Live Component docs example
+   (one button, type="button", data-action="live#action"). #}
 <div class="space-y-3">
     <div class="join w-full shadow-lg">
         <input type="text"

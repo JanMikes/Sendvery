@@ -1,2 +1,4 @@
 import './styles/app.css';
-import '@symfony/stimulus-bundle';
+import { startStimulusApp } from '@symfony/stimulus-bundle';
+
+startStimulusApp();
