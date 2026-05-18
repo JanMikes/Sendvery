@@ -395,9 +395,9 @@ Do NOT use `{% block content %}...{% endblock %}` inside `<twig:Component>` tags
 </twig:SectionContainer>
 ```
 
-### Dark mode
+### Theme
 
-Dark mode uses `data-theme` attribute (not CSS `dark:` class). The `dark-mode` Stimulus controller toggles `data-theme="sendvery"` / `data-theme="sendvery-dark"` on `<html>`. Do NOT use Tailwind `dark:` prefix for theme-dependent styling — it won't work with daisyUI's data-theme approach.
+Single light theme only (`data-theme="sendvery"` on `<html>`). Dark mode was intentionally removed — do not reintroduce a `sendvery-dark` theme or a `dark-mode` Stimulus controller without a product decision. Do NOT use Tailwind `dark:` prefix for theme-dependent styling — it won't work with daisyUI's data-theme approach.
 
 ## Docker
 

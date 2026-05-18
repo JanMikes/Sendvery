@@ -1,20 +1,19 @@
-{% extends 'base.html.twig' %}
+{% extends 'marketing_layout.html.twig' %}
 
 {% block title %}Sign in — Sendvery{% endblock %}
 {% block meta_description %}Sign in to your Sendvery account to monitor your email deliverability.{% endblock %}
 
-{% block body %}
-<div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+{% block content %}
+<div class="flex items-center justify-center bg-base-200 px-4 py-16 min-h-[calc(100vh-4rem)]">
     <div class="w-full max-w-md">
         <div class="text-center mb-8">
-            <a href="{{ path('home') }}" class="text-3xl font-bold text-primary tracking-tight">Sendvery</a>
-            <p class="text-base-content/60 mt-2">Sign in to your account</p>
+            <p class="text-base-content/60">Sign in to your account</p>
         </div>
 
         {% if pendingDomain is defined and pendingDomain %}
-            <div class="alert alert-success bg-success/10 border border-success/30 text-success-content mb-4">
+            <div class="alert bg-success/10 border border-success/30 text-success mb-4">
                 <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span class="text-sm"><span class="font-mono font-semibold">{{ pendingDomain }}</span> is ready — we'll start monitoring it after sign-in.</span>
+                <span class="text-sm text-base-content"><span class="font-mono font-semibold text-success">{{ pendingDomain }}</span> is ready — we'll start monitoring it after sign-in.</span>
             </div>
         {% endif %}
 
@@ -56,10 +55,6 @@
                 </p>
             </div>
         </div>
-
-        <p class="text-center text-sm text-base-content/40 mt-6">
-            <a href="{{ path('home') }}" class="hover:text-base-content">Back to homepage</a>
-        </p>
     </div>
 </div>
 {% endblock %}
