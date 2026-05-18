@@ -61,7 +61,7 @@
 {% block tool_title %}DMARC Record Checker{% endblock %}
 {% block tool_description %}Look up and analyze your DMARC record. Check your policy enforcement level, verify reporting addresses, and get recommendations for improvement.{% endblock %}
 
-{% block checker_card %}<twig:DmarcChecker />{% endblock %}
+{% block checker_card %}<twig:DmarcChecker domain="{{ initialDomain ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
 <twig:SectionContainer>

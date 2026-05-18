@@ -8,6 +8,7 @@
     {% if this.result %}
         <div data-loading="addClass(hidden)">
             {% include 'tools/_results/dmarc-results.html.twig' with {result: this.result, domain: this.domain} %}
+            {% include 'components/_StartMonitoringCta.html.twig' with {domain: this.domain} %}
         </div>
     {% endif %}
 </div>

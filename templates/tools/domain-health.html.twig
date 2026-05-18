@@ -61,7 +61,7 @@
 {% block tool_title %}Domain Health Check{% endblock %}
 {% block tool_description %}Get your domain's email health grade. A comprehensive report card combining SPF, DKIM, DMARC, MX, and TLS analysis into a single A-F score.{% endblock %}
 
-{% block checker_card %}<twig:DomainHealthChecker />{% endblock %}
+{% block checker_card %}<twig:DomainHealthChecker domain="{{ initialDomain ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
 <twig:SectionContainer>

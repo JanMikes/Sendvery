@@ -45,6 +45,12 @@ final class OnboardingDomainController extends AbstractController
         $data = new AddDomainData();
         $errors = [];
         $dnsResults = null;
+        $session = $request->getSession();
+        $pendingDomain = (string) $session->get('pending_domain', '');
+
+        if ('' !== $pendingDomain) {
+            $data->domainName = $pendingDomain;
+        }
 
         if ($request->isMethod('POST')) {
             $data->domainName = trim($request->request->getString('domain_name'));
@@ -66,6 +72,8 @@ final class OnboardingDomainController extends AbstractController
                     teamId: $teamId,
                     domainName: $data->domainName,
                 ));
+
+                $session->remove('pending_domain');
 
                 $dnsResults = [
                     'spf' => $this->spfChecker->check($data->domainName),

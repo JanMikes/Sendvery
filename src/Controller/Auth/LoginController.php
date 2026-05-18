@@ -30,11 +30,20 @@ final class LoginController extends AbstractController
             return $this->redirectToRoute('dashboard_overview');
         }
 
+        if ($request->isMethod('GET')) {
+            $domain = trim($request->query->getString('domain'));
+            if ('' !== $domain) {
+                $request->getSession()->set('pending_domain', $domain);
+            }
+        }
+
         if ($request->isMethod('POST')) {
             return $this->handleLogin($request);
         }
 
-        return $this->render('auth/login.html.twig');
+        return $this->render('auth/login.html.twig', [
+            'pendingDomain' => $request->getSession()->get('pending_domain'),
+        ]);
     }
 
     private function handleLogin(Request $request): Response
@@ -55,6 +64,7 @@ final class LoginController extends AbstractController
             return $this->render('auth/login.html.twig', [
                 'email' => $email,
                 'errors' => $errors,
+                'pendingDomain' => $request->getSession()->get('pending_domain'),
             ]);
         }
 

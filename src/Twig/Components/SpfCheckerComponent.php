@@ -26,6 +26,15 @@ final class SpfCheckerComponent
     ) {
     }
 
+    public function mount(string $domain = ''): void
+    {
+        $this->domain = $domain;
+
+        if ('' !== trim($this->domain)) {
+            $this->check();
+        }
+    }
+
     #[LiveAction]
     public function check(): void
     {

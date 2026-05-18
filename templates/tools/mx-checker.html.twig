@@ -61,7 +61,7 @@
 {% block tool_title %}MX Record Checker{% endblock %}
 {% block tool_description %}Look up your MX records and check mail server health. Verify priority configuration, test connectivity, and check TLS support.{% endblock %}
 
-{% block checker_card %}<twig:MxChecker />{% endblock %}
+{% block checker_card %}<twig:MxChecker domain="{{ initialDomain ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
 <twig:SectionContainer>

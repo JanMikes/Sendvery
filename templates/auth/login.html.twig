@@ -11,6 +11,13 @@
             <p class="text-base-content/60 mt-2">Sign in to your account</p>
         </div>
 
+        {% if pendingDomain is defined and pendingDomain %}
+            <div class="alert alert-success bg-success/10 border border-success/30 text-success-content mb-4">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="text-sm"><span class="font-mono font-semibold">{{ pendingDomain }}</span> is ready — we'll start monitoring it after sign-in.</span>
+            </div>
+        {% endif %}
+
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
                 {% if errors is defined and errors|length > 0 %}

@@ -61,7 +61,7 @@
 {% block tool_title %}DKIM Record Checker{% endblock %}
 {% block tool_description %}Look up your DKIM record and verify key strength. Check selectors, detect stale or weak keys, and validate your DKIM configuration.{% endblock %}
 
-{% block checker_card %}<twig:DkimChecker />{% endblock %}
+{% block checker_card %}<twig:DkimChecker domain="{{ initialDomain ?? '' }}" selector="{{ initialSelector ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
 <twig:SectionContainer>

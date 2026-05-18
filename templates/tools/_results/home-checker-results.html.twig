@@ -18,11 +18,13 @@
             </div>
 
             <div class="flex flex-wrap gap-2 mt-4">
-                <a href="{{ path('tools_spf_checker') }}" class="btn btn-xs btn-outline">SPF Details</a>
-                <a href="{{ path('tools_dkim_checker') }}" class="btn btn-xs btn-outline">DKIM Details</a>
-                <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-xs btn-outline">DMARC Details</a>
-                <a href="{{ path('tools_domain_health') }}" class="btn btn-xs btn-primary">Full Report</a>
+                <a href="{{ path('tools_spf_checker', {domain: domain}) }}" class="btn btn-xs btn-outline">SPF Details</a>
+                <a href="{{ path('tools_dkim_checker', {domain: domain}) }}" class="btn btn-xs btn-outline">DKIM Details</a>
+                <a href="{{ path('tools_dmarc_checker', {domain: domain}) }}" class="btn btn-xs btn-outline">DMARC Details</a>
+                <a href="{{ path('tools_domain_health', {domain: domain}) }}" class="btn btn-xs btn-primary">Full Report</a>
             </div>
         </div>
     </div>
+
+    {% include 'components/_StartMonitoringCta.html.twig' with {domain: domain, variant: 'compact'} %}
 </div>

@@ -29,6 +29,16 @@ final class DkimCheckerComponent
     ) {
     }
 
+    public function mount(string $domain = '', string $selector = ''): void
+    {
+        $this->domain = $domain;
+        $this->selector = $selector;
+
+        if ('' !== trim($this->domain)) {
+            $this->check();
+        }
+    }
+
     #[LiveAction]
     public function check(): void
     {

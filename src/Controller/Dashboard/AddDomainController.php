@@ -40,6 +40,10 @@ final class AddDomainController extends AbstractController
         $data = new AddDomainData();
         $errors = [];
 
+        if ($request->isMethod('GET')) {
+            $data->domainName = trim($request->query->getString('domain'));
+        }
+
         if ($request->isMethod('POST')) {
             if (!$canAdd) {
                 $errors[] = sprintf(
