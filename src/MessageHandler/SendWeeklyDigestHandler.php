@@ -101,6 +101,17 @@ final readonly class SendWeeklyDigestHandler
         $lines[] = "  DNS changes: {$digest->dnsChangesCount}";
         $lines[] = '';
 
+        if ([] !== $digest->currentlyBrokenDns) {
+            $lines[] = 'DNS Records Still Broken:';
+            foreach ($digest->currentlyBrokenDns as $item) {
+                $lines[] = "  [{$item->checkType}] {$item->domainName} — last checked ".$item->checkedAt->format('M j, H:i');
+                foreach ($item->issueMessages as $message) {
+                    $lines[] = "    {$message}";
+                }
+            }
+            $lines[] = '';
+        }
+
         foreach ($digest->domains as $domain) {
             $lines[] = str_repeat('-', 40);
             $lines[] = $domain->domainName;

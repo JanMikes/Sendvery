@@ -28,6 +28,28 @@ final readonly class AlertOnDnsChange
         $team = $this->teamRepository->get($event->teamId);
         $typeName = strtoupper($event->type->value);
 
+        // First check ever for this domain+type and it's already broken — alert immediately.
+        // Without this, a domain added with a pre-existing misconfiguration (e.g. a CNAME
+        // pointing at a selector the provider hasn't published yet) would never trigger a
+        // change-based alert, since there's no prior state to compare against.
+        if ($event->isFirstCheck && !$event->isValid) {
+            $this->alertEngine->createAlert(
+                team: $team,
+                monitoredDomain: $domain,
+                type: AlertType::DnsRecordInvalid,
+                severity: AlertSeverity::Critical,
+                title: "{$typeName} is broken for {$domain->domain}",
+                message: "We detected an issue with the {$typeName} record for {$domain->domain} on the first monitoring check. Review the details and fix the configuration to restore email authentication.",
+                data: [
+                    'dns_check_type' => $event->type->value,
+                    'current_record' => $event->rawRecord,
+                    'first_check' => true,
+                ],
+            );
+
+            return;
+        }
+
         if (null !== $event->previousRawRecord && null === $event->rawRecord) {
             $this->alertEngine->createAlert(
                 team: $team,

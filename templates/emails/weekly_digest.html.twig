@@ -121,6 +121,28 @@
                     </tr>
                     {% endif %}
 
+                    {# Currently Broken DNS — persistent reminder while records stay invalid #}
+                    {% if digest.currentlyBrokenDns|length > 0 %}
+                    <tr>
+                        <td style="padding: 0 32px 24px;">
+                            <h2 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #18181b;">DNS Records Still Broken</h2>
+                            <div style="padding: 12px 16px; background-color: #fef2f2; border-radius: 6px; border: 1px solid #fecaca;">
+                                {% for item in digest.currentlyBrokenDns %}
+                                <div style="margin-bottom: {{ loop.last ? '0' : '12px' }};">
+                                    <div style="font-size: 13px; color: #991b1b; font-weight: 600; margin-bottom: 4px;">
+                                        {{ item.checkType }} &mdash; {{ item.domainName }}
+                                    </div>
+                                    {% for message in item.issueMessages %}
+                                    <div style="font-size: 12px; color: #7f1d1d; margin-bottom: 2px;">{{ message }}</div>
+                                    {% endfor %}
+                                    <div style="font-size: 11px; color: #b91c1c; margin-top: 4px;">Last checked {{ item.checkedAt|date('M j, H:i') }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+
                     {# DNS Changes #}
                     {% if digest.dnsChangesCount > 0 %}
                     <tr>

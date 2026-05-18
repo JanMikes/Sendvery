@@ -66,6 +66,7 @@ final class DnsCheckResult implements EntityWithEvents
         array $details,
         ?string $previousRawRecord,
         bool $hasChanged,
+        bool $isFirstCheck = false,
     ) {
         $this->id = $id;
         $this->monitoredDomain = $monitoredDomain;
@@ -87,6 +88,7 @@ final class DnsCheckResult implements EntityWithEvents
             isValid: $this->isValid,
             rawRecord: $this->rawRecord,
             previousRawRecord: $this->previousRawRecord,
+            isFirstCheck: $isFirstCheck,
         ));
     }
 }

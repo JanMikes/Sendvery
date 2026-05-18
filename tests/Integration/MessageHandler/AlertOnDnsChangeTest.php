@@ -124,6 +124,63 @@ final class AlertOnDnsChangeTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function firesAlertOnFirstCheckWhenAlreadyBroken(): void
+    {
+        // Domain added with a pre-existing DKIM misconfiguration (CNAME pointing at a
+        // selector the provider has not published). Without first-check alerting this
+        // would silently sit in the dashboard until something else changed.
+        [$team, $domain] = $this->createTeamAndDomain();
+        $em = $this->getService(EntityManagerInterface::class);
+        $handler = $this->getService(AlertOnDnsChange::class);
+
+        $event = new DnsCheckCompleted(
+            dnsCheckResultId: Uuid::uuid7(),
+            domainId: $domain->id,
+            teamId: $team->id,
+            type: DnsCheckType::Dkim,
+            hasChanged: false,
+            isValid: false,
+            rawRecord: null,
+            previousRawRecord: null,
+            isFirstCheck: true,
+        );
+
+        $handler($event);
+        $em->flush();
+
+        $alerts = $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]);
+        self::assertCount(1, $alerts);
+        self::assertSame(AlertType::DnsRecordInvalid, $alerts[0]->type);
+        self::assertStringContainsString('broken for dns-alert-test.com', $alerts[0]->title);
+    }
+
+    #[Test]
+    public function noAlertOnFirstCheckWhenHealthy(): void
+    {
+        [$team, $domain] = $this->createTeamAndDomain();
+        $em = $this->getService(EntityManagerInterface::class);
+        $handler = $this->getService(AlertOnDnsChange::class);
+
+        $event = new DnsCheckCompleted(
+            dnsCheckResultId: Uuid::uuid7(),
+            domainId: $domain->id,
+            teamId: $team->id,
+            type: DnsCheckType::Spf,
+            hasChanged: false,
+            isValid: true,
+            rawRecord: 'v=spf1 ~all',
+            previousRawRecord: null,
+            isFirstCheck: true,
+        );
+
+        $handler($event);
+        $em->flush();
+
+        $alerts = $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]);
+        self::assertCount(0, $alerts);
+    }
+
+    #[Test]
     public function noAlertWhenNoChange(): void
     {
         [$team, $domain] = $this->createTeamAndDomain();

@@ -88,6 +88,7 @@ final readonly class DnsMonitor
         $previous = $this->dnsCheckResultRepository->findLatestForDomainAndType($domain->id, $type);
         $previousRawRecord = $previous?->rawRecord;
         $hasChanged = $previousRawRecord !== $rawRecord;
+        $isFirstCheck = null === $previous;
 
         $serializedIssues = array_map(static fn ($issue) => [
             'severity' => $issue->severity->value,
@@ -106,6 +107,7 @@ final readonly class DnsMonitor
             details: $details,
             previousRawRecord: $previousRawRecord,
             hasChanged: $hasChanged,
+            isFirstCheck: $isFirstCheck,
         );
     }
 

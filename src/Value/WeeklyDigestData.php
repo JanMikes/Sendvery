@@ -7,7 +7,8 @@ namespace App\Value;
 final readonly class WeeklyDigestData
 {
     /**
-     * @param array<WeeklyDigestDomainData> $domains
+     * @param array<WeeklyDigestDomainData>   $domains
+     * @param list<WeeklyDigestBrokenDnsItem> $currentlyBrokenDns latest per (domain, check type) where isValid=false
      */
     public function __construct(
         public string $teamName,
@@ -19,6 +20,7 @@ final readonly class WeeklyDigestData
         public float $averagePassRate,
         public int $alertsCount,
         public int $dnsChangesCount,
+        public array $currentlyBrokenDns = [],
     ) {
     }
 }

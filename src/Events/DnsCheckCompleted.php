@@ -18,6 +18,7 @@ final readonly class DnsCheckCompleted
         public bool $isValid,
         public ?string $rawRecord,
         public ?string $previousRawRecord,
+        public bool $isFirstCheck = false,
     ) {
     }
 }

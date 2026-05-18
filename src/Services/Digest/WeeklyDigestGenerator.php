@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Digest;
 
 use App\Entity\Team;
+use App\Value\WeeklyDigestBrokenDnsItem;
 use App\Value\WeeklyDigestData;
 use App\Value\WeeklyDigestDomainData;
 use Doctrine\DBAL\Connection;
@@ -68,6 +69,7 @@ final readonly class WeeklyDigestGenerator
 
         $alertsCount = $this->getTotalAlertsCount($teamId, $periodStart, $periodEnd);
         $dnsChangesCount = $this->getDnsChangesCount($teamId, $periodStart, $periodEnd);
+        $currentlyBrokenDns = $this->getCurrentlyBrokenDns($teamId);
 
         return new WeeklyDigestData(
             teamName: $team->name,
@@ -79,6 +81,7 @@ final readonly class WeeklyDigestGenerator
             averagePassRate: $domainsWithData > 0 ? $passRateSum / $domainsWithData : 0.0,
             alertsCount: $alertsCount,
             dnsChangesCount: $dnsChangesCount,
+            currentlyBrokenDns: $currentlyBrokenDns,
         );
     }
 
@@ -188,5 +191,55 @@ final readonly class WeeklyDigestGenerator
                 'to' => $to->format('Y-m-d H:i:s'),
             ],
         )->fetchOne();
+    }
+
+    /**
+     * Latest dns_check_result per (domain, type) for this team where the most-recent
+     * check came back invalid. Surfaces persistently-broken records in the digest so
+     * the user gets a weekly nudge even when no state change fires an alert.
+     *
+     * @return list<WeeklyDigestBrokenDnsItem>
+     */
+    private function getCurrentlyBrokenDns(string $teamId): array
+    {
+        $rows = $this->database->executeQuery(
+            'SELECT domain_name, check_type, checked_at, issues
+            FROM (
+                SELECT DISTINCT ON (dcr.monitored_domain_id, dcr.type)
+                    md.domain AS domain_name,
+                    dcr.type AS check_type,
+                    dcr.checked_at AS checked_at,
+                    dcr.issues AS issues,
+                    dcr.is_valid AS is_valid
+                FROM dns_check_result dcr
+                JOIN monitored_domain md ON md.id = dcr.monitored_domain_id
+                WHERE md.team_id = :teamId
+                ORDER BY dcr.monitored_domain_id, dcr.type, dcr.checked_at DESC
+            ) latest
+            WHERE latest.is_valid = false
+            ORDER BY domain_name, check_type',
+            ['teamId' => $teamId],
+        )->fetchAllAssociative();
+
+        $items = [];
+        foreach ($rows as $row) {
+            /** @var list<array{severity?: string, message?: string, recommendation?: string}> $decoded */
+            $decoded = is_string($row['issues']) ? json_decode($row['issues'], true) : (array) $row['issues'];
+            $messages = [];
+            foreach ($decoded as $issue) {
+                if (isset($issue['message']) && '' !== $issue['message']) {
+                    $messages[] = $issue['message'];
+                }
+            }
+
+            $items[] = new WeeklyDigestBrokenDnsItem(
+                domainName: (string) $row['domain_name'],
+                checkType: strtoupper((string) $row['check_type']),
+                checkedAt: new \DateTimeImmutable((string) $row['checked_at']),
+                issueMessages: $messages,
+            );
+        }
+
+        return $items;
     }
 }
