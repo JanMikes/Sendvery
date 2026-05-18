@@ -1,7 +1,14 @@
-{# Top navigation — responsive with mobile hamburger and Tools dropdown. #}
-<nav class="navbar bg-base-100/80 backdrop-blur-md sticky top-0 z-50 border-b border-base-200"
+{# Top navigation — responsive with mobile hamburger and Tools dropdown.
+
+   NOTE: we deliberately do NOT put daisyUI's `.navbar` class on the outer
+   <nav> element. `.navbar` makes its container `display: flex`, which would
+   then treat the top bar and the mobile menu panel as side-by-side flex
+   items — the mobile menu would render as a narrow column next to the bar
+   instead of dropping below it. Outer <nav> stays block; the top bar gets
+   the visual chrome (min-height, padding) instead. #}
+<nav class="bg-base-100/80 backdrop-blur-md sticky top-0 z-50 border-b border-base-200"
      {{ stimulus_controller('mobile-nav') }}>
-    <div class="container mx-auto flex items-center w-full gap-2">
+    <div class="container mx-auto flex items-center w-full gap-2 min-h-16 px-4">
         {# Logo #}
         <div class="flex-1 min-w-0">
             <a href="{{ path('home') }}" class="text-xl font-bold text-primary tracking-tight">
