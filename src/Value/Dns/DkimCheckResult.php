@@ -9,6 +9,8 @@ final readonly class DkimCheckResult
     /**
      * @param array<DnsIssue> $issues
      * @param array<string>   $recommendations
+     * @param list<string>    $detectedProviders providers detected from MX/SPF (empty when user supplied a selector or none detected)
+     * @param list<string>    $matchedProviders  providers that publish the selector this result was for (best-effort label)
      */
     public function __construct(
         public ?string $rawRecord,
@@ -18,6 +20,10 @@ final readonly class DkimCheckResult
         public string $selector,
         public array $issues,
         public array $recommendations,
+        public DkimLookupOutcome $outcome = DkimLookupOutcome::NoRecord,
+        public ?string $cnameTarget = null,
+        public array $detectedProviders = [],
+        public array $matchedProviders = [],
     ) {
     }
 
