@@ -15,7 +15,7 @@ final class DmarcRecord
 {
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
-    public readonly UuidInterface $id;
+    public UuidInterface $id;
 
     #[ORM\ManyToOne(targetEntity: DmarcReport::class)]
     #[ORM\JoinColumn(name: 'dmarc_report_id', nullable: false)]

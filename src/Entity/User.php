@@ -17,7 +17,7 @@ final class User implements EntityWithEvents, UserInterface
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
-    public readonly UuidInterface $id;
+    public UuidInterface $id;
 
     #[ORM\Column(length: 255, unique: true)]
     public string $email;

@@ -19,7 +19,7 @@ final class DnsCheckResult implements EntityWithEvents
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
-    public readonly UuidInterface $id;
+    public UuidInterface $id;
 
     #[ORM\ManyToOne(targetEntity: MonitoredDomain::class)]
     #[ORM\JoinColumn(name: 'monitored_domain_id', nullable: false)]

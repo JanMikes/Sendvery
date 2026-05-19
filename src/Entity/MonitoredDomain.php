@@ -18,7 +18,7 @@ final class MonitoredDomain implements EntityWithEvents
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
-    public readonly UuidInterface $id;
+    public UuidInterface $id;
 
     #[ORM\ManyToOne(targetEntity: Team::class)]
     #[ORM\JoinColumn(name: 'team_id', nullable: false)]

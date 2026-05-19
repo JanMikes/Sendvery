@@ -27,6 +27,29 @@ final class OnboardingTest extends WebTestCase
         self::assertResponseIsSuccessful();
     }
 
+    /**
+     * Reproduces the readonly-id Doctrine proxy bug: a fresh request has no
+     * entity-map cache, so TeamMembership::$team is loaded as a proxy.
+     * Touching $team->name triggers proxy init, which used to throw
+     * LogicException on the readonly $id property because Ramsey UUIDs are
+     * compared by object identity.
+     */
+    #[Test]
+    public function onboardingTeamPageWorksWhenTeamLoadedAsProxy(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam();
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->clear();
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/team');
+
+        self::assertResponseIsSuccessful();
+    }
+
     #[Test]
     public function onboardingTeamRedirectsToDashboardIfCompleted(): void
     {

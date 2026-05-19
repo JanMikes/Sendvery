@@ -17,7 +17,7 @@ final class BetaAccessRequest implements EntityWithEvents
 
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
-    public readonly UuidInterface $id;
+    public UuidInterface $id;
 
     #[ORM\Column(length: 255)]
     public readonly string $email;
