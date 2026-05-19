@@ -61,11 +61,14 @@ final class LoginController extends AbstractController
                 $errors[] = (string) $violation->getMessage();
             }
 
+            // Turbo treats 422 as a form-error response and replaces the
+            // <form> in place. Returning 200 would trigger Turbo's
+            // "Form responses must redirect to another location" error.
             return $this->render('auth/login.html.twig', [
                 'email' => $email,
                 'errors' => $errors,
                 'pendingDomain' => $request->getSession()->get('pending_domain'),
-            ]);
+            ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
         }
 
         $this->commandBus->dispatch(new RequestMagicLink(
@@ -73,8 +76,8 @@ final class LoginController extends AbstractController
             email: strtolower($email),
         ));
 
-        return $this->render('auth/check_email.html.twig', [
-            'email' => $email,
-        ]);
+        $request->getSession()->set('pending_login_email', $email);
+
+        return $this->redirectToRoute('auth_check_email');
     }
 }

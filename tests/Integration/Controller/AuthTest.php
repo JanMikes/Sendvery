@@ -38,36 +38,49 @@ final class AuthTest extends WebTestCase
     }
 
     #[Test]
-    public function submitValidEmailShowsCheckEmailPage(): void
+    public function submitValidEmailRedirectsToCheckEmailPage(): void
     {
         $client = self::createClient();
         $email = 'login-'.Uuid::uuid7()->toString().'@example.com';
 
         $client->request('POST', '/login', ['email' => $email]);
 
+        self::assertResponseRedirects('/login/check-email');
+
+        $client->followRedirect();
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h2', 'Check your email');
     }
 
     #[Test]
-    public function submitInvalidEmailShowsError(): void
+    public function checkEmailWithoutPendingEmailRedirectsToLogin(): void
+    {
+        $client = self::createClient();
+
+        $client->request('GET', '/login/check-email');
+
+        self::assertResponseRedirects('/login');
+    }
+
+    #[Test]
+    public function submitInvalidEmailReturns422WithError(): void
     {
         $client = self::createClient();
 
         $client->request('POST', '/login', ['email' => 'not-an-email']);
 
-        self::assertResponseIsSuccessful();
+        self::assertResponseStatusCodeSame(422);
         self::assertSelectorExists('.alert-error');
     }
 
     #[Test]
-    public function submitEmptyEmailShowsError(): void
+    public function submitEmptyEmailReturns422WithError(): void
     {
         $client = self::createClient();
 
         $client->request('POST', '/login', ['email' => '']);
 
-        self::assertResponseIsSuccessful();
+        self::assertResponseStatusCodeSame(422);
         self::assertSelectorExists('.alert-error');
     }
 
