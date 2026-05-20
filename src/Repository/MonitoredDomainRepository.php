@@ -35,11 +35,11 @@ final readonly class MonitoredDomainRepository
         ]);
     }
 
-    public function findFirstForTeam(UuidInterface $teamId): ?MonitoredDomain
+    public function findLatestForTeam(UuidInterface $teamId): ?MonitoredDomain
     {
         return $this->entityManager->getRepository(MonitoredDomain::class)->findOneBy(
             ['team' => $teamId->toString()],
-            ['createdAt' => 'ASC'],
+            ['createdAt' => 'DESC'],
         );
     }
 }

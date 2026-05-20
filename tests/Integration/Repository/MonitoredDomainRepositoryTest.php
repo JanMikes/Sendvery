@@ -87,4 +87,49 @@ final class MonitoredDomainRepositoryTest extends IntegrationTestCase
         $result = $repo->findByDomain('nonexistent.com', Uuid::uuid7());
         self::assertNull($result);
     }
+
+    public function testFindLatestForTeamReturnsMostRecentlyAdded(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $repo = $this->getService(MonitoredDomainRepository::class);
+
+        $teamId = Uuid::uuid7();
+        $team = new Team(
+            id: $teamId,
+            name: 'Latest Test',
+            slug: 'latest-test-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $older = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'older.com',
+            createdAt: new \DateTimeImmutable('2026-01-01 10:00:00'),
+        );
+        $em->persist($older);
+
+        $newer = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'newer.com',
+            createdAt: new \DateTimeImmutable('2026-01-02 10:00:00'),
+        );
+        $em->persist($newer);
+
+        $em->flush();
+        $em->clear();
+
+        $latest = $repo->findLatestForTeam($teamId);
+        self::assertNotNull($latest);
+        self::assertSame('newer.com', $latest->domain);
+    }
+
+    public function testFindLatestForTeamReturnsNullWhenNoDomains(): void
+    {
+        $repo = $this->getService(MonitoredDomainRepository::class);
+
+        self::assertNull($repo->findLatestForTeam(Uuid::uuid7()));
+    }
 }

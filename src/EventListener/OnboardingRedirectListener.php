@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\EventListener;
 
 use App\Entity\User;
-use Doctrine\DBAL\Connection;
+use App\Services\OnboardingTracker;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -27,7 +27,7 @@ final readonly class OnboardingRedirectListener
     public function __construct(
         private TokenStorageInterface $tokenStorage,
         private UrlGeneratorInterface $urlGenerator,
-        private Connection $database,
+        private OnboardingTracker $onboardingTracker,
     ) {
     }
 
@@ -64,25 +64,12 @@ final readonly class OnboardingRedirectListener
             return;
         }
 
-        if (null !== $user->onboardingCompletedAt && $this->userHasMonitoredDomain($user)) {
+        if (null !== $user->onboardingCompletedAt && $this->onboardingTracker->userHasMonitoredDomain($user)) {
             return;
         }
 
         $event->setResponse(
-            new RedirectResponse($this->urlGenerator->generate('onboarding_team')),
+            new RedirectResponse($this->urlGenerator->generate($this->onboardingTracker->nextStepRoute($user))),
         );
-    }
-
-    private function userHasMonitoredDomain(User $user): bool
-    {
-        $count = (int) $this->database->fetchOne(
-            'SELECT COUNT(d.id)
-             FROM monitored_domain d
-             INNER JOIN team_membership tm ON tm.team_id = d.team_id
-             WHERE tm.user_id = :userId',
-            ['userId' => $user->id->toString()],
-        );
-
-        return $count > 0;
     }
 }

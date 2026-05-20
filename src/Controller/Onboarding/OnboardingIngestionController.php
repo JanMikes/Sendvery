@@ -82,7 +82,15 @@ final class OnboardingIngestionController extends AbstractController
 
         $memberships = $this->teamMembershipRepository->findForUser($user->id);
         $teamId = $memberships[0]->team->id;
-        $primaryDomain = $this->monitoredDomainRepository->findFirstForTeam($teamId);
+
+        $requestedDomain = strtolower(trim($request->query->getString('domain')));
+        $primaryDomain = '' !== $requestedDomain
+            ? $this->monitoredDomainRepository->findByDomain($requestedDomain, $teamId)
+            : null;
+
+        if (null === $primaryDomain) {
+            $primaryDomain = $this->monitoredDomainRepository->findLatestForTeam($teamId);
+        }
 
         $domainName = null;
         $ruaInstruction = null;

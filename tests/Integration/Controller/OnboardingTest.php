@@ -73,6 +73,38 @@ final class OnboardingTest extends WebTestCase
         $client->request('POST', '/app/onboarding/team', ['team_name' => 'My Custom Team']);
 
         self::assertResponseRedirects('/app/onboarding/domain');
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->clear();
+
+        $refreshed = $em->find(User::class, $user->id);
+        self::assertNotNull($refreshed);
+        self::assertNotNull($refreshed->onboardingTeamCompletedAt);
+    }
+
+    #[Test]
+    public function onboardingTeamRedirectsToDomainWhenTeamStepAlreadyDone(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/team');
+
+        self::assertResponseRedirects('/app/onboarding/domain');
+    }
+
+    #[Test]
+    public function onboardingTeamRedirectsToIngestionWhenDomainAlreadyExists(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/team');
+
+        self::assertResponseRedirects('/app/onboarding/ingestion');
     }
 
     #[Test]
@@ -88,6 +120,18 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
+    public function onboardingDomainRedirectsToIngestionWhenDomainAlreadyExists(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/domain');
+
+        self::assertResponseRedirects('/app/onboarding/ingestion');
+    }
+
+    #[Test]
     public function onboardingIngestionPageReturns200(): void
     {
         $client = self::createClient();
@@ -97,6 +141,87 @@ final class OnboardingTest extends WebTestCase
         $client->request('GET', '/app/onboarding/ingestion');
 
         self::assertResponseIsSuccessful();
+    }
+
+    #[Test]
+    public function onboardingIngestionShowsRequestedDomainNotOldest(): void
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+        $team = $membership->team;
+
+        $older = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'older-domain.example',
+            createdAt: new \DateTimeImmutable('2026-01-01 10:00:00'),
+        );
+        $older->popEvents();
+        $em->persist($older);
+
+        $newer = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'newer-domain.example',
+            createdAt: new \DateTimeImmutable('2026-01-02 10:00:00'),
+        );
+        $newer->popEvents();
+        $em->persist($newer);
+        $em->flush();
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/ingestion?domain=newer-domain.example');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('newer-domain.example', $body);
+        self::assertStringNotContainsString('older-domain.example', $body);
+    }
+
+    #[Test]
+    public function onboardingIngestionFallsBackToLatestDomainWhenNoQueryParam(): void
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+        $team = $membership->team;
+
+        $older = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'older-fallback.example',
+            createdAt: new \DateTimeImmutable('2026-01-01 10:00:00'),
+        );
+        $older->popEvents();
+        $em->persist($older);
+
+        $newer = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'newer-fallback.example',
+            createdAt: new \DateTimeImmutable('2026-01-02 10:00:00'),
+        );
+        $newer->popEvents();
+        $em->persist($newer);
+        $em->flush();
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/ingestion');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('newer-fallback.example', $body);
     }
 
     #[Test]
@@ -146,6 +271,30 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
+    public function dashboardRedirectsToDomainStepWhenTeamStepDoneButNoDomain(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app');
+
+        self::assertResponseRedirects('/app/onboarding/domain');
+    }
+
+    #[Test]
+    public function dashboardRedirectsToIngestionStepWhenDomainExistsButOnboardingIncomplete(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app');
+
+        self::assertResponseRedirects('/app/onboarding/ingestion');
+    }
+
+    #[Test]
     public function dashboardAccessibleAfterOnboarding(): void
     {
         $client = self::createClient();
@@ -166,7 +315,7 @@ final class OnboardingTest extends WebTestCase
         self::assertResponseRedirects('/login');
     }
 
-    private function createNewUserWithTeam(): User
+    private function createNewUserWithTeam(bool $teamStepCompleted = false, bool $withDomain = false): User
     {
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
@@ -176,6 +325,7 @@ final class OnboardingTest extends WebTestCase
             id: $userId,
             email: 'onboard-'.$userId->toString().'@example.com',
             createdAt: new \DateTimeImmutable(),
+            onboardingTeamCompletedAt: $teamStepCompleted ? new \DateTimeImmutable() : null,
         );
         $user->popEvents();
         $em->persist($user);
@@ -198,6 +348,18 @@ final class OnboardingTest extends WebTestCase
             joinedAt: new \DateTimeImmutable(),
         );
         $em->persist($membership);
+
+        if ($withDomain) {
+            $domain = new MonitoredDomain(
+                id: Uuid::uuid7(),
+                team: $team,
+                domain: 'onboard-'.substr($teamId->toString(), 0, 8).'.example',
+                createdAt: new \DateTimeImmutable(),
+            );
+            $domain->popEvents();
+            $em->persist($domain);
+        }
+
         $em->flush();
 
         return $user;

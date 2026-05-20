@@ -10,6 +10,7 @@ use App\Entity\User;
 use App\Repository\MagicLinkTokenRepository;
 use App\Repository\UserRepository;
 use App\Services\IdentityProvider;
+use App\Services\OnboardingTracker;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
@@ -36,6 +37,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         private readonly IdentityProvider $identityProvider,
         private readonly ClockInterface $clock,
         private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly OnboardingTracker $onboardingTracker,
     ) {
     }
 
@@ -86,7 +88,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         $user = $token->getUser();
 
         if ($user instanceof User && null === $user->onboardingCompletedAt) {
-            return new RedirectResponse($this->urlGenerator->generate('onboarding_team'));
+            return new RedirectResponse($this->urlGenerator->generate($this->onboardingTracker->nextStepRoute($user)));
         }
 
         return new RedirectResponse($this->urlGenerator->generate('dashboard_overview'));

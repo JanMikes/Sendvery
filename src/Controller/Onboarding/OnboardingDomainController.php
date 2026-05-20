@@ -13,6 +13,7 @@ use App\Services\Dns\DkimChecker;
 use App\Services\Dns\DmarcChecker;
 use App\Services\Dns\SpfChecker;
 use App\Services\IdentityProvider;
+use App\Services\OnboardingTracker;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,6 +32,7 @@ final class OnboardingDomainController extends AbstractController
         private readonly SpfChecker $spfChecker,
         private readonly DkimChecker $dkimChecker,
         private readonly DmarcChecker $dmarcChecker,
+        private readonly OnboardingTracker $onboardingTracker,
     ) {
     }
 
@@ -46,6 +48,12 @@ final class OnboardingDomainController extends AbstractController
 
         $memberships = $this->teamMembershipRepository->findForUser($user->id);
         $teamId = $memberships[0]->team->id;
+
+        $check = strtolower(trim($request->query->getString('check')));
+
+        if ($request->isMethod('GET') && '' === $check && $this->onboardingTracker->userHasMonitoredDomain($user)) {
+            return $this->redirectToRoute($this->onboardingTracker->nextStepRoute($user));
+        }
 
         $data = new AddDomainData();
         $errors = [];
@@ -73,20 +81,16 @@ final class OnboardingDomainController extends AbstractController
 
                 return $this->redirectToRoute('onboarding_domain', ['check' => $data->domainName]);
             }
-        } else {
-            $check = strtolower(trim($request->query->getString('check')));
+        } elseif ('' !== $check) {
+            $existing = $this->monitoredDomainRepository->findByDomain($check, $teamId);
 
-            if ('' !== $check) {
-                $existing = $this->monitoredDomainRepository->findByDomain($check, $teamId);
-
-                if (null !== $existing) {
-                    $data->domainName = $existing->domain;
-                    $dnsResults = [
-                        'spf' => $this->spfChecker->check($existing->domain),
-                        'dkim' => $this->dkimChecker->check($existing->domain),
-                        'dmarc' => $this->dmarcChecker->check($existing->domain),
-                    ];
-                }
+            if (null !== $existing) {
+                $data->domainName = $existing->domain;
+                $dnsResults = [
+                    'spf' => $this->spfChecker->check($existing->domain),
+                    'dkim' => $this->dkimChecker->check($existing->domain),
+                    'dmarc' => $this->dmarcChecker->check($existing->domain),
+                ];
             }
         }
 

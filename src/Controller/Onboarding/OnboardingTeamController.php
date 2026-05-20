@@ -6,6 +6,7 @@ namespace App\Controller\Onboarding;
 
 use App\Entity\User;
 use App\Repository\TeamMembershipRepository;
+use App\Services\OnboardingTracker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,6 +18,7 @@ final class OnboardingTeamController extends AbstractController
     public function __construct(
         private readonly TeamMembershipRepository $teamMembershipRepository,
         private readonly EntityManagerInterface $entityManager,
+        private readonly OnboardingTracker $onboardingTracker,
     ) {
     }
 
@@ -30,6 +32,10 @@ final class OnboardingTeamController extends AbstractController
             return $this->redirectToRoute('dashboard_overview');
         }
 
+        if ($request->isMethod('GET') && null !== $user->onboardingTeamCompletedAt) {
+            return $this->redirectToRoute($this->onboardingTracker->nextStepRoute($user));
+        }
+
         $memberships = $this->teamMembershipRepository->findForUser($user->id);
         $team = $memberships[0]->team ?? null;
 
@@ -38,8 +44,10 @@ final class OnboardingTeamController extends AbstractController
 
             if ('' !== $teamName && null !== $team) {
                 $team->name = $teamName;
-                $this->entityManager->flush();
             }
+
+            $this->onboardingTracker->completeTeamStep($user);
+            $this->entityManager->flush();
 
             return $this->redirectToRoute('onboarding_domain');
         }

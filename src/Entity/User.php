@@ -29,6 +29,9 @@ final class User implements EntityWithEvents, UserInterface
     public ?\DateTimeImmutable $lastLoginAt;
 
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $onboardingTeamCompletedAt;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     public ?\DateTimeImmutable $onboardingCompletedAt;
 
     #[ORM\Column(type: 'boolean', options: ['default' => true])]
@@ -46,6 +49,7 @@ final class User implements EntityWithEvents, UserInterface
         \DateTimeImmutable $createdAt,
         string $locale = 'en',
         ?\DateTimeImmutable $lastLoginAt = null,
+        ?\DateTimeImmutable $onboardingTeamCompletedAt = null,
         ?\DateTimeImmutable $onboardingCompletedAt = null,
         bool $emailDigestEnabled = true,
         bool $emailAlertsEnabled = true,
@@ -55,6 +59,7 @@ final class User implements EntityWithEvents, UserInterface
         $this->createdAt = $createdAt;
         $this->locale = $locale;
         $this->lastLoginAt = $lastLoginAt;
+        $this->onboardingTeamCompletedAt = $onboardingTeamCompletedAt;
         $this->onboardingCompletedAt = $onboardingCompletedAt;
         $this->emailDigestEnabled = $emailDigestEnabled;
         $this->emailAlertsEnabled = $emailAlertsEnabled;
