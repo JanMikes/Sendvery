@@ -84,12 +84,12 @@ final readonly class RequestMagicLinkHandler
         <head><meta charset="UTF-8"></head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #1a1a2e;">
             <div style="text-align: center; margin-bottom: 32px;">
-                <h1 style="font-size: 24px; font-weight: 700; color: #6366f1; margin: 0;">Sendvery</h1>
+                <h1 style="font-size: 24px; font-weight: 700; color: #0f766e; margin: 0;">Sendvery</h1>
             </div>
             <div style="background: #f8fafc; border-radius: 12px; padding: 32px; text-align: center;">
                 <h2 style="font-size: 20px; margin: 0 0 16px;">Sign in to Sendvery</h2>
                 <p style="color: #64748b; margin: 0 0 24px;">Click the button below to sign in. This link expires in 15 minutes.</p>
-                <a href="{$verifyUrl}" style="display: inline-block; background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Sign in</a>
+                <a href="{$verifyUrl}" style="display: inline-block; background: #0f766e; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Sign in</a>
             </div>
             <p style="text-align: center; color: #94a3b8; font-size: 13px; margin-top: 24px;">
                 If you didn't request this link, you can safely ignore this email.

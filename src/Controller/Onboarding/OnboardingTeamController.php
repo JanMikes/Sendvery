@@ -33,8 +33,6 @@ final class OnboardingTeamController extends AbstractController
         $memberships = $this->teamMembershipRepository->findForUser($user->id);
         $team = $memberships[0]->team ?? null;
 
-        $suggestedName = $team->name ?? $this->extractDomain($user->email);
-
         if ($request->isMethod('POST')) {
             $teamName = trim($request->request->getString('team_name'));
 
@@ -46,15 +44,6 @@ final class OnboardingTeamController extends AbstractController
             return $this->redirectToRoute('onboarding_domain');
         }
 
-        return $this->render('onboarding/team.html.twig', [
-            'suggestedName' => $suggestedName,
-        ]);
-    }
-
-    private function extractDomain(string $email): string
-    {
-        $parts = explode('@', $email);
-
-        return $parts[1] ?? 'My Team';
+        return $this->render('onboarding/team.html.twig');
     }
 }
