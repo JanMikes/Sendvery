@@ -84,19 +84,20 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
-    public function onboardingTeamRedirectsToDomainWhenTeamStepAlreadyDone(): void
+    public function onboardingTeamPagePrefillsCurrentTeamName(): void
     {
         $client = self::createClient();
         $user = $this->createNewUserWithTeam(teamStepCompleted: true);
 
         $client->loginUser($user);
-        $client->request('GET', '/app/onboarding/team');
+        $crawler = $client->request('GET', '/app/onboarding/team');
 
-        self::assertResponseRedirects('/app/onboarding/domain');
+        self::assertResponseIsSuccessful();
+        self::assertSame('example.com', $crawler->filter('#team_name')->attr('value'));
     }
 
     #[Test]
-    public function onboardingTeamRedirectsToIngestionWhenDomainAlreadyExists(): void
+    public function onboardingTeamPageStillRendersWhenRevisitedAfterCompletingTeamStep(): void
     {
         $client = self::createClient();
         $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
@@ -104,7 +105,7 @@ final class OnboardingTest extends WebTestCase
         $client->loginUser($user);
         $client->request('GET', '/app/onboarding/team');
 
-        self::assertResponseRedirects('/app/onboarding/ingestion');
+        self::assertResponseIsSuccessful();
     }
 
     #[Test]
@@ -120,13 +121,27 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
-    public function onboardingDomainRedirectsToIngestionWhenDomainAlreadyExists(): void
+    public function onboardingDomainPageStillRendersWhenRevisitedWithExistingDomain(): void
     {
         $client = self::createClient();
         $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
 
         $client->loginUser($user);
         $client->request('GET', '/app/onboarding/domain');
+
+        self::assertResponseIsSuccessful();
+    }
+
+    #[Test]
+    public function dashboardRedirectsMidFlowUserWithDomainToIngestion(): void
+    {
+        $client = self::createClient();
+        // Mirrors the production bug: user has a domain but onboardingTeamCompletedAt is null
+        // (column didn't exist when they started). They should land on step 3, not step 1.
+        $user = $this->createNewUserWithTeam(teamStepCompleted: false, withDomain: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app');
 
         self::assertResponseRedirects('/app/onboarding/ingestion');
     }

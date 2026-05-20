@@ -32,10 +32,6 @@ final class OnboardingTeamController extends AbstractController
             return $this->redirectToRoute('dashboard_overview');
         }
 
-        if ($request->isMethod('GET') && null !== $user->onboardingTeamCompletedAt) {
-            return $this->redirectToRoute($this->onboardingTracker->nextStepRoute($user));
-        }
-
         $memberships = $this->teamMembershipRepository->findForUser($user->id);
         $team = $memberships[0]->team ?? null;
 
@@ -52,6 +48,8 @@ final class OnboardingTeamController extends AbstractController
             return $this->redirectToRoute('onboarding_domain');
         }
 
-        return $this->render('onboarding/team.html.twig');
+        return $this->render('onboarding/team.html.twig', [
+            'teamName' => null === $team ? '' : $team->name,
+        ]);
     }
 }

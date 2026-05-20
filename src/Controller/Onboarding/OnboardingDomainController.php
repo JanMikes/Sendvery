@@ -13,7 +13,6 @@ use App\Services\Dns\DkimChecker;
 use App\Services\Dns\DmarcChecker;
 use App\Services\Dns\SpfChecker;
 use App\Services\IdentityProvider;
-use App\Services\OnboardingTracker;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -32,7 +31,6 @@ final class OnboardingDomainController extends AbstractController
         private readonly SpfChecker $spfChecker,
         private readonly DkimChecker $dkimChecker,
         private readonly DmarcChecker $dmarcChecker,
-        private readonly OnboardingTracker $onboardingTracker,
     ) {
     }
 
@@ -50,10 +48,6 @@ final class OnboardingDomainController extends AbstractController
         $teamId = $memberships[0]->team->id;
 
         $check = strtolower(trim($request->query->getString('check')));
-
-        if ($request->isMethod('GET') && '' === $check && $this->onboardingTracker->userHasMonitoredDomain($user)) {
-            return $this->redirectToRoute($this->onboardingTracker->nextStepRoute($user));
-        }
 
         $data = new AddDomainData();
         $errors = [];

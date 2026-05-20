@@ -38,11 +38,16 @@ final readonly class OnboardingTracker
 
     public function nextStepRoute(User $user): string
     {
-        if (null === $user->onboardingTeamCompletedAt) {
+        $hasDomain = $this->userHasMonitoredDomain($user);
+
+        // A user with a domain has implicitly finished the team step — they
+        // couldn't have reached the add-domain form without first being routed
+        // through (and submitting) step 1 in some earlier session.
+        if (null === $user->onboardingTeamCompletedAt && !$hasDomain) {
             return 'onboarding_team';
         }
 
-        if (!$this->userHasMonitoredDomain($user)) {
+        if (!$hasDomain) {
             return 'onboarding_domain';
         }
 
