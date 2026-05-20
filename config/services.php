@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Symfony\Component\DependencyInjection\Loader\Configurator\App;
+use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
 
 return App::config([
     'services' => [
@@ -13,6 +14,9 @@ return App::config([
                 '../src/Entity/',
                 '../src/Kernel.php',
             ],
+        ],
+        PdoSessionHandler::class => [
+            'arguments' => ['%env(DATABASE_URL)%'],
         ],
         'Spatie\Dns\Dns' => [
             'autoconfigure' => true,

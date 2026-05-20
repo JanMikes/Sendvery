@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Symfony\Component\DependencyInjection\Loader\Configurator\App;
+use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
 
 return App::config([
     'framework' => [
@@ -12,8 +13,14 @@ return App::config([
         'php_errors' => [
             'log' => true,
         ],
+        // Sessions are stored in Postgres via PdoSessionHandler so they
+        // survive container restarts. A dedicated PDO connection (built
+        // from DATABASE_URL) is used instead of the Doctrine connection:
+        // PdoSessionHandler holds a SELECT ... FOR UPDATE transaction
+        // for the whole request, which would collide with Doctrine writes
+        // and with DAMA DoctrineTestBundle's per-test rollback transaction.
         'session' => [
-            'handler_id' => null,
+            'handler_id' => PdoSessionHandler::class,
             'cookie_secure' => 'auto',
             'cookie_samesite' => 'lax',
             'storage_factory_id' => 'session.storage.factory.native',
@@ -28,6 +35,11 @@ return App::config([
     'when@test' => [
         'framework' => [
             'test' => true,
+            // Tests use file-based sessions so per-test session rows
+            // don't escape DAMA DoctrineTestBundle's rollback.
+            'session' => [
+                'handler_id' => null,
+            ],
         ],
     ],
 ]);
