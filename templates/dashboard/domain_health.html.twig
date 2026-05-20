@@ -25,6 +25,20 @@
         </div>
     </div>
 
+    {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
+        <div class="mb-6">
+            <twig:DnsRecordInstruction
+                recordType="TXT"
+                host="_dmarc.{{ domain.domainName }}"
+                whatText="Forward DMARC reports to Sendvery"
+                whyText="DMARC reports are how mail providers tell you who's sending email as your domain. This TXT record points those reports at us so we can show them to you as charts and alerts."
+                currentValue="{{ ruaInstruction.currentRecord }}"
+                finalValue="{{ ruaInstruction.finalRecord }}"
+                :alreadyConfigured="false"
+            />
+        </div>
+    {% endif %}
+
     {% if latest %}
         {# Current score #}
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

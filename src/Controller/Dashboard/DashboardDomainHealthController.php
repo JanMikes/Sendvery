@@ -6,15 +6,22 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainHealthHistory;
+use App\Repository\DnsCheckResultRepository;
+use App\Value\Dns\DmarcRuaInstruction;
+use App\Value\DnsCheckType;
+use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 final class DashboardDomainHealthController extends AbstractController
 {
+    private const string REPORT_ADDRESS = 'reports@sendvery.com';
+
     public function __construct(
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetDomainHealthHistory $getDomainHealthHistory,
+        private readonly DnsCheckResultRepository $dnsCheckResultRepository,
     ) {
     }
 
@@ -29,6 +36,16 @@ final class DashboardDomainHealthController extends AbstractController
 
         $latest = $this->getDomainHealthHistory->latestForDomain($id);
         $history = $this->getDomainHealthHistory->forDomain($id);
+
+        $latestDmarcCheck = $this->dnsCheckResultRepository->findLatestForDomainAndType(
+            Uuid::fromString($id),
+            DnsCheckType::Dmarc,
+        );
+
+        $ruaInstruction = DmarcRuaInstruction::build(
+            $latestDmarcCheck?->rawRecord,
+            self::REPORT_ADDRESS,
+        );
 
         $trendChartConfig = null;
         if (count($history) > 1) {
@@ -54,6 +71,7 @@ final class DashboardDomainHealthController extends AbstractController
             'latest' => $latest,
             'history' => $history,
             'trendChartConfig' => $trendChartConfig,
+            'ruaInstruction' => $ruaInstruction,
         ]);
     }
 }

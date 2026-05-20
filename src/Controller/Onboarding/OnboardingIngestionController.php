@@ -6,8 +6,11 @@ namespace App\Controller\Onboarding;
 
 use App\Entity\User;
 use App\Message\ConnectMailbox;
+use App\Repository\MonitoredDomainRepository;
 use App\Repository\TeamMembershipRepository;
+use App\Services\Dns\DmarcChecker;
 use App\Services\IdentityProvider;
+use App\Value\Dns\DmarcRuaInstruction;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -18,10 +21,14 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class OnboardingIngestionController extends AbstractController
 {
+    private const string REPORT_ADDRESS = 'reports@sendvery.com';
+
     public function __construct(
         private readonly MessageBusInterface $commandBus,
         private readonly IdentityProvider $identityProvider,
         private readonly TeamMembershipRepository $teamMembershipRepository,
+        private readonly MonitoredDomainRepository $monitoredDomainRepository,
+        private readonly DmarcChecker $dmarcChecker,
     ) {
     }
 
@@ -73,8 +80,24 @@ final class OnboardingIngestionController extends AbstractController
             }
         }
 
+        $memberships = $this->teamMembershipRepository->findForUser($user->id);
+        $teamId = $memberships[0]->team->id;
+        $primaryDomain = $this->monitoredDomainRepository->findFirstForTeam($teamId);
+
+        $domainName = null;
+        $ruaInstruction = null;
+
+        if (null !== $primaryDomain) {
+            $domainName = $primaryDomain->domain;
+            $dmarcCheck = $this->dmarcChecker->check($primaryDomain->domain);
+            $ruaInstruction = DmarcRuaInstruction::build($dmarcCheck->rawRecord, self::REPORT_ADDRESS);
+        }
+
         return $this->render('onboarding/ingestion.html.twig', [
             'errors' => $errors,
+            'domainName' => $domainName,
+            'ruaInstruction' => $ruaInstruction,
+            'reportAddress' => self::REPORT_ADDRESS,
         ]);
     }
 }

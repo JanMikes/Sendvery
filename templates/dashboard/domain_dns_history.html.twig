@@ -16,6 +16,20 @@
         </div>
     </div>
 
+    {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
+        <div class="mb-6">
+            <twig:DnsRecordInstruction
+                recordType="TXT"
+                host="_dmarc.{{ domain.domainName }}"
+                whatText="Send DMARC reports to Sendvery"
+                whyText="Without this, mail providers (Gmail, Outlook…) send DMARC reports somewhere else — or nowhere — and we can't show you who's sending mail as your domain."
+                currentValue="{{ ruaInstruction.currentRecord }}"
+                finalValue="{{ ruaInstruction.finalRecord }}"
+                :alreadyConfigured="false"
+            />
+        </div>
+    {% endif %}
+
     {% if history is empty %}
         <twig:EmptyState
             title="No DNS checks yet"

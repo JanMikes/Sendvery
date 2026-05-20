@@ -25,10 +25,10 @@
         </div>
     {% endif %}
 
-    {# Option 1: Forward reports #}
+    {# Option 1: Forward reports — show live DMARC state for the user's domain #}
     <div class="card bg-base-100 shadow-xl border border-base-200">
-        <div class="card-body p-6 sm:p-8">
-            <div class="flex items-start gap-4 mb-4">
+        <div class="card-body p-6 sm:p-8 space-y-5">
+            <div class="flex items-start gap-4">
                 <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
@@ -36,21 +36,39 @@
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 flex-wrap mb-1">
-                        <h2 class="text-xl font-bold">Forward reports to us</h2>
+                        <h2 class="text-xl font-bold">Forward reports to us via DNS</h2>
                         <span class="badge badge-primary badge-sm">Recommended</span>
                     </div>
                     <p class="text-sm text-base-content/60">
-                        Easiest setup. Add one line to your DMARC DNS record and reports start flowing in within 24 hours.
+                        Easiest setup. Add a single tag to your domain's DMARC DNS record{% if domainName %} at <span class="font-mono text-base-content/80">{{ domainName }}</span>{% endif %} — reports flow in within 24 hours.
                     </p>
                 </div>
             </div>
 
-            <div class="bg-base-200/60 rounded-xl p-4 mb-4">
-                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-2">Add to your DMARC record</div>
-                <div class="mockup-code text-sm rounded-lg">
-                    <pre data-prefix="$"><code>rua=mailto:reports@sendvery.com</code></pre>
+            {% if ruaInstruction is not null and domainName is not null %}
+                <twig:DnsRecordInstruction
+                    recordType="TXT"
+                    host="_dmarc.{{ domainName }}"
+                    whatText="Point DMARC aggregate reports at Sendvery"
+                    whyText="DMARC reports are XML files mail providers send daily, describing who's sending email as your domain. This TXT record tells them to also send those reports to us so we can turn them into charts and alerts."
+                    currentValue="{{ ruaInstruction.currentRecord }}"
+                    finalValue="{{ ruaInstruction.finalRecord }}"
+                    :alreadyConfigured="ruaInstruction.alreadyConfigured"
+                />
+            {% else %}
+                {# Fallback when the user skipped adding a domain in step 2 #}
+                <div class="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm">
+                    <div class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-warning shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/></svg>
+                        <div>
+                            <p class="font-semibold">No domain yet</p>
+                            <p class="text-base-content/70 mt-1">
+                                <a href="{{ path('onboarding_domain') }}" class="link link-primary">Add a domain first</a> — we'll then show you exactly what DNS record to add or edit.
+                            </p>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            {% endif %}
 
             <form method="post" action="{{ path('onboarding_ingestion') }}">
                 <input type="hidden" name="method" value="forward">
@@ -58,7 +76,11 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
-                    I've updated my DMARC record
+                    {% if ruaInstruction is not null and ruaInstruction.alreadyConfigured %}
+                        Continue
+                    {% else %}
+                        I've updated my DMARC record
+                    {% endif %}
                 </button>
             </form>
         </div>

@@ -1,0 +1,117 @@
+{# Side-by-side DNS setup instruction card.
+
+   Renders WHAT (title), WHY (one-line tip), and HOW (record type, host, TTL,
+   plus the user's current value next to the value they should end up with).
+   The action ("Add new record" vs "Edit existing record") is derived from
+   whether a current value exists.
+
+   Props:
+     - recordType (string)        DNS record type (TXT / CNAME / MX).
+     - host (string)              Full host name, e.g. "_dmarc.example.com".
+     - finalValue (string)        The value the record should hold after the change.
+     - whatText (string)          Short imperative title — what we're asking for.
+     - whyText (string)           One-sentence explanation in plain language.
+     - currentValue (?string)     Existing value, or null when no record exists.
+     - ttl (int)                  Recommended TTL in seconds (default 3600).
+     - alreadyConfigured (bool)   When true, render a success state instead of instructions.
+#}
+{% props recordType, host, finalValue, whatText, whyText, currentValue = null, ttl = 3600, alreadyConfigured = false %}
+
+{% set isEdit = currentValue is not null and currentValue != '' %}
+{% set actionLabel = isEdit ? 'Edit existing record' : 'Add a new record' %}
+
+<div class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl">
+    <div class="card-body p-5 sm:p-6 space-y-4">
+        {# WHAT — title + why hint #}
+        <div class="flex items-start gap-3">
+            <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 class="font-bold text-base sm:text-lg leading-snug">{{ whatText }}</h3>
+                <p class="text-sm text-base-content/60 mt-1 leading-relaxed">
+                    <span class="font-semibold text-base-content/80">Why:</span> {{ whyText }}
+                </p>
+            </div>
+        </div>
+
+        {% if alreadyConfigured %}
+            <div class="rounded-xl border border-success/20 bg-success/5 p-4 flex items-start gap-3">
+                <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                </svg>
+                <div class="text-sm">
+                    <div class="font-semibold text-success">You're all set</div>
+                    <p class="text-base-content/70 mt-0.5">This record is already configured correctly. No DNS change needed.</p>
+                    {% if currentValue %}
+                        <div class="bg-base-200/60 rounded-lg p-2 mt-2 font-mono text-xs break-all">{{ currentValue }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            {# HOW — action chip + record meta #}
+            <div class="rounded-xl bg-base-200/60 p-4 space-y-3">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs uppercase tracking-wide font-semibold text-base-content/50">Action</span>
+                    <span class="badge {{ isEdit ? 'badge-warning' : 'badge-primary' }} badge-sm font-semibold">
+                        {% if isEdit %}
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.41-9.41a2 2 0 112.83 2.83L11.83 15H9v-2.83l8.59-8.58z"/></svg>
+                        {% else %}
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        {% endif %}
+                        {{ actionLabel }}
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Record type</div>
+                        <div class="font-mono font-semibold">{{ recordType }}</div>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Host / Name</div>
+                        <div class="font-mono break-all">{{ host }}</div>
+                    </div>
+                </div>
+
+                <div class="text-xs text-base-content/50">
+                    TTL: <span class="font-mono">{{ ttl }}</span> (or leave your provider's default)
+                </div>
+            </div>
+
+            {# Side-by-side values #}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="rounded-xl border border-base-200 bg-base-100 overflow-hidden">
+                    <div class="px-3 py-2 bg-base-200/60 text-xs uppercase tracking-wide font-semibold text-base-content/60 flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Current value
+                    </div>
+                    <div class="p-3 font-mono text-xs break-all min-h-[3.5rem] flex items-center">
+                        {% if isEdit %}
+                            <span class="text-base-content/80">{{ currentValue }}</span>
+                        {% else %}
+                            <span class="italic text-base-content/40">No record exists yet</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="rounded-xl border border-primary/30 bg-primary/5 overflow-hidden">
+                    <div class="px-3 py-2 bg-primary/10 text-xs uppercase tracking-wide font-semibold text-primary flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        Final value (paste this)
+                    </div>
+                    <div class="p-3 font-mono text-xs break-all min-h-[3.5rem] flex items-center select-all">
+                        <span class="text-base-content">{{ finalValue }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-xs text-base-content/50 leading-relaxed">
+                Open your DNS provider (Cloudflare, GoDaddy, Namecheap, your registrar…), find the <span class="font-mono">{{ host }}</span> record above
+                {%- if isEdit %} and replace its value with the final value{% else %} or create it if missing{% endif %}.
+                Changes can take a few minutes to a few hours to propagate.
+            </div>
+        {% endif %}
+    </div>
+</div>
