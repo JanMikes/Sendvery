@@ -54,3 +54,7 @@ Thumbs.db
 
 ###> phpstan/phpstan ###
 ###< phpstan/phpstan ###
+
+###> claude code ###
+/.claude/scheduled_tasks.lock
+###< claude code ###
