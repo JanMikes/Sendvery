@@ -5,20 +5,61 @@
 {% block page_title %}Setup complete{% endblock %}
 
 {% block content %}
-<div class="card bg-base-100 shadow-xl">
-    <div class="card-body text-center">
-        <div class="flex justify-center mb-4">
-            <svg class="w-20 h-20 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+<div class="space-y-6">
+    <div class="card bg-base-100 shadow-xl border border-base-200">
+        <div class="card-body p-8 sm:p-10 text-center">
+            <div class="flex justify-center mb-6">
+                <div class="relative">
+                    <div class="absolute inset-0 bg-success/20 rounded-full blur-2xl"></div>
+                    <div class="relative w-20 h-20 rounded-full bg-success/15 flex items-center justify-center ring-8 ring-success/5">
+                        <svg class="w-10 h-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <h1 class="text-3xl sm:text-4xl font-bold mb-3">You're all set! 🎉</h1>
+            <p class="text-base-content/60 max-w-md mx-auto mb-8">
+                Sendvery is now watching your domain. Here's what happens next.
+            </p>
+
+            {# What happens next — clear timeline #}
+            <div class="text-left max-w-md mx-auto space-y-4 mb-8">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-semibold text-sm">1</div>
+                    <div>
+                        <div class="font-semibold text-base-content">Reports start arriving</div>
+                        <p class="text-sm text-base-content/60">First DMARC reports typically land within 24 hours — sometimes within minutes if you have high volume.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-semibold text-sm">2</div>
+                    <div>
+                        <div class="font-semibold text-base-content">We parse and analyze</div>
+                        <p class="text-sm text-base-content/60">Every report is parsed automatically. You'll see charts, sources, and pass/fail rates in your dashboard.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 font-semibold text-sm">3</div>
+                    <div>
+                        <div class="font-semibold text-base-content">You get alerts when it matters</div>
+                        <p class="text-sm text-base-content/60">We'll email you on real problems — drops in authentication, suspicious senders, or expiring records.</p>
+                    </div>
+                </div>
+            </div>
+
+            <a href="{{ path('dashboard_overview') }}" class="btn btn-primary w-full gap-2">
+                Go to dashboard
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                </svg>
+            </a>
         </div>
-
-        <h2 class="text-2xl font-bold mb-2">You're all set!</h2>
-        <p class="text-base-content/60 mb-6">
-            Your account is ready. Head to your dashboard to start monitoring.
-        </p>
-
-        <a href="{{ path('dashboard_overview') }}" class="btn btn-primary w-full">
-            Go to dashboard
-        </a>
     </div>
+
+    <p class="text-center text-sm text-base-content/50">
+        Need a hand? Check the <a href="{{ path('knowledge_base_index') }}" class="link link-primary">knowledge base</a> — it's full of guides.
+    </p>
 </div>
 {% endblock %}
