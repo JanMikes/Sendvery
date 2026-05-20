@@ -7,6 +7,7 @@ namespace App\Controller\Onboarding;
 use App\Entity\User;
 use App\FormData\AddDomainData;
 use App\Message\AddDomain;
+use App\Repository\MonitoredDomainRepository;
 use App\Repository\TeamMembershipRepository;
 use App\Services\Dns\DkimChecker;
 use App\Services\Dns\DmarcChecker;
@@ -26,6 +27,7 @@ final class OnboardingDomainController extends AbstractController
         private readonly IdentityProvider $identityProvider,
         private readonly ValidatorInterface $validator,
         private readonly TeamMembershipRepository $teamMembershipRepository,
+        private readonly MonitoredDomainRepository $monitoredDomainRepository,
         private readonly SpfChecker $spfChecker,
         private readonly DkimChecker $dkimChecker,
         private readonly DmarcChecker $dmarcChecker,
@@ -42,12 +44,15 @@ final class OnboardingDomainController extends AbstractController
             return $this->redirectToRoute('dashboard_overview');
         }
 
+        $memberships = $this->teamMembershipRepository->findForUser($user->id);
+        $teamId = $memberships[0]->team->id;
+
         $data = new AddDomainData();
         $errors = [];
         $dnsResults = null;
 
         if ($request->isMethod('POST')) {
-            $data->domainName = trim($request->request->getString('domain_name'));
+            $data->domainName = strtolower(trim($request->request->getString('domain_name')));
 
             $violations = $this->validator->validate($data);
 
@@ -56,25 +61,31 @@ final class OnboardingDomainController extends AbstractController
                     $errors[] = (string) $violation->getMessage();
                 }
             } else {
-                $memberships = $this->teamMembershipRepository->findForUser($user->id);
-                $teamId = $memberships[0]->team->id;
+                $existing = $this->monitoredDomainRepository->findByDomain($data->domainName, $teamId);
 
-                $domainId = $this->identityProvider->nextIdentity();
+                if (null === $existing) {
+                    $this->commandBus->dispatch(new AddDomain(
+                        domainId: $this->identityProvider->nextIdentity(),
+                        teamId: $teamId,
+                        domainName: $data->domainName,
+                    ));
+                }
 
-                $this->commandBus->dispatch(new AddDomain(
-                    domainId: $domainId,
-                    teamId: $teamId,
-                    domainName: $data->domainName,
-                ));
+                return $this->redirectToRoute('onboarding_domain', ['check' => $data->domainName]);
+            }
+        } else {
+            $check = strtolower(trim($request->query->getString('check')));
 
-                $dnsResults = [
-                    'spf' => $this->spfChecker->check($data->domainName),
-                    'dkim' => $this->dkimChecker->check($data->domainName),
-                    'dmarc' => $this->dmarcChecker->check($data->domainName),
-                ];
+            if ('' !== $check) {
+                $existing = $this->monitoredDomainRepository->findByDomain($check, $teamId);
 
-                if ($request->request->has('continue')) {
-                    return $this->redirectToRoute('onboarding_ingestion');
+                if (null !== $existing) {
+                    $data->domainName = $existing->domain;
+                    $dnsResults = [
+                        'spf' => $this->spfChecker->check($existing->domain),
+                        'dkim' => $this->dkimChecker->check($existing->domain),
+                        'dmarc' => $this->dmarcChecker->check($existing->domain),
+                    ];
                 }
             }
         }
