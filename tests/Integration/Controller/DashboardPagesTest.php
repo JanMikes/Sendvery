@@ -372,25 +372,23 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function emptyDomainListShowsEmptyState(): void
+    public function userWithNoDomainsIsRedirectedToOnboarding(): void
     {
         $client = $this->createAuthenticatedClientEmpty();
 
         $client->request('GET', '/app/domains');
 
-        self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'No domains yet');
+        self::assertResponseRedirects('/app/onboarding/team');
     }
 
     #[Test]
-    public function emptyReportsListShowsEmptyState(): void
+    public function reportsPageRedirectsToOnboardingWhenNoDomains(): void
     {
         $client = $this->createAuthenticatedClientEmpty();
 
         $client->request('GET', '/app/reports');
 
-        self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'No reports yet');
+        self::assertResponseRedirects('/app/onboarding/team');
     }
 
     #[Test]

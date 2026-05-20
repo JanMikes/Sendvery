@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Controller;
 
+use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
@@ -87,6 +88,16 @@ final class FeedbackTest extends WebTestCase
             joinedAt: new \DateTimeImmutable(),
         );
         $em->persist($membership);
+
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'feedback-'.substr($userId->toString(), 0, 8).'.com',
+            createdAt: new \DateTimeImmutable(),
+        );
+        $domain->popEvents();
+        $em->persist($domain);
+
         $em->flush();
 
         $client->loginUser($user);

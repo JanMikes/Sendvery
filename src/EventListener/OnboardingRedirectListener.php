@@ -5,13 +5,16 @@ declare(strict_types=1);
 namespace App\EventListener;
 
 use App\Entity\User;
+use Doctrine\DBAL\Connection;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
-#[AsEventListener(event: 'kernel.request', priority: 10)]
+// Priority must be below Symfony\Component\Security\Http\Firewall (priority 8) so the
+// token has been populated from the session by the time this listener runs.
+#[AsEventListener(event: 'kernel.request', priority: 4)]
 final readonly class OnboardingRedirectListener
 {
     private const array ONBOARDING_ROUTES = [
@@ -24,6 +27,7 @@ final readonly class OnboardingRedirectListener
     public function __construct(
         private TokenStorageInterface $tokenStorage,
         private UrlGeneratorInterface $urlGenerator,
+        private Connection $database,
     ) {
     }
 
@@ -40,7 +44,6 @@ final readonly class OnboardingRedirectListener
             return;
         }
 
-        // Only intercept /app/* routes (but not onboarding routes themselves)
         if (!str_starts_with($request->getPathInfo(), '/app')) {
             return;
         }
@@ -61,10 +64,25 @@ final readonly class OnboardingRedirectListener
             return;
         }
 
-        if (null === $user->onboardingCompletedAt) {
-            $event->setResponse(
-                new RedirectResponse($this->urlGenerator->generate('onboarding_team')),
-            );
+        if (null !== $user->onboardingCompletedAt && $this->userHasMonitoredDomain($user)) {
+            return;
         }
+
+        $event->setResponse(
+            new RedirectResponse($this->urlGenerator->generate('onboarding_team')),
+        );
+    }
+
+    private function userHasMonitoredDomain(User $user): bool
+    {
+        $count = (int) $this->database->fetchOne(
+            'SELECT COUNT(d.id)
+             FROM monitored_domain d
+             INNER JOIN team_membership tm ON tm.team_id = d.team_id
+             WHERE tm.user_id = :userId',
+            ['userId' => $user->id->toString()],
+        );
+
+        return $count > 0;
     }
 }

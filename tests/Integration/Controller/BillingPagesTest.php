@@ -53,6 +53,16 @@ final class BillingPagesTest extends WebTestCase
             joinedAt: new \DateTimeImmutable(),
         );
         $em->persist($membership);
+
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'billing-'.substr($teamId->toString(), 0, 8).'.com',
+            createdAt: new \DateTimeImmutable(),
+        );
+        $domain->popEvents();
+        $em->persist($domain);
+
         $em->flush();
 
         $client->loginUser($user);
