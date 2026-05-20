@@ -41,6 +41,16 @@ return App::config([
                 '$betaRequestsEmail' => '%env(BETA_REQUESTS_EMAIL)%',
             ],
         ],
+        'App\Services\Sentry\SentryTracesSampler' => [
+            'arguments' => [
+                '$profilingSecret' => '%env(SENTRY_PROFILING_SECRET)%',
+                '$defaultTracesSampleRate' => '%env(float:SENTRY_TRACES_SAMPLE_RATE)%',
+            ],
+        ],
+        'sentry.traces_sampler' => [
+            'class' => Closure::class,
+            'factory' => ['@App\Services\Sentry\SentryTracesSampler', '__invoke'],
+        ],
     ],
     'when@test' => [
         'services' => [
