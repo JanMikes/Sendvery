@@ -40,7 +40,7 @@ final readonly class DmarcRuaInstruction
         }
 
         $ruaAddresses[] = $reportAddress;
-        $newRuaValue = implode(',', array_map(static fn (string $addr): string => 'mailto:' . $addr, $ruaAddresses));
+        $newRuaValue = implode(',', array_map(static fn (string $addr): string => 'mailto:'.$addr, $ruaAddresses));
 
         $tags['rua'] = $newRuaValue;
 
