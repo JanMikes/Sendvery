@@ -33,14 +33,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  scheduler:
-    build: .
-    command: php bin/console messenger:consume scheduler_default --time-limit=3600
-    depends_on:
-      database:
-        condition: service_healthy
-    restart: unless-stopped
-
   database:
     image: postgres:17-alpine
     environment:
