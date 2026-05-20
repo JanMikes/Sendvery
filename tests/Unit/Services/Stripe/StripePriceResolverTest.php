@@ -28,4 +28,13 @@ final class StripePriceResolverTest extends TestCase
         $this->expectException(\LogicException::class);
         $resolver->getPriceId(SubscriptionPlan::Free);
     }
+
+    public function testUnlimitedPlanThrowsException(): void
+    {
+        $resolver = new StripePriceResolver();
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Unlimited plan is internal-only');
+        $resolver->getPriceId(SubscriptionPlan::Unlimited);
+    }
 }

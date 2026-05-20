@@ -16,27 +16,32 @@
                     <span class="badge badge-primary badge-lg">{{ billing.plan.value|capitalize }}</span>
                 </div>
 
+                {% set is_unlimited = billing.plan.value == 'unlimited' %}
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <p class="text-sm text-base-content/50">Domains</p>
-                        <p class="text-lg font-medium">{{ billing.domainCount }} / {{ maxDomains }}</p>
-                        <div class="w-full bg-base-200 rounded-full h-2 mt-1">
-                            <div class="bg-primary rounded-full h-2" style="width: {{ maxDomains > 0 ? ((billing.domainCount / maxDomains) * 100)|round : 0 }}%"></div>
-                        </div>
+                        <p class="text-lg font-medium">{{ billing.domainCount }} / {{ is_unlimited ? '∞' : maxDomains }}</p>
+                        {% if not is_unlimited %}
+                            <div class="w-full bg-base-200 rounded-full h-2 mt-1">
+                                <div class="bg-primary rounded-full h-2" style="width: {{ maxDomains > 0 ? ((billing.domainCount / maxDomains) * 100)|round : 0 }}%"></div>
+                            </div>
+                        {% endif %}
                     </div>
                     <div>
                         <p class="text-sm text-base-content/50">Team Members</p>
-                        <p class="text-lg font-medium">{{ billing.memberCount }} / {{ maxMembers }}</p>
-                        <div class="w-full bg-base-200 rounded-full h-2 mt-1">
-                            <div class="bg-primary rounded-full h-2" style="width: {{ maxMembers > 0 ? ((billing.memberCount / maxMembers) * 100)|round : 0 }}%"></div>
-                        </div>
+                        <p class="text-lg font-medium">{{ billing.memberCount }} / {{ is_unlimited ? '∞' : maxMembers }}</p>
+                        {% if not is_unlimited %}
+                            <div class="w-full bg-base-200 rounded-full h-2 mt-1">
+                                <div class="bg-primary rounded-full h-2" style="width: {{ maxMembers > 0 ? ((billing.memberCount / maxMembers) * 100)|round : 0 }}%"></div>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
         {# Paid plans in private beta #}
-        {% if billing.plan.value != 'team' %}
+        {% if billing.plan.value in ['free', 'personal'] %}
             <div class="card bg-base-100 border border-base-200 shadow-sm">
                 <div class="card-body p-6">
                     <div class="flex items-start gap-3 mb-4">

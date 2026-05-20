@@ -95,6 +95,39 @@ final class PlanEnforcementTest extends IntegrationTestCase
         self::assertTrue($enforcement->canAccessFeature(SubscriptionPlan::Team, 'api_access'));
     }
 
+    public function testUnlimitedPlanCanAlwaysAddDomain(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $enforcement = $this->getService(PlanEnforcement::class);
+
+        $team = $this->createTeam($em);
+        $this->createDomain($em, $team);
+        $this->createDomain($em, $team);
+        $this->createDomain($em, $team);
+
+        self::assertTrue($enforcement->canAddDomain($team->id->toString(), SubscriptionPlan::Unlimited));
+    }
+
+    public function testUnlimitedPlanCanAlwaysAddTeamMember(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $enforcement = $this->getService(PlanEnforcement::class);
+
+        $team = $this->createTeam($em);
+        $this->createMember($em, $team);
+
+        self::assertTrue($enforcement->canAddTeamMember($team->id->toString(), SubscriptionPlan::Unlimited));
+    }
+
+    public function testUnlimitedPlanGrantsAllFeatures(): void
+    {
+        $enforcement = $this->getService(PlanEnforcement::class);
+
+        self::assertTrue($enforcement->canAccessFeature(SubscriptionPlan::Unlimited, 'alerts'));
+        self::assertTrue($enforcement->canAccessFeature(SubscriptionPlan::Unlimited, 'api_access'));
+        self::assertTrue($enforcement->canAccessFeature(SubscriptionPlan::Unlimited, 'ai_insights'));
+    }
+
     private function createTeam(EntityManagerInterface $em): Team
     {
         $team = new Team(

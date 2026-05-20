@@ -73,7 +73,10 @@ final class RequestBetaAccessController extends AbstractController
             'data' => $data,
             'errors' => $errors,
             'success' => $success,
-            'plans' => SubscriptionPlan::cases(),
+            'plans' => array_values(array_filter(
+                SubscriptionPlan::cases(),
+                static fn (SubscriptionPlan $plan): bool => SubscriptionPlan::Unlimited !== $plan,
+            )),
             'source' => $source,
         ]);
     }

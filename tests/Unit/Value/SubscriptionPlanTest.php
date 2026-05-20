@@ -14,6 +14,7 @@ final class SubscriptionPlanTest extends TestCase
         self::assertSame('free', SubscriptionPlan::Free->value);
         self::assertSame('personal', SubscriptionPlan::Personal->value);
         self::assertSame('team', SubscriptionPlan::Team->value);
+        self::assertSame('unlimited', SubscriptionPlan::Unlimited->value);
     }
 
     public function testFromValue(): void

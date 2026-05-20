@@ -96,4 +96,31 @@ final class PlanLimitsTest extends TestCase
     {
         self::assertFalse($this->planLimits->hasFeature(SubscriptionPlan::Team, 'nonexistent_feature'));
     }
+
+    public function testMaxDomainsForUnlimitedPlan(): void
+    {
+        self::assertSame(PHP_INT_MAX, $this->planLimits->getMaxDomains(SubscriptionPlan::Unlimited));
+    }
+
+    public function testMaxTeamMembersForUnlimitedPlan(): void
+    {
+        self::assertSame(PHP_INT_MAX, $this->planLimits->getMaxTeamMembers(SubscriptionPlan::Unlimited));
+    }
+
+    public function testUnlimitedHasAllKnownFeatures(): void
+    {
+        $features = ['dns_monitoring', 'alerts', 'digest', 'api_access', 'blacklist_monitoring', 'ai_insights', 'pdf_export', 'sender_inventory'];
+
+        foreach ($features as $feature) {
+            self::assertTrue(
+                $this->planLimits->hasFeature(SubscriptionPlan::Unlimited, $feature),
+                sprintf('Unlimited plan should have feature "%s"', $feature),
+            );
+        }
+    }
+
+    public function testUnlimitedReturnsTrueEvenForUnknownFeature(): void
+    {
+        self::assertTrue($this->planLimits->hasFeature(SubscriptionPlan::Unlimited, 'future_feature_we_havent_built_yet'));
+    }
 }

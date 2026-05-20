@@ -26,7 +26,8 @@ final class UpgradePlanController extends AbstractController
     {
         $targetPlan = SubscriptionPlan::tryFrom($plan);
 
-        if (null === $targetPlan || SubscriptionPlan::Free === $targetPlan) {
+        $purchasablePlans = [SubscriptionPlan::Personal, SubscriptionPlan::Team];
+        if (null === $targetPlan || !in_array($targetPlan, $purchasablePlans, true)) {
             $this->addFlash('error', 'Invalid plan selected.');
 
             return $this->redirectToRoute('dashboard_billing');

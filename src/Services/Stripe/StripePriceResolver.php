@@ -24,6 +24,7 @@ final readonly class StripePriceResolver
             SubscriptionPlan::Personal => $this->requireEnv('STRIPE_PRICE_PERSONAL'),
             SubscriptionPlan::Team => $this->requireEnv('STRIPE_PRICE_TEAM'),
             SubscriptionPlan::Free => throw new \LogicException('Free plan does not have a Stripe price.'),
+            SubscriptionPlan::Unlimited => throw new \LogicException('Unlimited plan is internal-only and cannot be purchased via Stripe.'),
         };
     }
 

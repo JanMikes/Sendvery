@@ -14,6 +14,7 @@ final readonly class PlanLimits
             SubscriptionPlan::Free => 1,
             SubscriptionPlan::Personal => 5,
             SubscriptionPlan::Team => 50,
+            SubscriptionPlan::Unlimited => PHP_INT_MAX,
         };
     }
 
@@ -23,11 +24,16 @@ final readonly class PlanLimits
             SubscriptionPlan::Free => 1,
             SubscriptionPlan::Personal => 1,
             SubscriptionPlan::Team => 10,
+            SubscriptionPlan::Unlimited => PHP_INT_MAX,
         };
     }
 
     public function hasFeature(SubscriptionPlan $plan, string $feature): bool
     {
+        if (SubscriptionPlan::Unlimited === $plan) {
+            return true;
+        }
+
         return match ($feature) {
             'dns_monitoring', 'alerts' => SubscriptionPlan::Free !== $plan,
             'digest' => true,
