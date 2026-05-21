@@ -9,6 +9,7 @@ use App\Message\ConnectMailbox;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\Dns\DmarcChecker;
 use App\Services\IdentityProvider;
+use App\Services\ReportAddressProvider;
 use App\Services\TeamProvisioner;
 use App\Value\Dns\DmarcRuaInstruction;
 use App\Value\MailboxEncryption;
@@ -21,14 +22,13 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class OnboardingIngestionController extends AbstractController
 {
-    private const string REPORT_ADDRESS = 'reports@sendvery.com';
-
     public function __construct(
         private readonly MessageBusInterface $commandBus,
         private readonly IdentityProvider $identityProvider,
         private readonly TeamProvisioner $teamProvisioner,
         private readonly MonitoredDomainRepository $monitoredDomainRepository,
         private readonly DmarcChecker $dmarcChecker,
+        private readonly ReportAddressProvider $reportAddressProvider,
     ) {
     }
 
@@ -94,11 +94,13 @@ final class OnboardingIngestionController extends AbstractController
 
         $dmarcCheck = $this->dmarcChecker->check($primaryDomain->domain);
 
+        $reportAddress = $this->reportAddressProvider->get();
+
         return $this->render('onboarding/ingestion.html.twig', [
             'errors' => $errors,
             'domainName' => $primaryDomain->domain,
-            'ruaInstruction' => DmarcRuaInstruction::build($dmarcCheck->rawRecord, self::REPORT_ADDRESS),
-            'reportAddress' => self::REPORT_ADDRESS,
+            'ruaInstruction' => DmarcRuaInstruction::build($dmarcCheck->rawRecord, $reportAddress),
+            'reportAddress' => $reportAddress,
         ]);
     }
 }

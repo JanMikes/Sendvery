@@ -7,6 +7,7 @@ namespace App\Controller\Dashboard;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainDnsHistory;
 use App\Repository\DnsCheckResultRepository;
+use App\Services\ReportAddressProvider;
 use App\Value\Dns\DmarcRuaInstruction;
 use App\Value\DnsCheckType;
 use Ramsey\Uuid\Uuid;
@@ -16,12 +17,11 @@ use Symfony\Component\Routing\Attribute\Route;
 
 final class DomainDnsHistoryController extends AbstractController
 {
-    private const string REPORT_ADDRESS = 'reports@sendvery.com';
-
     public function __construct(
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetDomainDnsHistory $getDomainDnsHistory,
         private readonly DnsCheckResultRepository $dnsCheckResultRepository,
+        private readonly ReportAddressProvider $reportAddressProvider,
     ) {
     }
 
@@ -43,7 +43,7 @@ final class DomainDnsHistoryController extends AbstractController
 
         $ruaInstruction = DmarcRuaInstruction::build(
             $latestDmarcCheck?->rawRecord,
-            self::REPORT_ADDRESS,
+            $this->reportAddressProvider->get(),
         );
 
         return $this->render('dashboard/domain_dns_history.html.twig', [

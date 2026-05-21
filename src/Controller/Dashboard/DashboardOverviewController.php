@@ -12,6 +12,7 @@ use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainVerificationStatus;
 use App\Services\DashboardContext;
 use App\Services\DomainVerificationEvaluator;
+use App\Services\ReportAddressProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -27,6 +28,7 @@ final class DashboardOverviewController extends AbstractController
         private readonly GetAlerts $getAlerts,
         private readonly GetDomainVerificationStatus $verificationStatusQuery,
         private readonly DomainVerificationEvaluator $verificationEvaluator,
+        private readonly ReportAddressProvider $reportAddressProvider,
     ) {
     }
 
@@ -89,6 +91,7 @@ final class DashboardOverviewController extends AbstractController
             'recentAlerts' => $recentAlerts,
             'verificationStatus' => $verificationStatus,
             'verificationSeverity' => null === $verificationStatus ? null : $this->verificationEvaluator->severity($verificationStatus),
+            'reportAddress' => $this->reportAddressProvider->get(),
         ]);
     }
 }

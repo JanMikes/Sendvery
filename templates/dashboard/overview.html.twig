@@ -33,7 +33,7 @@
                         <p class="text-sm text-base-content/70">We saw it before, but the last {{ verificationStatus.consecutiveDmarcFailures }} checks couldn't find it. Reports will stop arriving until it's republished.</p>
                     {% else %}
                         <div class="font-semibold text-base-content mb-1">No DMARC reports yet for {{ verificationStatus.domainName }}</div>
-                        <p class="text-sm text-base-content/70">DMARC is published but no reports have arrived after 48 hours. Verify that <code class="kbd kbd-xs">rua</code> points at <span class="font-mono">reports@sendvery.com</span>.</p>
+                        <p class="text-sm text-base-content/70">DMARC is published but no reports have arrived after 48 hours. Verify that <code class="kbd kbd-xs">rua</code> points at <span class="font-mono">{{ reportAddress }}</span>.</p>
                     {% endif %}
                 </div>
                 <form method="post" action="{{ path('dashboard_domain_reverify', {id: verificationStatus.domainId}) }}" class="shrink-0">
