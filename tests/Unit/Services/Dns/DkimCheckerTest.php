@@ -7,6 +7,7 @@ namespace App\Tests\Unit\Services\Dns;
 use App\Services\Dns\DkimChecker;
 use App\Services\Dns\DkimSelectorRegistry;
 use App\Services\Dns\EmailProviderDetector;
+use App\Services\Dns\FakeDns;
 use App\Services\OrganizationMapper;
 use App\Value\Dns\DkimLookupOutcome;
 use PHPUnit\Framework\Attributes\Test;
@@ -17,7 +18,7 @@ final class DkimCheckerTest extends TestCase
     #[Test]
     public function reportsKeyFoundWhenTxtContainsValidKey(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withTxt('google._domainkey.example.com', 'v=DKIM1; k=rsa; p='.$this->fakePublicKey(2048));
 
         $checker = $this->checker($dns);
@@ -33,7 +34,7 @@ final class DkimCheckerTest extends TestCase
     #[Test]
     public function reportsKeyRevokedWhenPTagIsEmpty(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withTxt('s1._domainkey.example.com', 'v=DKIM1; k=rsa; p=');
 
         $checker = $this->checker($dns);
@@ -48,7 +49,7 @@ final class DkimCheckerTest extends TestCase
     public function reportsCnameTargetMissingKeyWhenChainGoesToNxdomain(): void
     {
         // The exact bug we hit on myspeedpuzzling.com: CNAME exists, target returns nothing.
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withCname('szn20251014._domainkey.myspeedpuzzling.com', 'szn20251014._domainkey.seznam.cz');
 
         $checker = $this->checker($dns);
@@ -66,7 +67,7 @@ final class DkimCheckerTest extends TestCase
     public function reportsCnameTargetMissingKeyWhenChainResolvesToUnrelatedTxt(): void
     {
         // CNAME points at apex which has SPF/site-verification but no DKIM 'p='.
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withCname('szn20251014._domainkey.example.com', 'example.com')
             ->withTxt('szn20251014._domainkey.example.com', 'v=spf1 include:_spf.google.com ~all')
             ->withTxt('szn20251014._domainkey.example.com', 'google-site-verification=xyz');
@@ -82,7 +83,7 @@ final class DkimCheckerTest extends TestCase
     #[Test]
     public function reportsNoRecordWhenNothingExists(): void
     {
-        $dns = new StubDns();
+        $dns = new FakeDns();
 
         $checker = $this->checker($dns);
 
@@ -96,7 +97,7 @@ final class DkimCheckerTest extends TestCase
     #[Test]
     public function reportsRecordsButNoDkimWhenTxtExistsWithoutPTag(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withTxt('foo._domainkey.example.com', 'v=spf1 include:_spf.google.com ~all');
 
         $checker = $this->checker($dns);
@@ -110,7 +111,7 @@ final class DkimCheckerTest extends TestCase
     public function autoProbeUsesDetectedProvidersToFindKey(): void
     {
         // Domain uses Google Workspace (per MX), key lives at `google._domainkey`.
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('example.com', 'aspmx.l.google.com')
             ->withTxt('google._domainkey.example.com', 'v=DKIM1; k=rsa; p='.$this->fakePublicKey(2048));
 
@@ -126,7 +127,7 @@ final class DkimCheckerTest extends TestCase
     #[Test]
     public function autoProbeReportsDetectedProvidersWhenNothingFound(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('example.com', 'aspmx.l.google.com');
 
         $checker = $this->checker($dns);
@@ -142,7 +143,7 @@ final class DkimCheckerTest extends TestCase
     public function autoProbeStopsEarlyWhenCnameFoundAtKnownSelector(): void
     {
         // Selector probe hits a CNAME early — should return that result rather than continuing.
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('example.com', 'aspmx.l.google.com')
             ->withCname('google._domainkey.example.com', 'google._domainkey.elsewhere.com');
 
@@ -154,7 +155,7 @@ final class DkimCheckerTest extends TestCase
         self::assertSame('google._domainkey.elsewhere.com', $result->cnameTarget);
     }
 
-    private function checker(StubDns $dns): DkimChecker
+    private function checker(FakeDns $dns): DkimChecker
     {
         $organizationMapper = new OrganizationMapper();
         $registry = new DkimSelectorRegistry();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Services\Dns;
 
 use App\Services\Dns\EmailProviderDetector;
+use App\Services\Dns\FakeDns;
 use App\Services\OrganizationMapper;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -14,7 +15,7 @@ final class EmailProviderDetectorTest extends TestCase
     #[Test]
     public function detectsGoogleFromMx(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('example.com', 'aspmx.l.google.com', 1);
 
         $detector = new EmailProviderDetector($dns, new OrganizationMapper());
@@ -25,7 +26,7 @@ final class EmailProviderDetectorTest extends TestCase
     #[Test]
     public function detectsMicrosoftFromMx(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('example.com', 'example-com.mail.protection.outlook.com');
 
         $detector = new EmailProviderDetector($dns, new OrganizationMapper());
@@ -36,7 +37,7 @@ final class EmailProviderDetectorTest extends TestCase
     #[Test]
     public function detectsSeznamFromMx(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('myspeedpuzzling.com', '16419979780475ef.mx2.emailprofi.seznam.cz', 10)
             ->withMx('myspeedpuzzling.com', '16419979780475ef.mx1.emailprofi.seznam.cz', 20);
 
@@ -48,7 +49,7 @@ final class EmailProviderDetectorTest extends TestCase
     #[Test]
     public function detectsSecondaryProviderFromSpfIncludes(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('example.com', 'aspmx.l.google.com')
             ->withTxt('example.com', 'v=spf1 include:_spf.google.com include:sendgrid.net ~all');
 
@@ -62,7 +63,7 @@ final class EmailProviderDetectorTest extends TestCase
     #[Test]
     public function ignoresNonSpfTxtRecords(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->withMx('example.com', 'aspmx.l.google.com')
             ->withTxt('example.com', 'google-site-verification=abc123')
             ->withTxt('example.com', 'v=spf1 include:_spf.google.com ~all');
@@ -75,7 +76,7 @@ final class EmailProviderDetectorTest extends TestCase
     #[Test]
     public function returnsEmptyWhenNoMxOrSpf(): void
     {
-        $dns = new StubDns();
+        $dns = new FakeDns();
 
         $detector = new EmailProviderDetector($dns, new OrganizationMapper());
 
@@ -85,7 +86,7 @@ final class EmailProviderDetectorTest extends TestCase
     #[Test]
     public function survivesDnsErrors(): void
     {
-        $dns = (new StubDns())
+        $dns = (new FakeDns())
             ->throwOn('example.com', 'MX')
             ->throwOn('example.com', 'TXT');
 
