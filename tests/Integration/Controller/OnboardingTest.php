@@ -8,6 +8,7 @@ use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
+use App\Tests\ScriptsDnsRecords;
 use App\Tests\WebTestCase;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
@@ -16,6 +17,7 @@ use Ramsey\Uuid\Uuid;
 
 final class OnboardingTest extends WebTestCase
 {
+    use ScriptsDnsRecords;
     #[Test]
     public function onboardingTeamPageReturns200ForNewUser(): void
     {
@@ -433,6 +435,53 @@ final class OnboardingTest extends WebTestCase
         $client->request('GET', '/app/onboarding/ingestion/verify');
 
         self::assertResponseRedirects('/app');
+    }
+
+    #[Test]
+    public function onboardingIngestionVerifyShowsVerifiedPanelWhenDmarcResolves(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
+
+        // Resolve the auto-generated domain name from the factory so we can script DNS for it.
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+        $domain = $em->getRepository(MonitoredDomain::class)->findOneBy(['team' => $membership->team->id->toString()]);
+        self::assertNotNull($domain);
+
+        $this->scriptDns()->withTxt(
+            '_dmarc.'.$domain->domain,
+            'v=DMARC1; p=quarantine; rua=mailto:reports@sendvery.com;',
+        );
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/ingestion/verify');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('DMARC active for '.$domain->domain, $body);
+        self::assertStringContainsString('v=DMARC1', $body);
+        self::assertStringContainsString('quarantine', $body);
+        self::assertStringNotContainsString('Not visible yet', $body);
+    }
+
+    #[Test]
+    public function onboardingIngestionVerifyShowsPendingPanelWhenDmarcMissing(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
+        // No scriptDns() call → FakeDns returns [] → DMARC check is invalid.
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/ingestion/verify');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Not visible yet', $body);
+        self::assertStringContainsString('Retry now', $body);
+        self::assertStringNotContainsString('DMARC active', $body);
     }
 
     #[Test]

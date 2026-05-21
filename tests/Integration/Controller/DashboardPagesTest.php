@@ -6,6 +6,7 @@ namespace App\Tests\Integration\Controller;
 
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
+use App\Entity\DnsCheckResult;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
@@ -15,6 +16,7 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\DnsCheckType;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
@@ -418,5 +420,144 @@ final class DashboardPagesTest extends WebTestCase
             self::assertResponseIsSuccessful();
             self::assertSelectorExists('aside', sprintf('Page %s missing sidebar from dashboard layout', $page));
         }
+    }
+
+    #[Test]
+    public function dashboardBannerAbsentWhenDmarcValidAndReportsFlowing(): void
+    {
+        // dmarc_verified_at older than the settling window + latest DNS check valid
+        // + first_report_at set → severity is Ok → no banner copy on the page.
+        $client = $this->createClientWithDmarcState(
+            dmarcVerifiedAt: new \DateTimeImmutable('-10 days'),
+            firstReportAt: new \DateTimeImmutable('-9 days'),
+            latestChecks: [['checkedAt' => '-1 hour', 'isValid' => true]],
+        );
+
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('DMARC record not detected', $body);
+        self::assertStringNotContainsString('went missing', $body);
+        self::assertStringNotContainsString('Confirming DMARC record', $body);
+        self::assertStringNotContainsString('No DMARC reports yet', $body);
+    }
+
+    #[Test]
+    public function dashboardBannerInfoToneWithinSettlingWindow(): void
+    {
+        // Verified < 24h ago + 1 failure in the latest check → severity is Info
+        // ("DNS still propagating"). Must not show the alarming "went missing" copy.
+        $client = $this->createClientWithDmarcState(
+            dmarcVerifiedAt: new \DateTimeImmutable('-2 hours'),
+            firstReportAt: null,
+            latestChecks: [
+                ['checkedAt' => '-2 hours', 'isValid' => true],
+                ['checkedAt' => '-30 minutes', 'isValid' => false],
+            ],
+        );
+
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Confirming DMARC record', $body);
+        self::assertStringNotContainsString('went missing', $body);
+    }
+
+    #[Test]
+    public function dashboardBannerCriticalAfterTwoConsecutiveFailures(): void
+    {
+        // Outside settling, two failures in a row after a previously-valid check →
+        // severity escalates to Critical with the "went missing" copy.
+        $client = $this->createClientWithDmarcState(
+            dmarcVerifiedAt: new \DateTimeImmutable('-30 days'),
+            firstReportAt: new \DateTimeImmutable('-29 days'),
+            latestChecks: [
+                ['checkedAt' => '-3 days', 'isValid' => true],
+                ['checkedAt' => '-2 days', 'isValid' => false],
+                ['checkedAt' => '-1 day', 'isValid' => false],
+            ],
+        );
+
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('went missing', $body);
+        self::assertStringContainsString('the last 2 checks', $body);
+    }
+
+    /**
+     * @param list<array{checkedAt: string, isValid: bool}> $latestChecks
+     */
+    private function createClientWithDmarcState(
+        ?\DateTimeImmutable $dmarcVerifiedAt,
+        ?\DateTimeImmutable $firstReportAt,
+        array $latestChecks,
+    ): KernelBrowser {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $userId = Uuid::uuid7();
+        $user = new User(
+            id: $userId,
+            email: 'banner-'.$userId->toString().'@example.com',
+            createdAt: new \DateTimeImmutable(),
+            onboardingCompletedAt: new \DateTimeImmutable(),
+        );
+        $user->popEvents();
+        $em->persist($user);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Banner Test',
+            slug: 'banner-test-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $team->popEvents();
+        $em->persist($team);
+
+        $membership = new TeamMembership(
+            id: Uuid::uuid7(),
+            user: $user,
+            team: $team,
+            role: TeamRole::Owner,
+            joinedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($membership);
+
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'banner-test.example',
+            createdAt: new \DateTimeImmutable(),
+            dmarcVerifiedAt: $dmarcVerifiedAt,
+            firstReportAt: $firstReportAt,
+        );
+        $domain->popEvents();
+        $em->persist($domain);
+
+        foreach ($latestChecks as $check) {
+            $em->persist(new DnsCheckResult(
+                id: Uuid::uuid7(),
+                monitoredDomain: $domain,
+                type: DnsCheckType::Dmarc,
+                checkedAt: new \DateTimeImmutable($check['checkedAt']),
+                rawRecord: $check['isValid'] ? 'v=DMARC1; p=none;' : null,
+                isValid: $check['isValid'],
+                issues: [],
+                details: [],
+                previousRawRecord: null,
+                hasChanged: false,
+                isFirstCheck: false,
+            ));
+        }
+
+        $em->flush();
+        $client->loginUser($user);
+
+        return $client;
     }
 }
