@@ -8,11 +8,11 @@ use App\Entity\User;
 use App\FormData\AddDomainData;
 use App\Message\AddDomain;
 use App\Repository\MonitoredDomainRepository;
-use App\Repository\TeamMembershipRepository;
 use App\Services\Dns\DkimChecker;
 use App\Services\Dns\DmarcChecker;
 use App\Services\Dns\SpfChecker;
 use App\Services\IdentityProvider;
+use App\Services\TeamProvisioner;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -28,7 +28,7 @@ final class OnboardingDomainController extends AbstractController
         private readonly MessageBusInterface $commandBus,
         private readonly IdentityProvider $identityProvider,
         private readonly ValidatorInterface $validator,
-        private readonly TeamMembershipRepository $teamMembershipRepository,
+        private readonly TeamProvisioner $teamProvisioner,
         private readonly MonitoredDomainRepository $monitoredDomainRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly SpfChecker $spfChecker,
@@ -48,8 +48,7 @@ final class OnboardingDomainController extends AbstractController
             return $this->redirectToRoute('dashboard_overview');
         }
 
-        $memberships = $this->teamMembershipRepository->findForUser($user->id);
-        $teamId = $memberships[0]->team->id;
+        $teamId = $this->teamProvisioner->provisionForUser($user)->id;
 
         $data = new AddDomainData();
         $errors = [];

@@ -7,9 +7,9 @@ namespace App\Controller\Onboarding;
 use App\Entity\User;
 use App\Message\ConnectMailbox;
 use App\Repository\MonitoredDomainRepository;
-use App\Repository\TeamMembershipRepository;
 use App\Services\Dns\DmarcChecker;
 use App\Services\IdentityProvider;
+use App\Services\TeamProvisioner;
 use App\Value\Dns\DmarcRuaInstruction;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
@@ -26,7 +26,7 @@ final class OnboardingIngestionController extends AbstractController
     public function __construct(
         private readonly MessageBusInterface $commandBus,
         private readonly IdentityProvider $identityProvider,
-        private readonly TeamMembershipRepository $teamMembershipRepository,
+        private readonly TeamProvisioner $teamProvisioner,
         private readonly MonitoredDomainRepository $monitoredDomainRepository,
         private readonly DmarcChecker $dmarcChecker,
     ) {
@@ -42,8 +42,7 @@ final class OnboardingIngestionController extends AbstractController
             return $this->redirectToRoute('dashboard_overview');
         }
 
-        $memberships = $this->teamMembershipRepository->findForUser($user->id);
-        $teamId = $memberships[0]->team->id;
+        $teamId = $this->teamProvisioner->provisionForUser($user)->id;
 
         // Block direct access to step 3 until the user has actually saved a domain in step 2.
         if (null === $this->monitoredDomainRepository->findLatestForTeam($teamId)) {

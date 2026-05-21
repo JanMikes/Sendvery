@@ -613,6 +613,36 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
+    public function onboardingProvisionsTeamForUserWithNoMembership(): void
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        // A user with no team / no membership (a scenario the magic-link
+        // signup is meant to prevent, but which can also arise from test
+        // factories or future invite flows).
+        $userId = Uuid::uuid7();
+        $user = new User(
+            id: $userId,
+            email: 'lonely-'.$userId->toString().'@example.com',
+            createdAt: new \DateTimeImmutable(),
+        );
+        $user->popEvents();
+        $em->persist($user);
+        $em->flush();
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/domain');
+
+        self::assertResponseIsSuccessful();
+
+        $em->clear();
+        $memberships = $em->getRepository(TeamMembership::class)->findBy(['user' => $userId->toString()]);
+        self::assertCount(1, $memberships);
+    }
+
+    #[Test]
     public function onboardingPagesNotAccessibleWithoutAuth(): void
     {
         $client = self::createClient();
