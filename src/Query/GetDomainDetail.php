@@ -16,13 +16,16 @@ final readonly class GetDomainDetail
 
     public function forDomain(string $domainId): ?DomainDetailResult
     {
-        /** @var array{domain_id: string, domain_name: string, dmarc_policy: string|null, is_verified: bool|string, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string}|false $row */
+        /** @var array{domain_id: string, domain_name: string, dmarc_policy: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, first_report_at: string|null, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 md.id AS domain_id,
                 md.domain AS domain_name,
                 md.dmarc_policy AS dmarc_policy,
-                md.is_verified AS is_verified,
+                md.spf_verified_at AS spf_verified_at,
+                md.dkim_verified_at AS dkim_verified_at,
+                md.dmarc_verified_at AS dmarc_verified_at,
+                md.first_report_at AS first_report_at,
                 md.created_at AS created_at,
                 COALESCE((SELECT COUNT(*) FROM dmarc_report dr WHERE dr.monitored_domain_id = md.id), 0) AS total_reports,
                 COALESCE((

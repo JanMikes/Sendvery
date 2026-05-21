@@ -36,7 +36,10 @@ final class MonitoredDomainTest extends TestCase
         self::assertSame('example.com', $domain->domain);
         self::assertSame($createdAt, $domain->createdAt);
         self::assertNull($domain->dmarcPolicy);
-        self::assertFalse($domain->isVerified);
+        self::assertNull($domain->spfVerifiedAt);
+        self::assertNull($domain->dkimVerifiedAt);
+        self::assertNull($domain->dmarcVerifiedAt);
+        self::assertNull($domain->firstReportAt);
     }
 
     public function testConstructorWithOptionalFields(): void
@@ -48,17 +51,26 @@ final class MonitoredDomainTest extends TestCase
             createdAt: new \DateTimeImmutable(),
         );
 
+        $verifiedAt = new \DateTimeImmutable('2026-04-01 09:00:00');
+        $reportAt = new \DateTimeImmutable('2026-04-02 06:00:00');
+
         $domain = new MonitoredDomain(
             id: Uuid::uuid7(),
             team: $team,
             domain: 'test.com',
             createdAt: new \DateTimeImmutable(),
             dmarcPolicy: DmarcPolicy::Reject,
-            isVerified: true,
+            spfVerifiedAt: $verifiedAt,
+            dkimVerifiedAt: $verifiedAt,
+            dmarcVerifiedAt: $verifiedAt,
+            firstReportAt: $reportAt,
         );
 
         self::assertSame(DmarcPolicy::Reject, $domain->dmarcPolicy);
-        self::assertTrue($domain->isVerified);
+        self::assertSame($verifiedAt, $domain->spfVerifiedAt);
+        self::assertSame($verifiedAt, $domain->dkimVerifiedAt);
+        self::assertSame($verifiedAt, $domain->dmarcVerifiedAt);
+        self::assertSame($reportAt, $domain->firstReportAt);
     }
 
     public function testRecordsDomainAddedEvent(): void

@@ -30,8 +30,17 @@ final class MonitoredDomain implements EntityWithEvents
     #[ORM\Column(type: 'string', nullable: true, enumType: DmarcPolicy::class)]
     public ?DmarcPolicy $dmarcPolicy;
 
-    #[ORM\Column(type: 'boolean')]
-    public bool $isVerified;
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $spfVerifiedAt;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $dkimVerifiedAt;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $dmarcVerifiedAt;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $firstReportAt;
 
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
@@ -42,14 +51,20 @@ final class MonitoredDomain implements EntityWithEvents
         string $domain,
         \DateTimeImmutable $createdAt,
         ?DmarcPolicy $dmarcPolicy = null,
-        bool $isVerified = false,
+        ?\DateTimeImmutable $spfVerifiedAt = null,
+        ?\DateTimeImmutable $dkimVerifiedAt = null,
+        ?\DateTimeImmutable $dmarcVerifiedAt = null,
+        ?\DateTimeImmutable $firstReportAt = null,
     ) {
         $this->id = $id;
         $this->team = $team;
         $this->domain = $domain;
         $this->createdAt = $createdAt;
         $this->dmarcPolicy = $dmarcPolicy;
-        $this->isVerified = $isVerified;
+        $this->spfVerifiedAt = $spfVerifiedAt;
+        $this->dkimVerifiedAt = $dkimVerifiedAt;
+        $this->dmarcVerifiedAt = $dmarcVerifiedAt;
+        $this->firstReportAt = $firstReportAt;
 
         $this->recordThat(new DomainAdded($this->id, $this->team->id));
     }

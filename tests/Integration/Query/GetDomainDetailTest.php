@@ -39,7 +39,7 @@ final class GetDomainDetailTest extends IntegrationTestCase
             domain: 'detail-test.com',
             createdAt: new \DateTimeImmutable(),
             dmarcPolicy: DmarcPolicy::Reject,
-            isVerified: true,
+            dmarcVerifiedAt: new \DateTimeImmutable(),
         );
         $em->persist($domain);
 
@@ -80,7 +80,8 @@ final class GetDomainDetailTest extends IntegrationTestCase
         self::assertNotNull($result);
         self::assertSame('detail-test.com', $result->domainName);
         self::assertSame('reject', $result->dmarcPolicy);
-        self::assertTrue($result->isVerified);
+        self::assertTrue($result->isVerified());
+        self::assertNotNull($result->dmarcVerifiedAt);
         self::assertSame(1, $result->totalReports);
         self::assertSame(50, $result->totalMessages);
         self::assertGreaterThan(0.0, $result->passRate);

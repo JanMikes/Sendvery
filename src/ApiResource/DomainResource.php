@@ -30,6 +30,10 @@ final readonly class DomainResource
         public string $domain,
         public ?string $dmarcPolicy,
         public bool $isVerified,
+        public ?string $spfVerifiedAt,
+        public ?string $dkimVerifiedAt,
+        public ?string $dmarcVerifiedAt,
+        public ?string $firstReportAt,
         public string $createdAt,
     ) {
     }
