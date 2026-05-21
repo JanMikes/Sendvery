@@ -58,6 +58,51 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
 
         $records = $em->getRepository(DmarcRecord::class)->findBy(['dmarcReport' => $reportId->toString()]);
         self::assertCount(2, $records);
+
+        $persistedDomain = $em->find(MonitoredDomain::class, $domainId);
+        self::assertNotNull($persistedDomain);
+        self::assertNotNull($persistedDomain->firstReportAt);
+    }
+
+    public function testFirstReportAtStaysFixedOnSubsequentReports(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'First Report Team',
+            slug: 'first-report-team-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $domainId = Uuid::uuid7();
+        $existingFirstReportAt = new \DateTimeImmutable('2026-04-01 09:00:00');
+        $domain = new MonitoredDomain(
+            id: $domainId,
+            team: $team,
+            domain: 'example.com',
+            createdAt: new \DateTimeImmutable(),
+            firstReportAt: $existingFirstReportAt,
+        );
+        $em->persist($domain);
+        $em->flush();
+        $em->clear();
+
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/google-report.xml');
+        assert(is_string($xml));
+
+        $handler = $this->getService(ProcessDmarcReportHandler::class);
+        $handler(new ProcessDmarcReport(
+            reportId: Uuid::uuid7(),
+            domainId: $domainId,
+            xmlContent: $xml,
+        ));
+        $em->flush();
+
+        $persistedDomain = $em->find(MonitoredDomain::class, $domainId);
+        self::assertNotNull($persistedDomain);
+        self::assertEquals($existingFirstReportAt, $persistedDomain->firstReportAt);
     }
 
     public function testSkipsDuplicateReport(): void

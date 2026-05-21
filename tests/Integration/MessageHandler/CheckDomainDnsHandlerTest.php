@@ -55,5 +55,28 @@ final class CheckDomainDnsHandlerTest extends IntegrationTestCase
         $types = array_map(fn (DnsCheckResult $r) => $r->type->value, $results);
         sort($types);
         self::assertSame(['dkim', 'dmarc', 'mx', 'spf'], $types);
+
+        $resultByType = [];
+        foreach ($results as $r) {
+            $resultByType[$r->type->value] = $r;
+        }
+
+        $updatedDomain = $em->find(MonitoredDomain::class, $domainId);
+        self::assertNotNull($updatedDomain);
+
+        // The handler should set *VerifiedAt iff the corresponding result is valid,
+        // independent of what live DNS returned for this domain at test time.
+        self::assertSame(
+            $resultByType['spf']->isValid,
+            null !== $updatedDomain->spfVerifiedAt,
+        );
+        self::assertSame(
+            $resultByType['dkim']->isValid,
+            null !== $updatedDomain->dkimVerifiedAt,
+        );
+        self::assertSame(
+            $resultByType['dmarc']->isValid,
+            null !== $updatedDomain->dmarcVerifiedAt,
+        );
     }
 }

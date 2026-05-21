@@ -14,6 +14,7 @@ use App\Services\Dns\DmarcChecker;
 use App\Services\Dns\SpfChecker;
 use App\Services\IdentityProvider;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,6 +34,7 @@ final class OnboardingDomainController extends AbstractController
         private readonly SpfChecker $spfChecker,
         private readonly DkimChecker $dkimChecker,
         private readonly DmarcChecker $dmarcChecker,
+        private readonly ClockInterface $clock,
     ) {
     }
 
@@ -88,11 +90,39 @@ final class OnboardingDomainController extends AbstractController
             if (null !== $existing) {
                 $data->domainName = $existing->domain;
                 $hasExistingDomain = true;
+                $spfCheck = $this->spfChecker->check($existing->domain);
+                $dkimCheck = $this->dkimChecker->check($existing->domain);
+                $dmarcCheck = $this->dmarcChecker->check($existing->domain);
+
                 $dnsResults = [
-                    'spf' => $this->spfChecker->check($existing->domain),
-                    'dkim' => $this->dkimChecker->check($existing->domain),
-                    'dmarc' => $this->dmarcChecker->check($existing->domain),
+                    'spf' => $spfCheck,
+                    'dkim' => $dkimCheck,
+                    'dmarc' => $dmarcCheck,
                 ];
+
+                // Mirror what the daily cron does: surface positive results immediately
+                // so the dashboard banner doesn't lie until the cron next runs.
+                $now = $this->clock->now();
+                $touched = false;
+
+                if ($spfCheck->isValid) {
+                    $existing->spfVerifiedAt = $now;
+                    $touched = true;
+                }
+
+                if ($dkimCheck->keyExists) {
+                    $existing->dkimVerifiedAt = $now;
+                    $touched = true;
+                }
+
+                if ($dmarcCheck->hasRecord() && null !== $dmarcCheck->policy) {
+                    $existing->dmarcVerifiedAt = $now;
+                    $touched = true;
+                }
+
+                if ($touched) {
+                    $this->entityManager->flush();
+                }
             }
         }
 

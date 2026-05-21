@@ -41,6 +41,10 @@ final readonly class ProcessDmarcReportHandler
         $domain = $this->monitoredDomainRepository->get($message->domainId);
         $now = $this->clock->now();
 
+        if (null === $domain->firstReportAt) {
+            $domain->firstReportAt = $now;
+        }
+
         $compressed = gzcompress($message->xmlContent);
         assert(false !== $compressed);
         $compressedXml = base64_encode($compressed);

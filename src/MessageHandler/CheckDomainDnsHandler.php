@@ -7,6 +7,7 @@ namespace App\MessageHandler;
 use App\Message\CheckDomainDns;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\Dns\DnsMonitor;
+use App\Value\DnsCheckType;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -27,6 +28,17 @@ final readonly class CheckDomainDnsHandler
 
         foreach ($results as $result) {
             $this->entityManager->persist($result);
+
+            if (!$result->isValid) {
+                continue;
+            }
+
+            match ($result->type) {
+                DnsCheckType::Spf => $domain->spfVerifiedAt = $result->checkedAt,
+                DnsCheckType::Dkim => $domain->dkimVerifiedAt = $result->checkedAt,
+                DnsCheckType::Dmarc => $domain->dmarcVerifiedAt = $result->checkedAt,
+                DnsCheckType::Mx => null,
+            };
         }
     }
 }
