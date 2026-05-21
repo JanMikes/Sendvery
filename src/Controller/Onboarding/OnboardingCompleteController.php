@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Controller\Onboarding;
 
 use App\Entity\User;
+use App\Query\GetDomainVerificationStatus;
+use App\Repository\TeamMembershipRepository;
+use App\Services\DomainVerificationEvaluator;
 use App\Services\OnboardingTracker;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,6 +17,9 @@ final class OnboardingCompleteController extends AbstractController
 {
     public function __construct(
         private readonly OnboardingTracker $onboardingTracker,
+        private readonly TeamMembershipRepository $teamMembershipRepository,
+        private readonly GetDomainVerificationStatus $verificationStatusQuery,
+        private readonly DomainVerificationEvaluator $verificationEvaluator,
     ) {
     }
 
@@ -31,6 +37,13 @@ final class OnboardingCompleteController extends AbstractController
             $this->onboardingTracker->completeOnboarding($user);
         }
 
-        return $this->render('onboarding/complete.html.twig');
+        $memberships = $this->teamMembershipRepository->findForUser($user->id);
+        $teamId = $memberships[0]->team->id;
+        $status = $this->verificationStatusQuery->forTeam($teamId);
+
+        return $this->render('onboarding/complete.html.twig', [
+            'status' => $status,
+            'severity' => null === $status ? null : $this->verificationEvaluator->severity($status),
+        ]);
     }
 }

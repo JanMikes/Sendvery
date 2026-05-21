@@ -398,6 +398,69 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
+    public function onboardingCompleteShowsWarningWhenDmarcUnverified(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/complete');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('DMARC record not detected yet', $body);
+    }
+
+    #[Test]
+    public function onboardingCompleteHasNoWarningWhenDmarcVerified(): void
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+
+        $verifiedAt = new \DateTimeImmutable();
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $membership->team,
+            domain: 'verified.example',
+            createdAt: $verifiedAt,
+            dmarcVerifiedAt: $verifiedAt,
+        );
+        $domain->popEvents();
+        $em->persist($domain);
+
+        // Latest DNS check confirms DMARC is currently valid → no "record changed" warning.
+        $check = new \App\Entity\DnsCheckResult(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            type: \App\Value\DnsCheckType::Dmarc,
+            checkedAt: $verifiedAt,
+            rawRecord: 'v=DMARC1; p=none;',
+            isValid: true,
+            issues: [],
+            details: [],
+            previousRawRecord: null,
+            hasChanged: false,
+            isFirstCheck: true,
+        );
+        $em->persist($check);
+        $em->flush();
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/complete');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('DMARC record not detected', $body);
+        self::assertStringNotContainsString('DMARC record changed', $body);
+    }
+
+    #[Test]
     public function onboardingCompleteRedirectsToDomainStepWhenNoDomain(): void
     {
         $client = self::createClient();
