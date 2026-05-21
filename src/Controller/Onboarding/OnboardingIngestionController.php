@@ -42,6 +42,14 @@ final class OnboardingIngestionController extends AbstractController
             return $this->redirectToRoute('dashboard_overview');
         }
 
+        $memberships = $this->teamMembershipRepository->findForUser($user->id);
+        $teamId = $memberships[0]->team->id;
+
+        // Block direct access to step 3 until the user has actually saved a domain in step 2.
+        if (null === $this->monitoredDomainRepository->findLatestForTeam($teamId)) {
+            return $this->redirectToRoute('onboarding_domain');
+        }
+
         $errors = [];
         $method = $request->request->getString('method');
 
@@ -60,9 +68,6 @@ final class OnboardingIngestionController extends AbstractController
                 if ('' === $host || '' === $username || '' === $password) {
                     $errors[] = 'Please fill in all connection fields.';
                 } else {
-                    $memberships = $this->teamMembershipRepository->findForUser($user->id);
-                    $teamId = $memberships[0]->team->id;
-
                     $this->commandBus->dispatch(new ConnectMailbox(
                         connectionId: $this->identityProvider->nextIdentity(),
                         teamId: $teamId,
@@ -80,31 +85,20 @@ final class OnboardingIngestionController extends AbstractController
             }
         }
 
-        $memberships = $this->teamMembershipRepository->findForUser($user->id);
-        $teamId = $memberships[0]->team->id;
-
         $requestedDomain = strtolower(trim($request->query->getString('domain')));
         $primaryDomain = '' !== $requestedDomain
             ? $this->monitoredDomainRepository->findByDomain($requestedDomain, $teamId)
             : null;
 
-        if (null === $primaryDomain) {
-            $primaryDomain = $this->monitoredDomainRepository->findLatestForTeam($teamId);
-        }
+        // The early-return guard above ensures the team has at least one domain.
+        $primaryDomain ??= $this->monitoredDomainRepository->findLatestForTeam($teamId);
 
-        $domainName = null;
-        $ruaInstruction = null;
-
-        if (null !== $primaryDomain) {
-            $domainName = $primaryDomain->domain;
-            $dmarcCheck = $this->dmarcChecker->check($primaryDomain->domain);
-            $ruaInstruction = DmarcRuaInstruction::build($dmarcCheck->rawRecord, self::REPORT_ADDRESS);
-        }
+        $dmarcCheck = $this->dmarcChecker->check($primaryDomain->domain);
 
         return $this->render('onboarding/ingestion.html.twig', [
             'errors' => $errors,
-            'domainName' => $domainName,
-            'ruaInstruction' => $ruaInstruction,
+            'domainName' => $primaryDomain->domain,
+            'ruaInstruction' => DmarcRuaInstruction::build($dmarcCheck->rawRecord, self::REPORT_ADDRESS),
             'reportAddress' => self::REPORT_ADDRESS,
         ]);
     }

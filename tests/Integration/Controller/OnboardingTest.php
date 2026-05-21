@@ -250,12 +250,36 @@ final class OnboardingTest extends WebTestCase
     public function onboardingIngestionPageReturns200(): void
     {
         $client = self::createClient();
-        $user = $this->createNewUserWithTeam();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
 
         $client->loginUser($user);
         $client->request('GET', '/app/onboarding/ingestion');
 
         self::assertResponseIsSuccessful();
+    }
+
+    #[Test]
+    public function onboardingIngestionRedirectsToDomainStepWhenNoDomain(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/ingestion');
+
+        self::assertResponseRedirects('/app/onboarding/domain');
+    }
+
+    #[Test]
+    public function onboardingIngestionForwardWithoutDomainRedirectsToDomainStep(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('POST', '/app/onboarding/ingestion', ['method' => 'forward']);
+
+        self::assertResponseRedirects('/app/onboarding/domain');
     }
 
     #[Test]
@@ -343,7 +367,7 @@ final class OnboardingTest extends WebTestCase
     public function onboardingIngestionForwardMethodRedirectsToComplete(): void
     {
         $client = self::createClient();
-        $user = $this->createNewUserWithTeam();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
 
         $client->loginUser($user);
         $client->request('POST', '/app/onboarding/ingestion', [
