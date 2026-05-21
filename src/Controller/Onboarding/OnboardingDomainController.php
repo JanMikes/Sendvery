@@ -49,11 +49,10 @@ final class OnboardingDomainController extends AbstractController
         $memberships = $this->teamMembershipRepository->findForUser($user->id);
         $teamId = $memberships[0]->team->id;
 
-        $check = strtolower(trim($request->query->getString('check')));
-
         $data = new AddDomainData();
         $errors = [];
         $dnsResults = null;
+        $hasExistingDomain = false;
 
         if ($request->isMethod('POST')) {
             $data->domainName = $this->normalizeDomainInput($request->request->getString('domain_name'));
@@ -81,13 +80,14 @@ final class OnboardingDomainController extends AbstractController
                     $this->entityManager->flush();
                 }
 
-                return $this->redirectToRoute('onboarding_domain', ['check' => $data->domainName]);
+                return $this->redirectToRoute('onboarding_domain');
             }
-        } elseif ('' !== $check) {
-            $existing = $this->monitoredDomainRepository->findByDomain($check, $teamId);
+        } else {
+            $existing = $this->monitoredDomainRepository->findLatestForTeam($teamId);
 
             if (null !== $existing) {
                 $data->domainName = $existing->domain;
+                $hasExistingDomain = true;
                 $dnsResults = [
                     'spf' => $this->spfChecker->check($existing->domain),
                     'dkim' => $this->dkimChecker->check($existing->domain),
@@ -100,6 +100,7 @@ final class OnboardingDomainController extends AbstractController
             'data' => $data,
             'errors' => $errors,
             'dnsResults' => $dnsResults,
+            'hasExistingDomain' => $hasExistingDomain,
         ]);
     }
 

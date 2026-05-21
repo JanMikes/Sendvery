@@ -140,6 +140,22 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
+    public function onboardingDomainPagePrefillsExistingDomain(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
+
+        $client->loginUser($user);
+        $crawler = $client->request('GET', '/app/onboarding/domain');
+
+        self::assertResponseIsSuccessful();
+        $prefilled = $crawler->filter('#domain_name')->attr('value');
+        self::assertNotSame('', $prefilled);
+        self::assertStringContainsString('.example', (string) $prefilled);
+        self::assertStringContainsString('Saved', (string) $client->getResponse()->getContent());
+    }
+
+    #[Test]
     public function onboardingDomainPostCreatesDomainWhenTeamHasNone(): void
     {
         $client = self::createClient();
