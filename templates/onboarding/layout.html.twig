@@ -56,8 +56,8 @@
                                 {{ s.num }}
                             </div>
                         {% elseif isClickable %}
-                            {# Reachable but not yet visited — clickable number #}
-                            <div class="w-10 h-10 rounded-full bg-base-100 border-2 border-primary/40 text-primary flex items-center justify-center font-semibold text-sm ring-4 ring-base-200 group-hover:border-primary group-hover:bg-primary/10 transition-all cursor-pointer">
+                            {# Reachable but not yet visited — clickable number. Background stays opaque on hover so the progress line doesn't show through. #}
+                            <div class="w-10 h-10 rounded-full bg-base-100 border-2 border-primary/40 text-primary flex items-center justify-center font-semibold text-sm ring-4 ring-base-200 group-hover:border-primary group-hover:ring-primary/30 transition-all cursor-pointer">
                                 {{ s.num }}
                             </div>
                         {% else %}
