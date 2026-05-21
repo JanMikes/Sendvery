@@ -56,7 +56,7 @@ final class OnboardingDomainController extends AbstractController
         $dnsResults = null;
 
         if ($request->isMethod('POST')) {
-            $data->domainName = strtolower(trim($request->request->getString('domain_name')));
+            $data->domainName = $this->normalizeDomainInput($request->request->getString('domain_name'));
 
             $violations = $this->validator->validate($data);
 
@@ -101,5 +101,14 @@ final class OnboardingDomainController extends AbstractController
             'errors' => $errors,
             'dnsResults' => $dnsResults,
         ]);
+    }
+
+    private function normalizeDomainInput(string $input): string
+    {
+        $value = strtolower(trim($input));
+        $value = (string) preg_replace('#^https?://#', '', $value);
+        $value = (string) preg_replace('#^www\.#', '', $value);
+
+        return $value;
     }
 }
