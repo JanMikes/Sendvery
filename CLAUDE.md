@@ -409,12 +409,20 @@ Single light theme only (`data-theme="sendvery"` on `<html>`). Dark mode was int
 
 ## Crons
 
-Symfony Console Commands triggered by Symfony Scheduler or system cron:
+Recurring jobs are plain Symfony Console Commands scheduled by **system cron**, not Symfony Scheduler. The crontab lives in `~/www/spare.srv/deployment/crontab` on the deployment host and is committed alongside the other projects' schedules. Each entry runs the command via `docker compose run --rm worker bin/console …` wrapped in `sentry-cli monitors run` so missed runs page us.
 
-- Poll IMAP/POP3 mailboxes (every 5-15 min)
-- DNS record checks (daily)
-- Weekly digest emails
-- Blacklist checks (daily, later phase)
+When you add a new scheduled command:
+
+1. Build it as an idempotent `bin/console sendvery:*` command in `src/Command/`.
+2. Add a line to `~/www/spare.srv/deployment/crontab` under the `## Sendvery` block with a stable monitor slug.
+3. Do **not** add `#[AsSchedule]` or `RecurringMessage` in the app — system cron owns scheduling.
+
+Current entries (kept in sync with `crontab`):
+
+- `*/15 * * * *` — `sendvery:mailbox:poll` (IMAP/POP3 polling)
+- `0 3 * * *` — `sendvery:dns:check-all` (DNS record + verification re-check)
+- `0 9 * * 1` — `sendvery:digest:send-all` (weekly digest)
+- Blacklist checks: daily (later phase)
 
 ## Comments
 
