@@ -13,6 +13,7 @@ use App\Services\Dns\DkimChecker;
 use App\Services\Dns\DmarcChecker;
 use App\Services\Dns\SpfChecker;
 use App\Services\IdentityProvider;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,6 +29,7 @@ final class OnboardingDomainController extends AbstractController
         private readonly ValidatorInterface $validator,
         private readonly TeamMembershipRepository $teamMembershipRepository,
         private readonly MonitoredDomainRepository $monitoredDomainRepository,
+        private readonly EntityManagerInterface $entityManager,
         private readonly SpfChecker $spfChecker,
         private readonly DkimChecker $dkimChecker,
         private readonly DmarcChecker $dmarcChecker,
@@ -63,7 +65,10 @@ final class OnboardingDomainController extends AbstractController
                     $errors[] = (string) $violation->getMessage();
                 }
             } else {
-                $existing = $this->monitoredDomainRepository->findByDomain($data->domainName, $teamId);
+                // Enforce the post-onboarding invariant of one domain per team:
+                // if the team already has a domain, rename it in place instead of
+                // appending a second row when the user submits a different name.
+                $existing = $this->monitoredDomainRepository->findLatestForTeam($teamId);
 
                 if (null === $existing) {
                     $this->commandBus->dispatch(new AddDomain(
@@ -71,6 +76,9 @@ final class OnboardingDomainController extends AbstractController
                         teamId: $teamId,
                         domainName: $data->domainName,
                     ));
+                } elseif ($existing->domain !== $data->domainName) {
+                    $existing->domain = $data->domainName;
+                    $this->entityManager->flush();
                 }
 
                 return $this->redirectToRoute('onboarding_domain', ['check' => $data->domainName]);

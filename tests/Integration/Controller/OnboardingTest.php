@@ -84,6 +84,25 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
+    public function onboardingTeamPostRenamesExistingTeamInsteadOfCreatingNew(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam();
+
+        $client->loginUser($user);
+        $client->request('POST', '/app/onboarding/team', ['team_name' => 'First Name']);
+        $client->request('POST', '/app/onboarding/team', ['team_name' => 'Second Name']);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->clear();
+
+        $memberships = $em->getRepository(TeamMembership::class)->findBy(['user' => $user->id->toString()]);
+        self::assertCount(1, $memberships);
+        self::assertSame('Second Name', $memberships[0]->team->name);
+    }
+
+    #[Test]
     public function onboardingTeamPagePrefillsCurrentTeamName(): void
     {
         $client = self::createClient();
@@ -118,6 +137,71 @@ final class OnboardingTest extends WebTestCase
         $client->request('GET', '/app/onboarding/domain');
 
         self::assertResponseIsSuccessful();
+    }
+
+    #[Test]
+    public function onboardingDomainPostCreatesDomainWhenTeamHasNone(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('POST', '/app/onboarding/domain', ['domain_name' => 'example.com']);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->clear();
+
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+
+        $domains = $em->getRepository(MonitoredDomain::class)->findBy(['team' => $membership->team->id->toString()]);
+        self::assertCount(1, $domains);
+        self::assertSame('example.com', $domains[0]->domain);
+    }
+
+    #[Test]
+    public function onboardingDomainPostRenamesExistingDomainInsteadOfCreatingSecond(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('POST', '/app/onboarding/domain', ['domain_name' => 'first.example']);
+        $client->request('POST', '/app/onboarding/domain', ['domain_name' => 'second.example']);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->clear();
+
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+
+        $domains = $em->getRepository(MonitoredDomain::class)->findBy(['team' => $membership->team->id->toString()]);
+        self::assertCount(1, $domains);
+        self::assertSame('second.example', $domains[0]->domain);
+    }
+
+    #[Test]
+    public function onboardingDomainPostWithSameNameKeepsSingleDomain(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('POST', '/app/onboarding/domain', ['domain_name' => 'example.com']);
+        $client->request('POST', '/app/onboarding/domain', ['domain_name' => 'example.com']);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->clear();
+
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+
+        $domains = $em->getRepository(MonitoredDomain::class)->findBy(['team' => $membership->team->id->toString()]);
+        self::assertCount(1, $domains);
+        self::assertSame('example.com', $domains[0]->domain);
     }
 
     #[Test]
@@ -331,6 +415,43 @@ final class OnboardingTest extends WebTestCase
         $client->request('GET', '/app');
 
         self::assertResponseIsSuccessful();
+    }
+
+    #[Test]
+    public function fullOnboardingFlowEndsWithExactlyOneTeamAndOneDomain(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam();
+
+        $client->loginUser($user);
+
+        // Submit team step twice with different names — should not duplicate.
+        $client->request('POST', '/app/onboarding/team', ['team_name' => 'Initial Name']);
+        $client->request('POST', '/app/onboarding/team', ['team_name' => 'Final Name']);
+
+        // Submit domain step twice with different names — should not duplicate.
+        $client->request('POST', '/app/onboarding/domain', ['domain_name' => 'initial.example']);
+        $client->request('POST', '/app/onboarding/domain', ['domain_name' => 'final.example']);
+
+        // Forward method on ingestion step → onboarding_complete.
+        $client->request('POST', '/app/onboarding/ingestion', ['method' => 'forward']);
+        $client->request('GET', '/app/onboarding/complete');
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->clear();
+
+        $refreshed = $em->find(User::class, $user->id);
+        self::assertNotNull($refreshed);
+        self::assertNotNull($refreshed->onboardingCompletedAt);
+
+        $memberships = $em->getRepository(TeamMembership::class)->findBy(['user' => $user->id->toString()]);
+        self::assertCount(1, $memberships);
+        self::assertSame('Final Name', $memberships[0]->team->name);
+
+        $domains = $em->getRepository(MonitoredDomain::class)->findBy(['team' => $memberships[0]->team->id->toString()]);
+        self::assertCount(1, $domains);
+        self::assertSame('final.example', $domains[0]->domain);
     }
 
     #[Test]
