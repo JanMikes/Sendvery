@@ -21,6 +21,9 @@ return App::config([
         'Spatie\Dns\Dns' => [
             'autoconfigure' => true,
         ],
+        'App\Services\Dns\SmtpProbe' => [
+            'alias' => 'App\Services\Dns\SocketSmtpProbe',
+        ],
         'SPFLib\Decoder' => [
             'autoconfigure' => true,
         ],
@@ -66,6 +69,14 @@ return App::config([
                 'alias' => 'App\Services\Dns\FakeDns',
             ],
             'App\Services\Dns\FakeDns' => [
+                'public' => true,
+            ],
+            // SmtpProbe: production opens a real TCP connection to port 25.
+            // Tests must never do that — alias to the in-memory fake.
+            'App\Services\Dns\SmtpProbe' => [
+                'alias' => 'App\Services\Dns\FakeSmtpProbe',
+            ],
+            'App\Services\Dns\FakeSmtpProbe' => [
                 'public' => true,
             ],
             'App\Services\IdentityProvider' => [

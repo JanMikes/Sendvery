@@ -14,6 +14,7 @@ final readonly class MxChecker
 {
     public function __construct(
         private Dns $dns,
+        private SmtpProbe $smtpProbe,
     ) {
     }
 
@@ -90,10 +91,9 @@ final readonly class MxChecker
         $tlsSupported = null;
 
         if (null !== $ip) {
-            $reachable = $this->checkPort25($ip);
-            if ($reachable) {
-                $tlsSupported = $this->checkStartTls($ip);
-            }
+            $probeResult = $this->smtpProbe->probe($ip);
+            $reachable = $probeResult->reachable;
+            $tlsSupported = $probeResult->tlsSupported;
         }
 
         return new MxRecord(
@@ -109,58 +109,16 @@ final readonly class MxChecker
     {
         try {
             $records = $this->dns->getRecords($host, 'A');
-            foreach ($records as $record) {
-                if (preg_match('/A\s+(\d+\.\d+\.\d+\.\d+)/', (string) $record, $matches)) {
-                    return $matches[1];
-                }
-            }
         } catch (\Throwable) {
-            // Fallback: try native DNS
+            return null;
         }
 
-        $ip = gethostbyname($host);
-
-        return $ip !== $host ? $ip : null;
-    }
-
-    private function checkPort25(string $ip): bool
-    {
-        $socket = @fsockopen($ip, 25, $errno, $errstr, 3);
-        if (false === $socket) {
-            return false;
-        }
-
-        $response = @fgets($socket, 1024);
-        fclose($socket);
-
-        return false !== $response && str_starts_with($response, '220');
-    }
-
-    private function checkStartTls(string $ip): bool
-    {
-        $socket = @fsockopen($ip, 25, $errno, $errstr, 3);
-        if (false === $socket) {
-            return false;
-        }
-
-        // Read banner
-        @fgets($socket, 1024);
-
-        // Send EHLO
-        fwrite($socket, "EHLO sendvery.com\r\n");
-
-        $ehloResponse = '';
-        while ($line = @fgets($socket, 1024)) {
-            $ehloResponse .= $line;
-            // Multi-line responses have - after status code, last line has space
-            if (isset($line[3]) && '-' !== $line[3]) {
-                break;
+        foreach ($records as $record) {
+            if (preg_match('/A\s+(\d+\.\d+\.\d+\.\d+)/', (string) $record, $matches)) {
+                return $matches[1];
             }
         }
 
-        fwrite($socket, "QUIT\r\n");
-        fclose($socket);
-
-        return false !== stripos($ehloResponse, 'STARTTLS');
+        return null;
     }
 }
