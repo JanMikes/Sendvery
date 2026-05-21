@@ -1,0 +1,52 @@
+{# Rendered inside a turbo-frame from onboarding/ingestion.html.twig. The frame is fetched once on page load and after each user-initiated retry; the Stimulus controller polls automatically while we're still in the "not visible yet" state. #}
+{% set isVerified = dmarcResult is not null and dmarcResult.isValid %}
+<turbo-frame id="dmarc-verify"
+             src="{{ path('onboarding_ingestion_verify') }}"
+             data-controller="dns-verify-poll"
+             data-dns-verify-poll-verified-value="{{ isVerified ? 'true' : 'false' }}"
+             data-dns-verify-poll-url-value="{{ path('onboarding_ingestion_verify') }}">
+    {% if isVerified %}
+        {% set policy = dmarcResult.details.policy|default(null) %}
+        <div class="rounded-2xl border border-success/30 bg-success/5 p-5">
+            <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-success/15 text-success flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div class="font-semibold text-base-content">DMARC active for {{ domainName }}</div>
+                        <span class="text-xs text-base-content/50">Checked just now</span>
+                    </div>
+                    {% if dmarcResult.rawRecord %}
+                        <pre class="mt-2 text-xs font-mono bg-base-200 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all">{{ dmarcResult.rawRecord }}</pre>
+                    {% endif %}
+                    {% if policy %}
+                        <div class="text-xs text-base-content/60 mt-2">policy: <span class="font-mono">{{ policy }}</span></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="rounded-2xl border border-info/30 bg-info/5 p-5">
+            <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-info/15 text-info flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-dns-verify-poll-target="spinner">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v2m0 12v2m8-8h-2M6 12H4m13.657-5.657l-1.414 1.414M7.757 16.243l-1.414 1.414m0-11.314l1.414 1.414m9.9 9.9l1.414 1.414"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-base-content">Not visible yet</div>
+                    <p class="text-sm text-base-content/70 mt-1">
+                        DNS often takes 1–5 minutes after you save the record at your registrar. We'll re-check automatically — <span data-dns-verify-poll-target="status">retrying soon…</span>
+                    </p>
+                    <div class="flex items-center gap-3 mt-3">
+                        <a href="{{ path('onboarding_ingestion_verify') }}" class="btn btn-sm btn-info btn-outline">Retry now</a>
+                        <a href="{{ path('onboarding_complete') }}" class="link link-hover text-sm text-base-content/60" data-turbo-frame="_top">Skip — I'll wait</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</turbo-frame>

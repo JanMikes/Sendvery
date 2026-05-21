@@ -55,6 +55,23 @@
                     finalValue="{{ ruaInstruction.finalRecord }}"
                     :alreadyConfigured="ruaInstruction.alreadyConfigured"
                 />
+
+                {# Live verification: lazy-loaded Turbo Frame that runs the same DNS check
+                   handler used by the daily cron + dashboard re-verify. Step 4 doesn't
+                   re-litigate this, so whatever this panel says is what the user takes
+                   forward. #}
+                <turbo-frame id="dmarc-verify"
+                             src="{{ path('onboarding_ingestion_verify') }}"
+                             loading="lazy">
+                    <div class="rounded-2xl border border-base-300 bg-base-200/50 p-5">
+                        <div class="flex items-center gap-3 text-sm text-base-content/70">
+                            <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v2m0 12v2m8-8h-2M6 12H4m13.657-5.657l-1.414 1.414M7.757 16.243l-1.414 1.414m0-11.314l1.414 1.414m9.9 9.9l1.414 1.414"/>
+                            </svg>
+                            <span>Querying DNS for <span class="font-mono">_dmarc.{{ domainName }}</span>…</span>
+                        </div>
+                    </div>
+                </turbo-frame>
             {% else %}
                 {# Fallback when the user skipped adding a domain in step 2 #}
                 <div class="rounded-xl border border-warning/20 bg-warning/5 p-4 text-sm">
