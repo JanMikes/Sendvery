@@ -36,7 +36,7 @@ final class GetDomainVerificationStatusTest extends IntegrationTestCase
     }
 
     #[Test]
-    public function returnsTimestampsAndCurrentValidity(): void
+    public function returnsTimestampsAndConsecutiveFailureCount(): void
     {
         $em = $this->getService(EntityManagerInterface::class);
         $query = $this->getService(GetDomainVerificationStatus::class);
@@ -62,36 +62,10 @@ final class GetDomainVerificationStatusTest extends IntegrationTestCase
         );
         $em->persist($domain);
 
-        // Older check valid, newest check invalid → currently NOT valid.
-        $oldCheck = new DnsCheckResult(
-            id: Uuid::uuid7(),
-            monitoredDomain: $domain,
-            type: DnsCheckType::Dmarc,
-            checkedAt: new \DateTimeImmutable('2026-05-10 09:00:00'),
-            rawRecord: 'v=DMARC1; p=none;',
-            isValid: true,
-            issues: [],
-            details: [],
-            previousRawRecord: null,
-            hasChanged: false,
-            isFirstCheck: true,
-        );
-        $em->persist($oldCheck);
-
-        $newCheck = new DnsCheckResult(
-            id: Uuid::uuid7(),
-            monitoredDomain: $domain,
-            type: DnsCheckType::Dmarc,
-            checkedAt: new \DateTimeImmutable('2026-05-15 09:00:00'),
-            rawRecord: null,
-            isValid: false,
-            issues: [],
-            details: [],
-            previousRawRecord: 'v=DMARC1; p=none;',
-            hasChanged: true,
-            isFirstCheck: false,
-        );
-        $em->persist($newCheck);
+        // Older check valid, then two failing checks newer → 2 consecutive failures.
+        $em->persist($this->dnsCheck($domain, '2026-05-10 09:00:00', true));
+        $em->persist($this->dnsCheck($domain, '2026-05-14 09:00:00', false));
+        $em->persist($this->dnsCheck($domain, '2026-05-15 09:00:00', false));
         $em->flush();
 
         $status = $query->forTeam($teamId);
@@ -102,6 +76,60 @@ final class GetDomainVerificationStatusTest extends IntegrationTestCase
         self::assertNotNull($status->dmarcVerifiedAt);
         self::assertNotNull($status->spfVerifiedAt);
         self::assertNull($status->firstReportAt);
-        self::assertFalse($status->dmarcCurrentlyValid);
+        self::assertSame(2, $status->consecutiveDmarcFailures);
+    }
+
+    #[Test]
+    public function consecutiveFailuresResetOnceLatestCheckPasses(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetDomainVerificationStatus::class);
+
+        $teamId = Uuid::uuid7();
+        $team = new Team(
+            id: $teamId,
+            name: 'Recover',
+            slug: 'recover-'.$teamId->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $verifiedAt = new \DateTimeImmutable('2026-05-01 09:00:00');
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'recover.example',
+            createdAt: new \DateTimeImmutable(),
+            dmarcVerifiedAt: $verifiedAt,
+        );
+        $em->persist($domain);
+
+        // failed, failed, then valid → count must reset to 0.
+        $em->persist($this->dnsCheck($domain, '2026-05-10 09:00:00', false));
+        $em->persist($this->dnsCheck($domain, '2026-05-11 09:00:00', false));
+        $em->persist($this->dnsCheck($domain, '2026-05-12 09:00:00', true));
+        $em->flush();
+
+        $status = $query->forTeam($teamId);
+
+        self::assertNotNull($status);
+        self::assertSame(0, $status->consecutiveDmarcFailures);
+    }
+
+    private function dnsCheck(MonitoredDomain $domain, string $when, bool $isValid): DnsCheckResult
+    {
+        return new DnsCheckResult(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            type: DnsCheckType::Dmarc,
+            checkedAt: new \DateTimeImmutable($when),
+            rawRecord: $isValid ? 'v=DMARC1; p=none;' : null,
+            isValid: $isValid,
+            issues: [],
+            details: [],
+            previousRawRecord: null,
+            hasChanged: false,
+            isFirstCheck: false,
+        );
     }
 }

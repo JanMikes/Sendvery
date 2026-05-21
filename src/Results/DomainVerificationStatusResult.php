@@ -13,7 +13,7 @@ final readonly class DomainVerificationStatusResult
         public ?\DateTimeImmutable $dkimVerifiedAt,
         public ?\DateTimeImmutable $dmarcVerifiedAt,
         public ?\DateTimeImmutable $firstReportAt,
-        public bool $dmarcCurrentlyValid,
+        public int $consecutiveDmarcFailures,
     ) {
     }
 
@@ -25,7 +25,7 @@ final readonly class DomainVerificationStatusResult
      *     dkim_verified_at: string|null,
      *     dmarc_verified_at: string|null,
      *     first_report_at: string|null,
-     *     dmarc_currently_valid: bool|string|int|null
+     *     consecutive_dmarc_failures: int|string|null
      * } $row
      */
     public static function fromDatabaseRow(array $row): self
@@ -37,10 +37,7 @@ final readonly class DomainVerificationStatusResult
             dkimVerifiedAt: self::toDateTime($row['dkim_verified_at']),
             dmarcVerifiedAt: self::toDateTime($row['dmarc_verified_at']),
             firstReportAt: self::toDateTime($row['first_report_at']),
-            // null means we've never run a check yet — treat as "not currently valid"
-            // rather than guessing; the dmarcVerifiedAt timestamp already captures
-            // "we have seen it valid at some point".
-            dmarcCurrentlyValid: (bool) ($row['dmarc_currently_valid'] ?? false),
+            consecutiveDmarcFailures: (int) ($row['consecutive_dmarc_failures'] ?? 0),
         );
     }
 

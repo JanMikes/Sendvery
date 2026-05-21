@@ -37,7 +37,7 @@ final class ReverifyDomainController extends AbstractController
         }
 
         // Run the same handler the daily cron uses so the dns_check_result row
-        // is written and the dmarc_currently_valid query reflects today's state.
+        // is written and the verification status query reflects today's state.
         ($this->checkDomainDnsHandler)(new CheckDomainDns(domainId: $domain->id));
         $this->entityManager->flush();
 

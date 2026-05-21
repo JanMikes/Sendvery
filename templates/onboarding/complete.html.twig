@@ -6,37 +6,6 @@
 
 {% block content %}
 <div class="space-y-6">
-    {% if status is not null and severity is not null and severity.value != 'ok' %}
-        {% set isCritical = severity.value == 'critical' %}
-        <div class="rounded-2xl border p-5 sm:p-6 {{ isCritical ? 'bg-error/5 border-error/30' : 'bg-warning/5 border-warning/30' }}">
-            <div class="flex items-start gap-3">
-                <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 {{ isCritical ? 'bg-error/15 text-error' : 'bg-warning/15 text-warning' }}">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/>
-                    </svg>
-                </div>
-                <div class="flex-1">
-                    {% if status.dmarcVerifiedAt is null %}
-                        <div class="font-semibold text-base-content mb-1">DMARC record not detected yet</div>
-                        <p class="text-sm text-base-content/70">
-                            We couldn't find a DMARC TXT record for <span class="font-mono">{{ status.domainName }}</span>. You can still finish onboarding — once you publish the record, the daily check will pick it up. If you just published it, DNS can take a few minutes to propagate.
-                        </p>
-                    {% elseif not status.dmarcCurrentlyValid %}
-                        <div class="font-semibold text-base-content mb-1">DMARC record changed</div>
-                        <p class="text-sm text-base-content/70">
-                            We saw a valid DMARC record for <span class="font-mono">{{ status.domainName }}</span> before, but the latest check couldn't find one. Verify the TXT record is still published.
-                        </p>
-                    {% else %}
-                        <div class="font-semibold text-base-content mb-1">No reports yet</div>
-                        <p class="text-sm text-base-content/70">
-                            DMARC is published for <span class="font-mono">{{ status.domainName }}</span> but no reports have arrived. Most senders batch reports daily — if you don't see anything by tomorrow, double-check that the <code class="kbd kbd-xs">rua</code> tag points at <span class="font-mono">reports@sendvery.com</span>.
-                        </p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    {% endif %}
-
     <div class="card bg-base-100 shadow-xl border border-base-200">
         <div class="card-body p-8 sm:p-10 text-center">
             <div class="flex justify-center mb-6">

@@ -7,14 +7,14 @@ namespace App\Controller\Onboarding;
 use App\Entity\User;
 use App\FormData\AddDomainData;
 use App\Message\AddDomain;
+use App\Message\CheckDomainDns;
+use App\MessageHandler\CheckDomainDnsHandler;
+use App\Repository\DnsCheckResultRepository;
 use App\Repository\MonitoredDomainRepository;
-use App\Services\Dns\DkimChecker;
-use App\Services\Dns\DmarcChecker;
-use App\Services\Dns\SpfChecker;
 use App\Services\IdentityProvider;
 use App\Services\TeamProvisioner;
+use App\Value\DnsCheckType;
 use Doctrine\ORM\EntityManagerInterface;
-use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,10 +31,8 @@ final class OnboardingDomainController extends AbstractController
         private readonly TeamProvisioner $teamProvisioner,
         private readonly MonitoredDomainRepository $monitoredDomainRepository,
         private readonly EntityManagerInterface $entityManager,
-        private readonly SpfChecker $spfChecker,
-        private readonly DkimChecker $dkimChecker,
-        private readonly DmarcChecker $dmarcChecker,
-        private readonly ClockInterface $clock,
+        private readonly CheckDomainDnsHandler $checkDomainDnsHandler,
+        private readonly DnsCheckResultRepository $dnsCheckResultRepository,
     ) {
     }
 
@@ -89,39 +87,18 @@ final class OnboardingDomainController extends AbstractController
             if (null !== $existing) {
                 $data->domainName = $existing->domain;
                 $hasExistingDomain = true;
-                $spfCheck = $this->spfChecker->check($existing->domain);
-                $dkimCheck = $this->dkimChecker->check($existing->domain);
-                $dmarcCheck = $this->dmarcChecker->check($existing->domain);
+
+                // Use the same handler the daily cron + dashboard re-verify use,
+                // so dns_check_result rows are written and downstream queries
+                // (GetDomainVerificationStatus, evaluator) see consistent state.
+                ($this->checkDomainDnsHandler)(new CheckDomainDns(domainId: $existing->id));
+                $this->entityManager->flush();
 
                 $dnsResults = [
-                    'spf' => $spfCheck,
-                    'dkim' => $dkimCheck,
-                    'dmarc' => $dmarcCheck,
+                    'spf' => $this->dnsCheckResultRepository->findLatestForDomainAndType($existing->id, DnsCheckType::Spf),
+                    'dkim' => $this->dnsCheckResultRepository->findLatestForDomainAndType($existing->id, DnsCheckType::Dkim),
+                    'dmarc' => $this->dnsCheckResultRepository->findLatestForDomainAndType($existing->id, DnsCheckType::Dmarc),
                 ];
-
-                // Mirror what the daily cron does: surface positive results immediately
-                // so the dashboard banner doesn't lie until the cron next runs.
-                $now = $this->clock->now();
-                $touched = false;
-
-                if ($spfCheck->isValid) {
-                    $existing->spfVerifiedAt = $now;
-                    $touched = true;
-                }
-
-                if ($dkimCheck->keyExists) {
-                    $existing->dkimVerifiedAt = $now;
-                    $touched = true;
-                }
-
-                if ($dmarcCheck->hasRecord() && null !== $dmarcCheck->policy) {
-                    $existing->dmarcVerifiedAt = $now;
-                    $touched = true;
-                }
-
-                if ($touched) {
-                    $this->entityManager->flush();
-                }
             }
         }
 

@@ -24,13 +24,59 @@ final class DomainVerificationEvaluatorTest extends TestCase
     }
 
     #[Test]
-    public function criticalWhenDmarcVerifiedButNowMissing(): void
+    public function infoWhenDmarcVerifiedRecentlyAndOneCheckFails(): void
+    {
+        // Settling window: any failure within 24h of first verifying is treated
+        // as DNS propagation, not a real outage. Surface as informational only.
+        $evaluator = new DomainVerificationEvaluator($this->clockAt('2026-05-21 12:00:00'));
+
+        $severity = $evaluator->severity($this->buildStatus(
+            dmarcVerifiedAt: new \DateTimeImmutable('2026-05-21 09:00:00'),
+            consecutiveDmarcFailures: 1,
+        ));
+
+        self::assertSame(DomainVerificationSeverity::Info, $severity);
+    }
+
+    #[Test]
+    public function infoWhenSustainedFailureButStillInSettlingWindow(): void
+    {
+        // Within the settling window we don't escalate to Critical even at 2+ failures —
+        // it's the right outcome for the legitimate "user is still wrangling their DNS
+        // panel" case where retries are expected.
+        $evaluator = new DomainVerificationEvaluator($this->clockAt('2026-05-21 12:00:00'));
+
+        $severity = $evaluator->severity($this->buildStatus(
+            dmarcVerifiedAt: new \DateTimeImmutable('2026-05-21 09:00:00'),
+            consecutiveDmarcFailures: 5,
+        ));
+
+        self::assertSame(DomainVerificationSeverity::Info, $severity);
+    }
+
+    #[Test]
+    public function infoWhenSingleFailureOutsideSettlingWindow(): void
+    {
+        // Outside settling, one missed check is almost always a transient resolver
+        // hiccup — watch but don't alarm until it's sustained.
+        $evaluator = new DomainVerificationEvaluator($this->clockAt('2026-05-21 12:00:00'));
+
+        $severity = $evaluator->severity($this->buildStatus(
+            dmarcVerifiedAt: new \DateTimeImmutable('2026-05-01 09:00:00'),
+            consecutiveDmarcFailures: 1,
+        ));
+
+        self::assertSame(DomainVerificationSeverity::Info, $severity);
+    }
+
+    #[Test]
+    public function criticalWhenSustainedFailureOutsideSettlingWindow(): void
     {
         $evaluator = new DomainVerificationEvaluator($this->clockAt('2026-05-21 12:00:00'));
 
         $severity = $evaluator->severity($this->buildStatus(
             dmarcVerifiedAt: new \DateTimeImmutable('2026-05-01 09:00:00'),
-            dmarcCurrentlyValid: false,
+            consecutiveDmarcFailures: 2,
         ));
 
         self::assertSame(DomainVerificationSeverity::Critical, $severity);
@@ -44,7 +90,7 @@ final class DomainVerificationEvaluatorTest extends TestCase
         $severity = $evaluator->severity($this->buildStatus(
             dmarcVerifiedAt: new \DateTimeImmutable('2026-05-19 09:00:00'),
             firstReportAt: null,
-            dmarcCurrentlyValid: true,
+            consecutiveDmarcFailures: 0,
         ));
 
         self::assertSame(DomainVerificationSeverity::Warning, $severity);
@@ -58,7 +104,7 @@ final class DomainVerificationEvaluatorTest extends TestCase
         $severity = $evaluator->severity($this->buildStatus(
             dmarcVerifiedAt: new \DateTimeImmutable('2026-05-21 09:00:00'),
             firstReportAt: null,
-            dmarcCurrentlyValid: true,
+            consecutiveDmarcFailures: 0,
         ));
 
         self::assertSame(DomainVerificationSeverity::Ok, $severity);
@@ -72,7 +118,7 @@ final class DomainVerificationEvaluatorTest extends TestCase
         $severity = $evaluator->severity($this->buildStatus(
             dmarcVerifiedAt: new \DateTimeImmutable('2026-05-19 09:00:00'),
             firstReportAt: new \DateTimeImmutable('2026-05-20 06:00:00'),
-            dmarcCurrentlyValid: true,
+            consecutiveDmarcFailures: 0,
         ));
 
         self::assertSame(DomainVerificationSeverity::Ok, $severity);
@@ -81,7 +127,7 @@ final class DomainVerificationEvaluatorTest extends TestCase
     private function buildStatus(
         ?\DateTimeImmutable $dmarcVerifiedAt = null,
         ?\DateTimeImmutable $firstReportAt = null,
-        bool $dmarcCurrentlyValid = false,
+        int $consecutiveDmarcFailures = 0,
     ): DomainVerificationStatusResult {
         return new DomainVerificationStatusResult(
             domainId: 'd1',
@@ -90,7 +136,7 @@ final class DomainVerificationEvaluatorTest extends TestCase
             dkimVerifiedAt: null,
             dmarcVerifiedAt: $dmarcVerifiedAt,
             firstReportAt: $firstReportAt,
-            dmarcCurrentlyValid: $dmarcCurrentlyValid,
+            consecutiveDmarcFailures: $consecutiveDmarcFailures,
         );
     }
 

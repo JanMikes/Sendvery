@@ -68,6 +68,11 @@
                 </div>
 
                 {% if dnsResults is not null %}
+                    {% set spfValid = dnsResults.spf is not null and dnsResults.spf.isValid %}
+                    {% set dkimValid = dnsResults.dkim is not null and dnsResults.dkim.isValid %}
+                    {% set dmarcValid = dnsResults.dmarc is not null and dnsResults.dmarc.isValid %}
+                    {% set dmarcPolicy = dnsResults.dmarc is not null ? dnsResults.dmarc.details.policy|default(null) : null %}
+
                     <div class="mt-6 pt-6 border-t border-base-200">
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="font-semibold text-base">DNS check results</h3>
@@ -76,9 +81,9 @@
 
                         <div class="space-y-2">
                             {# SPF #}
-                            <div class="flex items-start gap-3 p-3 rounded-xl border {{ dnsResults.spf.rawRecord ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20' }}">
-                                <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {{ dnsResults.spf.rawRecord ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning' }}">
-                                    {% if dnsResults.spf.rawRecord %}
+                            <div class="flex items-start gap-3 p-3 rounded-xl border {{ spfValid ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20' }}">
+                                <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {{ spfValid ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning' }}">
+                                    {% if spfValid %}
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                                     {% else %}
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/></svg>
@@ -89,16 +94,16 @@
                                         <span class="font-semibold text-sm">SPF</span>
                                         <span class="text-xs text-base-content/50">Sender Policy Framework</span>
                                     </div>
-                                    <div class="text-sm {{ dnsResults.spf.rawRecord ? 'text-success' : 'text-warning' }}">
-                                        {{ dnsResults.spf.rawRecord ? 'Record found' : 'No record found' }}
+                                    <div class="text-sm {{ spfValid ? 'text-success' : 'text-warning' }}">
+                                        {{ spfValid ? 'Record found' : 'No record found' }}
                                     </div>
                                 </div>
                             </div>
 
                             {# DKIM #}
-                            <div class="flex items-start gap-3 p-3 rounded-xl border {{ dnsResults.dkim.keyExists ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20' }}">
-                                <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {{ dnsResults.dkim.keyExists ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning' }}">
-                                    {% if dnsResults.dkim.keyExists %}
+                            <div class="flex items-start gap-3 p-3 rounded-xl border {{ dkimValid ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20' }}">
+                                <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {{ dkimValid ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning' }}">
+                                    {% if dkimValid %}
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                                     {% else %}
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/></svg>
@@ -109,16 +114,16 @@
                                         <span class="font-semibold text-sm">DKIM</span>
                                         <span class="text-xs text-base-content/50">DomainKeys Identified Mail</span>
                                     </div>
-                                    <div class="text-sm {{ dnsResults.dkim.keyExists ? 'text-success' : 'text-warning' }}">
-                                        {{ dnsResults.dkim.keyExists ? 'Record found' : 'No record found (normal — uses provider-specific selectors)' }}
+                                    <div class="text-sm {{ dkimValid ? 'text-success' : 'text-warning' }}">
+                                        {{ dkimValid ? 'Record found' : 'No record found (normal — uses provider-specific selectors)' }}
                                     </div>
                                 </div>
                             </div>
 
                             {# DMARC #}
-                            <div class="flex items-start gap-3 p-3 rounded-xl border {{ dnsResults.dmarc.rawRecord ? 'bg-success/5 border-success/20' : 'bg-error/5 border-error/20' }}">
-                                <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {{ dnsResults.dmarc.rawRecord ? 'bg-success/15 text-success' : 'bg-error/15 text-error' }}">
-                                    {% if dnsResults.dmarc.rawRecord %}
+                            <div class="flex items-start gap-3 p-3 rounded-xl border {{ dmarcValid ? 'bg-success/5 border-success/20' : 'bg-error/5 border-error/20' }}">
+                                <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 {{ dmarcValid ? 'bg-success/15 text-success' : 'bg-error/15 text-error' }}">
+                                    {% if dmarcValid %}
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                                     {% else %}
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -129,9 +134,9 @@
                                         <span class="font-semibold text-sm">DMARC</span>
                                         <span class="text-xs text-base-content/50">Reporting & policy</span>
                                     </div>
-                                    <div class="text-sm {{ dnsResults.dmarc.rawRecord ? 'text-success' : 'text-error' }}">
-                                        {% if dnsResults.dmarc.rawRecord %}
-                                            Record found <span class="opacity-70">— policy:</span> <span class="font-mono">{{ dnsResults.dmarc.policy }}</span>
+                                    <div class="text-sm {{ dmarcValid ? 'text-success' : 'text-error' }}">
+                                        {% if dmarcValid %}
+                                            Record found{% if dmarcPolicy %} <span class="opacity-70">— policy:</span> <span class="font-mono">{{ dmarcPolicy }}</span>{% endif %}
                                         {% else %}
                                             No record found — we'll help you set one up
                                         {% endif %}
