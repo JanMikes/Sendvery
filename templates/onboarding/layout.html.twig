@@ -23,41 +23,52 @@
     </header>
 
     {# Progress steps — custom stepper that spans the content width #}
+    {% set completedSteps = onboarding_completed_steps() %}
+    {% set progressCount = (completedSteps[1] is defined ? 1 : 0) + (completedSteps[2] is defined ? 1 : 0) + (completedSteps[3] is defined ? 1 : 0) %}
     <div class="container mx-auto px-4 pt-10 pb-2">
         <div class="w-full max-w-2xl mx-auto">
             <ol class="relative flex justify-between">
                 {# Background track #}
                 <div class="absolute top-5 left-5 right-5 h-[3px] bg-base-300 rounded-full"></div>
 
-                {# Progress fill (driven by `step` variable) #}
+                {# Progress fill — based on completed steps, not just current step #}
                 <div class="absolute top-5 left-5 h-[3px] bg-primary rounded-full transition-all duration-500"
-                     style="width: calc((100% - 2.5rem) * {{ ((step - 1) / 3) }});"></div>
+                     style="width: calc((100% - 2.5rem) * {{ (progressCount / 3) }});"></div>
 
                 {% for s in steps_data %}
-                    {% set isClickable = step != s.num and step >= s.num %}
+                    {% set isCompleted = completedSteps[s.num] is defined %}
+                    {% set isCurrent = step == s.num %}
+                    {% set previousDone = s.num == 1 or completedSteps[s.num - 1] is defined %}
+                    {# Step 4 (Done) is only reachable via natural completion of step 3, not via stepper click. #}
+                    {% set isClickable = not isCurrent and s.num != 4 and (isCompleted or previousDone) %}
                     <li class="relative flex flex-col items-center gap-2 z-10 flex-1">
                         {% if isClickable %}<a href="{{ path(s.route) }}" class="flex flex-col items-center gap-2 group" aria-label="Go to step {{ s.num }}: {{ s.label }}">{% endif %}
-                        {% if step > s.num %}
-                            {# Completed — clickable, navigates back #}
-                            <div class="w-10 h-10 rounded-full bg-primary text-primary-content flex items-center justify-center shadow-sm ring-4 ring-base-200 {% if isClickable %}group-hover:ring-primary/30 transition-all cursor-pointer{% endif %}">
+                        {% if isCompleted %}
+                            {# Completed — checkmark icon; active ring when also the current step #}
+                            <div class="w-10 h-10 rounded-full bg-primary text-primary-content flex items-center justify-center shadow-sm font-semibold text-sm {{ isCurrent ? 'shadow-md ring-4 ring-primary/20' : 'ring-4 ring-base-200' }} {% if isClickable %}group-hover:ring-primary/30 transition-all cursor-pointer{% endif %}">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
                                 </svg>
                             </div>
-                        {% elseif step == s.num %}
-                            {# Current — pulsing ring for emphasis #}
+                        {% elseif isCurrent %}
+                            {# Current and not yet completed — number with active ring #}
                             <div class="w-10 h-10 rounded-full bg-primary text-primary-content flex items-center justify-center shadow-md ring-4 ring-primary/20 font-semibold text-sm">
                                 {{ s.num }}
                             </div>
+                        {% elseif isClickable %}
+                            {# Reachable but not yet visited — clickable number #}
+                            <div class="w-10 h-10 rounded-full bg-base-100 border-2 border-primary/40 text-primary flex items-center justify-center font-semibold text-sm ring-4 ring-base-200 group-hover:border-primary group-hover:bg-primary/10 transition-all cursor-pointer">
+                                {{ s.num }}
+                            </div>
                         {% else %}
-                            {# Upcoming — locked, not navigable yet #}
+                            {# Locked — previous step not done yet #}
                             <div class="w-10 h-10 rounded-full bg-base-100 border-2 border-base-300 text-base-content/40 flex items-center justify-center font-semibold text-sm ring-4 ring-base-200">
                                 {{ s.num }}
                             </div>
                         {% endif %}
 
                         <div class="text-center mt-1">
-                            <div class="text-sm font-semibold {{ step >= s.num ? 'text-base-content' : 'text-base-content/40' }} {% if isClickable %}group-hover:text-primary transition-colors{% endif %}">
+                            <div class="text-sm font-semibold {{ (isCompleted or isCurrent or isClickable) ? 'text-base-content' : 'text-base-content/40' }} {% if isClickable %}group-hover:text-primary transition-colors{% endif %}">
                                 {{ s.label }}
                             </div>
                             <div class="text-xs text-base-content/50 hidden sm:block mt-0.5">{{ s.desc }}</div>

@@ -257,7 +257,7 @@ final class OnboardingTest extends WebTestCase
     public function onboardingCompleteSetsOnboardingCompleted(): void
     {
         $client = self::createClient();
-        $user = $this->createNewUserWithTeam();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true, withDomain: true);
 
         $client->loginUser($user);
         $client->request('GET', '/app/onboarding/complete');
@@ -271,6 +271,18 @@ final class OnboardingTest extends WebTestCase
         $refreshed = $em->find(User::class, $user->id);
         self::assertNotNull($refreshed);
         self::assertNotNull($refreshed->onboardingCompletedAt);
+    }
+
+    #[Test]
+    public function onboardingCompleteRedirectsToDomainStepWhenNoDomain(): void
+    {
+        $client = self::createClient();
+        $user = $this->createNewUserWithTeam(teamStepCompleted: true);
+
+        $client->loginUser($user);
+        $client->request('GET', '/app/onboarding/complete');
+
+        self::assertResponseRedirects('/app/onboarding/domain');
     }
 
     #[Test]

@@ -24,6 +24,10 @@ final class OnboardingCompleteController extends AbstractController
         $user = $this->getUser();
 
         if (null === $user->onboardingCompletedAt) {
+            if (!$this->onboardingTracker->userHasMonitoredDomain($user)) {
+                return $this->redirectToRoute($this->onboardingTracker->nextStepRoute($user));
+            }
+
             $this->onboardingTracker->completeOnboarding($user);
         }
 

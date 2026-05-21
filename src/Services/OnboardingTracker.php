@@ -58,6 +58,28 @@ final readonly class OnboardingTracker
         return 'dashboard_overview';
     }
 
+    /** @return array<int, true> map from step number to true, for fast `in_array`-style lookup in Twig */
+    public function completedSteps(User $user): array
+    {
+        $hasDomain = $this->userHasMonitoredDomain($user);
+        $completed = [];
+
+        if (null !== $user->onboardingTeamCompletedAt || $hasDomain) {
+            $completed[1] = true;
+        }
+
+        if ($hasDomain) {
+            $completed[2] = true;
+        }
+
+        if (null !== $user->onboardingCompletedAt) {
+            $completed[3] = true;
+            $completed[4] = true;
+        }
+
+        return $completed;
+    }
+
     public function userHasMonitoredDomain(User $user): bool
     {
         $count = (int) $this->database->fetchOne(
