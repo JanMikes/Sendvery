@@ -79,6 +79,14 @@ return App::config([
             'App\Services\Dns\FakeSmtpProbe' => [
                 'public' => true,
             ],
+            // SPFLib uses its own DNS resolver, outside the App namespace and
+            // outside symfony/phpunit-bridge's dns-mock reach. Inject our fake
+            // resolver into the Decoder so SPF lookups stay in-process.
+            'SPFLib\Decoder' => [
+                'arguments' => [
+                    '$dnsResolver' => '@App\Services\Dns\FakeSpfResolver',
+                ],
+            ],
             'App\Services\IdentityProvider' => [
                 'public' => true,
             ],

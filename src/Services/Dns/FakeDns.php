@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Dns;
 
 use Spatie\Dns\Dns;
+use Spatie\Dns\Records\A;
 use Spatie\Dns\Records\CNAME;
 use Spatie\Dns\Records\MX;
 use Spatie\Dns\Records\Record;
@@ -29,6 +30,19 @@ final class FakeDns extends Dns
 
     /** @var array<string, array<string, true>> */
     private array $throws = [];
+
+    public function withA(string $name, string $ip): self
+    {
+        $this->records[$name]['A'][] = A::make([
+            'host' => $name,
+            'ttl' => 60,
+            'class' => 'IN',
+            'type' => 'A',
+            'ip' => $ip,
+        ]);
+
+        return $this;
+    }
 
     public function withTxt(string $name, string $value): self
     {

@@ -18,6 +18,7 @@ use Ramsey\Uuid\Uuid;
 final class OnboardingTest extends WebTestCase
 {
     use ScriptsDnsRecords;
+
     #[Test]
     public function onboardingTeamPageReturns200ForNewUser(): void
     {

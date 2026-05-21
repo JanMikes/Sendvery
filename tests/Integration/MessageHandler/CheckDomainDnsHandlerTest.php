@@ -20,6 +20,7 @@ use Ramsey\Uuid\UuidInterface;
 final class CheckDomainDnsHandlerTest extends IntegrationTestCase
 {
     use ScriptsDnsRecords;
+
     #[Test]
     public function createsDnsCheckResultsForDomain(): void
     {
@@ -111,6 +112,102 @@ final class CheckDomainDnsHandlerTest extends IntegrationTestCase
         $domain = $em->find(MonitoredDomain::class, $domainId);
         self::assertNotNull($domain);
         self::assertNotNull($domain->dmarcVerifiedAt, 'A valid DMARC check must set dmarc_verified_at on the domain');
+    }
+
+    #[Test]
+    public function spfLookupLimitTrippedAtElevenIncludes(): void
+    {
+        // RFC 7208 caps SPF DNS lookups at 10. Eleven include: mechanisms must
+        // produce isValid=false with a Critical lookup-limit issue surfaced.
+        $includes = array_map(static fn (int $i): string => "include:spf{$i}.example", range(1, 11));
+        $spfRecord = 'v=spf1 '.implode(' ', $includes).' ~all';
+
+        $this->scriptDns()->withTxt('spfheavy.example', $spfRecord);
+
+        $domainId = $this->createDomain('spfheavy.example');
+
+        $handler = $this->getService(CheckDomainDnsHandler::class);
+        $handler(new CheckDomainDns(domainId: $domainId));
+
+        $em = $this->getService(EntityManagerInterface::class);
+        $em->flush();
+        $em->clear();
+
+        $spf = $this->latestCheck($em, $domainId, DnsCheckType::Spf);
+        self::assertNotNull($spf);
+        self::assertFalse($spf->isValid, 'SPF must be invalid when lookup count exceeds 10');
+        self::assertSame(11, $spf->details['lookup_count'] ?? null);
+
+        $messages = array_map(static fn (array $issue): string => $issue['message'], $spf->issues);
+        self::assertNotEmpty(array_filter($messages, static fn (string $m): bool => str_contains($m, 'exceeding the 10-lookup limit')));
+    }
+
+    #[Test]
+    public function mxRecordIsCapturedAndProbedThroughSmtpFake(): void
+    {
+        // End-to-end MX flow without any network: script the MX record, the A
+        // record for the MX target, AND a reachable STARTTLS-capable SMTP probe
+        // at the resolved IP. Handler should capture host, priority, IP,
+        // reachable=true, tls_supported=true on the resulting DnsCheckResult.
+        $this->scriptDns()
+            ->withMx('mxhost.example', 'mail.mxhost.example', priority: 10)
+            ->withA('mail.mxhost.example', '192.0.2.10');
+
+        $this->scriptSmtp()->withReachable('192.0.2.10', tlsSupported: true);
+
+        $domainId = $this->createDomain('mxhost.example');
+
+        $handler = $this->getService(CheckDomainDnsHandler::class);
+        $handler(new CheckDomainDns(domainId: $domainId));
+
+        $em = $this->getService(EntityManagerInterface::class);
+        $em->flush();
+        $em->clear();
+
+        $mx = $this->latestCheck($em, $domainId, DnsCheckType::Mx);
+        self::assertNotNull($mx);
+
+        /** @var list<array{host: string, priority: int, ip: ?string, reachable: bool, tls_supported: ?bool}> $records */
+        $records = $mx->details['records'] ?? [];
+        self::assertCount(1, $records, 'MX records must be captured in the check result details');
+        self::assertSame('mail.mxhost.example', $records[0]['host']);
+        self::assertSame(10, $records[0]['priority']);
+        self::assertSame('192.0.2.10', $records[0]['ip']);
+        self::assertTrue($records[0]['reachable']);
+        self::assertTrue($records[0]['tls_supported']);
+    }
+
+    #[Test]
+    public function mxRecordWithUnreachableServerSurfacesWarning(): void
+    {
+        // Same MX + A scripting, but the SMTP probe returns unreachable. The
+        // check must capture reachable=false and the issues list must include
+        // the "responded on port 25" warning.
+        $this->scriptDns()
+            ->withMx('mxhost.example', 'mail.mxhost.example', priority: 10)
+            ->withA('mail.mxhost.example', '192.0.2.10');
+
+        $this->scriptSmtp()->withUnreachable('192.0.2.10');
+
+        $domainId = $this->createDomain('mxhost.example');
+
+        $handler = $this->getService(CheckDomainDnsHandler::class);
+        $handler(new CheckDomainDns(domainId: $domainId));
+
+        $em = $this->getService(EntityManagerInterface::class);
+        $em->flush();
+        $em->clear();
+
+        $mx = $this->latestCheck($em, $domainId, DnsCheckType::Mx);
+        self::assertNotNull($mx);
+
+        /** @var list<array{reachable: bool}> $records */
+        $records = $mx->details['records'] ?? [];
+        self::assertCount(1, $records);
+        self::assertFalse($records[0]['reachable']);
+
+        $messages = array_map(static fn (array $issue): string => $issue['message'], $mx->issues);
+        self::assertNotEmpty(array_filter($messages, static fn (string $m): bool => str_contains($m, 'responded on port 25')));
     }
 
     #[Test]
