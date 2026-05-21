@@ -3,6 +3,34 @@
 {% block page_title %}Overview{% endblock %}
 
 {% block content %}
+    {% if verificationStatus is not null and verificationSeverity is not null and verificationSeverity.value != 'ok' %}
+        {% set isCritical = verificationSeverity.value == 'critical' %}
+        <div class="rounded-2xl border p-5 mb-6 {{ isCritical ? 'bg-error/5 border-error/30' : 'bg-warning/5 border-warning/30' }}">
+            <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full flex items-center justify-center shrink-0 {{ isCritical ? 'bg-error/15 text-error' : 'bg-warning/15 text-warning' }}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    {% if verificationStatus.dmarcVerifiedAt is null %}
+                        <div class="font-semibold text-base-content mb-1">DMARC record not detected for {{ verificationStatus.domainName }}</div>
+                        <p class="text-sm text-base-content/70">Publish a DMARC TXT record so reports can be delivered. We re-check every day; you can also re-check now.</p>
+                    {% elseif not verificationStatus.dmarcCurrentlyValid %}
+                        <div class="font-semibold text-base-content mb-1">DMARC record went missing for {{ verificationStatus.domainName }}</div>
+                        <p class="text-sm text-base-content/70">We saw it before, but the latest check couldn't find it. Reports will stop arriving until it's republished.</p>
+                    {% else %}
+                        <div class="font-semibold text-base-content mb-1">No DMARC reports yet for {{ verificationStatus.domainName }}</div>
+                        <p class="text-sm text-base-content/70">DMARC is published but no reports have arrived after 48 hours. Verify that <code class="kbd kbd-xs">rua</code> points at <span class="font-mono">reports@sendvery.com</span>.</p>
+                    {% endif %}
+                </div>
+                <form method="post" action="{{ path('dashboard_domain_reverify', {id: verificationStatus.domainId}) }}" class="shrink-0">
+                    <button type="submit" class="btn btn-sm {{ isCritical ? 'btn-error' : 'btn-warning' }}">Re-check now</button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
     {# Stat cards #}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <twig:StatCard

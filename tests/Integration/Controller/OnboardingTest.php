@@ -558,6 +558,61 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
+    public function dashboardShowsVerificationBannerForUnverifiedDmarc(): void
+    {
+        $client = self::createClient();
+        $user = $this->createCompletedUser();
+
+        $client->loginUser($user);
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('DMARC record not detected', $body);
+    }
+
+    #[Test]
+    public function reverifyEndpointRedirectsBackToDashboard(): void
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $user = $this->createCompletedUser();
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+
+        $domain = $em->getRepository(MonitoredDomain::class)->findOneBy(['team' => $membership->team->id->toString()]);
+        self::assertNotNull($domain);
+
+        $client->loginUser($user);
+        $client->request('POST', '/app/domains/'.$domain->id->toString().'/reverify');
+
+        self::assertResponseRedirects('/app');
+    }
+
+    #[Test]
+    public function reverifyEndpointDeniesCrossTeamAccess(): void
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $userA = $this->createCompletedUser();
+        $userB = $this->createCompletedUser();
+
+        $membershipB = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $userB->id->toString()]);
+        self::assertNotNull($membershipB);
+        $domainB = $em->getRepository(MonitoredDomain::class)->findOneBy(['team' => $membershipB->team->id->toString()]);
+        self::assertNotNull($domainB);
+
+        $client->loginUser($userA);
+        $client->request('POST', '/app/domains/'.$domainB->id->toString().'/reverify');
+
+        self::assertSame(403, $client->getResponse()->getStatusCode());
+    }
+
+    #[Test]
     public function onboardingPagesNotAccessibleWithoutAuth(): void
     {
         $client = self::createClient();
@@ -635,7 +690,7 @@ final class OnboardingTest extends WebTestCase
         $team = new Team(
             id: $teamId,
             name: 'Completed Team',
-            slug: 'completed-'.substr($teamId->toString(), 0, 8),
+            slug: 'completed-'.$teamId->toString(),
             createdAt: new \DateTimeImmutable(),
         );
         $team->popEvents();
@@ -653,7 +708,7 @@ final class OnboardingTest extends WebTestCase
         $domain = new MonitoredDomain(
             id: Uuid::uuid7(),
             team: $team,
-            domain: 'completed-'.substr($teamId->toString(), 0, 8).'.com',
+            domain: 'completed-'.$teamId->toString().'.com',
             createdAt: new \DateTimeImmutable(),
         );
         $domain->popEvents();
