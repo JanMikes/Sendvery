@@ -149,6 +149,9 @@ return App::config([
             'App\Query\GetDomainDetail' => [
                 'public' => true,
             ],
+            'App\Query\GetDomainVerificationStatus' => [
+                'public' => true,
+            ],
             'App\Query\GetDomainSenderBreakdown' => [
                 'public' => true,
             ],
