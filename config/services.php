@@ -58,6 +58,16 @@ return App::config([
     ],
     'when@test' => [
         'services' => [
+            // No live DNS in tests: the four DNS checkers ask Spatie\Dns\Dns,
+            // which by default queries the system resolver. Aliasing it to a
+            // do-nothing fake makes integration tests fast and deterministic.
+            // Tests that need positive DNS data use the StubDns helper directly.
+            'Spatie\Dns\Dns' => [
+                'alias' => 'App\Services\Dns\FakeDns',
+            ],
+            'App\Services\Dns\FakeDns' => [
+                'public' => true,
+            ],
             'App\Services\IdentityProvider' => [
                 'public' => true,
             ],
