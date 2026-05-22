@@ -150,7 +150,7 @@
                       onsubmit="return confirm('Transfer ownership? You will become an Admin.')">
                     <select name="new_owner_user_id" required class="select select-bordered flex-1">
                         <option value="">Choose a teammate…</option>
-                        {% for member in members if member.role.value != 'owner' %}
+                        {% for member in members|filter(m => m.role.value != 'owner') %}
                             <option value="{{ member.user.id }}">{{ member.user.email }}</option>
                         {% endfor %}
                     </select>

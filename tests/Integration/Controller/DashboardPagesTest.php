@@ -7,17 +7,13 @@ namespace App\Tests\Integration\Controller;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DnsCheckResult;
-use App\Entity\MonitoredDomain;
-use App\Entity\Team;
-use App\Entity\TeamMembership;
-use App\Entity\User;
+use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
 use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
 use App\Value\DnsCheckType;
-use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
@@ -33,58 +29,28 @@ final class DashboardPagesTest extends WebTestCase
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
 
-        $userId = Uuid::uuid7();
-        $user = new User(
-            id: $userId,
-            email: 'dash-'.$userId->toString().'@example.com',
-            createdAt: new \DateTimeImmutable(),
-            onboardingCompletedAt: new \DateTimeImmutable(),
-        );
-        $user->popEvents();
-        $em->persist($user);
-
-        $teamId = Uuid::uuid7();
-        $team = new Team(
-            id: $teamId,
-            name: 'Dashboard Test',
-            slug: 'dashboard-test-'.Uuid::uuid7()->toString(),
-            createdAt: new \DateTimeImmutable('2000-01-01'),
-            plan: 'personal',
-        );
-        $team->popEvents();
-        $em->persist($team);
-
-        $membership = new TeamMembership(
-            id: Uuid::uuid7(),
-            user: $user,
-            team: $team,
-            role: TeamRole::Owner,
-            joinedAt: new \DateTimeImmutable(),
-        );
-        $em->persist($membership);
-
-        $domainId = Uuid::uuid7();
-        $domain = new MonitoredDomain(
-            id: $domainId,
-            team: $team,
-            domain: 'dashboard-test.com',
-            createdAt: new \DateTimeImmutable(),
-            dmarcPolicy: DmarcPolicy::Reject,
-        );
-        $domain->popEvents();
-        $em->persist($domain);
+        $persona = $fixtures->persona()
+            ->emailPrefix('dash')
+            ->teamName('Dashboard Test')
+            ->plan('personal')
+            ->withDomain('dashboard-test.com')
+            ->build();
+        assert(null !== $persona->domain);
+        $persona->domain->dmarcPolicy = DmarcPolicy::Reject;
+        $em->flush();
 
         $reportId = Uuid::uuid7();
         $report = new DmarcReport(
             id: $reportId,
-            monitoredDomain: $domain,
+            monitoredDomain: $persona->domain,
             reporterOrg: 'google.com',
             reporterEmail: 'noreply@google.com',
             externalReportId: 'ext-dash-'.Uuid::uuid7()->toString(),
             dateRangeBegin: new \DateTimeImmutable('-2 days'),
             dateRangeEnd: new \DateTimeImmutable('-1 day'),
-            policyDomain: 'dashboard-test.com',
+            policyDomain: $persona->domain->domain,
             policyAdkim: DmarcAlignment::Relaxed,
             policyAspf: DmarcAlignment::Relaxed,
             policyP: DmarcPolicy::Reject,
@@ -95,7 +61,7 @@ final class DashboardPagesTest extends WebTestCase
         );
         $em->persist($report);
 
-        $record = new DmarcRecord(
+        $em->persist(new DmarcRecord(
             id: Uuid::uuid7(),
             dmarcReport: $report,
             sourceIp: '1.2.3.4',
@@ -103,16 +69,15 @@ final class DashboardPagesTest extends WebTestCase
             disposition: Disposition::None,
             dkimResult: AuthResult::Pass,
             spfResult: AuthResult::Pass,
-            headerFrom: 'dashboard-test.com',
-        );
-        $em->persist($record);
+            headerFrom: $persona->domain->domain,
+        ));
         $em->flush();
 
-        $client->loginUser($user);
+        $client->loginUser($persona->user);
 
         return [
             'client' => $client,
-            'domainId' => $domainId,
+            'domainId' => $persona->domain->id,
             'reportId' => $reportId,
         ];
     }
@@ -120,39 +85,14 @@ final class DashboardPagesTest extends WebTestCase
     private function createAuthenticatedClientEmpty(): KernelBrowser
     {
         $client = self::createClient();
-        $em = self::getContainer()->get(EntityManagerInterface::class);
-        assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->persona()
+            ->emailPrefix('empty-dash')
+            ->teamName('Empty Dashboard')
+            ->withoutDomain()
+            ->build();
 
-        $userId = Uuid::uuid7();
-        $user = new User(
-            id: $userId,
-            email: 'empty-dash-'.$userId->toString().'@example.com',
-            createdAt: new \DateTimeImmutable(),
-            onboardingCompletedAt: new \DateTimeImmutable(),
-        );
-        $user->popEvents();
-        $em->persist($user);
-
-        $team = new Team(
-            id: Uuid::uuid7(),
-            name: 'Empty Dashboard',
-            slug: 'empty-dashboard-'.Uuid::uuid7()->toString(),
-            createdAt: new \DateTimeImmutable(),
-        );
-        $team->popEvents();
-        $em->persist($team);
-
-        $membership = new TeamMembership(
-            id: Uuid::uuid7(),
-            user: $user,
-            team: $team,
-            role: TeamRole::Owner,
-            joinedAt: new \DateTimeImmutable(),
-        );
-        $em->persist($membership);
-        $em->flush();
-
-        $client->loginUser($user);
+        $client->loginUser($persona->user);
 
         return $client;
     }
@@ -499,50 +439,22 @@ final class DashboardPagesTest extends WebTestCase
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
 
-        $userId = Uuid::uuid7();
-        $user = new User(
-            id: $userId,
-            email: 'banner-'.$userId->toString().'@example.com',
-            createdAt: new \DateTimeImmutable(),
-            onboardingCompletedAt: new \DateTimeImmutable(),
-        );
-        $user->popEvents();
-        $em->persist($user);
+        $persona = $fixtures->persona()
+            ->emailPrefix('banner')
+            ->teamName('Banner Test')
+            ->withDomain('banner-test.example')
+            ->build();
+        assert(null !== $persona->domain);
 
-        $team = new Team(
-            id: Uuid::uuid7(),
-            name: 'Banner Test',
-            slug: 'banner-test-'.Uuid::uuid7()->toString(),
-            createdAt: new \DateTimeImmutable(),
-        );
-        $team->popEvents();
-        $em->persist($team);
-
-        $membership = new TeamMembership(
-            id: Uuid::uuid7(),
-            user: $user,
-            team: $team,
-            role: TeamRole::Owner,
-            joinedAt: new \DateTimeImmutable(),
-        );
-        $em->persist($membership);
-
-        $domain = new MonitoredDomain(
-            id: Uuid::uuid7(),
-            team: $team,
-            domain: 'banner-test.example',
-            createdAt: new \DateTimeImmutable(),
-            dmarcVerifiedAt: $dmarcVerifiedAt,
-            firstReportAt: $firstReportAt,
-        );
-        $domain->popEvents();
-        $em->persist($domain);
+        $persona->domain->dmarcVerifiedAt = $dmarcVerifiedAt;
+        $persona->domain->firstReportAt = $firstReportAt;
 
         foreach ($latestChecks as $check) {
             $em->persist(new DnsCheckResult(
                 id: Uuid::uuid7(),
-                monitoredDomain: $domain,
+                monitoredDomain: $persona->domain,
                 type: DnsCheckType::Dmarc,
                 checkedAt: new \DateTimeImmutable($check['checkedAt']),
                 rawRecord: $check['isValid'] ? 'v=DMARC1; p=none;' : null,
@@ -556,7 +468,7 @@ final class DashboardPagesTest extends WebTestCase
         }
 
         $em->flush();
-        $client->loginUser($user);
+        $client->loginUser($persona->user);
 
         return $client;
     }
