@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ownership of {{ teamName }} has been transferred</title>
+</head>
+<body style="margin: 0; padding: 0; background: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background: #f4f4f5; padding: 32px 16px;">
+        <tr>
+            <td align="center">
+                <table width="560" cellpadding="0" cellspacing="0" style="background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08);">
+                    <tr>
+                        <td style="padding: 24px 32px; background: #475569;">
+                            <h1 style="margin: 0; color: #fff; font-size: 20px;">Ownership transferred</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 32px; font-size: 15px; color: #3f3f46; line-height: 1.6;">
+                            <p style="margin: 0 0 16px 0;">
+                                You transferred ownership of the Sendvery team <strong>{{ teamName }}</strong> to <strong>{{ newOwnerEmail }}</strong>.
+                            </p>
+                            <p style="margin: 0 0 16px 0; color: #71717a;">
+                                You're now an Admin on the team. You can still invite and remove teammates, change roles, and manage settings — only ownership transfers and a few owner-only safeguards are off-limits.
+                            </p>
+                            <div style="text-align: center; margin: 32px 0;">
+                                <a href="{{ teamSettingsUrl }}" style="display: inline-block; padding: 14px 36px; background: #475569; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                                    Team settings
+                                </a>
+                            </div>
+                            <p style="margin: 16px 0 0 0; font-size: 13px; color: #b45309;">
+                                <strong>If this wasn't you</strong>, contact support immediately so we can investigate and restore your ownership.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

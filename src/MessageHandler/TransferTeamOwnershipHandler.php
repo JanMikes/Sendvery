@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\MessageHandler;
 
 use App\Exceptions\CannotTransferOwnership;
+use App\Message\SendOwnershipTransferNotifications;
 use App\Message\TransferTeamOwnership;
 use App\Repository\TeamMembershipRepository;
 use App\Value\TeamRole;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Moves the Owner role between two existing members of the same team. The
@@ -25,6 +27,7 @@ final readonly class TransferTeamOwnershipHandler
 {
     public function __construct(
         private TeamMembershipRepository $membershipRepository,
+        private MessageBusInterface $commandBus,
     ) {
     }
 
@@ -52,5 +55,11 @@ final readonly class TransferTeamOwnershipHandler
 
         $incoming->role = TeamRole::Owner;
         $currentOwnership->role = TeamRole::Admin;
+
+        $this->commandBus->dispatch(new SendOwnershipTransferNotifications(
+            teamId: $message->teamId,
+            newOwnerUserId: $message->newOwnerUserId,
+            previousOwnerUserId: $message->currentOwnerUserId,
+        ));
     }
 }
