@@ -225,8 +225,23 @@ final class DomainDetailBadgeTest extends WebTestCase
         assert($em instanceof EntityManagerInterface);
 
         // Anchors on category rows + score/trend cards only render in the
-        // "has snapshot" branch of the health template — persist a snapshot
-        // so we hit that branch.
+        // "has snapshot" branch of the health template, and the trend-chart
+        // anchor specifically needs >1 history entries — persist two snapshots
+        // so both `id="health-score"` and `id="health-trend"` render.
+        $em->persist(new DomainHealthSnapshot(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            grade: 'B',
+            score: 80,
+            spfScore: 90,
+            dkimScore: 80,
+            dmarcScore: 80,
+            mxScore: 90,
+            blacklistScore: 80,
+            checkedAt: new \DateTimeImmutable('-1 day'),
+            recommendations: [],
+            shareHash: null,
+        ));
         $em->persist(new DomainHealthSnapshot(
             id: Uuid::uuid7(),
             monitoredDomain: $persona->domain,
@@ -253,6 +268,7 @@ final class DomainDetailBadgeTest extends WebTestCase
         self::assertStringContainsString('id="health-dmarc"', $body);
         self::assertStringContainsString('id="health-mx"', $body);
         self::assertStringContainsString('id="health-score"', $body);
+        self::assertStringContainsString('id="health-trend"', $body);
     }
 
     #[Test]

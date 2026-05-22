@@ -210,6 +210,34 @@ final class NextActionResolverTest extends TestCase
     }
 
     #[Test]
+    public function resolveConnectMailboxSuppressedWhenAnyDomainHasReports(): void
+    {
+        // Mixed multi-domain state: one domain still has zero reports but
+        // another is already receiving them via the central inbox. The
+        // "connect a mailbox" nudge is intentionally suppressed unless ALL
+        // domains are dry — partial coverage still means the report pipeline
+        // is working for this team.
+        $resolver = new NextActionResolver();
+
+        $result = $resolver->resolve(
+            domains: [
+                $this->buildDomain(domainName: 'a.example.com', totalReports: 0),
+                $this->buildDomain(domainName: 'b.example.com', totalReports: 50),
+            ],
+            verificationStatus: $this->buildStatus(
+                dmarcVerifiedAt: new \DateTimeImmutable('-10 days'),
+                firstReportAt: new \DateTimeImmutable('-9 days'),
+            ),
+            verificationSeverity: DomainVerificationSeverity::Ok,
+            unreadCriticalAlertCount: 0,
+            quarantineCount: 0,
+            hasMailbox: false,
+        );
+
+        self::assertSame(NextAction::AllHealthy, $result->actionKey);
+    }
+
+    #[Test]
     public function resolveAllHealthyWhenDomainHasReports(): void
     {
         $resolver = new NextActionResolver();

@@ -209,6 +209,29 @@ final class DnsHealthOverviewTest extends WebTestCase
     }
 
     #[Test]
+    public function forDomainReturnsNullForDomainBelongingToDifferentTeam(): void
+    {
+        // Security guard: a known domain ID scoped against a foreign team's
+        // IDs must return null, never the row. Cross-tenant exposure here
+        // would leak SPF/DKIM/DMARC verification state across teams.
+        self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $personaA = $fixtures->onboardedOwner();
+        $personaB = $fixtures->onboardedOwner();
+        assert(null !== $personaA->domain);
+
+        $query = self::getContainer()->get(GetDnsHealthOverview::class);
+        assert($query instanceof GetDnsHealthOverview);
+
+        $result = $query->forDomain(
+            $personaA->domain->id->toString(),
+            [$personaB->team->id->toString()],
+        );
+
+        self::assertNull($result);
+    }
+
+    #[Test]
     public function noDashboardLinksToPublicDomainHealthTool(): void
     {
         $client = self::createClient();
