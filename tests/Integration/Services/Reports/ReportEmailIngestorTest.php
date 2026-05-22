@@ -19,6 +19,7 @@ use App\Value\Reports\ReportSource;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 final class ReportEmailIngestorTest extends IntegrationTestCase
 {
@@ -110,6 +111,7 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
             identityProvider: $this->getService(IdentityProvider::class),
             clock: $this->getService(ClockInterface::class),
             logger: new NullLogger(),
+            commandBus: $this->getService(MessageBusInterface::class),
         );
 
         $this->client->addEnvelope($this->envelope(uid: 1, messageId: '<x@y>'));
@@ -142,7 +144,9 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
         self::assertNotNull($envelope);
         self::assertSame(17, $envelope->imapUid);
         self::assertSame(555, $envelope->imapUidvalidity);
-        self::assertSame(EnvelopeProcessingStatus::Pending, $envelope->processingStatus);
+        // The synchronous bus runs ProcessReceivedReportEmail inline; the empty-body
+        // fixture has no DMARC attachments, so the envelope ends up ignored, not pending.
+        self::assertSame(EnvelopeProcessingStatus::Ignored, $envelope->processingStatus);
     }
 
     private function envelope(int $uid, string $messageId, ?int $uidvalidity = 1): FetchedEnvelope

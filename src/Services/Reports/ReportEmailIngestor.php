@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Reports;
 
 use App\Entity\ReceivedReportEmail;
+use App\Message\ProcessReceivedReportEmail;
 use App\Repository\ReceivedReportEmailRepository;
 use App\Services\IdentityProvider;
 use App\Value\Reports\CentralInboxFolder;
@@ -13,6 +14,7 @@ use App\Value\Reports\ReportSource;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Pulls one batch of envelopes from the central inbox, persists each as a
@@ -34,6 +36,7 @@ final readonly class ReportEmailIngestor
         private IdentityProvider $identityProvider,
         private ClockInterface $clock,
         private LoggerInterface $logger,
+        private MessageBusInterface $commandBus,
     ) {
     }
 
@@ -53,8 +56,10 @@ final readonly class ReportEmailIngestor
             $persisted = 0;
 
             foreach ($envelopes as $envelope) {
-                if ($this->persistIfNew($envelope)) {
+                $entity = $this->persistIfNew($envelope);
+                if (null !== $entity) {
                     ++$persisted;
+                    $this->commandBus->dispatch(new ProcessReceivedReportEmail(envelopeId: $entity->id));
                 }
 
                 $this->client->moveToFolder($envelope->uid, CentralInboxFolder::Pending);
@@ -70,14 +75,14 @@ final readonly class ReportEmailIngestor
         }
     }
 
-    private function persistIfNew(FetchedEnvelope $envelope): bool
+    private function persistIfNew(FetchedEnvelope $envelope): ?ReceivedReportEmail
     {
         if ($this->envelopeRepository->existsForSourceAndMessageId(ReportSource::CentralInbox, $envelope->messageId)) {
             $this->logger->debug('Duplicate envelope skipped (already ingested).', [
                 'messageId' => $envelope->messageId,
             ]);
 
-            return false;
+            return null;
         }
 
         $now = $this->clock->now();
@@ -99,6 +104,6 @@ final readonly class ReportEmailIngestor
         $this->entityManager->persist($entity);
         $this->entityManager->flush();
 
-        return true;
+        return $entity;
     }
 }

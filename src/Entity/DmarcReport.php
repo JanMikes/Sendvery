@@ -63,6 +63,10 @@ final class DmarcReport implements EntityWithEvents
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $processedAt;
 
+    #[ORM\ManyToOne(targetEntity: ReceivedReportEmail::class)]
+    #[ORM\JoinColumn(name: 'source_envelope_id', nullable: true, onDelete: 'SET NULL')]
+    public readonly ?ReceivedReportEmail $sourceEnvelope;
+
     public function __construct(
         UuidInterface $id,
         MonitoredDomain $monitoredDomain,
@@ -79,6 +83,7 @@ final class DmarcReport implements EntityWithEvents
         int $policyPct,
         string $rawXml,
         \DateTimeImmutable $processedAt,
+        ?ReceivedReportEmail $sourceEnvelope = null,
     ) {
         $this->id = $id;
         $this->monitoredDomain = $monitoredDomain;
@@ -95,5 +100,6 @@ final class DmarcReport implements EntityWithEvents
         $this->policyPct = $policyPct;
         $this->rawXml = $rawXml;
         $this->processedAt = $processedAt;
+        $this->sourceEnvelope = $sourceEnvelope;
     }
 }

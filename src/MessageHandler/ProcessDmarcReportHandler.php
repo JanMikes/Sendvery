@@ -6,6 +6,7 @@ namespace App\MessageHandler;
 
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
+use App\Entity\ReceivedReportEmail;
 use App\Events\DmarcReportProcessed;
 use App\Message\ProcessDmarcReport;
 use App\Repository\DmarcReportRepository;
@@ -49,6 +50,10 @@ final readonly class ProcessDmarcReportHandler
         assert(false !== $compressed);
         $compressedXml = base64_encode($compressed);
 
+        $sourceEnvelope = null !== $message->sourceEnvelopeId
+            ? $this->entityManager->find(ReceivedReportEmail::class, $message->sourceEnvelopeId)
+            : null;
+
         $report = new DmarcReport(
             id: $message->reportId,
             monitoredDomain: $domain,
@@ -65,6 +70,7 @@ final readonly class ProcessDmarcReportHandler
             policyPct: $parsed->policyPct,
             rawXml: $compressedXml,
             processedAt: $now,
+            sourceEnvelope: $sourceEnvelope,
         );
 
         $this->entityManager->persist($report);

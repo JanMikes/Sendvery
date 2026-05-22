@@ -92,6 +92,34 @@ final class ImapCentralInboxClient implements CentralInboxClient
         $this->moveMessage($message, $folder);
     }
 
+    public function moveByMessageId(string $messageId, CentralInboxFolder $from, CentralInboxFolder $to): void
+    {
+        $client = $this->connect();
+        $fromPath = $this->config->folderPath($from);
+        $folder = $client->getFolderByPath($fromPath);
+
+        if (null === $folder) {
+            $this->logger->info('Cannot move message {msgId}: source folder {folder} missing.', [
+                'msgId' => $messageId,
+                'folder' => $fromPath,
+            ]);
+
+            return;
+        }
+
+        $message = $folder->messages()->whereMessageId($messageId)->get()->first();
+        if (!$message instanceof Message) {
+            $this->logger->info('Cannot move message {msgId}: not found in folder {folder}.', [
+                'msgId' => $messageId,
+                'folder' => $fromPath,
+            ]);
+
+            return;
+        }
+
+        $this->moveMessage($message, $to);
+    }
+
     public function close(): void
     {
         if (null === $this->client) {

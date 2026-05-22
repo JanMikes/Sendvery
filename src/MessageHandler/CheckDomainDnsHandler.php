@@ -36,7 +36,7 @@ final readonly class CheckDomainDnsHandler
             match ($result->type) {
                 DnsCheckType::Spf => $domain->spfVerifiedAt = $result->checkedAt,
                 DnsCheckType::Dkim => $domain->dkimVerifiedAt = $result->checkedAt,
-                DnsCheckType::Dmarc => $domain->dmarcVerifiedAt = $result->checkedAt,
+                DnsCheckType::Dmarc => $domain->markDmarcVerified($result->checkedAt),
                 DnsCheckType::Mx => null,
             };
         }

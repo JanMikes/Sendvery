@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Events\DomainAdded;
+use App\Events\DomainDmarcVerified;
 use App\Value\DmarcPolicy;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
@@ -67,5 +68,25 @@ final class MonitoredDomain implements EntityWithEvents
         $this->firstReportAt = $firstReportAt;
 
         $this->recordThat(new DomainAdded($this->id, $this->team->id));
+    }
+
+    /**
+     * Records the first successful DMARC DNS verification and emits a
+     * DomainDmarcVerified event so listeners (notably the quarantine
+     * releaser) can react. Re-verifications are a no-op event-wise so we
+     * don't fire duplicate releases on every nightly DNS sweep.
+     */
+    public function markDmarcVerified(\DateTimeImmutable $verifiedAt): void
+    {
+        $wasUnverified = null === $this->dmarcVerifiedAt;
+        $this->dmarcVerifiedAt = $verifiedAt;
+
+        if ($wasUnverified) {
+            $this->recordThat(new DomainDmarcVerified(
+                domainId: $this->id,
+                teamId: $this->team->id,
+                domainName: $this->domain,
+            ));
+        }
     }
 }

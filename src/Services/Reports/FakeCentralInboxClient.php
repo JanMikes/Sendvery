@@ -21,6 +21,9 @@ final class FakeCentralInboxClient implements CentralInboxClient
     /** @var array<int, CentralInboxFolder> */
     private array $moved = [];
 
+    /** @var array<string, array{from: CentralInboxFolder, to: CentralInboxFolder}> */
+    private array $movedByMessageId = [];
+
     private bool $shouldFail = false;
     private string $failureMessage = '';
     private int $closedTimes = 0;
@@ -41,6 +44,11 @@ final class FakeCentralInboxClient implements CentralInboxClient
     public function moveToFolder(int $uid, CentralInboxFolder $folder): void
     {
         $this->moved[$uid] = $folder;
+    }
+
+    public function moveByMessageId(string $messageId, CentralInboxFolder $from, CentralInboxFolder $to): void
+    {
+        $this->movedByMessageId[$messageId] = ['from' => $from, 'to' => $to];
     }
 
     public function close(): void
@@ -74,6 +82,12 @@ final class FakeCentralInboxClient implements CentralInboxClient
         return $this->moved;
     }
 
+    /** @return array<string, array{from: CentralInboxFolder, to: CentralInboxFolder}> */
+    public function getMovedByMessageId(): array
+    {
+        return $this->movedByMessageId;
+    }
+
     public function getClosedTimes(): int
     {
         return $this->closedTimes;
@@ -83,6 +97,7 @@ final class FakeCentralInboxClient implements CentralInboxClient
     {
         $this->pending = [];
         $this->moved = [];
+        $this->movedByMessageId = [];
         $this->closedTimes = 0;
         $this->shouldFail = false;
         $this->failureMessage = '';

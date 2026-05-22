@@ -12,6 +12,7 @@ final readonly class ProcessDmarcReport
         public UuidInterface $reportId,
         public UuidInterface $domainId,
         public string $xmlContent,
+        public ?UuidInterface $sourceEnvelopeId = null,
     ) {
     }
 }

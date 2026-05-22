@@ -194,6 +194,24 @@ return App::config([
             'App\MessageHandler\PollReportsInboxHandler' => [
                 'public' => true,
             ],
+            'App\MessageHandler\ProcessReceivedReportEmailHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\ReleaseQuarantinedReportsForDomainHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\ReleaseQuarantinedReportsWhenDomainVerified' => [
+                'public' => true,
+            ],
+            'App\Services\Reports\DmarcReportRouter' => [
+                'public' => true,
+            ],
+            'App\Services\Reports\RawEmailMimeParser' => [
+                'public' => true,
+            ],
+            'App\Repository\QuarantinedDmarcReportRepository' => [
+                'public' => true,
+            ],
             'App\Query\GetDashboardStats' => [
                 'public' => true,
             ],
