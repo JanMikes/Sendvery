@@ -1,98 +1,272 @@
-<div class="text-center mb-8">
-    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-warning/10 text-warning-content text-sm font-medium">
-        <span class="w-2 h-2 rounded-full bg-warning animate-pulse"></span>
-        Hosted plans are in private beta — request access below
-    </div>
-</div>
+<div data-controller="pricing"
+     data-pricing-billing-value="annual"
+     data-pricing-ai-value="false"
+     class="max-w-6xl mx-auto">
 
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-    {# Self-Hosted (Free) #}
-    <div class="card bg-base-200/50 border border-base-300">
-        <div class="card-body">
-            <h3 class="card-title text-lg">Self-Hosted</h3>
-            <div class="mt-2">
-                <span class="text-3xl font-bold">Free</span>
-                <span class="text-base-content/50 text-sm"> forever</span>
-            </div>
-            <p class="text-sm text-base-content/60 mt-2">Run on your own infrastructure. All features included.</p>
-            <ul class="mt-4 space-y-2 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Unlimited domains</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> All features</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> AGPL-3.0 licensed</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Docker image</li>
-            </ul>
-            <div class="card-actions mt-6">
-                <a href="{{ path('about_open_source') }}" class="btn btn-outline btn-sm w-full">Learn more</a>
-            </div>
+    <div class="flex flex-col md:flex-row gap-4 items-center justify-center mb-10">
+        <div class="join">
+            <button
+                type="button"
+                data-pricing-target="billingButton"
+                data-action="pricing#setBilling"
+                data-billing="monthly"
+                aria-pressed="false"
+                class="btn btn-sm join-item"
+            >Monthly</button>
+            <button
+                type="button"
+                data-pricing-target="billingButton"
+                data-action="pricing#setBilling"
+                data-billing="annual"
+                aria-pressed="true"
+                class="btn btn-sm join-item btn-active"
+            >Annual <span class="badge badge-success badge-xs ml-2">−2 months</span></button>
         </div>
-    </div>
-
-    {# Free Hosted — beta #}
-    <div class="card bg-base-200/50 border border-base-300">
-        <div class="card-body">
-            <h3 class="card-title text-lg">Free</h3>
-            <div class="mt-2">
-                <span class="text-3xl font-bold">$0</span>
-                <span class="text-base-content/50 text-sm">/month</span>
-            </div>
-            <p class="text-sm text-base-content/60 mt-2">Get started with 1 domain. No credit card required.</p>
-            <ul class="mt-4 space-y-2 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 1 domain</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> DMARC parsing</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Basic email digest</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 30-day retention</li>
-            </ul>
-            <div class="card-actions mt-6">
-                <a href="{{ path('beta_signup') }}" class="btn btn-outline btn-sm w-full">Join the wait list</a>
-            </div>
-        </div>
+        <label class="label gap-2 cursor-pointer">
+            <input
+                type="checkbox"
+                data-pricing-target="aiToggle"
+                data-action="pricing#toggleAi"
+                class="toggle toggle-sm toggle-primary"
+            >
+            <span class="label-text">✨ Add AI Insights</span>
+        </label>
     </div>
 
-    {# Personal — beta access #}
-    <div class="card bg-base-200/50 border-2 border-primary shadow-lg relative">
-        <div class="absolute -top-3 left-1/2 -translate-x-1/2">
-            <span class="badge badge-primary badge-sm">Most popular</span>
-        </div>
-        <div class="card-body">
-            <h3 class="card-title text-lg">Personal</h3>
-            <div class="mt-2">
-                <span class="text-3xl font-bold">$5.99</span>
-                <span class="text-base-content/50 text-sm">/month</span>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <div
+            class="card bg-base-200/50 border border-base-300"
+            data-pricing-target="card"
+            data-ai-available="false"
+            data-price-monthly="$0"
+            data-price-annual="$0"
+            data-price-ai-monthly="$0"
+            data-price-ai-annual="$0"
+            data-strike-monthly=""
+            data-strike-annual=""
+            data-strike-ai-monthly=""
+            data-strike-ai-annual=""
+            data-note-monthly="Get started with 1 domain. No credit card."
+            data-note-annual="Get started with 1 domain. No credit card."
+            data-note-ai-monthly="AI isn't on Free — tell us your use case below."
+            data-note-ai-annual="AI isn't on Free — tell us your use case below."
+            data-chip-monthly=""
+            data-chip-annual=""
+            data-chip-ai-monthly=""
+            data-chip-ai-annual=""
+        >
+            <div class="card-body">
+                <h3 class="card-title text-lg">Free</h3>
+                <div class="mt-2">
+                    <span class="text-3xl font-bold" data-pricing-target="price">$0</span>
+                    <span class="text-base-content/50 text-sm">/mo</span>
+                    <span class="line-through text-base-content/40 text-sm ml-2 invisible" data-pricing-target="strikethrough"></span>
+                </div>
+                <p class="text-sm text-base-content/60 mt-2" data-pricing-target="billingNote">Get started with 1 domain. No credit card.</p>
+                <div class="badge badge-success badge-sm mt-1 hidden" data-pricing-target="savingsChip"></div>
+                <ul class="mt-4 space-y-2 text-sm">
+                    <li>1 domain</li>
+                    <li>100 reports/mo</li>
+                    <li>30-day retention</li>
+                    <li>DMARC + DNS monitoring</li>
+                    <li data-pricing-target="aiFeature" hidden>✨ AI: not on Free — tell us your use case</li>
+                </ul>
+                <div class="card-actions mt-6">
+                    <a
+                        data-pricing-target="cta"
+                        href="{{ path('request_beta_access', {plan: 'free'}) }}"
+                        data-href-monthly="{{ path('request_beta_access', {plan: 'free', source: 'pricing'}) }}"
+                        data-href-annual="{{ path('request_beta_access', {plan: 'free', source: 'pricing'}) }}"
+                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'free', source: 'pricing-ai-curious'}) }}"
+                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'free', source: 'pricing-ai-curious'}) }}"
+                        data-label-monthly="Get started"
+                        data-label-annual="Get started"
+                        data-label-ai-monthly="Curious about AI? Tell us →"
+                        data-label-ai-annual="Curious about AI? Tell us →"
+                        class="btn btn-outline btn-sm w-full"
+                    >Get started</a>
+                </div>
             </div>
-            <p class="text-xs text-base-content/50">VAT included where applicable</p>
-            <p class="text-sm text-base-content/60 mt-2">Full monitoring for up to 5 domains.</p>
-            <ul class="mt-4 space-y-2 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Up to 5 domains</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Real-time alerts</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Blacklist monitoring</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 1-year retention</li>
-            </ul>
-            <div class="card-actions mt-6">
-                <a href="{{ path('request_beta_access', {plan: 'personal'}) }}" class="btn btn-primary btn-sm w-full">Request beta access</a>
+        </div>
+
+        <div
+            class="card bg-base-200/50 border-2 border-primary shadow-lg relative"
+            data-pricing-target="card"
+            data-ai-available="true"
+            data-base-plan="personal"
+            data-price-monthly="$5.99"
+            data-price-annual="$4.99"
+            data-price-ai-monthly="$9.99"
+            data-price-ai-annual="$8.99"
+            data-strike-monthly=""
+            data-strike-annual="$5.99"
+            data-strike-ai-monthly=""
+            data-strike-ai-annual="$9.99"
+            data-note-monthly="Billed monthly · Cancel anytime"
+            data-note-annual="Billed annually at $59.88"
+            data-note-ai-monthly="Billed monthly · Cancel anytime"
+            data-note-ai-annual="Billed annually at $107.88"
+            data-chip-monthly=""
+            data-chip-annual="Save $12/yr"
+            data-chip-ai-monthly=""
+            data-chip-ai-annual="Save $12/yr"
+        >
+            <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span class="badge badge-primary badge-sm">Most popular</span>
+            </div>
+            <div class="card-body">
+                <h3 class="card-title text-lg">Personal</h3>
+                <div class="mt-2">
+                    <span class="text-3xl font-bold" data-pricing-target="price">$4.99</span>
+                    <span class="text-base-content/50 text-sm">/mo</span>
+                    <span class="line-through text-base-content/40 text-sm ml-2" data-pricing-target="strikethrough">$5.99</span>
+                </div>
+                <p class="text-sm text-base-content/60 mt-2" data-pricing-target="billingNote">Billed annually at $59.88</p>
+                <div class="badge badge-success badge-sm mt-1" data-pricing-target="savingsChip">Save $12/yr</div>
+                <ul class="mt-4 space-y-2 text-sm">
+                    <li>5 domains</li>
+                    <li>1,000 reports/mo</li>
+                    <li>1-year retention</li>
+                    <li>Blacklist monitoring</li>
+                    <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 50 on-demand/mo</li>
+                </ul>
+                <div class="card-actions mt-6">
+                    <a
+                        data-pricing-target="cta"
+                        href="{{ path('request_beta_access', {plan: 'personal'}) }}"
+                        data-href-monthly="{{ path('request_beta_access', {plan: 'personal', source: 'pricing'}) }}"
+                        data-href-annual="{{ path('request_beta_access', {plan: 'personal', source: 'pricing'}) }}"
+                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'personal', source: 'pricing-ai-curious'}) }}"
+                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'personal', source: 'pricing-ai-curious'}) }}"
+                        data-label-monthly="Get Personal"
+                        data-label-annual="Get Personal"
+                        data-label-ai-monthly="Notify me when AI ships →"
+                        data-label-ai-annual="Notify me when AI ships →"
+                        class="btn btn-primary btn-sm w-full"
+                    >Get Personal</a>
+                </div>
             </div>
         </div>
+
+        <div
+            class="card bg-base-200/50 border border-base-300"
+            data-pricing-target="card"
+            data-ai-available="true"
+            data-base-plan="pro"
+            data-price-monthly="$23.99"
+            data-price-annual="$19.99"
+            data-price-ai-monthly="$33.99"
+            data-price-ai-annual="$29.99"
+            data-strike-monthly=""
+            data-strike-annual="$23.99"
+            data-strike-ai-monthly=""
+            data-strike-ai-annual="$33.99"
+            data-note-monthly="Billed monthly · Cancel anytime"
+            data-note-annual="Billed annually at $239.88"
+            data-note-ai-monthly="Billed monthly · Cancel anytime"
+            data-note-ai-annual="Billed annually at $359.88"
+            data-chip-monthly=""
+            data-chip-annual="Save $48/yr"
+            data-chip-ai-monthly=""
+            data-chip-ai-annual="Save $48/yr"
+        >
+            <div class="card-body">
+                <h3 class="card-title text-lg">Pro</h3>
+                <div class="mt-2">
+                    <span class="text-3xl font-bold" data-pricing-target="price">$19.99</span>
+                    <span class="text-base-content/50 text-sm">/mo</span>
+                    <span class="line-through text-base-content/40 text-sm ml-2" data-pricing-target="strikethrough">$23.99</span>
+                </div>
+                <p class="text-sm text-base-content/60 mt-2" data-pricing-target="billingNote">Billed annually at $239.88</p>
+                <div class="badge badge-success badge-sm mt-1" data-pricing-target="savingsChip">Save $48/yr</div>
+                <ul class="mt-4 space-y-2 text-sm">
+                    <li>20 domains</li>
+                    <li>10,000 reports/mo</li>
+                    <li>3 team members</li>
+                    <li>2-year retention</li>
+                    <li>API access + webhooks</li>
+                    <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 200 on-demand/mo</li>
+                </ul>
+                <div class="card-actions mt-6">
+                    <a
+                        data-pricing-target="cta"
+                        href="{{ path('request_beta_access', {plan: 'pro'}) }}"
+                        data-href-monthly="{{ path('request_beta_access', {plan: 'pro', source: 'pricing'}) }}"
+                        data-href-annual="{{ path('request_beta_access', {plan: 'pro', source: 'pricing'}) }}"
+                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'pro', source: 'pricing-ai-curious'}) }}"
+                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'pro', source: 'pricing-ai-curious'}) }}"
+                        data-label-monthly="Get Pro"
+                        data-label-annual="Get Pro"
+                        data-label-ai-monthly="Notify me when AI ships →"
+                        data-label-ai-annual="Notify me when AI ships →"
+                        class="btn btn-primary btn-sm w-full"
+                    >Get Pro</a>
+                </div>
+            </div>
+        </div>
+
+        <div
+            class="card bg-base-200/50 border border-base-300"
+            data-pricing-target="card"
+            data-ai-available="true"
+            data-base-plan="business"
+            data-price-monthly="$59.99"
+            data-price-annual="$49.99"
+            data-price-ai-monthly="$79.99"
+            data-price-ai-annual="$69.99"
+            data-strike-monthly=""
+            data-strike-annual="$59.99"
+            data-strike-ai-monthly=""
+            data-strike-ai-annual="$79.99"
+            data-note-monthly="Billed monthly · Cancel anytime"
+            data-note-annual="Billed annually at $599.88"
+            data-note-ai-monthly="Billed monthly · Cancel anytime"
+            data-note-ai-annual="Billed annually at $839.88"
+            data-chip-monthly=""
+            data-chip-annual="Save $120/yr"
+            data-chip-ai-monthly=""
+            data-chip-ai-annual="Save $120/yr"
+        >
+            <div class="card-body">
+                <h3 class="card-title text-lg">Business</h3>
+                <div class="mt-2">
+                    <span class="text-3xl font-bold" data-pricing-target="price">$49.99</span>
+                    <span class="text-base-content/50 text-sm">/mo</span>
+                    <span class="line-through text-base-content/40 text-sm ml-2" data-pricing-target="strikethrough">$59.99</span>
+                </div>
+                <p class="text-sm text-base-content/60 mt-2" data-pricing-target="billingNote">Billed annually at $599.88</p>
+                <div class="badge badge-success badge-sm mt-1" data-pricing-target="savingsChip">Save $120/yr</div>
+                <ul class="mt-4 space-y-2 text-sm">
+                    <li>50 domains</li>
+                    <li>50,000 reports/mo</li>
+                    <li>10 team members</li>
+                    <li>Unlimited retention</li>
+                    <li>White-label PDF reports</li>
+                    <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 500 on-demand/mo</li>
+                </ul>
+                <div class="card-actions mt-6">
+                    <a
+                        data-pricing-target="cta"
+                        href="{{ path('request_beta_access', {plan: 'business'}) }}"
+                        data-href-monthly="{{ path('request_beta_access', {plan: 'business', source: 'pricing'}) }}"
+                        data-href-annual="{{ path('request_beta_access', {plan: 'business', source: 'pricing'}) }}"
+                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'business', source: 'pricing-ai-curious'}) }}"
+                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'business', source: 'pricing-ai-curious'}) }}"
+                        data-label-monthly="Get Business"
+                        data-label-annual="Get Business"
+                        data-label-ai-monthly="Notify me when AI ships →"
+                        data-label-ai-annual="Notify me when AI ships →"
+                        class="btn btn-primary btn-sm w-full"
+                    >Get Business</a>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    {# Business — beta access (full 4-card + AI toggle layout lands in Phase 4) #}
-    <div class="card bg-base-200/50 border border-base-300">
-        <div class="card-body">
-            <h3 class="card-title text-lg">Business</h3>
-            <div class="mt-2">
-                <span class="text-3xl font-bold">$59.99</span>
-                <span class="text-base-content/50 text-sm">/month</span>
-            </div>
-            <p class="text-xs text-base-content/50">VAT included where applicable</p>
-            <p class="text-sm text-base-content/60 mt-2">For teams managing many domains.</p>
-            <ul class="mt-4 space-y-2 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Up to 50 domains</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> 10 team members</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> API access + webhooks</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> White-label PDF reports</li>
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Unlimited retention</li>
-            </ul>
-            <div class="card-actions mt-6">
-                <a href="{{ path('request_beta_access', {plan: 'business'}) }}" class="btn btn-primary btn-sm w-full">Request beta access</a>
-            </div>
-        </div>
-    </div>
+    <p class="text-center mt-8 text-sm text-base-content/60">
+        Need more? <a href="{{ path('request_beta_access', {plan: 'enterprise', source: 'pricing'}) }}" class="link link-primary">Talk to us about Enterprise →</a>
+    </p>
+    <p class="text-center mt-3 text-xs text-base-content/40">VAT included where applicable. Prices in USD.</p>
 </div>
