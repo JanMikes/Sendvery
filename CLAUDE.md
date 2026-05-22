@@ -419,10 +419,16 @@ When you add a new scheduled command:
 
 Current entries (kept in sync with `crontab`):
 
-- `*/15 * * * *` — `sendvery:mailbox:poll` (IMAP/POP3 polling)
+- `*/15 * * * *` — `sendvery:mailbox:poll` (per-user IMAP/POP3 polling)
+- `*/5 * * * *` — `sendvery:reports:poll-inbox` (central reports@sendvery.com inbox)
+- `15 4 * * *` — `sendvery:reports:purge` (drop parsed/ignored envelopes past SENDVERY_ENVELOPE_PURGE_AFTER_DAYS)
+- `30 4 * * *` — `sendvery:reports:quarantine:purge` (drop quarantined reports past their TTL)
 - `0 3 * * *` — `sendvery:dns:check-all` (DNS record + verification re-check)
 - `0 9 * * 1` — `sendvery:digest:send-all` (weekly digest)
 - Blacklist checks: daily (later phase)
+
+Ops:
+- Re-run a failed envelope after a parser fix: `bin/console sendvery:reports:reprocess <envelope-id>`
 
 ## Comments
 
