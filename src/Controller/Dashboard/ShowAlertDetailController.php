@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Message\MarkAlertAsRead;
 use App\Query\GetAlertDetail;
+use App\Services\DashboardContext;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,6 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class ShowAlertDetailController extends AbstractController
 {
     public function __construct(
+        private readonly DashboardContext $dashboardContext,
         private readonly GetAlertDetail $getAlertDetail,
         private readonly MessageBusInterface $commandBus,
     ) {
@@ -23,7 +25,7 @@ final class ShowAlertDetailController extends AbstractController
     #[Route('/app/alerts/{id}', name: 'dashboard_alert_detail')]
     public function __invoke(string $id): Response
     {
-        $alert = $this->getAlertDetail->forAlert($id);
+        $alert = $this->getAlertDetail->forAlert($id, $this->dashboardContext->getTeamIdStrings());
 
         if (null === $alert) {
             throw $this->createNotFoundException('Alert not found.');

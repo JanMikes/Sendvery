@@ -22,7 +22,7 @@ final class ListAlertsController extends AbstractController
     #[Route('/app/alerts', name: 'dashboard_alerts')]
     public function __invoke(Request $request): Response
     {
-        $teamId = $this->dashboardContext->getTeamId()->toString();
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
 
         $severity = $request->query->get('severity');
         $type = $request->query->get('type');
@@ -35,15 +35,15 @@ final class ListAlertsController extends AbstractController
             default => null,
         };
 
-        $alerts = $this->getAlerts->forTeam(
-            teamId: $teamId,
+        $alerts = $this->getAlerts->forTeams(
+            teamIds: $teamIds,
             severity: is_string($severity) ? $severity : null,
             type: is_string($type) ? $type : null,
             domainId: is_string($domainId) ? $domainId : null,
             isRead: $isRead,
         );
 
-        $unreadCount = $this->getAlerts->countUnreadForTeam($teamId);
+        $unreadCount = $this->getAlerts->countUnreadForTeams($teamIds);
 
         return $this->render('dashboard/alerts.html.twig', [
             'alerts' => $alerts,

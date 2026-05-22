@@ -21,8 +21,7 @@ final class ListDomainsController extends AbstractController
     #[Route('/app/domains', name: 'dashboard_domains')]
     public function __invoke(): Response
     {
-        $teamId = $this->dashboardContext->getTeamId();
-        $domains = $this->getDomainOverview->forTeam($teamId->toString());
+        $domains = $this->getDomainOverview->forTeams($this->dashboardContext->getTeamIdStrings());
 
         return $this->render('dashboard/domains.html.twig', [
             'domains' => $domains,

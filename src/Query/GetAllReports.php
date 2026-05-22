@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Query;
 
 use App\Results\ReportListResult;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
 final readonly class GetAllReports
@@ -14,9 +15,17 @@ final readonly class GetAllReports
     ) {
     }
 
-    /** @return array<ReportListResult> */
-    public function forTeam(string $teamId, int $limit = 50, int $offset = 0): array
+    /**
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     *
+     * @return array<ReportListResult>
+     */
+    public function forTeams(array $teamIds, int $limit = 50, int $offset = 0): array
     {
+        if ([] === $teamIds) {
+            return [];
+        }
+
         /** @var list<array{report_id: string, domain_name: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int|string, pass_rate: float|string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
@@ -35,15 +44,18 @@ final readonly class GetAllReports
             FROM dmarc_report dr
             JOIN monitored_domain md ON md.id = dr.monitored_domain_id
             LEFT JOIN dmarc_record rec ON rec.dmarc_report_id = dr.id
-            WHERE md.team_id = :teamId
+            WHERE md.team_id IN (:teamIds)
             GROUP BY dr.id, md.domain, dr.reporter_org, dr.date_range_begin, dr.date_range_end
             ORDER BY dr.date_range_end DESC
             LIMIT :limit OFFSET :offset',
             [
-                'teamId' => $teamId,
+                'teamIds' => $teamIds,
                 'pass' => 'pass',
                 'limit' => $limit,
                 'offset' => $offset,
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
             ],
         )->fetchAllAssociative();
 

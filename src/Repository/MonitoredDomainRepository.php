@@ -16,6 +16,11 @@ final readonly class MonitoredDomainRepository
     ) {
     }
 
+    /**
+     * System-scoped lookup. Use ONLY from internal code paths (event handlers,
+     * ingestion workers, cron commands) where the domain id originates from
+     * trusted state. User-facing controllers MUST go through {@see findForTeams()}.
+     */
     public function get(UuidInterface $id): MonitoredDomain
     {
         $domain = $this->entityManager->find(MonitoredDomain::class, $id);
@@ -25,6 +30,35 @@ final readonly class MonitoredDomainRepository
         }
 
         return $domain;
+    }
+
+    /**
+     * Team-scoped lookup for user-facing controllers. Returns null if the
+     * domain is missing OR belongs to a team the caller isn't a member of —
+     * callers translate that into a 404 instead of leaking the existence of
+     * other tenants' domains.
+     *
+     * @param list<UuidInterface> $teamIds team UUIDs the caller belongs to
+     */
+    public function findForTeams(UuidInterface $id, array $teamIds): ?MonitoredDomain
+    {
+        if ([] === $teamIds) {
+            return null;
+        }
+
+        $domain = $this->entityManager->find(MonitoredDomain::class, $id);
+
+        if (null === $domain) {
+            return null;
+        }
+
+        foreach ($teamIds as $teamId) {
+            if ($domain->team->id->equals($teamId)) {
+                return $domain;
+            }
+        }
+
+        return null;
     }
 
     public function findByDomain(string $domain, UuidInterface $teamId): ?MonitoredDomain

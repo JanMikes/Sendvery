@@ -75,7 +75,7 @@ final class GetDomainDetailTest extends IntegrationTestCase
         $em->persist($record);
         $em->flush();
 
-        $result = $query->forDomain($domainId->toString());
+        $result = $query->forDomain($domainId->toString(), [$team->id->toString()]);
 
         self::assertNotNull($result);
         self::assertSame('detail-test.com', $result->domainName);
@@ -92,8 +92,35 @@ final class GetDomainDetailTest extends IntegrationTestCase
     {
         $query = $this->getService(GetDomainDetail::class);
 
-        $result = $query->forDomain(Uuid::uuid7()->toString());
+        $result = $query->forDomain(Uuid::uuid7()->toString(), [Uuid::uuid7()->toString()]);
 
         self::assertNull($result);
+    }
+
+    public function testReturnsNullForCrossTenantDomain(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetDomainDetail::class);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Owner Team',
+            slug: 'owner-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $domainId = Uuid::uuid7();
+        $em->persist(new MonitoredDomain(
+            id: $domainId,
+            team: $team,
+            domain: 'cross-tenant.example',
+            createdAt: new \DateTimeImmutable(),
+        ));
+        $em->flush();
+
+        $otherTeamId = Uuid::uuid7()->toString();
+
+        self::assertNull($query->forDomain($domainId->toString(), [$otherTeamId]));
     }
 }

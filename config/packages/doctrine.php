@@ -12,6 +12,12 @@ return App::config([
                 'uuid' => 'Ramsey\Uuid\Doctrine\UuidType',
             ],
         ],
+        // Team scoping is enforced explicitly in every Query class / repo
+        // method that touches tenant data (see DashboardContext::getTeamIds()
+        // — passed into queries as a `team_id IN (...)` clause). We do NOT
+        // use a Doctrine SQL filter: it only covers ORM queries (silently
+        // skipping raw DBAL reads, which is most of our read side), and it
+        // makes the security check invisible at the call site.
         'orm' => [
             'naming_strategy' => 'doctrine.orm.naming_strategy.underscore_number_aware',
             'auto_mapping' => true,
@@ -22,12 +28,6 @@ return App::config([
                     'dir' => '%kernel.project_dir%/src/Entity',
                     'prefix' => 'App\Entity',
                     'alias' => 'App',
-                ],
-            ],
-            'filters' => [
-                'team_filter' => [
-                    'class' => 'App\Doctrine\TeamFilter',
-                    'enabled' => true,
                 ],
             ],
         ],

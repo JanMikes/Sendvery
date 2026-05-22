@@ -652,7 +652,10 @@ final class OnboardingTest extends WebTestCase
         $client->loginUser($userA);
         $client->request('POST', '/app/domains/'.$domainB->id->toString().'/reverify');
 
-        self::assertSame(403, $client->getResponse()->getStatusCode());
+        // 404 instead of 403 — we now respond as if the domain doesn't exist
+        // rather than confirming it's there but off-limits, so we don't leak
+        // the existence of other tenants' domain ids.
+        self::assertSame(404, $client->getResponse()->getStatusCode());
     }
 
     #[Test]

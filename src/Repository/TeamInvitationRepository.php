@@ -17,6 +17,10 @@ final readonly class TeamInvitationRepository
     ) {
     }
 
+    /**
+     * System-scoped lookup. Use ONLY from internal code paths. User-facing
+     * controllers MUST go through {@see findForTeams()}.
+     */
     public function get(UuidInterface $id): TeamInvitation
     {
         $invitation = $this->entityManager->find(TeamInvitation::class, $id);
@@ -26,6 +30,30 @@ final readonly class TeamInvitationRepository
         }
 
         return $invitation;
+    }
+
+    /**
+     * @param list<UuidInterface> $teamIds
+     */
+    public function findForTeams(UuidInterface $id, array $teamIds): ?TeamInvitation
+    {
+        if ([] === $teamIds) {
+            return null;
+        }
+
+        $invitation = $this->entityManager->find(TeamInvitation::class, $id);
+
+        if (null === $invitation) {
+            return null;
+        }
+
+        foreach ($teamIds as $teamId) {
+            if ($invitation->team->id->equals($teamId)) {
+                return $invitation;
+            }
+        }
+
+        return null;
     }
 
     public function findByToken(string $token): ?TeamInvitation

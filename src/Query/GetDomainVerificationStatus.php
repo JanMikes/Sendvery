@@ -6,8 +6,8 @@ namespace App\Query;
 
 use App\Results\DomainVerificationStatusResult;
 use App\Value\DnsCheckType;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
-use Ramsey\Uuid\UuidInterface;
 
 final readonly class GetDomainVerificationStatus
 {
@@ -16,8 +16,15 @@ final readonly class GetDomainVerificationStatus
     ) {
     }
 
-    public function forTeam(UuidInterface $teamId): ?DomainVerificationStatusResult
+    /**
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function forTeams(array $teamIds): ?DomainVerificationStatusResult
     {
+        if ([] === $teamIds) {
+            return null;
+        }
+
         // consecutive_dmarc_failures counts the trailing run of failing DMARC checks —
         // i.e. how many is_valid=false rows are newer than the most recent is_valid=true
         // row (or all of them, if we've never had a valid check). This is what the
@@ -50,12 +57,15 @@ final readonly class GetDomainVerificationStatus
                       )
                 ) AS consecutive_dmarc_failures
             FROM monitored_domain md
-            WHERE md.team_id = :teamId
+            WHERE md.team_id IN (:teamIds)
             ORDER BY md.created_at DESC
             LIMIT 1",
             [
-                'teamId' => $teamId->toString(),
+                'teamIds' => $teamIds,
                 'dmarcType' => DnsCheckType::Dmarc->value,
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
             ],
         )->fetchAssociative();
 

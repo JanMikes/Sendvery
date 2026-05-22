@@ -27,13 +27,13 @@ final class ReverifyDomainController extends AbstractController
     #[Route('/app/domains/{id}/reverify', name: 'dashboard_domain_reverify', methods: ['POST'])]
     public function __invoke(string $id): Response
     {
-        $domain = $this->monitoredDomainRepository->get(Uuid::fromString($id));
+        $domain = $this->monitoredDomainRepository->findForTeams(
+            Uuid::fromString($id),
+            $this->dashboardContext->getTeamIds(),
+        );
 
-        // Team scoping: the dashboard context resolves the active team from the
-        // session; we refuse cross-team verification attempts here rather than
-        // relying on the SQL filter, which doesn't cover domain lookups by id.
-        if (!$domain->team->id->equals($this->dashboardContext->getTeamId())) {
-            throw $this->createAccessDeniedException();
+        if (null === $domain) {
+            throw $this->createNotFoundException('Domain not found.');
         }
 
         // Run the same handler the daily cron uses so the dns_check_result row

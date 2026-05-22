@@ -37,13 +37,12 @@ final class DashboardOverviewController extends AbstractController
     #[Route('/app', name: 'dashboard_overview')]
     public function __invoke(): Response
     {
-        $teamId = $this->dashboardContext->getTeamId();
-        $teamIdString = $teamId->toString();
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
 
-        $stats = $this->getDashboardStats->forTeam($teamIdString);
-        $domains = $this->getDomainOverview->forTeam($teamIdString);
-        $recentReports = $this->getAllReports->forTeam($teamIdString, limit: 10);
-        $trendData = $this->getDomainPassRateTrend->forTeam($teamIdString, days: 30);
+        $stats = $this->getDashboardStats->forTeams($teamIds);
+        $domains = $this->getDomainOverview->forTeams($teamIds);
+        $recentReports = $this->getAllReports->forTeams($teamIds, limit: 10);
+        $trendData = $this->getDomainPassRateTrend->forTeams($teamIds, days: 30);
 
         $trendChartConfig = [
             'chart' => [
@@ -75,14 +74,14 @@ final class DashboardOverviewController extends AbstractController
             'tooltip' => ['x' => ['format' => 'MMM dd']],
         ];
 
-        $unreadAlertCount = $this->getAlerts->countUnreadForTeam($teamIdString);
-        $recentAlerts = $this->getAlerts->forTeam(
-            teamId: $teamIdString,
+        $unreadAlertCount = $this->getAlerts->countUnreadForTeams($teamIds);
+        $recentAlerts = $this->getAlerts->forTeams(
+            teamIds: $teamIds,
             severity: 'critical',
             limit: 5,
         );
 
-        $verificationStatus = $this->verificationStatusQuery->forTeam($teamId);
+        $verificationStatus = $this->verificationStatusQuery->forTeams($teamIds);
 
         // Surface the quarantine count for the team's headline domain when it's
         // still unverified — reports already arriving for them is a strong

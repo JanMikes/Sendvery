@@ -32,7 +32,7 @@ final class GetDomainVerificationStatusTest extends IntegrationTestCase
         $em->persist($team);
         $em->flush();
 
-        self::assertNull($query->forTeam($teamId));
+        self::assertNull($query->forTeams([$teamId->toString()]));
     }
 
     #[Test]
@@ -68,7 +68,7 @@ final class GetDomainVerificationStatusTest extends IntegrationTestCase
         $em->persist($this->dnsCheck($domain, '2026-05-15 09:00:00', false));
         $em->flush();
 
-        $status = $query->forTeam($teamId);
+        $status = $query->forTeams([$teamId->toString()]);
 
         self::assertNotNull($status);
         self::assertSame($domainId->toString(), $status->domainId);
@@ -110,7 +110,7 @@ final class GetDomainVerificationStatusTest extends IntegrationTestCase
         $em->persist($this->dnsCheck($domain, '2026-05-12 09:00:00', true));
         $em->flush();
 
-        $status = $query->forTeam($teamId);
+        $status = $query->forTeams([$teamId->toString()]);
 
         self::assertNotNull($status);
         self::assertSame(0, $status->consecutiveDmarcFailures);

@@ -7,6 +7,7 @@ namespace App\Controller\Dashboard;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainDnsHistory;
 use App\Repository\DnsCheckResultRepository;
+use App\Services\DashboardContext;
 use App\Services\ReportAddressProvider;
 use App\Value\Dns\DmarcRuaInstruction;
 use App\Value\DnsCheckType;
@@ -18,6 +19,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class DomainDnsHistoryController extends AbstractController
 {
     public function __construct(
+        private readonly DashboardContext $dashboardContext,
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetDomainDnsHistory $getDomainDnsHistory,
         private readonly DnsCheckResultRepository $dnsCheckResultRepository,
@@ -28,13 +30,14 @@ final class DomainDnsHistoryController extends AbstractController
     #[Route('/app/domains/{id}/dns-history', name: 'dashboard_domain_dns_history')]
     public function __invoke(string $id): Response
     {
-        $domain = $this->getDomainDetail->forDomain($id);
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
+        $domain = $this->getDomainDetail->forDomain($id, $teamIds);
 
         if (null === $domain) {
             throw $this->createNotFoundException('Domain not found.');
         }
 
-        $history = $this->getDomainDnsHistory->forDomain($id);
+        $history = $this->getDomainDnsHistory->forDomain($id, $teamIds);
 
         $latestDmarcCheck = $this->dnsCheckResultRepository->findLatestForDomainAndType(
             Uuid::fromString($id),

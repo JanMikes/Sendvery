@@ -26,8 +26,11 @@ final class ListReportsController extends AbstractController
         $limit = 25;
         $offset = ($page - 1) * $limit;
 
-        $teamId = $this->dashboardContext->getTeamId();
-        $reports = $this->getAllReports->forTeam($teamId->toString(), limit: $limit, offset: $offset);
+        $reports = $this->getAllReports->forTeams(
+            $this->dashboardContext->getTeamIdStrings(),
+            limit: $limit,
+            offset: $offset,
+        );
 
         $template = $request->headers->has('Turbo-Frame')
             ? 'dashboard/_reports_table.html.twig'

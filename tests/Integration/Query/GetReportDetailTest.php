@@ -88,7 +88,7 @@ final class GetReportDetailTest extends IntegrationTestCase
         $em->persist($record2);
         $em->flush();
 
-        $result = $query->forReport($reportId->toString());
+        $result = $query->forReport($reportId->toString(), [$team->id->toString()]);
 
         self::assertNotNull($result);
         self::assertSame('google.com', $result->reporterOrg);
@@ -107,7 +107,7 @@ final class GetReportDetailTest extends IntegrationTestCase
     {
         $query = $this->getService(GetReportDetail::class);
 
-        $result = $query->forReport(Uuid::uuid7()->toString());
+        $result = $query->forReport(Uuid::uuid7()->toString(), [Uuid::uuid7()->toString()]);
 
         self::assertNull($result);
     }

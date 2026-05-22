@@ -72,7 +72,7 @@ final class GetAllReportsTest extends IntegrationTestCase
         ));
         $em->flush();
 
-        $results = $query->forTeam($teamId->toString());
+        $results = $query->forTeams([$teamId->toString()]);
 
         self::assertCount(1, $results);
         self::assertSame('allreports.com', $results[0]->domainName);
@@ -96,7 +96,7 @@ final class GetAllReportsTest extends IntegrationTestCase
         $em->persist($team);
         $em->flush();
 
-        $results = $query->forTeam($teamId->toString());
+        $results = $query->forTeams([$teamId->toString()]);
 
         self::assertCount(0, $results);
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Dashboard;
 
 use App\Query\GetReportDetail;
+use App\Services\DashboardContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -12,6 +13,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class ShowReportDetailController extends AbstractController
 {
     public function __construct(
+        private readonly DashboardContext $dashboardContext,
         private readonly GetReportDetail $getReportDetail,
     ) {
     }
@@ -19,7 +21,7 @@ final class ShowReportDetailController extends AbstractController
     #[Route('/app/reports/{id}', name: 'dashboard_report_detail')]
     public function __invoke(string $id): Response
     {
-        $report = $this->getReportDetail->forReport($id);
+        $report = $this->getReportDetail->forReport($id, $this->dashboardContext->getTeamIdStrings());
 
         if (null === $report) {
             throw $this->createNotFoundException('Report not found.');

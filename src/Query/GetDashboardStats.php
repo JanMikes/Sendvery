@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Query;
 
 use App\Results\DashboardStatsResult;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
 final readonly class GetDashboardStats
@@ -14,17 +15,24 @@ final readonly class GetDashboardStats
     ) {
     }
 
-    public function forTeam(string $teamId): DashboardStatsResult
+    /**
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function forTeams(array $teamIds): DashboardStatsResult
     {
+        if ([] === $teamIds) {
+            return new DashboardStatsResult(0, 0, 0.0, 0);
+        }
+
         /** @var array{total_domains: int|string, total_reports_30d: int|string, total_messages: int|string, pass_rate: float|string}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
-                (SELECT COUNT(*) FROM monitored_domain WHERE team_id = :teamId) AS total_domains,
+                (SELECT COUNT(*) FROM monitored_domain WHERE team_id IN (:teamIds)) AS total_domains,
                 COALESCE((
                     SELECT COUNT(*)
                     FROM dmarc_report dr
                     JOIN monitored_domain md ON md.id = dr.monitored_domain_id
-                    WHERE md.team_id = :teamId
+                    WHERE md.team_id IN (:teamIds)
                     AND dr.date_range_end >= NOW() - INTERVAL \'30 days\'
                 ), 0) AS total_reports_30d,
                 COALESCE((
@@ -32,7 +40,7 @@ final readonly class GetDashboardStats
                     FROM dmarc_record rec
                     JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
                     JOIN monitored_domain md ON md.id = dr.monitored_domain_id
-                    WHERE md.team_id = :teamId
+                    WHERE md.team_id IN (:teamIds)
                     AND dr.date_range_end >= NOW() - INTERVAL \'30 days\'
                 ), 0) AS total_messages,
                 COALESCE((
@@ -43,22 +51,20 @@ final readonly class GetDashboardStats
                     FROM dmarc_record rec
                     JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
                     JOIN monitored_domain md ON md.id = dr.monitored_domain_id
-                    WHERE md.team_id = :teamId
+                    WHERE md.team_id IN (:teamIds)
                     AND dr.date_range_end >= NOW() - INTERVAL \'30 days\'
                 ), 0) AS pass_rate',
             [
-                'teamId' => $teamId,
+                'teamIds' => $teamIds,
                 'pass' => 'pass',
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
             ],
         )->fetchAssociative();
 
         if (false === $row) {
-            return new DashboardStatsResult(
-                totalDomains: 0,
-                totalReportsLast30Days: 0,
-                overallPassRate: 0.0,
-                totalMessages: 0,
-            );
+            return new DashboardStatsResult(0, 0, 0.0, 0);
         }
 
         return new DashboardStatsResult(

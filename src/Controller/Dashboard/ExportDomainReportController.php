@@ -42,15 +42,16 @@ final class ExportDomainReportController extends AbstractController
             return $this->redirectToRoute('dashboard_domain_detail', ['id' => $id]);
         }
 
-        $domain = $this->getDomainDetail->forDomain($id);
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
+        $domain = $this->getDomainDetail->forDomain($id, $teamIds);
 
         if (null === $domain) {
             throw $this->createNotFoundException('Domain not found.');
         }
 
-        $reportData = $this->getDomainReportData->forDomain($id);
-        $healthSnapshot = $this->getDomainHealthHistory->latestForDomain($id);
-        $senders = $this->getSenderInventory->forDomain($id);
+        $reportData = $this->getDomainReportData->forDomain($id, $teamIds);
+        $healthSnapshot = $this->getDomainHealthHistory->latestForDomain($id, $teamIds);
+        $senders = $this->getSenderInventory->forDomain($id, $teamIds);
 
         $pdfContent = $this->pdfReportGenerator->generate([
             'domain' => $domain,

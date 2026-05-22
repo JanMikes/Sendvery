@@ -40,6 +40,10 @@ final readonly class TeamMembershipRepository
             ]);
     }
 
+    /**
+     * System-scoped lookup. Use ONLY from internal code paths. User-facing
+     * controllers MUST go through {@see findForTeams()}.
+     */
     public function get(UuidInterface $id): TeamMembership
     {
         $membership = $this->entityManager->find(TeamMembership::class, $id);
@@ -48,6 +52,30 @@ final readonly class TeamMembershipRepository
         }
 
         return $membership;
+    }
+
+    /**
+     * @param list<UuidInterface> $teamIds
+     */
+    public function findForTeams(UuidInterface $id, array $teamIds): ?TeamMembership
+    {
+        if ([] === $teamIds) {
+            return null;
+        }
+
+        $membership = $this->entityManager->find(TeamMembership::class, $id);
+
+        if (null === $membership) {
+            return null;
+        }
+
+        foreach ($teamIds as $teamId) {
+            if ($membership->team->id->equals($teamId)) {
+                return $membership;
+            }
+        }
+
+        return null;
     }
 
     public function findOwnerForTeam(UuidInterface $teamId): ?TeamMembership

@@ -8,6 +8,7 @@ use App\Message\ResendTeamInvitation;
 use App\Repository\TeamInvitationRepository;
 use App\Repository\TeamRepository;
 use App\Security\TeamVoter;
+use App\Services\DashboardContext;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,6 +19,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 final class ResendTeamInvitationController extends AbstractController
 {
     public function __construct(
+        private readonly DashboardContext $dashboardContext,
         private readonly TeamRepository $teamRepository,
         private readonly TeamInvitationRepository $invitationRepository,
         private readonly MessageBusInterface $commandBus,
@@ -28,7 +30,15 @@ final class ResendTeamInvitationController extends AbstractController
     #[IsGranted('ROLE_USER')]
     public function __invoke(string $id): Response
     {
-        $invitation = $this->invitationRepository->get(Uuid::fromString($id));
+        $invitation = $this->invitationRepository->findForTeams(
+            Uuid::fromString($id),
+            $this->dashboardContext->getTeamIds(),
+        );
+
+        if (null === $invitation) {
+            throw $this->createNotFoundException('Invitation not found.');
+        }
+
         $team = $this->teamRepository->get($invitation->team->id);
 
         $this->denyAccessUnlessGranted(TeamVoter::MANAGE_MEMBERS, $team);

@@ -36,7 +36,7 @@ final class GetDomainPassRateTrendTest extends IntegrationTestCase
         $em->persist($domain);
         $em->flush();
 
-        $results = $query->forDomain($domainId->toString(), days: 7);
+        $results = $query->forDomain($domainId->toString(), [$team->id->toString()], days: 7);
 
         self::assertCount(8, $results); // 7 days + today
         foreach ($results as $result) {
@@ -61,7 +61,7 @@ final class GetDomainPassRateTrendTest extends IntegrationTestCase
         $em->persist($team);
         $em->flush();
 
-        $results = $query->forTeam($teamId->toString(), days: 3);
+        $results = $query->forTeams([$teamId->toString()], days: 3);
 
         self::assertCount(4, $results); // 3 days + today
     }

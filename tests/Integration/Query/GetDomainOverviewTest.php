@@ -73,7 +73,7 @@ final class GetDomainOverviewTest extends IntegrationTestCase
         $em->persist($record);
         $em->flush();
 
-        $results = $query->forTeam($teamId->toString());
+        $results = $query->forTeams([$teamId->toString()]);
 
         self::assertCount(1, $results);
         self::assertSame('overview-test.com', $results[0]->domainName);
@@ -105,7 +105,7 @@ final class GetDomainOverviewTest extends IntegrationTestCase
         $em->persist($domain);
         $em->flush();
 
-        $results = $query->forTeam($teamId->toString());
+        $results = $query->forTeams([$teamId->toString()]);
 
         self::assertCount(1, $results);
         self::assertSame(0, $results[0]->totalReports);

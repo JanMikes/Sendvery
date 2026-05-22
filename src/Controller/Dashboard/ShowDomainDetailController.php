@@ -9,6 +9,7 @@ use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainReports;
 use App\Query\GetDomainSenderBreakdown;
 use App\Repository\QuarantinedDmarcReportRepository;
+use App\Services\DashboardContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -16,6 +17,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class ShowDomainDetailController extends AbstractController
 {
     public function __construct(
+        private readonly DashboardContext $dashboardContext,
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetDomainReports $getDomainReports,
         private readonly GetDomainSenderBreakdown $getDomainSenderBreakdown,
@@ -27,15 +29,16 @@ final class ShowDomainDetailController extends AbstractController
     #[Route('/app/domains/{id}', name: 'dashboard_domain_detail')]
     public function __invoke(string $id): Response
     {
-        $domain = $this->getDomainDetail->forDomain($id);
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
+        $domain = $this->getDomainDetail->forDomain($id, $teamIds);
 
         if (null === $domain) {
             throw $this->createNotFoundException('Domain not found.');
         }
 
-        $reports = $this->getDomainReports->forDomain($id, limit: 10);
-        $senders = $this->getDomainSenderBreakdown->forDomain($id);
-        $trendData = $this->getDomainPassRateTrend->forDomain($id, days: 90);
+        $reports = $this->getDomainReports->forDomain($id, $teamIds, limit: 10);
+        $senders = $this->getDomainSenderBreakdown->forDomain($id, $teamIds);
+        $trendData = $this->getDomainPassRateTrend->forDomain($id, $teamIds, days: 90);
 
         $trendChartConfig = [
             'chart' => ['type' => 'area', 'height' => 280],

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Query;
 
 use App\Results\AlertDetailResult;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
 final readonly class GetAlertDetail
@@ -14,8 +15,15 @@ final readonly class GetAlertDetail
     ) {
     }
 
-    public function forAlert(string $alertId): ?AlertDetailResult
+    /**
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function forAlert(string $alertId, array $teamIds): ?AlertDetailResult
     {
+        if ([] === $teamIds) {
+            return null;
+        }
+
         /** @var array{alert_id: string, type: string, severity: string, title: string, message: string, data: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
@@ -31,8 +39,15 @@ final readonly class GetAlertDetail
                 md.domain AS domain_name
             FROM alert a
             LEFT JOIN monitored_domain md ON md.id = a.monitored_domain_id
-            WHERE a.id = :alertId',
-            ['alertId' => $alertId],
+            WHERE a.id = :alertId
+            AND a.team_id IN (:teamIds)',
+            [
+                'alertId' => $alertId,
+                'teamIds' => $teamIds,
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
+            ],
         )->fetchAssociative();
 
         if (false === $row) {

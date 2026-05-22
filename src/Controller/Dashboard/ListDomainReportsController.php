@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Dashboard;
 
 use App\Query\GetDomainReports;
+use App\Services\DashboardContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,6 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
 final class ListDomainReportsController extends AbstractController
 {
     public function __construct(
+        private readonly DashboardContext $dashboardContext,
         private readonly GetDomainReports $getDomainReports,
     ) {
     }
@@ -24,7 +26,12 @@ final class ListDomainReportsController extends AbstractController
         $limit = 25;
         $offset = ($page - 1) * $limit;
 
-        $reports = $this->getDomainReports->forDomain($id, limit: $limit, offset: $offset);
+        $reports = $this->getDomainReports->forDomain(
+            $id,
+            $this->dashboardContext->getTeamIdStrings(),
+            limit: $limit,
+            offset: $offset,
+        );
 
         $template = $request->headers->has('Turbo-Frame')
             ? 'dashboard/_domain_reports_table.html.twig'

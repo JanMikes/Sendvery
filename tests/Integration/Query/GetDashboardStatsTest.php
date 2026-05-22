@@ -73,7 +73,7 @@ final class GetDashboardStatsTest extends IntegrationTestCase
         $em->persist($record);
         $em->flush();
 
-        $result = $query->forTeam($teamId->toString());
+        $result = $query->forTeams([$teamId->toString()]);
 
         self::assertSame(1, $result->totalDomains);
         self::assertSame(1, $result->totalReportsLast30Days);
@@ -96,7 +96,7 @@ final class GetDashboardStatsTest extends IntegrationTestCase
         $em->persist($team);
         $em->flush();
 
-        $result = $query->forTeam($teamId->toString());
+        $result = $query->forTeams([$teamId->toString()]);
 
         self::assertSame(0, $result->totalDomains);
         self::assertSame(0, $result->totalReportsLast30Days);

@@ -6,6 +6,7 @@ namespace App\Query;
 
 use App\Results\ReportDetailResult;
 use App\Results\ReportRecordResult;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
 final readonly class GetReportDetail
@@ -15,8 +16,15 @@ final readonly class GetReportDetail
     ) {
     }
 
-    public function forReport(string $reportId): ?ReportDetailResult
+    /**
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function forReport(string $reportId, array $teamIds): ?ReportDetailResult
     {
+        if ([] === $teamIds) {
+            return null;
+        }
+
         /** @var array{report_id: string, reporter_org: string, reporter_email: string, external_report_id: string, date_range_begin: string, date_range_end: string, policy_domain: string, policy_adkim: string, policy_aspf: string, policy_p: string, policy_sp: string|null, policy_pct: int|string, processed_at: string}|false $reportRow */
         $reportRow = $this->database->executeQuery(
             'SELECT
@@ -34,8 +42,16 @@ final readonly class GetReportDetail
                 dr.policy_pct AS policy_pct,
                 dr.processed_at AS processed_at
             FROM dmarc_report dr
-            WHERE dr.id = :reportId',
-            ['reportId' => $reportId],
+            JOIN monitored_domain md ON md.id = dr.monitored_domain_id
+            WHERE dr.id = :reportId
+            AND md.team_id IN (:teamIds)',
+            [
+                'reportId' => $reportId,
+                'teamIds' => $teamIds,
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
+            ],
         )->fetchAssociative();
 
         if (false === $reportRow) {

@@ -9,6 +9,7 @@ use App\Message\RemoveTeamMember;
 use App\Repository\TeamMembershipRepository;
 use App\Repository\TeamRepository;
 use App\Security\TeamVoter;
+use App\Services\DashboardContext;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,6 +21,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 final class RemoveTeamMemberController extends AbstractController
 {
     public function __construct(
+        private readonly DashboardContext $dashboardContext,
         private readonly TeamRepository $teamRepository,
         private readonly TeamMembershipRepository $membershipRepository,
         private readonly MessageBusInterface $commandBus,
@@ -30,7 +32,15 @@ final class RemoveTeamMemberController extends AbstractController
     #[IsGranted('ROLE_USER')]
     public function __invoke(string $id): Response
     {
-        $membership = $this->membershipRepository->get(Uuid::fromString($id));
+        $membership = $this->membershipRepository->findForTeams(
+            Uuid::fromString($id),
+            $this->dashboardContext->getTeamIds(),
+        );
+
+        if (null === $membership) {
+            throw $this->createNotFoundException('Team membership not found.');
+        }
+
         $team = $this->teamRepository->get($membership->team->id);
 
         $this->denyAccessUnlessGranted(TeamVoter::MANAGE_MEMBERS, $team);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Query;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
 final readonly class GetDomainReportData
@@ -14,6 +15,8 @@ final readonly class GetDomainReportData
     }
 
     /**
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     *
      * @return array{
      *     domain_name: string,
      *     total_reports: int,
@@ -26,11 +29,16 @@ final readonly class GetDomainReportData
      *     latest_score: int|null,
      * }|null
      */
-    public function forDomain(string $domainId): ?array
+    public function forDomain(string $domainId, array $teamIds): ?array
     {
+        if ([] === $teamIds) {
+            return null;
+        }
+
         $domain = $this->database->executeQuery(
-            'SELECT domain FROM monitored_domain WHERE id = :id',
-            ['id' => $domainId],
+            'SELECT domain FROM monitored_domain WHERE id = :id AND team_id IN (:teamIds)',
+            ['id' => $domainId, 'teamIds' => $teamIds],
+            ['teamIds' => ArrayParameterType::STRING],
         )->fetchOne();
 
         if (false === $domain) {

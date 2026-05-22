@@ -73,7 +73,7 @@ final class GetDomainReportsTest extends IntegrationTestCase
         $em->persist($record);
         $em->flush();
 
-        $results = $query->forDomain($domainId->toString());
+        $results = $query->forDomain($domainId->toString(), [$team->id->toString()]);
 
         self::assertCount(1, $results);
         self::assertSame('google.com', $results[0]->reporterOrg);
@@ -125,10 +125,11 @@ final class GetDomainReportsTest extends IntegrationTestCase
         }
         $em->flush();
 
-        $page1 = $query->forDomain($domainId->toString(), limit: 2, offset: 0);
+        $teamIds = [$team->id->toString()];
+        $page1 = $query->forDomain($domainId->toString(), $teamIds, limit: 2, offset: 0);
         self::assertCount(2, $page1);
 
-        $page2 = $query->forDomain($domainId->toString(), limit: 2, offset: 2);
+        $page2 = $query->forDomain($domainId->toString(), $teamIds, limit: 2, offset: 2);
         self::assertCount(1, $page2);
     }
 }

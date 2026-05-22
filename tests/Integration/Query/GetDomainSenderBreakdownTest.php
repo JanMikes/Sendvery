@@ -86,7 +86,7 @@ final class GetDomainSenderBreakdownTest extends IntegrationTestCase
 
         $em->flush();
 
-        $results = $query->forDomain($domainId->toString());
+        $results = $query->forDomain($domainId->toString(), [$team->id->toString()]);
 
         self::assertCount(2, $results);
         self::assertSame('1.1.1.1', $results[0]->sourceIp);
@@ -98,7 +98,7 @@ final class GetDomainSenderBreakdownTest extends IntegrationTestCase
     {
         $query = $this->getService(GetDomainSenderBreakdown::class);
 
-        $results = $query->forDomain(Uuid::uuid7()->toString());
+        $results = $query->forDomain(Uuid::uuid7()->toString(), [Uuid::uuid7()->toString()]);
 
         self::assertCount(0, $results);
     }
