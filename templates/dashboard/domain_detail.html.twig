@@ -29,7 +29,7 @@
             <a href="{{ path('dashboard_domain_dns_history', { id: domain.domainId }) }}" class="btn btn-ghost btn-sm">
                 DNS History
             </a>
-            <a href="{{ path('tools_domain_health') }}?domain={{ domain.domainName }}" class="btn btn-ghost btn-sm">
+            <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}" class="btn btn-ghost btn-sm">
                 DNS Health Check
             </a>
         </div>
