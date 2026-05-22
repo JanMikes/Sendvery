@@ -1,279 +1,362 @@
-# Monetization & Marketing Strategy
+# Monetization & Pricing
 
-**Last updated:** 2026-05-14
+**Last updated:** 2026-05-22
 
-> **Current state (May 2026):** Hosted paid plans are **not yet open for self-serve checkout**. The pricing page advertises tiers but the upgrade CTAs lead to `/request-access` — a contact form that captures lead details (name, email, requested plan, domain count, free-text message), persists a `BetaAccessRequest` entity, and emails `jan.mikes@sendvery.com`. Stripe code (`SubscriptionManager`, `PlanEnforcement`, webhook controller, billing/upgrade/manage routes) is fully implemented and tested — it's gated by the absence of UI links, not by feature flags. See `docs/12-fake-door-stripe.md` for the switch-back runbook and DEC-050 for the rationale.
+> **Current state (May 2026):** Hosted paid plans are **not yet open for self-serve checkout**. The pricing page advertises tiers but the upgrade CTAs lead to `/request-access` — a contact form that captures lead details and emails `jan.mikes@sendvery.com`. Stripe code (`SubscriptionManager`, `PlanEnforcement`, webhook controller, billing/upgrade/manage routes) is fully implemented and tested — it is gated by the absence of UI links, not by feature flags.
+>
+> The transition runbook (fake-door → live Stripe with the model below) lives in `docs/12-fake-door-stripe.md`. The detailed implementation plan lives in `docs/13-pricing-implementation-plan.md`. See DEC-050 for the fake-door rationale and DEC-052..DEC-057 for the new pricing-model decisions that supersede DEC-024 and DEC-025.
 >
 > **Price display policy:** all advertised hosted prices are USD and shown as "VAT included where applicable". Jan is OSVČ in CZ and below the VAT threshold, so we collect a flat sticker price and do not break out VAT. If we cross the CZ threshold or expand to EU B2C scale, enable Stripe Tax + OSS at that point (no code changes required).
 
+---
+
 ## Pricing Model
 
-### Self-Hosted — Always Free (open source)
-- Unlimited everything
-- All features
-- Run on your own infrastructure (Docker)
-- Community support (GitHub issues)
-- **This is a marketing feature, not a limitation** — builds trust, drives adoption
+Four public tiers (Free + 3 paid) plus Enterprise. Each paid tier has a paired internal **AI variant** sold via a single "Add AI Insights" toggle on the pricing page. Two billing cadences: monthly and annual. Annual is exactly **2 months free** (`annual_total = 10 × monthly`) — clean math, clean marketing.
 
-### Hosted Free — 1 domain
-- 1 domain
-- Reasonable report volume (TBD — ~1,000 reports/mo or ~100k messages)
-- DMARC report parsing + DNS validation (SPF/DKIM/DMARC)
-- Basic email digest (no AI)
-- 30-day data retention
-- No team (solo only)
-- **No AI**
+### Tier matrix
 
-### Hosted Personal — $5.99/mo
-- Up to 5 domains
-- Solo (no team members)
-- Full report volume
-- Real-time alerts
-- Email HTML analysis
-- Blacklist monitoring
-- 1-year data retention
-- Sender discovery / inventory
-- **No AI** (available as add-on)
+| | **Free** | **Personal** | **Pro** | **Business** |
+|---|---|---|---|---|
+| **Monthly price** | $0 | $5.99 | $23.99 | $59.99 |
+| **+ AI (monthly)** | reach out | $9.99 | $33.99 | $79.99 |
+| **Annual /mo** | $0 | $4.99 | $19.99 | $49.99 |
+| **+ AI (annual /mo)** | reach out | $8.99 | $29.99 | $69.99 |
+| **Annual total** | — | $59.88 | $239.88 | $599.88 |
+| **Savings vs. monthly** | — | $12 / yr | $48 / yr | $120 / yr |
+| **Domains** | 1 | 5 | 20 | 50 |
+| **Reports/mo** | 100 | 1,000 | 10,000 | 50,000 |
+| **Seats** | 1 | 1 | 3 | 10 |
+| **Retention** | 30 days | 1 year | 2 years | unlimited |
+| **DMARC + DNS monitoring** | ✓ | ✓ | ✓ | ✓ |
+| **Real-time alerts** | – | ✓ | ✓ | ✓ |
+| **Blacklist monitoring** | – | ✓ | ✓ | ✓ |
+| **Sender inventory** | – | ✓ | ✓ | ✓ |
+| **Email HTML analysis** | – | ✓ | ✓ | ✓ |
+| **API + webhooks** | – | – | ✓ | ✓ |
+| **White-label PDF reports** | – | – | – | ✓ |
+| **AI Insights** (when toggled on) | reach out (manual) | ✓ + 50 on-demand/mo | ✓ + 200 on-demand/mo | ✓ + 500 on-demand/mo |
 
-### Hosted Team — $49.99/mo
-- Up to 50 domains
-- Up to 10 team members
-- Everything in Personal, plus:
-- White-label PDF reports
-- API access + webhooks
-- Unlimited data retention
-- **AI analysis included** (perk of Team tier)
+**AI delta (constant across cadences):** `+$4` (Personal) · `+$10` (Pro) · `+$20` (Business).
+AI is not discounted on annual — it's a metered cost we incur monthly, so the surcharge is the same per month either way. The annual savings story stays clean: **Save $12 / $48 / $120 per year**, regardless of AI.
+
+### Self-Hosted — always free (open source, AGPL-3.0)
+
+- Unlimited everything (the software is free; AGPL keeps it that way).
+- Self-hosters supply their own Anthropic API key for AI features.
+- Run on your own infrastructure (Docker image, single binary via FrankenPHP).
+- Community support (GitHub issues).
+- This is a marketing feature, not a limitation — builds trust, drives adoption.
 
 ### Enterprise — "Need more? Contact us"
-- Custom domain/seat limits
-- SLA
-- Dedicated support
-- Custom integrations
-- AI included
 
-### Add-ons (all tiers except Free)
-- **AI Insights:** $3.99/mo — plain-English summaries, anomaly explanations, remediation guidance, weekly AI digest (Personal only — included in Team+)
-- **Extra domain:** $1/mo per domain
-- **Extra seat:** $2/mo per seat (Team+ only)
+- Custom domain/seat/report limits.
+- SLA, dedicated support, custom integrations.
+- AI included.
+- Single line below the four cards on the pricing page; no card-style display.
 
-### What You Pay For (hosted tiers)
-The software is free. Hosted tiers sell:
-- Managed infrastructure (no Docker/server to maintain)
-- Automatic updates
-- Our hosted IMAP receiving address (no IMAP setup needed)
-- Email support / priority support
-- Data retention & backups
+### Internal-only plans
 
-### AI Add-on Details
-AI Insights ($3.99/mo) includes:
-- Weekly AI digest email — plain-English summary of what happened
-- Anomaly explanation — "this spike is likely caused by..."
-- Remediation guidance — "add this DNS record to fix..."
-- On-demand "explain this" for any report or alert
-- Powered by Anthropic Claude API (costs covered by subscription)
+`SubscriptionPlan::Unlimited` remains as a **staff grant** (set via `app:team:set-plan`) for partners, internal teams, and edge support cases. Not exposed in any marketing or self-serve UI; not purchasable via Stripe.
 
-**Marketing angle:** "The cheapest DMARC monitoring starts at $5.99. Want AI to explain it all? Add insights for $3.99."
+---
 
-**Future optionality:** If Anthropic API costs drop significantly, fold AI into all paid tiers as a value bump → "We just made AI Insights free for all paid plans!" = great retention email + press.
+## Naming rationale
 
-### Stripe Implementation
+| Tier | Reads as | Why this name |
+|---|---|---|
+| **Personal** | "for my own stuff" | Owner has 1–5 domains: personal site, side projects, a freelance domain. |
+| **Pro** | "for professionals" | Universal SaaS power-user signal. Includes the freelancer-with-many-domains persona without invoking team/seats. |
+| **Business** | "your business depends on this" | Industry-standard upper tier name (Cloudflare, Linear, Notion). Signals stakes, not seats. |
+
+Deliberately avoided: **Studio / Team** (too org-specific), **Starter** (implies transient — many solo users stay forever), **Hobby** (clashes with "your domain sends real email").
+
+See **DEC-052** for the full naming decision.
+
+---
+
+## Pricing-page UX
+
+### Layout
+
+Four cards (Free / Personal / Pro / Business) in a 4-column grid. Pro carries a "Best value" badge that never moves between toggle states. Enterprise gets a single line beneath the grid: *"Need more? Talk to us →"*.
+
+### Two toggles, both above the grid
+
+```
+┌───────────────────────────────────────────────┐
+│   Billing:   ( Monthly )  [ Annual −2 months ]│  ← pill, annual default + green badge
+│                                                │
+│   ☐  Add AI Insights                          │  ← checkbox with subtle sparkle icon
+└───────────────────────────────────────────────┘
+```
+
+- **Billing cadence:** Annual is the default (drives conversion). Monthly is one tap away. Annual badge says "−2 months" (truer than "−17%") and pulses gently for ~1s on first page load.
+- **AI Insights:** off by default. When on, every paid card grows the AI line item and price flips to the AI variant. The Free card switches to a "Curious about AI? Tell us your use case →" reach-out invitation (uses the existing `BetaAccessRequest` infrastructure, just a different `interestType`).
+- **Toggle state persists in `localStorage`** so a user who chose Monthly on visit 1 isn't reset to Annual on visit 2.
+
+### Card price display (Personal example)
+
+Annual / no AI (default landing state):
+```
+Personal
+$4.99 /mo       ← BIG, the hero number (per-month equivalent when billed annually)
+~~$5.99~~       ← strikethrough monthly rate, smaller, gray
+Billed annually at $59.88
+Save $12/year   ← green chip
+[ Get Personal → ]
+```
+
+Monthly / no AI:
+```
+Personal
+$5.99 /mo       ← BIG
+Billed monthly · Cancel anytime
+[ Get Personal → ]
+```
+
+Annual / +AI:
+```
+Personal + AI
+$8.99 /mo
+~~$9.99~~
+Billed annually at $107.88
+✨ AI Insights · 50 on-demand explanations/mo
+[ Get Personal → ]
+```
+
+**Design rules:**
+- The big focal number is always the **monthly-equivalent price** ($/mo). The yearly total goes to fine print. Users compare $/mo, not $/yr.
+- Same baseline, same font size for the hero number across both toggle states — eye stays anchored on one position.
+- Strikethrough only appears in Annual mode (showing the better-than-monthly deal).
+- Price flip animates with a 200ms scale-down/scale-up, not a hard swap.
+- AI Insights line item slides into the feature list when enabled; don't reflow the whole card.
+
+### Mobile
+
+Toggles stack vertically above cards; cards become single-column. Same data, same logic.
+
+---
+
+## What AI Insights does
+
+When AI Insights is enabled on a plan, **the following run automatically**:
+
+1. **Weekly AI digest email** (Monday ~9am team-local) — Sonnet generates a plain-English summary: pass-rate trend, top failing sender, anomalies worth attention, recommended next actions. One call per team per week.
+2. **Anomaly explanations** — when failure rate spikes (>2σ from rolling baseline) or a new sender appears, AI inline-explains it on the dashboard. Triggered, not polled.
+3. **Remediation guidance** — when DNS checks find a problem, AI writes step-by-step fix instructions specific to the user's DNS provider / sender configuration (detected from records).
+4. **Smart sender labeling** — Haiku auto-labels new sender IPs ("this is Mailgun infrastructure") so the inventory doesn't look like noise.
+
+**Rate-limited (the cost lever):**
+
+5. **"Explain this" button on every report/alert** — on-demand Sonnet call. Monthly quotas:
+   - Personal: 50 explanations/mo
+   - Pro: 200 explanations/mo
+   - Business: 500 explanations/mo
+   - Counter visible in dashboard ("47 of 200 used this month").
+
+**Deliberately NOT done:** auto-summarize every parsed report. ~95% of DMARC reports are routine "everything passed for known senders" — zero user value, linear cost. AI summarizes *patterns and exceptions*.
+
+### AI cost rationale (back-of-envelope)
+
+Per-feature unit cost (Anthropic public pricing; Sonnet 4.6 unless noted):
+
+| Feature | Model | Frequency | Approx tokens (in/out) | Cost/call |
+|---|---|---|---|---|
+| Weekly digest | Sonnet | 1/week/team | 8k / 2k | $0.054 |
+| Anomaly explanation | Sonnet | triggered | 5k / 1k | $0.030 |
+| On-demand "explain this" | Sonnet | quota-capped | 5k / 1k | $0.030 |
+| Remediation guidance | Sonnet | on DNS failure | 3k / 1.5k | $0.032 |
+| Smart sender labeling | Haiku | per new IP | 1k / 0.1k | $0.0015 |
+
+Per-team monthly cost ceiling (full quota use):
+
+| Tier | Digest | Anomalies | On-demand cap | Remediation | Labels | **Total** |
+|---|---|---|---|---|---|---|
+| Personal | $0.22 | ~$0.45 | $1.50 (50×) | ~$0.10 | ~$0.10 | **~$2.40** |
+| Pro | $0.22 | ~$1.50 | $6.00 (200×) | ~$0.30 | ~$0.30 | **~$8.30** |
+| Business | $0.22 | ~$4.50 | $15.00 (500×) | ~$0.60 | ~$0.80 | **~$21.10** |
+
+Margin at full quota use: Personal 1.7×, Pro ~1.2×, Business ~1.0× (skinny on purpose — power-tier users tolerate it). If Business margin bleeds in practice, tighten the on-demand quota or raise to $74.99/+$25 — don't launch at thinner.
+
+### Future optionality
+
+If Anthropic API costs drop significantly, fold AI into all paid tiers as a value bump → *"We just made AI Insights free for all paid plans!"* = great retention email + press cycle.
+
+---
+
+## Domain extras (deferred to Phase 2)
+
+Per-domain add-ons (Stripe quantity-based subscription items, prorated) are intentionally **not** in the launch model. Rationale: extras add real Stripe complexity (per-tier price IDs, manage-extras UI, upgrade-nudge logic) and the launch matrix already covers the 95% case. Add when users actually push against the tier caps and the data tells us the right price/cap structure.
+
+Sketch for when we add them (don't build yet):
+
+| Tier | Per-domain extra | Cap (extras only) |
+|---|---|---|
+| Personal | +$2/mo per domain | +5 (i.e., max 10 total) |
+| Pro | +$1.50/mo per domain | +15 (i.e., max 35 total) |
+| Business | +$1/mo per domain | unlimited |
+
+Tier-decreasing price is the nudge — at the boundary, upgrading to the next tier is always the better deal. Annual extras follow the same 10/12 math.
+
+See **DEC-056** for the deferral decision.
+
+---
+
+## Stripe SKU layout
+
+12 base price IDs (3 paid tiers × 2 AI variants × 2 cadences), all under three Products in Stripe. Plus the Free tier (no Stripe price) and Unlimited (no Stripe price, staff-grant only).
 
 ```
 Stripe Products & Prices:
 
 Product: "Sendvery Personal"
-  Price: $5.99/mo (recurring)
-  Price: $57.50/yr (~$4.79/mo, ~17% discount)
+  Price: $5.99/mo  (recurring monthly)  → STRIPE_PRICE_PERSONAL_MONTHLY
+  Price: $59.88/yr (recurring yearly)   → STRIPE_PRICE_PERSONAL_ANNUAL
+  Price: $9.99/mo  (with AI, monthly)   → STRIPE_PRICE_PERSONAL_AI_MONTHLY
+  Price: $107.88/yr (with AI, yearly)   → STRIPE_PRICE_PERSONAL_AI_ANNUAL
 
-Product: "Sendvery Team"
-  Price: $49.99/mo (recurring)
-  Price: $479.90/yr (~$39.99/mo, ~17% discount)
+Product: "Sendvery Pro"
+  Price: $23.99/mo                      → STRIPE_PRICE_PRO_MONTHLY
+  Price: $239.88/yr                     → STRIPE_PRICE_PRO_ANNUAL
+  Price: $33.99/mo                      → STRIPE_PRICE_PRO_AI_MONTHLY
+  Price: $359.88/yr                     → STRIPE_PRICE_PRO_AI_ANNUAL
 
-Product: "AI Insights"
-  Price: $3.99/mo (recurring, add-on for Personal)
-
-Product: "Extra Domain"
-  Price: $1.00/mo (metered/quantity-based)
-
-Product: "Extra Seat"
-  Price: $2.00/mo (metered/quantity-based)
+Product: "Sendvery Business"
+  Price: $59.99/mo                      → STRIPE_PRICE_BUSINESS_MONTHLY
+  Price: $599.88/yr                     → STRIPE_PRICE_BUSINESS_ANNUAL
+  Price: $79.99/mo                      → STRIPE_PRICE_BUSINESS_AI_MONTHLY
+  Price: $839.88/yr                     → STRIPE_PRICE_BUSINESS_AI_ANNUAL
 ```
 
-Plan limits enforced in application logic (Symfony subscriber/event listener on domain creation, team invite, etc.), not in Stripe.
+Stripe metadata on every subscription:
+- `team_id` (UUID)
+- `plan` (enum value, e.g. `personal_ai`)
+- `interval` (`monthly` | `annual`)
 
-### Key Pricing Decisions (TBD)
-- [x] ~~Per-domain or per-volume pricing?~~ → Per-domain tiers with generous volume. Add-on domains at $1/mo.
-- [ ] **Annual discount?** Proposed: ~20% off (~2 months free). Personal: $57.50/yr, Team: $479.90/yr
-- [ ] **Lifetime deal for early adopters?** Good for cash flow but creates future liability
-- [x] ~~License choice?~~ → AGPL-3.0 (DEC-017)
+Tax: Stripe Tax stays off until we cross the CZ VAT threshold or expand. Until then, sticker prices are inclusive — no breakout on receipts.
 
-### Smart upgrade nudges (implement in app)
-- When a user on Personal adds enough extra domains that total cost ≥ Team price → show "Upgrade to Team and save" banner
-- When a Team user's add-ons push total ≥ $100/mo → show "Contact us about Enterprise pricing"
-- When Free user hits domain/report limit → show upgrade CTA with "unlock with Personal for $5.99/mo"
-- When Personal user without AI views a report → show "Want this explained in plain English? Add AI Insights for $3.99/mo" teaser with a blurred/preview AI summary
-- When Personal user with AI hits 5 domain limit → "Upgrade to Team for 50 domains + 10 members (AI included)"
+Plan limits and AI quotas are enforced in **application logic** (`PlanLimits` + `PlanEnforcement` + AI gating decorator), not in Stripe.
 
-### Annual pricing (recommended)
-| Plan | Monthly | Annual (per month) | Annual total | Savings |
-|------|---------|-------------------|-------------|---------|
-| Personal | $5.99 | $4.99 | $59.88 | ~17% |
-| Team | $49.99 | $41.59 | $499.00 | ~17% |
+---
 
-Annual pricing reduces churn and improves cash flow. ~17% discount (roughly 2 months free) is industry standard.
+## Internal model
 
-### Competitive positioning
-| | Sendvery Personal | Sendvery + AI | dmarcian Basic | EasyDMARC Starter | PowerDMARC Basic |
+`App\Value\SubscriptionPlan` (expanded; see DEC-053):
+
+```php
+enum SubscriptionPlan: string
+{
+    case Free = 'free';
+    case Personal = 'personal';
+    case PersonalAi = 'personal_ai';
+    case Pro = 'pro';
+    case ProAi = 'pro_ai';
+    case Business = 'business';
+    case BusinessAi = 'business_ai';
+    case Unlimited = 'unlimited'; // staff grant only
+}
+```
+
+Helper methods on the enum:
+- `hasAi(): bool` — true for `*Ai` variants and `Unlimited`.
+- `baseTier(): self` — `PersonalAi → Personal`, etc. Useful for "show me the base price" comparisons.
+- `withAi(): self` — `Personal → PersonalAi`. Throws if no AI variant exists (Free, Unlimited).
+- `withoutAi(): self` — inverse.
+- `tierGroup(): string` — returns `'free' | 'personal' | 'pro' | 'business' | 'unlimited'` for UI grouping.
+
+`App\Value\BillingInterval` (new):
+
+```php
+enum BillingInterval: string
+{
+    case Monthly = 'monthly';
+    case Annual = 'annual';
+}
+```
+
+`Team` entity gains `billingInterval: ?BillingInterval` (nullable, null for Free/Unlimited).
+
+---
+
+## Smart upgrade nudges (implemented in app)
+
+- **Personal user nearing 5 domains** → banner: "Upgrade to Pro for 20 domains + AI on-demand + API access."
+- **Personal user without AI views a report detail page** → blurred AI preview teaser: "Want this explained in plain English? Add AI Insights for $4/mo."
+- **Pro user nearing 20 domains** → banner: "Upgrade to Business for 50 domains, 10 seats, and white-label reports."
+- **Pro user without AI** → same blurred AI teaser as Personal, but with +$10/mo pricing.
+- **Free user hitting the 1-domain or 100-report cap** → upgrade CTA: "Unlock 5 domains and 1,000 reports with Personal for $5.99/mo (or $4.99/mo annual)."
+- **Any AI on-demand quota at 80%** → in-dashboard nudge: "You've used 160 of 200 AI explanations this month. Upgrade to Business for 500/mo."
+- **Business plan with high overage attempts (e.g., bouncing off 50 domains repeatedly)** → "Looks like you're outgrowing Business. Let's talk about Enterprise."
+
+---
+
+## Competitive positioning
+
+| | Sendvery Personal | Sendvery Personal + AI | dmarcian Basic | EasyDMARC Starter | PowerDMARC Basic |
 |---|---|---|---|---|---|
-| **Price** | **$5.99/mo** | **$9.98/mo** | $19.99/mo | $35.99/mo | $8/mo |
+| **Price** | **$4.99–$5.99/mo** | **$8.99–$9.99/mo** | $19.99/mo | $35.99/mo | $8/mo |
 | **Domains** | 5 | 5 | 2 | 2 | 2 |
 | **AI analysis** | No | **Yes** | No | No | No |
 | **Self-hosted** | Free forever | Free forever | No | No | No |
-| **SPF/DKIM/HTML** | Yes | Partial | Partial | Partial |
 
-Sendvery is the cheapest option with the most domains AND unique AI features. This is a strong story.
+Marketing hooks:
+- *"DMARC monitoring from $5.99/mo — or $4.99/mo with annual billing."*
+- *"The only DMARC tool with AI insights starting at $8.99/mo."*
+- *"Free forever if you self-host."*
 
-## Revenue Model Considerations
+---
 
-**Why subscription makes sense:**
-- Ongoing monitoring = recurring value
-- AI analysis costs are per-use (Anthropic API)
-- Blacklist checking requires ongoing API calls
-- Data retention has storage costs
+## Revenue model considerations
 
-**Cost structure per user (rough estimate):**
-- AI analysis: ~$0.01-0.05 per report summary (Claude Haiku/Sonnet)
-- Storage: negligible at small scale
-- Email sending (digests): ~$0.001 per email
-- DNS lookups: negligible
-- IMAP polling: compute time
+**Why subscription works:**
+- Ongoing monitoring = recurring value.
+- AI analysis cost is per-use (Anthropic API).
+- Blacklist checks require ongoing DNS queries to RBLs.
+- Data retention has storage costs.
+- IMAP polling + central inbox = ongoing compute.
 
 **Break-even thinking:**
-- At $10/mo per user, need ~100-200 paying users for meaningful revenue
-- At $50/mo agency tier, need fewer but harder to acquire
+- At $5–10/mo per Personal user, ~100–200 paying users for meaningful coffee-money revenue.
+- At $20–34/mo per Pro user, ~50–100 users move the needle.
+- At $50–80/mo per Business user, fewer but harder to acquire — and stickiest.
+
+## Annual savings story (the marketing headline)
+
+> **"Save up to 2 months/year — every year — with annual billing."**
+
+- Personal annual: **$4.99/mo** ($59.88/yr — save $12/yr)
+- Pro annual: **$19.99/mo** ($239.88/yr — save $48/yr)
+- Business annual: **$49.99/mo** ($599.88/yr — save $120/yr)
+
+Round-dollar savings read better than percentages in copy.
+
+---
+
+## What you pay for (hosted tiers)
+
+The software is free (AGPL). Hosted tiers sell:
+- Managed infrastructure (no Docker/server to maintain).
+- Automatic updates.
+- Our hosted IMAP receiving address (no IMAP setup needed).
+- Email support / priority support on Pro+.
+- Data retention & backups.
+- AI inference cost coverage (when AI Insights is on).
+
+---
 
 ## Go-to-Market: Fake Door → Closed Beta → Launch
 
-### Phase 0: Fake Door Landing Page (deploy ASAP)
+The original 4-phase plan still stands. The pricing model above slots into **Phase 3 (Public Launch)** — that's when self-serve checkout flips on. The transition runbook is in `docs/12-fake-door-stripe.md`; the implementation plan is in `docs/13-pricing-implementation-plan.md`.
 
-**Purpose:** Start SEO indexing, validate demand, collect email leads — while building the personal-use tool in the background.
+### Phases (summary)
 
-**What to build:**
-- Landing page at sendvery.com (part of the Symfony app, just Twig templates)
-- Hero section: value proposition + "Join the Beta" CTA
-- Free DNS checker tool (enter domain → instant SPF/DKIM/DMARC check)
-  - This is REAL functionality, not fake — gives immediate value to visitors
-  - No account needed — just enter a domain
-  - Results page includes "Want ongoing monitoring? Join the beta"
-- Feature overview (what Sendvery will do)
-- Pricing page (show the planned tiers with "Coming soon")
-- Knowledge Base section (evergreen SEO guides, no regular publishing cadence)
-- Email collection form: "Join the closed beta — we'll notify you when it's ready"
+- **Phase 0 — Fake-door landing page** (current state): SEO indexing, lead capture via `/request-access`, real DNS checker tools.
+- **Phase 1 — Personal use**: Jan dogfoods the product on his own domains. No auth, no billing.
+- **Phase 2 — Closed beta**: invited users from email list, free, magic-link auth.
+- **Phase 3 — Public launch**: Stripe live, all four tiers purchasable (Free without checkout), AI toggle visible but AI variants gated behind "Coming soon" until DEC-057 stubs are replaced with real AI.
+- **Phase 4 — AI & extras**: real AI implementation replaces stubs; domain extras get built; Enterprise gets a sales motion.
 
-**What happens when someone clicks "Sign Up" or "Start Free":**
-- Show: "Sendvery is currently in closed beta. Enter your email to get early access."
-- Collect: email, how many domains they manage (1, 2-5, 6-20, 20+), biggest email pain point (optional)
-- Store in DB (simple `BetaSignup` entity)
-- Send confirmation email: "You're on the list! We'll reach out when your spot opens."
+---
 
-**Why this works:**
-- Google starts indexing immediately — SEO compounds over time
-- DNS checker tool attracts organic traffic (people google "check my DMARC record")
-- Email list = warm leads ready for launch day
-- Survey data ("how many domains?") validates pricing tiers
-- Zero pressure to build billing, teams, AI yet
-
-### Phase 0 Tech Requirements (minimal)
-- Twig landing page templates (hero, features, pricing, knowledge base, beta signup form)
-- DNS lookup service (SPF/DKIM/DMARC record checker — real functionality)
-- BetaSignup entity (email, domain_count, pain_point, created_at)
-- Symfony Mailer for confirmation email
-- Basic SEO: meta tags, sitemap.xml, robots.txt
-- Knowledge Base as Twig templates or simple markdown-rendered pages (`/learn/*` routes)
-
-### SEO Content Strategy (start publishing immediately)
-
-**Target keywords (low competition, decent volume):**
-- "check dmarc record" / "dmarc checker" / "dmarc lookup"
-- "what is dmarc" / "dmarc explained"
-- "spf record too many lookups" / "spf lookup limit"
-- "how to set up dkim"
-- "dmarc none vs quarantine vs reject"
-- "email authentication guide"
-
-**Content approach: Knowledge Base (not a blog)**
-
-Instead of a traditional blog requiring a regular publishing cadence, Sendvery uses a **Knowledge Base** — a collection of evergreen, SEO-optimized guides. These are static pages that rank in search and never feel stale. No dates displayed, no "posted on" — just authoritative content. Write once, update occasionally, rank forever.
-
-**Knowledge Base pages (write at launch, update as needed):**
-1. `/learn/what-is-dmarc` — "DMARC in 5 minutes: what it is and why you need it" (evergreen explainer)
-2. `/learn/spf-lookup-limit` — "SPF lookup limit: why your email is bouncing and how to fix it" (problem-specific, high intent)
-3. `/learn/dmarc-none-to-reject` — "Moving from DMARC p=none to p=reject: a step-by-step guide" (actionable)
-4. `/learn/email-authentication-guide` — "The complete guide to email authentication: SPF, DKIM, DMARC, BIMI" (pillar content)
-5. `/learn/spf-broken` — "Your SPF record is probably broken and you don't know it" (security angle, "set and forget" trap)
-6. `/learn/email-security-risks` — "5 email security risks you can't see without monitoring" (bridges all tool pages)
-7. `/learn/dmarc-none-spoofing` — "What happens when your DMARC is set to none" (shows how p=none gets exploited)
-
-**One personal story page (optional, on About or homepage):**
-"I deleted my DMARC reports for years. Here's what I was missing." — Jan's authentic founder story. Not a blog post, just part of the About/brand narrative.
-
-Each knowledge base page ends with DNS checker CTA + beta signup. Security-focused pages specifically funnel toward the monitoring value proposition — "checking once isn't enough."
-
-### Phase 1: Personal Use (build in parallel with landing page)
-- DMARC report ingestion (IMAP) for Jan's own domains
-- Parser, storage, basic CLI/web dashboard
-- This is the real product being built behind the scenes
-- No auth, no billing, no teams needed yet
-
-### Phase 2: Closed Beta (invite from email list)
-- Add user authentication (magic link or password)
-- Basic onboarding flow
-- Invite beta users in batches (10, 50, 100...)
-- Collect feedback aggressively
-- Still no billing — beta is free
-
-### Phase 3: Public Launch
-- Enable Stripe billing
-- Open registration
-- Product Hunt launch
-- Announce on HN, Reddit r/selfhosted, r/sysadmin
-- GitHub repo goes public (AGPL)
-- Docker Hub image published
-
-### Phase 4: AI & Teams
-- Add AI Insights add-on ($3.99/mo)
-- Enable team features
-- Enterprise tier
-
-## Marketing Strategy (ongoing)
-
-### Positioning
-- NOT "enterprise email security" (Proofpoint, Agari territory)
-- YES "email health for developers and small teams"
-- Lead with price — "DMARC monitoring from $5.99/mo. 5 domains."
-- Lead with simplicity — "Understand your email auth in plain English"
-- Lead with open source — "Free forever if you self-host"
-- Lead with security expertise — tool pages demonstrate deep knowledge of attack vectors, risks, and mitigation. The visitor should finish reading and think "these people understand email security better than I do — I need this."
-- The "set and forget" narrative — every tool page reinforces that DNS records drift over time. New services get added, keys expire, providers migrate, records break silently. Checking once is a snapshot; monitoring is protection.
-
-### Acquisition Channels
-1. **SEO / Content** — knowledge base guides + DNS checker tools (start in Phase 0)
-2. **Free DNS checker as lead gen** — organic traffic magnet
-3. **Developer communities** — HN, Reddit r/sysadmin, r/selfhosted (Phase 3)
-4. **Product Hunt** — launch day buzz (Phase 3)
-5. **Open source community** — GitHub stars, Docker Hub pulls (Phase 3)
-6. **Email list from beta** — warm leads for launch (Phase 2→3)
-
-### Landing Page Messaging
-
-**Hero:** "Your email, monitored. Understand your DMARC, SPF, and DKIM — not just charts, but answers."
-
-**Subhero:** "Free DNS checker. Ongoing monitoring from $5.99/mo. Self-host free forever."
-
-**CTA:** "Check your domain now" (DNS checker) + "Join the beta" (email capture)
-
-**Alternative hero angle (security-forward):** "Your domain sends email every day. Do you know who else is sending as you?"
-
-**Alternative subhero:** "Check your SPF, DKIM, and DMARC in seconds. Then stay protected with continuous monitoring that catches what you'd miss."
-
-The security angle works especially well on tool pages where visitors arrive with a specific problem. The homepage can mix both — authority/expertise in the hero, simplicity/price in the features section.
+*See `docs/07-decisions-log.md` (DEC-050, DEC-052..DEC-057) for the decisions behind this model, and `docs/13-pricing-implementation-plan.md` for the step-by-step build plan.*

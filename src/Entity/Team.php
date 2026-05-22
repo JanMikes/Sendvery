@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Events\TeamCreated;
+use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
@@ -31,6 +32,9 @@ final class Team implements EntityWithEvents
     #[ORM\Column(length: 50)]
     public string $plan;
 
+    #[ORM\Column(length: 20, nullable: true)]
+    public ?string $billingInterval;
+
     #[ORM\Column(length: 255, nullable: true)]
     public ?string $stripeSubscriptionId;
 
@@ -49,6 +53,7 @@ final class Team implements EntityWithEvents
         string $plan = 'free',
         ?string $stripeSubscriptionId = null,
         ?\DateTimeImmutable $planWarningAt = null,
+        ?string $billingInterval = null,
     ) {
         $this->id = $id;
         $this->name = $name;
@@ -58,6 +63,7 @@ final class Team implements EntityWithEvents
         $this->plan = $plan;
         $this->stripeSubscriptionId = $stripeSubscriptionId;
         $this->planWarningAt = $planWarningAt;
+        $this->billingInterval = $billingInterval;
 
         $this->recordThat(new TeamCreated($this->id));
     }
@@ -65,5 +71,10 @@ final class Team implements EntityWithEvents
     public function getSubscriptionPlan(): SubscriptionPlan
     {
         return SubscriptionPlan::from($this->plan);
+    }
+
+    public function getBillingInterval(): ?BillingInterval
+    {
+        return null !== $this->billingInterval ? BillingInterval::from($this->billingInterval) : null;
     }
 }

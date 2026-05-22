@@ -23,5 +23,6 @@ final readonly class DowngradeTeamPlanHandler
         $team->plan = SubscriptionPlan::Free->value;
         $team->stripeSubscriptionId = null;
         $team->planWarningAt = null;
+        $team->billingInterval = null;
     }
 }

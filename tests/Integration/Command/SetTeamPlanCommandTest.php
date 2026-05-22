@@ -45,14 +45,14 @@ final class SetTeamPlanCommandTest extends IntegrationTestCase
         $tester = $this->commandTester();
         $tester->execute([
             'team' => $slug,
-            'plan' => 'team',
+            'plan' => 'business',
         ]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         $em->clear();
         $reloaded = $em->find(Team::class, $team->id);
         self::assertNotNull($reloaded);
-        self::assertSame('team', $reloaded->plan);
+        self::assertSame('business', $reloaded->plan);
     }
 
     #[Test]

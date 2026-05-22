@@ -31,10 +31,10 @@ final class RequestBetaAccessTest extends WebTestCase
     public function planQueryParamPreselectsPlan(): void
     {
         $client = self::createClient();
-        $crawler = $client->request('GET', '/request-access?plan=team');
+        $crawler = $client->request('GET', '/request-access?plan=business');
 
         self::assertResponseIsSuccessful();
-        self::assertSame('team', $crawler->filter('select[name="plan"] option[selected]')->attr('value'));
+        self::assertSame('business', $crawler->filter('select[name="plan"] option[selected]')->attr('value'));
     }
 
     #[Test]
@@ -57,7 +57,7 @@ final class RequestBetaAccessTest extends WebTestCase
             'name' => 'Jane Doe',
             'email' => $email,
             'company' => 'Acme Corp',
-            'plan' => 'team',
+            'plan' => 'business',
             'domain_count' => '12',
             'message' => 'Need to monitor all our domains',
             'source' => 'pricing',
@@ -72,7 +72,7 @@ final class RequestBetaAccessTest extends WebTestCase
         self::assertNotNull($entity);
         self::assertSame('Jane Doe', $entity->name);
         self::assertSame('Acme Corp', $entity->company);
-        self::assertSame(SubscriptionPlan::Team, $entity->requestedPlan);
+        self::assertSame(SubscriptionPlan::Business, $entity->requestedPlan);
         self::assertSame(12, $entity->domainCount);
         self::assertSame('Need to monitor all our domains', $entity->message);
         self::assertSame('pricing', $entity->source);
@@ -88,7 +88,7 @@ final class RequestBetaAccessTest extends WebTestCase
 
         self::assertArrayHasKey('requests@sendvery.test', $byRecipient);
         self::assertStringContainsString('Jane Doe', (string) $byRecipient['requests@sendvery.test']->getSubject());
-        self::assertStringContainsString('team', (string) $byRecipient['requests@sendvery.test']->getSubject());
+        self::assertStringContainsString('business', (string) $byRecipient['requests@sendvery.test']->getSubject());
 
         self::assertArrayHasKey($email, $byRecipient);
         self::assertSame('We received your Sendvery beta access request', $byRecipient[$email]->getSubject());

@@ -41,6 +41,11 @@ return App::config([
                 '$defaultUri' => '%env(DEFAULT_URI)%',
             ],
         ],
+        'App\Services\Stripe\StripePriceResolver' => [
+            'arguments' => [
+                '$aiPurchasable' => '%env(bool:SENDVERY_AI_PURCHASABLE)%',
+            ],
+        ],
         'App\Controller\Webhook\StripeWebhookController' => [
             'arguments' => [
                 '$stripeWebhookSecret' => '%env(STRIPE_WEBHOOK_SECRET)%',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Message;
 
+use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
 use Ramsey\Uuid\UuidInterface;
 
@@ -14,6 +15,7 @@ final readonly class UpgradeTeamPlan
         public SubscriptionPlan $plan,
         public string $stripeSubscriptionId,
         public string $stripeCustomerId,
+        public ?BillingInterval $billingInterval = null,
     ) {
     }
 }

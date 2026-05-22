@@ -73,9 +73,12 @@ final class RequestBetaAccessController extends AbstractController
             'data' => $data,
             'errors' => $errors,
             'success' => $success,
+            // Show only base tiers in the dropdown. AI variants don't get
+            // their own option — DEC-057 routes "interested in AI" via the
+            // `interest=ai` query param and the AI toggle on the pricing page.
             'plans' => array_values(array_filter(
                 SubscriptionPlan::cases(),
-                static fn (SubscriptionPlan $plan): bool => SubscriptionPlan::Unlimited !== $plan,
+                static fn (SubscriptionPlan $plan): bool => !$plan->hasAi() && SubscriptionPlan::Unlimited !== $plan,
             )),
             'source' => $source,
         ]);

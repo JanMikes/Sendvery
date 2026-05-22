@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Entity;
 
 use App\Entity\Team;
 use App\Events\TeamCreated;
+use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
 use PHPUnit\Framework\TestCase;
 use Ramsey\Uuid\Uuid;
@@ -32,6 +33,8 @@ final class TeamTest extends TestCase
         self::assertSame('free', $team->plan);
         self::assertNull($team->stripeSubscriptionId);
         self::assertNull($team->planWarningAt);
+        self::assertNull($team->billingInterval);
+        self::assertNull($team->getBillingInterval());
     }
 
     public function testConstructorWithOptionalFields(): void
@@ -98,5 +101,20 @@ final class TeamTest extends TestCase
         );
 
         self::assertSame(SubscriptionPlan::Free, $team->getSubscriptionPlan());
+    }
+
+    public function testGetBillingIntervalReturnsEnum(): void
+    {
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Annual Test',
+            slug: 'annual-test',
+            createdAt: new \DateTimeImmutable(),
+            plan: 'personal',
+            billingInterval: 'annual',
+        );
+
+        self::assertSame('annual', $team->billingInterval);
+        self::assertSame(BillingInterval::Annual, $team->getBillingInterval());
     }
 }

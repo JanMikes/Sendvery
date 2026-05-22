@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Message;
 
 use App\Message\UpgradeTeamPlan;
+use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
 use PHPUnit\Framework\TestCase;
 use Ramsey\Uuid\Uuid;
@@ -25,5 +26,20 @@ final class UpgradeTeamPlanTest extends TestCase
         self::assertSame(SubscriptionPlan::Personal, $message->plan);
         self::assertSame('sub_123', $message->stripeSubscriptionId);
         self::assertSame('cus_456', $message->stripeCustomerId);
+        self::assertNull($message->billingInterval);
+    }
+
+    public function testConstructorWithBillingInterval(): void
+    {
+        $message = new UpgradeTeamPlan(
+            teamId: Uuid::uuid7(),
+            plan: SubscriptionPlan::ProAi,
+            stripeSubscriptionId: 'sub_789',
+            stripeCustomerId: 'cus_012',
+            billingInterval: BillingInterval::Annual,
+        );
+
+        self::assertSame(SubscriptionPlan::ProAi, $message->plan);
+        self::assertSame(BillingInterval::Annual, $message->billingInterval);
     }
 }

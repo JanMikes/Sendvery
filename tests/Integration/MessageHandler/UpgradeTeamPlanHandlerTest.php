@@ -71,7 +71,7 @@ final class UpgradeTeamPlanHandlerTest extends IntegrationTestCase
 
         $handler(new UpgradeTeamPlan(
             teamId: $teamId,
-            plan: SubscriptionPlan::Team,
+            plan: SubscriptionPlan::Business,
             stripeSubscriptionId: 'sub_test_789',
             stripeCustomerId: 'cus_test_abc',
         ));

@@ -1,6 +1,6 @@
 # Decisions Log
 
-**Last updated:** 2026-03-24
+**Last updated:** 2026-05-22
 
 Track key decisions, their rationale, and any alternatives considered.
 
@@ -442,6 +442,66 @@ Track key decisions, their rationale, and any alternatives considered.
 **Rationale:** Free RBLs already cover the lists ESPs actually consult when deciding to deliver. Paid intelligence feeds are most valuable for security-operations teams, which is not Sendvery's audience. Avoids per-domain API costs that would erode margin on the $5.99 Personal plan. Re-evaluate if (a) RBL operators start rate-limiting us, or (b) users specifically request paid feeds.
 **Alternatives considered:** Commercial multi-RBL APIs (MXToolbox, MultiRBL paid), Talos Intelligence reputation.
 **Impact:** `App\Services\BlacklistChecker` implementation, pricing structure (no need for a blacklist-API-costs line item), Phase 2 launch scope.
+
+---
+
+### DEC-052: Pricing tier names — Free / Personal / Pro / Business
+**Date:** 2026-05-22
+**Status:** Decided (supersedes the naming part of DEC-024)
+**Decision:** The four public hosted tiers are **Free, Personal, Pro, Business**, plus **Enterprise** (contact-only). Internal-only tier `Unlimited` (staff grant) remains, and is not exposed in marketing or self-serve UI.
+**Rationale:** Survey of best-in-class SaaS (Cloudflare, Linear, Notion, Vercel, Tailscale) shows that the upper tier is almost universally "Business" — it signals stakes without invoking seats. "Pro" is the universal SaaS power-user signal and naturally captures the freelancer-with-many-domains persona we were missing under the old Personal→Team gap. "Personal" stays put because it accurately describes 1–5 domains for hobby/side projects. Deliberately avoided: Studio/Team (team-language), Starter (implies transient — many solo users never graduate), Hobby (clashes with "your domain sends real email").
+**Alternatives considered:** Free/Starter/Pro/Business, Hobby/Pro/Business/Enterprise (Vercel-style), Personal/Studio/Team (rejected as team-oriented).
+**Impact:** `SubscriptionPlan` enum values (`personal`, `pro`, `business` + their `*_ai` siblings), all pricing UI, Stripe Product names, marketing copy across landing page, knowledge base, and `README.md`.
+
+---
+
+### DEC-053: AI Insights as paired internal SKUs, single public toggle
+**Date:** 2026-05-22
+**Status:** Decided (supersedes DEC-025)
+**Decision:** AI Insights is implemented as a **paired internal plan** (`PersonalAi`, `ProAi`, `BusinessAi`) — a separate Stripe price ID per cadence — but presented to users as a single **"Add AI Insights"** toggle on the pricing page that swaps the price in every card. Switching the toggle on or off changes the subscription's price ID via a Stripe subscription update (with proration). AI is not available on Free; the Free card with AI toggled on shows a "Curious about AI? Tell us your use case →" invitation (reuses `BetaAccessRequest` infrastructure).
+**Rationale:** Internally, paired SKUs are massively simpler than Stripe subscription add-on items: one column on `team.plan`, one match expression in `PlanLimits`, one price ID per state. Externally, the toggle still gives the "feature flag" feel customers expect — same UX, far less code. Refused to gate AI fully on Free because it makes the value prop look like an upsell trap; the reach-out invitation lets curious Free users self-identify as leads.
+**Alternatives considered:** Stripe subscription add-on items ("AI Insights" as a second line item on the same subscription — rejected: doubles webhook + UI complexity), AI as a separate standalone Stripe subscription (rejected: confusing receipts, two cancellation flows).
+**Impact:** `SubscriptionPlan` enum gains three `*Ai` cases and helper methods (`hasAi()`, `baseTier()`, `withAi()`, `withoutAi()`, `tierGroup()`). `StripePriceResolver` takes `(plan, interval)`. Stripe product catalog gets 12 prices. Webhook handles `customer.subscription.updated` for AI-toggle changes.
+
+---
+
+### DEC-054: Annual billing = exactly 2 months free (10/12 monthly)
+**Date:** 2026-05-22
+**Status:** Decided
+**Decision:** Annual pricing is exactly **10 × the monthly rate**, paid up-front (i.e., 2 months free per year, ~16.7% off). Prices are tuned so both monthly and annual end in `.99`. AI surcharges (`+$4 / +$10 / +$20`) are **constant across cadences** — AI is not discounted on annual because AI cost is metered monthly.
+**Rationale:** "2 months free" is the canonical SaaS framing, easier to communicate than "save 17%" and avoids dishonesty around the round percentage. The 10/12 multiplier on the chosen monthly anchors ($5.99, $23.99, $59.99) lands cleanly on three `.99` annual rates ($4.99, $19.99, $49.99) with round-dollar savings ($12 / $48 / $120). Constant AI delta makes the toggle math trivial in UI and keeps Stripe price-ID matrix predictable.
+**Alternatives considered:** 20% off annual (rejected: $62.49 monthly Business looks ugly; user explicitly preferred "2 months free"), AI surcharge also discounted on annual (rejected: complicates math, doesn't reflect underlying cost shape).
+**Impact:** All sticker prices, Stripe Price configuration, savings copy on pricing page, `StripePriceResolver` interval mapping, billing settings UI.
+
+---
+
+### DEC-055: AI runs on digest + anomalies + remediation + capped on-demand
+**Date:** 2026-05-22
+**Status:** Decided
+**Decision:** When AI Insights is enabled on a plan, the following run **automatically**: (1) weekly digest email summarizing trends and recommended actions, (2) anomaly explanations when failure rate spikes or new sender appears, (3) remediation guidance on DNS check failures, (4) smart sender labeling on new IPs (Haiku, cheap). On top of that, an **on-demand "Explain this" button** is available on every report/alert, **rate-limited per month**: 50 (Personal), 200 (Pro), 500 (Business). Per-report auto-summarization is **deliberately not done** — 95% of reports are routine and add zero user value at linear cost.
+**Rationale:** Maximizes the perceived "the tool understands itself" UX while keeping cost bounded. Sub-linear cost scaling (one weekly digest covers all domains in a team) means margins stay reasonable across all three paid AI tiers — Personal 1.7×, Pro 1.2×, Business ~1.0× at full quota use. The on-demand quota is the cost lever for future tuning. Sentry monitoring of actual AI spend per team will drive any future quota or pricing adjustments.
+**Alternatives considered:** AI on every parsed report (rejected: linear cost, ruins Business margin), AI only in digest (rejected: too thin a value proposition for the $4–$20 surcharge), unlimited on-demand (rejected: open-ended cost exposure).
+**Impact:** `App\Services\Ai` interface surface (5 operations), `PlanLimits::getOnDemandAiQuota()`, AI usage tracking schema, monthly counter reset cron, dashboard "quota used" indicator.
+
+---
+
+### DEC-056: Domain extras deferred to Phase 2
+**Date:** 2026-05-22
+**Status:** Decided
+**Decision:** Per-domain Stripe quantity-based extras are **not built for initial launch**. The four tiers' fixed domain limits (1 / 5 / 20 / 50) are the only domain-quantity dimension users see. Extras can be added later when usage data tells us the right cap structure.
+**Rationale:** Extras add disproportionate complexity for the long tail: per-tier price IDs, manage-extras UI, upgrade-nudge logic vs. plan jumps, proration on add/remove. The fixed-tier matrix already covers the 95% case (most users land cleanly inside a tier). Launching without extras forces clearer tier decisions and reduces UI surface; once we have real usage signal we can build extras informed by it rather than guessing pricing/caps now.
+**Alternatives considered:** Ship extras at launch (rejected: complexity-to-value ratio too high for week-one), never ship extras (rejected: power users will hit caps and want to add 1–3 domains without jumping a full tier).
+**Impact:** Pricing page card UI (no "+ extra domain" line), `PlanLimits` keeps fixed `getMaxDomains()`, Stripe catalog stays at 12 IDs (not 18), implementation plan phase ordering.
+
+---
+
+### DEC-057: AI implemented stub-first, gating wired at launch, real impl in next phase
+**Date:** 2026-05-22
+**Status:** Decided
+**Decision:** Build the **AI gating, quota tracking, and interface surface fully** as part of the initial pricing rollout — but ship with a **`StubAiInsightsService`** that returns canned/empty results (or short placeholder copy explaining AI is being prepared). At launch, the AI toggle on the pricing page **is visible but the AI variant plans are not yet purchasable** — clicking "Add AI Insights" on a paid card shows a "AI Insights — coming soon" modal with an option to reach out for early access. The pricing page demonstrates the UX, leads accumulate, and the gating/quota plumbing is battle-tested before real Anthropic calls land. Replacing `StubAiInsightsService` with `AnthropicAiInsightsService` is then a 1-PR drop-in.
+**Rationale:** Two reasons. (a) Ethical: never bill users for AI that doesn't work; making AI variants non-purchasable at launch prevents that while keeping pricing UI honest. (b) Engineering: AI features compound risk — plan gating, quota enforcement, billing changes, real LLM calls. Decoupling the plumbing rollout from the LLM-impl rollout means each problem is debugged in isolation. The stub interface is also the test seam for unit-testing plan/quota logic without external network calls.
+**Alternatives considered:** Build AI fully and launch both together (rejected: too many moving parts in one cutover), hide the AI toggle entirely until real AI ships (rejected: loses the demand-validation signal from "click AI → coming soon" early-access list).
+**Impact:** New `App\Services\Ai` namespace with interface + stub + decorator. AI usage table/columns ship with empty counters. Pricing page AI toggle wired and visible; "Add AI" CTAs in cards open the "coming soon" modal until env flag flips. `StripePriceResolver` rejects `*Ai` plans with a clear error until env is configured.
 
 ---
 

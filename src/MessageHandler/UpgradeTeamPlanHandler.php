@@ -23,5 +23,8 @@ final readonly class UpgradeTeamPlanHandler
         $team->stripeSubscriptionId = $message->stripeSubscriptionId;
         $team->stripeCustomerId = $message->stripeCustomerId;
         $team->planWarningAt = null;
+        if (null !== $message->billingInterval) {
+            $team->billingInterval = $message->billingInterval->value;
+        }
     }
 }

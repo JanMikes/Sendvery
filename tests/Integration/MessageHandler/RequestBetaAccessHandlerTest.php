@@ -26,7 +26,7 @@ final class RequestBetaAccessHandlerTest extends IntegrationTestCase
             email: 'request-'.$id->toString().'@example.com',
             name: 'Alex',
             company: 'Globex',
-            requestedPlan: SubscriptionPlan::Team,
+            requestedPlan: SubscriptionPlan::Business,
             domainCount: 42,
             message: 'Looking forward to it',
             source: 'pricing',
@@ -37,7 +37,7 @@ final class RequestBetaAccessHandlerTest extends IntegrationTestCase
         self::assertNotNull($entity);
         self::assertSame('Alex', $entity->name);
         self::assertSame('Globex', $entity->company);
-        self::assertSame(SubscriptionPlan::Team, $entity->requestedPlan);
+        self::assertSame(SubscriptionPlan::Business, $entity->requestedPlan);
         self::assertSame(42, $entity->domainCount);
         self::assertSame('Looking forward to it', $entity->message);
     }

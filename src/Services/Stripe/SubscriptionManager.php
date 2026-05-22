@@ -7,6 +7,7 @@ namespace App\Services\Stripe;
 use App\Entity\Team;
 use App\Message\DowngradeTeamPlan;
 use App\Message\UpgradeTeamPlan;
+use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
 use Ramsey\Uuid\Uuid;
 use Stripe\StripeClient;
@@ -24,12 +25,12 @@ final readonly class SubscriptionManager
     ) {
     }
 
-    public function createCheckoutSession(Team $team, SubscriptionPlan $plan): string
+    public function createCheckoutSession(Team $team, SubscriptionPlan $plan, BillingInterval $interval): string
     {
         $params = [
             'mode' => 'subscription',
             'line_items' => [[
-                'price' => $this->priceResolver->getPriceId($plan),
+                'price' => $this->priceResolver->getPriceId($plan, $interval),
                 'quantity' => 1,
             ]],
             'success_url' => $this->defaultUri.'/app/settings/billing/success?session_id={CHECKOUT_SESSION_ID}',
@@ -37,6 +38,7 @@ final readonly class SubscriptionManager
             'metadata' => [
                 'team_id' => $team->id->toString(),
                 'plan' => $plan->value,
+                'interval' => $interval->value,
             ],
         ];
 
@@ -87,6 +89,7 @@ final readonly class SubscriptionManager
         $metadata = $session['metadata'] ?? null;
         $teamId = $metadata['team_id'] ?? null;
         $planValue = $metadata['plan'] ?? null;
+        $intervalValue = $metadata['interval'] ?? null;
 
         if (!\is_string($teamId) || !\is_string($planValue)) {
             return;
@@ -97,11 +100,14 @@ final readonly class SubscriptionManager
             return;
         }
 
+        $interval = \is_string($intervalValue) ? BillingInterval::tryFrom($intervalValue) : null;
+
         $this->commandBus->dispatch(new UpgradeTeamPlan(
             teamId: Uuid::fromString($teamId),
             plan: $plan,
             stripeSubscriptionId: (string) ($session['subscription'] ?? ''),
             stripeCustomerId: (string) ($session['customer'] ?? ''),
+            billingInterval: $interval,
         ));
     }
 
