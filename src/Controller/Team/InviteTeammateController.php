@@ -7,10 +7,14 @@ namespace App\Controller\Team;
 use App\Entity\User;
 use App\Exceptions\UserAlreadyOnTeam;
 use App\Message\InviteTeammate;
+use App\Query\GetTeamPlan;
+use App\Repository\TeamInvitationRepository;
+use App\Repository\TeamMembershipRepository;
 use App\Repository\TeamRepository;
 use App\Security\TeamVoter;
 use App\Services\DashboardContext;
 use App\Services\IdentityProvider;
+use App\Services\Stripe\PlanLimits;
 use App\Value\TeamRole;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -27,6 +31,10 @@ final class InviteTeammateController extends AbstractController
     public function __construct(
         private readonly DashboardContext $dashboardContext,
         private readonly TeamRepository $teamRepository,
+        private readonly TeamMembershipRepository $membershipRepository,
+        private readonly TeamInvitationRepository $invitationRepository,
+        private readonly GetTeamPlan $getTeamPlan,
+        private readonly PlanLimits $planLimits,
         private readonly MessageBusInterface $commandBus,
         private readonly IdentityProvider $identityProvider,
         private readonly ValidatorInterface $validator,
@@ -40,6 +48,29 @@ final class InviteTeammateController extends AbstractController
         $teamId = $this->dashboardContext->getTeamId();
         $team = $this->teamRepository->get($teamId);
         $this->denyAccessUnlessGranted(TeamVoter::MANAGE_MEMBERS, $team);
+
+        // Plan-cap check mirrors the UI gate on /app/team. Pending invitations
+        // count toward the cap because the token can be redeemed at any time
+        // — letting two of them outstanding on a 1-seat plan would race a
+        // second teammate onto the team.
+        $plan = $this->getTeamPlan->forTeam($teamId->toString());
+        $maxMembers = $this->planLimits->getMaxTeamMembers($plan);
+        $effectiveCount = count($this->membershipRepository->findForTeam($teamId))
+            + count($this->invitationRepository->findPendingForTeam($teamId));
+
+        if ($effectiveCount >= $maxMembers) {
+            $this->addFlash(
+                'team_error',
+                sprintf(
+                    'Your %s plan only supports %d team member%s. Upgrade your plan to invite more teammates.',
+                    $plan->value,
+                    $maxMembers,
+                    1 === $maxMembers ? '' : 's',
+                ),
+            );
+
+            return $this->redirectToRoute('team_settings');
+        }
 
         $email = strtolower(trim($request->request->getString('email')));
         $roleValue = $request->request->getString('role', TeamRole::Member->value);

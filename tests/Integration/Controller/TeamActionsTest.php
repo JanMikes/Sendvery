@@ -30,11 +30,35 @@ final class TeamActionsTest extends WebTestCase
     }
 
     #[Test]
-    public function inviteTeammateAsOwnerSucceeds(): void
+    public function inviteTeammateAsOwnerSucceedsOnTeamPlan(): void
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
-        $persona = $fixtures->onboardedOwner();
+        $persona = $fixtures->persona()->plan('team')->build();
+        $client->loginUser($persona->user);
+
+        $invitee = 'invitee-'.Uuid::uuid7()->toString().'@example.com';
+        $client->request('POST', '/app/team/invite', [
+            'email' => $invitee,
+            'role' => 'member',
+        ]);
+
+        self::assertResponseRedirects('/app/team');
+
+        // Follow the redirect and confirm the success flash, so we know the
+        // invite actually went through (rather than being silently blocked
+        // by the new plan-limit gate which also redirects to /app/team).
+        $client->followRedirect();
+        self::assertSelectorTextContains('body', 'Invitation sent to '.$invitee);
+    }
+
+    #[Test]
+    public function inviteTeammateOnFreePlanIsBlockedWithFlash(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        // Free plan caps the team at 1 member — owner only.
+        $persona = $fixtures->persona()->plan('free')->build();
         $client->loginUser($persona->user);
 
         $client->request('POST', '/app/team/invite', [
@@ -43,6 +67,30 @@ final class TeamActionsTest extends WebTestCase
         ]);
 
         self::assertResponseRedirects('/app/team');
+        $client->followRedirect();
+        self::assertSelectorTextContains('body', 'Upgrade your plan to invite more teammates');
+    }
+
+    #[Test]
+    public function inviteTeammateOnTeamPlanAtCapIsBlocked(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        // Team plan: max 10 members. Owner + 9 teammates = at the cap.
+        $persona = $fixtures->persona()->plan('team')->build();
+        for ($i = 0; $i < 9; ++$i) {
+            $fixtures->addExtraTeammate($persona->team);
+        }
+        $client->loginUser($persona->user);
+
+        $client->request('POST', '/app/team/invite', [
+            'email' => 'one-too-many-'.Uuid::uuid7()->toString().'@example.com',
+            'role' => 'member',
+        ]);
+
+        self::assertResponseRedirects('/app/team');
+        $client->followRedirect();
+        self::assertSelectorTextContains('body', 'Upgrade your plan to invite more teammates');
     }
 
     #[Test]
