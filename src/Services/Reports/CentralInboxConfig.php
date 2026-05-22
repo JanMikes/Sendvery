@@ -12,6 +12,9 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * Env-driven configuration for the central reports@sendvery.com inbox.
  * Read once at service construction; missing values surface as boot-time
  * errors so production never silently runs with bad config.
+ *
+ * The inbox is considered enabled when SENDVERY_REPORTS_INBOX_USERNAME is
+ * set — self-hosters that don't run a central inbox simply leave it blank.
  */
 final readonly class CentralInboxConfig
 {
@@ -29,8 +32,6 @@ final readonly class CentralInboxConfig
     public int $maxMessageBytes;
 
     public function __construct(
-        #[Autowire(env: 'bool:SENDVERY_REPORTS_INBOX_ENABLED')]
-        bool $enabled,
         #[Autowire(env: 'SENDVERY_REPORTS_INBOX_HOST')]
         string $host,
         #[Autowire(env: 'int:SENDVERY_REPORTS_INBOX_PORT')]
@@ -54,7 +55,7 @@ final readonly class CentralInboxConfig
         #[Autowire(env: 'int:SENDVERY_REPORTS_INBOX_MAX_MESSAGE_BYTES')]
         int $maxMessageBytes,
     ) {
-        $this->enabled = $enabled;
+        $this->enabled = '' !== $username;
         $this->host = $host;
         $this->port = $port;
         $this->username = $username;

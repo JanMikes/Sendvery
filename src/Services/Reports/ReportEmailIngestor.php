@@ -46,7 +46,7 @@ final readonly class ReportEmailIngestor
     public function ingestBatch(): int
     {
         if (!$this->config->enabled) {
-            $this->logger->info('Central reports inbox is disabled (SENDVERY_REPORTS_INBOX_ENABLED=false); skipping poll.');
+            $this->logger->info('Central reports inbox is disabled (SENDVERY_REPORTS_INBOX_USERNAME is empty); skipping poll.');
 
             return 0;
         }

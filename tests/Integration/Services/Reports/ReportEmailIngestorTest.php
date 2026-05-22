@@ -89,10 +89,9 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
     public function testSkipsWhenDisabled(): void
     {
         $disabled = new CentralInboxConfig(
-            enabled: false,
             host: 'imap.test',
             port: 993,
-            username: 'user',
+            username: '',
             password: 'pass',
             encryption: MailboxEncryption::Ssl->value,
             pendingFolder: 'Sendvery/Pending',
