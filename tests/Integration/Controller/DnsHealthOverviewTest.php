@@ -182,8 +182,23 @@ final class DnsHealthOverviewTest extends WebTestCase
         $persona = $fixtures->onboardedOwner();
         $client->loginUser($persona->user);
 
-        $client->request('GET', '/app/dns-health');
+        assert(null !== $persona->domain);
 
+        // DNS Health overview — sidebar + page content
+        $client->request('GET', '/app/dns-health');
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('/tools/domain-health', (string) $client->getResponse()->getContent());
+
+        // Domain detail — previously had a header "DNS Health Check" button
+        // linking to the public tool. Regression guard so a future change can't
+        // silently re-introduce it.
+        $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id));
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('/tools/domain-health', (string) $client->getResponse()->getContent());
+
+        // Per-domain DNS health drill-down — also previously had a CTA to the
+        // public tool inside its empty-state branch.
+        $client->request('GET', sprintf('/app/domains/%s/health', $persona->domain->id));
         self::assertResponseIsSuccessful();
         self::assertStringNotContainsString('/tools/domain-health', (string) $client->getResponse()->getContent());
     }
