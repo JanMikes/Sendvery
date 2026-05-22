@@ -368,6 +368,9 @@ return App::config([
                     '$defaultUri' => '%env(DEFAULT_URI)%',
                 ],
             ],
+            'App\Command\AnnounceLaunchToBetaLeadsCommand' => [
+                'public' => true,
+            ],
         ],
     ],
 ]);

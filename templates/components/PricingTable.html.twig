@@ -1,3 +1,18 @@
+{# Cutover-aware CTAs (Phase 6). When `stripe_live` is true, paid non-AI
+   CTAs route straight to dashboard_billing_upgrade; otherwise they keep
+   the request_beta_access lead-capture path. AI CTAs always go to lead
+   capture until DEC-057 flips (SENDVERY_AI_PURCHASABLE=true). #}
+{% set personal_monthly = stripe_live ? path('dashboard_billing_upgrade', {plan: 'personal', interval: 'monthly'}) : path('request_beta_access', {plan: 'personal', source: 'pricing'}) %}
+{% set personal_annual = stripe_live ? path('dashboard_billing_upgrade', {plan: 'personal', interval: 'annual'}) : path('request_beta_access', {plan: 'personal', source: 'pricing'}) %}
+{% set pro_monthly = stripe_live ? path('dashboard_billing_upgrade', {plan: 'pro', interval: 'monthly'}) : path('request_beta_access', {plan: 'pro', source: 'pricing'}) %}
+{% set pro_annual = stripe_live ? path('dashboard_billing_upgrade', {plan: 'pro', interval: 'annual'}) : path('request_beta_access', {plan: 'pro', source: 'pricing'}) %}
+{% set business_monthly = stripe_live ? path('dashboard_billing_upgrade', {plan: 'business', interval: 'monthly'}) : path('request_beta_access', {plan: 'business', source: 'pricing'}) %}
+{% set business_annual = stripe_live ? path('dashboard_billing_upgrade', {plan: 'business', interval: 'annual'}) : path('request_beta_access', {plan: 'business', source: 'pricing'}) %}
+{% set personal_ai_href = path('request_beta_access', {plan: 'personal', source: 'pricing-ai-curious'}) %}
+{% set pro_ai_href = path('request_beta_access', {plan: 'pro', source: 'pricing-ai-curious'}) %}
+{% set business_ai_href = path('request_beta_access', {plan: 'business', source: 'pricing-ai-curious'}) %}
+{% set free_ai_href = path('request_beta_access', {plan: 'free', source: 'pricing-ai-curious'}) %}
+
 <div data-controller="pricing"
      data-pricing-billing-value="annual"
      data-pricing-ai-value="false"
@@ -78,8 +93,8 @@
                         href="{{ path('request_beta_access', {plan: 'free'}) }}"
                         data-href-monthly="{{ path('request_beta_access', {plan: 'free', source: 'pricing'}) }}"
                         data-href-annual="{{ path('request_beta_access', {plan: 'free', source: 'pricing'}) }}"
-                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'free', source: 'pricing-ai-curious'}) }}"
-                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'free', source: 'pricing-ai-curious'}) }}"
+                        data-href-ai-monthly="{{ free_ai_href }}"
+                        data-href-ai-annual="{{ free_ai_href }}"
                         data-label-monthly="Get started"
                         data-label-annual="Get started"
                         data-label-ai-monthly="Curious about AI? Tell us →"
@@ -134,11 +149,11 @@
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
-                        href="{{ path('request_beta_access', {plan: 'personal'}) }}"
-                        data-href-monthly="{{ path('request_beta_access', {plan: 'personal', source: 'pricing'}) }}"
-                        data-href-annual="{{ path('request_beta_access', {plan: 'personal', source: 'pricing'}) }}"
-                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'personal', source: 'pricing-ai-curious'}) }}"
-                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'personal', source: 'pricing-ai-curious'}) }}"
+                        href="{{ personal_annual }}"
+                        data-href-monthly="{{ personal_monthly }}"
+                        data-href-annual="{{ personal_annual }}"
+                        data-href-ai-monthly="{{ personal_ai_href }}"
+                        data-href-ai-annual="{{ personal_ai_href }}"
                         data-label-monthly="Get Personal"
                         data-label-annual="Get Personal"
                         data-label-ai-monthly="Notify me when AI ships →"
@@ -191,11 +206,11 @@
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
-                        href="{{ path('request_beta_access', {plan: 'pro'}) }}"
-                        data-href-monthly="{{ path('request_beta_access', {plan: 'pro', source: 'pricing'}) }}"
-                        data-href-annual="{{ path('request_beta_access', {plan: 'pro', source: 'pricing'}) }}"
-                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'pro', source: 'pricing-ai-curious'}) }}"
-                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'pro', source: 'pricing-ai-curious'}) }}"
+                        href="{{ pro_annual }}"
+                        data-href-monthly="{{ pro_monthly }}"
+                        data-href-annual="{{ pro_annual }}"
+                        data-href-ai-monthly="{{ pro_ai_href }}"
+                        data-href-ai-annual="{{ pro_ai_href }}"
                         data-label-monthly="Get Pro"
                         data-label-annual="Get Pro"
                         data-label-ai-monthly="Notify me when AI ships →"
@@ -248,11 +263,11 @@
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
-                        href="{{ path('request_beta_access', {plan: 'business'}) }}"
-                        data-href-monthly="{{ path('request_beta_access', {plan: 'business', source: 'pricing'}) }}"
-                        data-href-annual="{{ path('request_beta_access', {plan: 'business', source: 'pricing'}) }}"
-                        data-href-ai-monthly="{{ path('request_beta_access', {plan: 'business', source: 'pricing-ai-curious'}) }}"
-                        data-href-ai-annual="{{ path('request_beta_access', {plan: 'business', source: 'pricing-ai-curious'}) }}"
+                        href="{{ business_annual }}"
+                        data-href-monthly="{{ business_monthly }}"
+                        data-href-annual="{{ business_annual }}"
+                        data-href-ai-monthly="{{ business_ai_href }}"
+                        data-href-ai-annual="{{ business_ai_href }}"
                         data-label-monthly="Get Business"
                         data-label-annual="Get Business"
                         data-label-ai-monthly="Notify me when AI ships →"
