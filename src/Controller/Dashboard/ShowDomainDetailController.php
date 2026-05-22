@@ -8,6 +8,7 @@ use App\Query\GetDomainDetail;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainReports;
 use App\Query\GetDomainSenderBreakdown;
+use App\Repository\QuarantinedDmarcReportRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -19,6 +20,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly GetDomainReports $getDomainReports,
         private readonly GetDomainSenderBreakdown $getDomainSenderBreakdown,
         private readonly GetDomainPassRateTrend $getDomainPassRateTrend,
+        private readonly QuarantinedDmarcReportRepository $quarantineRepository,
     ) {
     }
 
@@ -65,12 +67,20 @@ final class ShowDomainDetailController extends AbstractController
             'dataLabels' => ['enabled' => false],
         ];
 
+        // Show "N reports waiting" only while the domain isn't verified yet —
+        // once verified, the quarantine release moves them into the dashboard
+        // proper so a count would be stale.
+        $quarantineCount = $domain->isVerified()
+            ? 0
+            : $this->quarantineRepository->countForDomain($domain->domainName);
+
         return $this->render('dashboard/domain_detail.html.twig', [
             'domain' => $domain,
             'reports' => $reports,
             'senders' => $senders,
             'trendChartConfig' => $trendChartConfig,
             'senderChartConfig' => $senderChartConfig,
+            'quarantineCount' => $quarantineCount,
         ]);
     }
 }

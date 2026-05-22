@@ -35,6 +35,29 @@
         </div>
     </div>
 
+    {% if quarantineCount > 0 %}
+        <div class="rounded-2xl border border-warning/30 bg-warning/5 p-5 mb-6">
+            <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-warning/15 text-warning flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <div class="font-semibold text-base-content mb-1">
+                        {{ quarantineCount }} DMARC report{{ quarantineCount > 1 ? 's' : '' }} waiting for {{ domain.domainName }}
+                    </div>
+                    <p class="text-sm text-base-content/70">
+                        Email receivers are already sending reports for this domain — they're parked in quarantine until your DMARC TXT record is verified. Finish DNS verification to unlock them all at once.
+                    </p>
+                </div>
+                <form method="post" action="{{ path('dashboard_domain_reverify', {id: domain.domainId}) }}" class="shrink-0">
+                    <button type="submit" class="btn btn-sm btn-warning">Re-check DNS</button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
     {# Quick stats #}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <twig:StatCard title="Total Messages" value="{{ domain.totalMessages|number_format(0, '.', ',') }}" />

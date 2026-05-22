@@ -23,8 +23,17 @@
                 </div>
                 <div class="flex-1">
                     {% if verificationStatus.dmarcVerifiedAt is null %}
-                        <div class="font-semibold text-base-content mb-1">DMARC record not detected for {{ verificationStatus.domainName }}</div>
-                        <p class="text-sm text-base-content/70">Publish a DMARC TXT record so reports can be delivered. We re-check every day; you can also re-check now.</p>
+                        {% if quarantineCount > 0 %}
+                            <div class="font-semibold text-base-content mb-1">
+                                {{ quarantineCount }} DMARC report{{ quarantineCount > 1 ? 's' : '' }} already waiting for {{ verificationStatus.domainName }}
+                            </div>
+                            <p class="text-sm text-base-content/70">
+                                Email receivers are already sending reports to <span class="font-mono">{{ reportAddress }}</span> — they're parked safely until you finish DNS verification. Publish your DMARC TXT record (and re-check below) to unlock them.
+                            </p>
+                        {% else %}
+                            <div class="font-semibold text-base-content mb-1">DMARC record not detected for {{ verificationStatus.domainName }}</div>
+                            <p class="text-sm text-base-content/70">Publish a DMARC TXT record so reports can be delivered. We re-check every day; you can also re-check now.</p>
+                        {% endif %}
                     {% elseif severityValue == 'info' %}
                         <div class="font-semibold text-base-content mb-1">Confirming DMARC record for {{ verificationStatus.domainName }}</div>
                         <p class="text-sm text-base-content/70">The latest check didn't see your DMARC record — most likely DNS is still propagating, or a resolver hiccup. We'll keep checking; nothing to worry about yet.</p>

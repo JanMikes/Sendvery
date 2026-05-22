@@ -10,6 +10,7 @@ use App\Query\GetDashboardStats;
 use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainVerificationStatus;
+use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
 use App\Services\DomainVerificationEvaluator;
 use App\Services\ReportAddressProvider;
@@ -29,6 +30,7 @@ final class DashboardOverviewController extends AbstractController
         private readonly GetDomainVerificationStatus $verificationStatusQuery,
         private readonly DomainVerificationEvaluator $verificationEvaluator,
         private readonly ReportAddressProvider $reportAddressProvider,
+        private readonly QuarantinedDmarcReportRepository $quarantineRepository,
     ) {
     }
 
@@ -82,6 +84,14 @@ final class DashboardOverviewController extends AbstractController
 
         $verificationStatus = $this->verificationStatusQuery->forTeam($teamId);
 
+        // Surface the quarantine count for the team's headline domain when it's
+        // still unverified — reports already arriving for them is a strong
+        // "finish DNS setup now" hook, not just abstract "reports might arrive".
+        $quarantineCount = 0;
+        if (null !== $verificationStatus && null === $verificationStatus->dmarcVerifiedAt) {
+            $quarantineCount = $this->quarantineRepository->countForDomain($verificationStatus->domainName);
+        }
+
         return $this->render('dashboard/overview.html.twig', [
             'stats' => $stats,
             'domains' => $domains,
@@ -92,6 +102,7 @@ final class DashboardOverviewController extends AbstractController
             'verificationStatus' => $verificationStatus,
             'verificationSeverity' => null === $verificationStatus ? null : $this->verificationEvaluator->severity($verificationStatus),
             'reportAddress' => $this->reportAddressProvider->get(),
+            'quarantineCount' => $quarantineCount,
         ]);
     }
 }
