@@ -212,6 +212,30 @@ return App::config([
             'App\Repository\QuarantinedDmarcReportRepository' => [
                 'public' => true,
             ],
+            'App\Repository\TeamInvitationRepository' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\InviteTeammateHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\AcceptTeamInvitationHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\RevokeTeamInvitationHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\ResendTeamInvitationHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\RemoveTeamMemberHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\TransferTeamOwnershipHandler' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\SendTeamInvitationEmailHandler' => [
+                'public' => true,
+            ],
             'App\Query\GetDashboardStats' => [
                 'public' => true,
             ],

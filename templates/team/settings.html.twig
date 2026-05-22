@@ -1,0 +1,164 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Team settings{% endblock %}
+
+{% block breadcrumbs %}<li>Team</li>{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-8">
+
+    <header>
+        <h1 class="text-2xl font-bold text-base-content">{{ team.name }}</h1>
+        <p class="text-sm text-base-content/60 mt-1">
+            Invite teammates so you can collaborate on DMARC monitoring together.
+        </p>
+    </header>
+
+    {% for flash in app.flashes('team_success') %}
+        <div class="alert alert-success">
+            <span>{{ flash }}</span>
+        </div>
+    {% endfor %}
+    {% for flash in app.flashes('team_error') %}
+        <div class="alert alert-error">
+            <span>{{ flash }}</span>
+        </div>
+    {% endfor %}
+
+    {# ─── Current members ─── #}
+    <section class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+            <h2 class="card-title text-base">Members</h2>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Joined</th>
+                            {% if canManage %}<th></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for member in members %}
+                            <tr>
+                                <td class="font-mono text-sm">{{ member.user.email }}{% if member.user.id == app.user.id %} <span class="badge badge-ghost badge-sm">you</span>{% endif %}</td>
+                                <td><span class="badge badge-outline">{{ member.role.value | capitalize }}</span></td>
+                                <td class="text-sm text-base-content/60">{{ member.joinedAt | date('Y-m-d') }}</td>
+                                {% if canManage %}
+                                    <td class="text-right">
+                                        {% if member.role.value != 'owner' and member.user.id != app.user.id %}
+                                            <form method="post" action="{{ path('team_remove_member', {id: member.id}) }}"
+                                                  onsubmit="return confirm('Remove {{ member.user.email }} from the team?')">
+                                                <button class="btn btn-ghost btn-xs text-error">Remove</button>
+                                            </form>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    {# ─── Pending invitations ─── #}
+    {% if pendingInvitations is not empty %}
+        <section class="card bg-base-100 border border-base-300">
+            <div class="card-body">
+                <h2 class="card-title text-base">Pending invitations</h2>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Sent</th>
+                                <th>Expires</th>
+                                {% if canManage %}<th></th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invite in pendingInvitations %}
+                                <tr>
+                                    <td class="font-mono text-sm">{{ invite.invitedEmail }}</td>
+                                    <td><span class="badge badge-outline">{{ invite.role.value | capitalize }}</span></td>
+                                    <td class="text-sm text-base-content/60">{{ invite.sentAt | date('Y-m-d') }}</td>
+                                    <td class="text-sm text-base-content/60">{{ invite.expiresAt | date('Y-m-d') }}</td>
+                                    {% if canManage %}
+                                        <td class="text-right space-x-1">
+                                            <form method="post" action="{{ path('team_resend_invitation', {id: invite.id}) }}" class="inline">
+                                                <button class="btn btn-ghost btn-xs">Resend</button>
+                                            </form>
+                                            <form method="post" action="{{ path('team_revoke_invitation', {id: invite.id}) }}" class="inline"
+                                                  onsubmit="return confirm('Revoke this invitation?')">
+                                                <button class="btn btn-ghost btn-xs text-error">Revoke</button>
+                                            </form>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    {% endif %}
+
+    {# ─── Invite form ─── #}
+    {% if canManage %}
+        <section class="card bg-base-100 border border-base-300">
+            <div class="card-body">
+                <h2 class="card-title text-base">Invite a teammate</h2>
+                <p class="text-sm text-base-content/60">
+                    They'll get a link by email. New to Sendvery? No problem — the link works for new accounts too.
+                </p>
+                <form method="post" action="{{ path('team_invite_teammate') }}" class="space-y-3 mt-3">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Email</span></label>
+                        <input type="email" name="email" required class="input input-bordered" placeholder="colleague@yourcompany.com">
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Role</span></label>
+                        <select name="role" class="select select-bordered">
+                            {% for role in assignableRoles %}
+                                <option value="{{ role.value }}">{{ role.value | capitalize }}</option>
+                            {% endfor %}
+                        </select>
+                        <label class="label">
+                            <span class="label-text-alt text-base-content/50">Admins can invite and remove teammates. Members can view domains and reports.</span>
+                        </label>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary">Send invitation</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    {% endif %}
+
+    {# ─── Transfer ownership ─── #}
+    {% if canTransfer and members | length > 1 %}
+        <section class="card bg-base-100 border border-warning/30">
+            <div class="card-body">
+                <h2 class="card-title text-base">Transfer ownership</h2>
+                <p class="text-sm text-base-content/60">
+                    Hand the Owner role to a teammate. You'll be downgraded to Admin so you can still manage the team.
+                </p>
+                <form method="post" action="{{ path('team_transfer_ownership') }}" class="flex flex-col sm:flex-row gap-3 mt-3"
+                      onsubmit="return confirm('Transfer ownership? You will become an Admin.')">
+                    <select name="new_owner_user_id" required class="select select-bordered flex-1">
+                        <option value="">Choose a teammate…</option>
+                        {% for member in members if member.role.value != 'owner' %}
+                            <option value="{{ member.user.id }}">{{ member.user.email }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-warning">Transfer ownership</button>
+                </form>
+            </div>
+        </section>
+    {% endif %}
+
+</div>
+{% endblock %}

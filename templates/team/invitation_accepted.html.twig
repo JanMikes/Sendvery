@@ -1,0 +1,24 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Welcome to {{ teamName }} — Sendvery{% endblock %}
+
+{% block body %}
+<div class="min-h-screen flex items-center justify-center p-6 bg-base-200">
+    <div class="card max-w-md w-full bg-base-100 shadow">
+        <div class="card-body text-center">
+            <div class="w-16 h-16 mx-auto bg-success/10 text-success rounded-full flex items-center justify-center">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold mt-4">You're in.</h1>
+            <p class="text-base-content/70">
+                You've joined <strong>{{ teamName }}</strong> on Sendvery.
+            </p>
+            <div class="mt-4">
+                <a href="{{ path('dashboard_overview') }}" class="btn btn-primary">Go to dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

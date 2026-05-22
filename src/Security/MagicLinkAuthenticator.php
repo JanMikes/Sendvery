@@ -8,6 +8,7 @@ use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
 use App\Repository\MagicLinkTokenRepository;
+use App\Repository\TeamInvitationRepository;
 use App\Repository\UserRepository;
 use App\Services\IdentityProvider;
 use App\Services\OnboardingTracker;
@@ -38,6 +39,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         private readonly ClockInterface $clock,
         private readonly UrlGeneratorInterface $urlGenerator,
         private readonly OnboardingTracker $onboardingTracker,
+        private readonly TeamInvitationRepository $invitationRepository,
     ) {
     }
 
@@ -115,6 +117,14 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         );
 
         $this->entityManager->persist($user);
+
+        // Skip default team creation when the user is signing in to accept an
+        // invitation — they'll be added to the inviting team by the post-login
+        // hook, and we don't want to leave them with an empty solo team they
+        // didn't ask for. They can always create one later from settings.
+        if ([] !== $this->invitationRepository->findPendingForEmail($email)) {
+            return $user;
+        }
 
         $domain = $this->extractDomain($email);
         $slugger = new AsciiSlugger();

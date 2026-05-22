@@ -21,12 +21,14 @@ final class TeamVoter extends Voter
     public const string EDIT = 'TEAM_EDIT';
     public const string DELETE = 'TEAM_DELETE';
     public const string MANAGE_MEMBERS = 'TEAM_MANAGE_MEMBERS';
+    public const string TRANSFER_OWNERSHIP = 'TEAM_TRANSFER_OWNERSHIP';
 
     private const array SUPPORTED_ATTRIBUTES = [
         self::VIEW,
         self::EDIT,
         self::DELETE,
         self::MANAGE_MEMBERS,
+        self::TRANSFER_OWNERSHIP,
     ];
 
     public function __construct(
@@ -60,6 +62,7 @@ final class TeamVoter extends Voter
             self::EDIT => in_array($membership->role, [TeamRole::Owner, TeamRole::Admin], true),
             self::DELETE => TeamRole::Owner === $membership->role,
             self::MANAGE_MEMBERS => in_array($membership->role, [TeamRole::Owner, TeamRole::Admin], true),
+            self::TRANSFER_OWNERSHIP => TeamRole::Owner === $membership->role,
             default => false,
         };
     }
