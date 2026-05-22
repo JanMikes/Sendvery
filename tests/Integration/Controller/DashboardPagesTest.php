@@ -17,15 +17,17 @@ use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
 use App\Value\DnsCheckType;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
+use Ramsey\Uuid\UuidInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 final class DashboardPagesTest extends WebTestCase
 {
     /**
-     * @return array{client: KernelBrowser, domainId: \Ramsey\Uuid\UuidInterface, reportId: \Ramsey\Uuid\UuidInterface}
+     * @return array{client: KernelBrowser, domainId: UuidInterface, reportId: UuidInterface}
      */
     private function createAuthenticatedClientWithData(): array
     {
@@ -622,14 +624,82 @@ final class DashboardPagesTest extends WebTestCase
         self::assertStringContainsString('DMARC Pass Rate', $body);
     }
 
+    private function insertTeamUsage(UuidInterface $teamId, int $count, string $startsAt = '2026-05-01 00:00:00', string $endsAt = '2026-06-01 00:00:00'): void
+    {
+        $connection = self::getContainer()->get(Connection::class);
+        assert($connection instanceof Connection);
+        $connection->executeStatement(
+            'INSERT INTO team_usage (team_id, reports_parsed_count, period_started_at, period_ends_at)
+             VALUES (:teamId, :count, :startsAt, :endsAt)',
+            [
+                'teamId' => $teamId->toString(),
+                'count' => $count,
+                'startsAt' => $startsAt,
+                'endsAt' => $endsAt,
+            ],
+        );
+    }
+
+    #[Test]
+    public function overviewShowsReportUsageCardWhenOver50Percent(): void
+    {
+        $data = $this->createHealthyHappyPathClient(plan: 'personal');
+        $this->insertTeamUsage($data['teamId'], 600);
+
+        $data['client']->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringContainsString('Reports this month', $body);
+        self::assertStringContainsString('600 / 1,000', $body);
+    }
+
+    #[Test]
+    public function overviewHidesCardWhenBelow50Percent(): void
+    {
+        $data = $this->createHealthyHappyPathClient(plan: 'personal');
+        $this->insertTeamUsage($data['teamId'], 400);
+
+        $data['client']->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringNotContainsString('Reports this month', $body);
+    }
+
+    #[Test]
+    public function overviewHidesCardOnUnlimitedPlan(): void
+    {
+        $data = $this->createHealthyHappyPathClient(plan: 'unlimited');
+        $this->insertTeamUsage($data['teamId'], 1_000_000);
+
+        $data['client']->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringNotContainsString('Reports this month', $body);
+    }
+
+    #[Test]
+    public function overviewHidesCardWhenNoTeamUsageRow(): void
+    {
+        $data = $this->createHealthyHappyPathClient(plan: 'personal');
+
+        $data['client']->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringNotContainsString('Reports this month', $body);
+    }
+
     /**
      * Builds a fully-healthy team: domain with DMARC verified > 48h ago, first
      * report received, 100% pass rate, valid latest DNS check. Lets the
      * health-summary + all-healthy next-action paths be exercised end-to-end.
      *
-     * @return array{client: KernelBrowser, domainId: \Ramsey\Uuid\UuidInterface}
+     * @return array{client: KernelBrowser, domainId: UuidInterface, teamId: UuidInterface}
      */
-    private function createHealthyHappyPathClient(): array
+    private function createHealthyHappyPathClient(string $plan = 'personal'): array
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -637,10 +707,10 @@ final class DashboardPagesTest extends WebTestCase
         $fixtures = TestFixtures::fromContainer(self::getContainer());
 
         $persona = $fixtures->persona()
-            ->emailPrefix('healthy')
+            ->emailPrefix('healthy-'.substr(uniqid('', true), -6))
             ->teamName('Healthy Team')
-            ->plan('personal')
-            ->withDomain('healthy.example')
+            ->plan($plan)
+            ->withDomain('healthy-'.substr(uniqid('', true), -6).'.example')
             ->build();
         assert(null !== $persona->domain);
         $persona->domain->dmarcVerifiedAt = new \DateTimeImmutable('-10 days');
@@ -696,6 +766,7 @@ final class DashboardPagesTest extends WebTestCase
         return [
             'client' => $client,
             'domainId' => $persona->domain->id,
+            'teamId' => $persona->team->id,
         ];
     }
 }

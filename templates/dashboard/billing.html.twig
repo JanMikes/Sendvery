@@ -8,6 +8,22 @@
 
 {% block content %}
     <div class="max-w-3xl mx-auto space-y-6">
+        {# PlanOverage warning — reports waiting because we hit this month's cap.
+           Surfaces a pile that would otherwise stay invisible until the cron
+           digest fires; deliberately above the plan card so it can't be missed. #}
+        {% if reportUsage is not null and reportUsage.planOverageQuarantineCount > 0 %}
+            <div class="alert bg-warning/10 border border-warning/30">
+                <svg class="w-6 h-6 text-warning shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/>
+                </svg>
+                <div>
+                    <p class="font-semibold">{{ reportUsage.planOverageQuarantineCount }} report{{ reportUsage.planOverageQuarantineCount > 1 ? 's' : '' }} waiting</p>
+                    <p class="text-sm text-base-content/70">They were received after you hit this month's cap. Upgrade to unlock them.</p>
+                </div>
+                <a href="{{ path('pricing') }}" class="btn btn-warning btn-sm">Upgrade</a>
+            </div>
+        {% endif %}
+
         {# Current plan #}
         <div class="card bg-base-100 border border-base-200 shadow-sm">
             <div class="card-body p-6">
@@ -37,6 +53,34 @@
                         {% endif %}
                     </div>
                 </div>
+
+                {# Monthly reports panel — hidden on Unlimited (no meaningful bar)
+                   and on teams that haven't ingested anything (no team_usage row). #}
+                {% if reportUsage is not null and not reportUsage.isUnlimited %}
+                    <div class="mt-6 pt-6 border-t border-base-200">
+                        <div class="flex items-center justify-between mb-1">
+                            <p class="text-sm text-base-content/50">Monthly reports</p>
+                            <p class="text-sm font-medium">{{ reportUsage.currentCount }} / {{ reportUsage.limit }}</p>
+                        </div>
+                        <div class="w-full bg-base-200 rounded-full h-2">
+                            <div class="{{ reportUsage.percentageUsed >= 90 ? 'bg-error' : (reportUsage.percentageUsed >= 70 ? 'bg-warning' : 'bg-primary') }} rounded-full h-2" style="width: {{ reportUsage.percentageUsed|round }}%"></div>
+                        </div>
+                        <p class="text-xs text-base-content/50 mt-1">Resets {{ reportUsage.periodEndsAt|date('M j, Y') }}</p>
+                    </div>
+                {% endif %}
+
+                {# Retention sub-line + next-tier nudge. Always render when we have
+                   any usage row (even on Unlimited plan, retention is the second
+                   reason people upgrade). #}
+                {% if reportUsage is not null %}
+                    <p class="text-sm text-base-content/70 mt-3">
+                        Retention: keeping reports for
+                        {% if reportUsage.retentionDays is null %}unlimited{% else %}{{ reportUsage.retentionDays }} days{% endif %}.
+                        {% if reportUsage.nextTierRetentionUpsell() is not null %}
+                            <a href="{{ path('pricing') }}" class="link link-primary">{{ reportUsage.nextTierRetentionUpsell() }}</a>
+                        {% endif %}
+                    </p>
+                {% endif %}
 
                 {% if aiQuotaLimit is not null %}
                     <div class="mt-6 pt-6 border-t border-base-200">

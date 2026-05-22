@@ -10,13 +10,17 @@ use App\Query\GetDashboardStats;
 use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainVerificationStatus;
+use App\Query\GetMonthlyReportUsage;
+use App\Query\GetTeamPlan;
 use App\Repository\MailboxConnectionRepository;
 use App\Repository\QuarantinedDmarcReportRepository;
+use App\Results\MonthlyReportUsageResult;
 use App\Services\DashboardContext;
 use App\Services\DomainVerificationEvaluator;
 use App\Services\HealthSummaryResolver;
 use App\Services\NextActionResolver;
 use App\Services\ReportAddressProvider;
+use App\Services\Stripe\PlanLimits;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -37,6 +41,9 @@ final class DashboardOverviewController extends AbstractController
         private readonly NextActionResolver $nextActionResolver,
         private readonly HealthSummaryResolver $healthSummaryResolver,
         private readonly MailboxConnectionRepository $mailboxRepository,
+        private readonly GetMonthlyReportUsage $getMonthlyReportUsage,
+        private readonly GetTeamPlan $getTeamPlan,
+        private readonly PlanLimits $planLimits,
     ) {
     }
 
@@ -118,6 +125,31 @@ final class DashboardOverviewController extends AbstractController
             verificationSeverity: $verificationSeverity,
         );
 
+        // Monthly-reports surface: a 6th stat card, but only when the team is
+        // on a finite-limit plan AND has crossed 50% of its monthly cap.
+        // Low-usage teams keep a clean overview free of "0 / 1000" noise.
+        $overviewReportUsage = null;
+        $showReportUsageCard = false;
+        $rawUsage = $this->getMonthlyReportUsage->forTeam($this->dashboardContext->getTeamId()->toString());
+        if (null !== $rawUsage) {
+            $plan = $this->getTeamPlan->forTeam($this->dashboardContext->getTeamId()->toString());
+            $maxReports = $this->planLimits->getMaxReportsPerMonth($plan);
+            $isUnlimited = PHP_INT_MAX === $maxReports;
+            $percentageUsed = $isUnlimited || 0 === $maxReports
+                ? 0.0
+                : min(100.0, ($rawUsage->currentCount / $maxReports) * 100.0);
+            $overviewReportUsage = new MonthlyReportUsageResult(
+                currentCount: $rawUsage->currentCount,
+                limit: $maxReports,
+                percentageUsed: $percentageUsed,
+                periodEndsAt: $rawUsage->periodEndsAt,
+                planOverageQuarantineCount: $rawUsage->planOverageQuarantineCount,
+                isUnlimited: $isUnlimited,
+                retentionDays: $this->planLimits->getRetentionDays($plan),
+            );
+            $showReportUsageCard = !$isUnlimited && $overviewReportUsage->percentageUsed >= 50.0;
+        }
+
         return $this->render('dashboard/overview.html.twig', [
             'stats' => $stats,
             'domains' => $domains,
@@ -131,6 +163,8 @@ final class DashboardOverviewController extends AbstractController
             'quarantineCount' => $quarantineCount,
             'nextAction' => $nextAction,
             'healthSummary' => $healthSummary,
+            'overviewReportUsage' => $overviewReportUsage,
+            'showReportUsageCard' => $showReportUsageCard,
         ]);
     }
 }

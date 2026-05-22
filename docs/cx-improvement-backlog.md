@@ -745,7 +745,8 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
 
 ## TASK-017: Report-detail records table is a wall of raw rows — group by source IP/sender and label "what is this thing"
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23 (commit `51c0612`)
 - Area: reports
 - Why: `templates/dashboard/report_detail.html.twig` renders one row per `DmarcReportRecord`, which for a high-volume reporter like Google can be 50+ rows of `66.249.93.x ... 1 ... none ... fail ... pass ...` that's impossible to interpret. The same source IP appears multiple times. The user can't easily answer "which actual services are sending as my domain?"
 - Acceptance:
@@ -755,6 +756,60 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
   - Move the existing flat table behind a "Show raw records" toggle (collapsed by default).
   - 100% test coverage on the grouping query.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Key schema findings:**
+- `dmarc_record` already has both `resolved_org` (nullable) and `resolved_hostname` (nullable). Template already uses `record.resolvedHostname ?? record.resolvedOrg ?? '—'` — proves the fallback chain.
+- The sender-inventory entity is `KnownSender` (table `known_sender`); unique key is `(monitored_domain_id, source_ip)`; has plain bool `is_authorized` (not multi-status). Mapping: `true` → "Authorized" badge, `false` → "Unauthorized", LEFT-JOIN-NULL → no badge.
+- `GetReportDetail` is untouched by TASK-016 (it's a separate query). Safe to extend without affecting reports filter work.
+
+**Data approach (Option B — SQL grouping):** New `GetReportSenderGroups` query runs a single `GROUP BY` with `LEFT JOIN known_sender`. Aggregates pass counts + disposition counts + `array_agg(DISTINCT source_ip)` in SQL. The drilldown is done in Twig: `for record in report.records if record.sourceIp in group.sourceIps` — reuses existing flat record list, no second round-trip.
+
+**Group key fallback chain:** `COALESCE(rec.resolved_org, rec.resolved_hostname, rec.source_ip)` — same as display label.
+
+**SQL (final):**
+```sql
+SELECT
+    COALESCE(rec.resolved_org, rec.resolved_hostname, rec.source_ip) AS group_key,
+    COALESCE(rec.resolved_org, rec.resolved_hostname, rec.source_ip) AS display_label,
+    SUM(rec.count)                                                    AS total_messages,
+    SUM(CASE WHEN rec.dkim_result = 'pass' THEN rec.count ELSE 0 END) AS dkim_pass_count,
+    SUM(CASE WHEN rec.spf_result  = 'pass' THEN rec.count ELSE 0 END) AS spf_pass_count,
+    SUM(CASE WHEN rec.disposition = 'none'        THEN rec.count ELSE 0 END) AS disposition_none,
+    SUM(CASE WHEN rec.disposition = 'quarantine'  THEN rec.count ELSE 0 END) AS disposition_quarantine,
+    SUM(CASE WHEN rec.disposition = 'reject'      THEN rec.count ELSE 0 END) AS disposition_reject,
+    array_agg(DISTINCT rec.source_ip)                                AS source_ips,
+    MAX(ks.is_authorized::int)                                       AS sender_is_authorized
+FROM dmarc_record rec
+JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
+JOIN monitored_domain md ON md.id = dr.monitored_domain_id
+LEFT JOIN known_sender ks ON ks.monitored_domain_id = dr.monitored_domain_id AND ks.source_ip = rec.source_ip
+WHERE rec.dmarc_report_id = :reportId AND md.team_id IN (:teamIds)
+GROUP BY group_key
+ORDER BY total_messages DESC
+```
+
+Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is authorized (1) it wins over false (0); all-null → null (no badge). Correct semantics.
+
+**Files to create:**
+- `src/Results/ReportSenderGroupResult.php` — `readonly final`, fields: `groupKey: string`, `displayLabel: string`, `totalMessages: int`, `dkimPassCount: int`, `dkimPassRate: float` (computed: `round(pass/total*100, 1)`, 0.0 when total=0), `spfPassCount: int`, `spfPassRate: float`, `dispositionNone: int`, `dispositionQuarantine: int`, `dispositionReject: int`, `sourceIps: array<string>`, `senderIsAuthorized: ?bool`. Static `fromDatabaseRow()` factory; private static `parsePgArray(string $literal): array<string>` handles `{a,b,c}` → `[a,b,c]`, with `array_filter` to strip empties (handles `{NULL}` edge case).
+- `src/Query/GetReportSenderGroups.php` — `readonly final`, `Connection`-injected, `forReport(string $reportId, list<string> $teamIds): list<ReportSenderGroupResult>`. Empty-teamIds guard returns `[]`. Uses `ArrayParameterType::STRING`. `array_map(ReportSenderGroupResult::fromDatabaseRow(...), $rows)`.
+- `tests/Integration/Query/GetReportSenderGroupsTest.php` — 12 tests covering: empty teamIds, non-existent report, single-record group, grouping by resolved_org, grouping by hostname fallback, grouping by IP fallback, separating different orgs, aggregating DKIM pass count + rate (e.g. 13/18 → 72.2%), aggregating disposition counts, `senderIsAuthorized=true` when KnownSender authorized, `senderIsAuthorized=false` when unauthorized, cross-tenant isolation (team A's IDs + team B's reportId → `[]`).
+- `tests/Integration/Controller/ReportDetailSenderGroupsTest.php` — 8 tests covering: 200 response, "By sender" heading present, group with `resolved_org=google.com` displays "google.com", DKIM pass-rate text "50%", disposition badge "reject" shown, "Authorized" badge with KnownSender(true), "Unauthorized" badge with KnownSender(false), `<details>` toggle wrapping raw records table.
+
+**Files to modify:**
+- `src/Controller/Dashboard/ShowReportDetailController.php` — inject `GetReportSenderGroups`. After fetching `$report`, call `$senderGroups = $this->getReportSenderGroups->forReport($id, $this->dashboardContext->getTeamIdStrings());`. Pass `'senderGroups' => $senderGroups` to render.
+- `templates/dashboard/report_detail.html.twig` — insert "By sender" section between line 85 (close of donut grid) and line 88 (existing records card). Each group: `<details open>` with summary row containing display label (truncated at 50 chars with `…`, full label in `title` attr for hover), `{{ group.totalMessages }} msg`, `DKIM {pct}%` ghost badge, `SPF {pct}%` ghost badge, disposition badges (only shown when count > 0): `badge-info "{n} none"`, `badge-warning "{n} quarantine"`, `badge-error "{n} reject"`. Authorization badge: `badge-success "Authorized"` / `badge-error "Unauthorized"` / nothing. Inner drilldown table filters `report.records` via `if record.sourceIp in group.sourceIps` — table-xs styling with source IP, hostname, count, disposition, dkim, spf using existing `<twig:StatusBadge>`. Move existing records card (lines 88-121) INSIDE a `<details>` element with `<summary>Show raw records ({{ report.records|length }})</summary>` — default collapsed.
+
+**Critical details:**
+- `parsePgArray` robustness: strip outer `{}`, explode on `,`, `array_values(array_filter(...))` to handle empty/NULL edge cases.
+- `senderIsAuthorized` from DBAL: `MAX(ks.is_authorized::int)` returns `int|null`. Cast in DTO: `null !== $row['sender_is_authorized'] ? (bool)(int)$row['sender_is_authorized'] : null`.
+- Team isolation: `WHERE md.team_id IN (:teamIds)` on the report path; `LEFT JOIN known_sender` tied to same `monitored_domain_id` as the report → no cross-domain or cross-team leakage.
+- Display label truncation in Twig (`length > 50 ? value[:50] ~ '…' : value`) — no PHP-side change needed; `title` attr carries full label.
+- Twig `record in group.sourceIps`: works with `array<string>` per Twig's `in` semantics.
+
+**Build phases:** 1) DTO + Query, PHPStan green. 2) ShowReportDetailController wiring. 3) Template restructure. 4) Tests; phpunit + phpstan + cs-fixer green; commit; push.
 
 ---
 
@@ -775,7 +830,8 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
 
 ## TASK-019: Billing page hides the most valuable view — show this team's actual usage vs. limit for the metric that actually triggers churn (reports/mo, retention)
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: dashboard
 - Why: `templates/dashboard/billing.html.twig` shows only domains-used and seats-used. The real bill-vs-value question for a deliverability customer is: "Am I getting close to my monthly report cap (Free: 100, Personal: 1k, Pro: 10k, Business: 50k)?" and "How far back can I look at my data on this plan?". Those numbers exist in `team_usage` and `PlanLimits::getRetentionDays` already — they're just not surfaced. This is also where the `PlanOverage` quarantine pile-up makes itself felt: a customer can have N reports quarantined and never know unless they bump into the (deferred) usage-warning email.
 - Acceptance:
@@ -785,6 +841,36 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
   - The same monthly-reports widget is added as a 6th stat card on `dashboard_overview` (only when the team isn't Unlimited and is over 50% used — keeps the overview clean for low-usage users).
   - 100% test coverage on the new `GetMonthlyReportUsage` query + the overview-card visibility branches.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Key finding:** `GetTeamPlan::forTeam()` already exists and returns `SubscriptionPlan` directly. `PlanLimits` is already injected into `BillingController`. `team_usage` table exists from migration `Version20260524200000.php`. Schema columns: `reports_parsed_count` (the current count), `period_ends_at`. `QuarantinedDmarcReport.domain_name` is lowercased; `MonitoredDomain.domain` is stored as-entered — use `LOWER(md.domain) = qdr.domain_name` in joins (matches `QuarantinedDmarcReportRepository::countForDomain` which calls `strtolower($domainName)`).
+
+**Files to create:**
+- `src/Query/GetMonthlyReportUsage.php` — `readonly final`, Connection-injected, single method `forTeam(string $teamId): ?MonthlyReportUsageRawResult`. SQL is a single statement: `SELECT tu.reports_parsed_count, tu.period_ends_at, (SELECT COUNT(*) FROM quarantined_dmarc_report qdr JOIN monitored_domain md ON LOWER(md.domain) = qdr.domain_name WHERE md.team_id = :teamId AND qdr.reason = 'plan_overage') AS plan_overage_quarantine_count FROM team_usage tu WHERE tu.team_id = :teamId`. Return null when `fetchAssociative()` returns false.
+- `src/Results/MonthlyReportUsageRawResult.php` — `readonly final` DTO: `currentCount: int`, `periodEndsAt: \DateTimeImmutable`, `planOverageQuarantineCount: int`. Static `fromDatabaseRow()`.
+- `src/Results/MonthlyReportUsageResult.php` — `readonly final` DTO: `currentCount`, `limit` (int), `percentageUsed` (float, capped at 100.0), `periodEndsAt`, `planOverageQuarantineCount`, `isUnlimited` (bool — true when `getMaxReportsPerMonth() === PHP_INT_MAX`), `retentionDays` (?int). Method `nextTierRetentionUpsell(): ?string` — pure `match` on `$this->retentionDays`: null → null (Business or Unlimited has no upgrade msg), 30 → "Upgrade to Personal for 1-year retention →", 365 → "Upgrade to Pro for 2-year retention →", 730 → "Upgrade to Business for unlimited retention →".
+- `tests/Integration/Query/GetMonthlyReportUsageTest.php` — 8 cases: returnsNullWhenNoTeamUsageRow, returnsCurrentCountAndPeriodEndsAt, returnsZeroOverageWhenNoneExist, countsPlanOverageReports, excludesOtherTeamsQuarantine, excludesNonOverageQuarantineReasons, countsMultiplePlanOverageForSameDomain, periodEndsAtHydratesCorrectly. Insert `team_usage` rows directly via DBAL (no entity).
+- `tests/Unit/Results/MonthlyReportUsageResultTest.php` — 4 tests for `nextTierRetentionUpsell()` (each branch).
+
+**Files to modify:**
+- `src/Controller/Dashboard/BillingController.php` — inject `GetMonthlyReportUsage`. After existing `$billing = $this->getBillingOverview->forTeam($teamId);`, call `$rawUsage = $this->getMonthlyReportUsage->forTeam($teamId);`. If non-null: resolve `$maxReports = $this->planLimits->getMaxReportsPerMonth($billing->plan)`, `$retentionDays = $this->planLimits->getRetentionDays($billing->plan)`, build `MonthlyReportUsageResult` with `isUnlimited: PHP_INT_MAX === $maxReports`. Else `$reportUsage = null`. Pass `'reportUsage' => $reportUsage` to render.
+- `templates/dashboard/billing.html.twig` — ABOVE the "Current Plan" card div, when `reportUsage.planOverageQuarantineCount > 0`: warning card `bg-warning/10 border border-warning/30` with copy "N reports waiting — they were received after you hit this month's cap. Upgrade to unlock them." with link to upgrade flow (use the existing pricing/upgrade route the billing template already references). INSIDE the "Current Plan" card after the Domains/Members grid: new "Monthly reports" panel matching existing percentage-bar pattern (`progress progress-success` when <70%, `progress-warning` when 70-89%, `progress-error` when >=90%). Show current/limit + percentage + "Resets {periodEndsAt|date('M j, Y')}". Wrap entire panel in `{% if reportUsage is not null and not reportUsage.isUnlimited %}`. Below the panel: "Retention: keeping reports for {N} days" (or "unlimited" when `retentionDays` is null); plus `{% if reportUsage.nextTierRetentionUpsell() is not null %}<a href="{{ path('pricing') }}">{{ reportUsage.nextTierRetentionUpsell() }}</a>{% endif %}`. The upsell link goes to pricing (lets user compare), unlike the PlanOverage warning which goes straight to upgrade flow.
+- `src/Controller/Dashboard/DashboardOverviewController.php` — additive injections (`GetMonthlyReportUsage`, `GetTeamPlan`, `PlanLimits`). After existing logic (reuses `$teamId = $this->dashboardContext->getTeamId()` already called at ~line 104 for `$hasMailbox`): `$rawUsage = $this->getMonthlyReportUsage->forTeam($teamId);`. Compute `$overviewReportUsage = null; $showReportUsageCard = false;`. If `$rawUsage !== null`: resolve plan via `GetTeamPlan::forTeam()` + PlanLimits, build the result DTO, set `$showReportUsageCard = !$overviewReportUsage->isUnlimited && $overviewReportUsage->percentageUsed >= 50.0`. Pass both vars to render. **Do NOT disturb TASK-002 work** (NextActionResolver / HealthSummaryResolver) — additive only.
+- `templates/dashboard/overview.html.twig` — change stat-grid container from current `lg:grid-cols-5` to `{{ showReportUsageCard ? 'lg:grid-cols-6' : 'lg:grid-cols-5' }}` (read current file to confirm exact grid class). Add conditional 6th card after the Alerts card: `{% if showReportUsageCard %}<div class="stat ..."><div class="stat-title">Reports this month</div><div class="stat-value">{{ overviewReportUsage.currentCount }}</div><div class="stat-desc">of {{ overviewReportUsage.limit }} ({{ overviewReportUsage.percentageUsed|number_format(0) }}%)</div></div>{% endif %}`. Match the existing stat-card styling.
+- `tests/Integration/Controller/BillingPagesTest.php` — 6 new methods: `billingPageShowsMonthlyReportsPanel` (insert `team_usage` via DBAL), `billingPageHidesPanelOnUnlimitedPlan`, `billingPageShowsPlanOverageWarning` (insert `team_usage` + `QuarantinedDmarcReport` with PlanOverage), `billingPageHidesWarningWhenZeroOverage`, `billingPageShowsRetentionSubLine` (Free plan → "30 days"), `billingPageShowsRetentionUpsellNudge` (Free → "Upgrade to Personal").
+- `tests/Integration/Controller/DashboardPagesTest.php` — 4 new methods: `overviewShowsReportUsageCardWhenOver50Percent` (insert `team_usage` with count = 600 on Personal plan limit 1000), `overviewHidesCardWhenBelow50Percent` (count = 400), `overviewHidesCardOnUnlimitedPlan`, `overviewHidesCardWhenNoTeamUsageRow`.
+
+**Critical details:**
+- `isUnlimited` signal: `PlanLimits::getMaxReportsPerMonth()` returns `PHP_INT_MAX` for Unlimited. Use exact-int comparison `PHP_INT_MAX === $maxReports` in the controller.
+- `retentionDays === null` is correct for Business plan (unlimited retention with 50k-reports/mo cap). Template should print "unlimited" for this case.
+- `team_usage` row missing → both pages render cleanly with no panel/card; this is the state for any team that has never had a report parsed.
+- `percentageUsed` capped at 100.0 in the constructor (`min(100.0, ...)`) to prevent UI overflow on edge cases.
+- Plan transition mid-period: `team_usage` count tracks ingestion as-it-happens; PlanLimits resolves current plan's limit. Acceptable behavior.
+- Test fixture limitation: existing personas don't insert `team_usage` rows. Tests must insert via DBAL `Connection::executeStatement()` (no entity for `team_usage`).
+- Quarantine join: `LOWER(md.domain) = qdr.domain_name` (matches existing convention since `QuarantinedDmarcReport` lowercases on construction).
+
+**Build phases:** 1) DTOs + Query + DTO/query tests. 2) BillingController + billing.html.twig + billing tests. 3) DashboardOverviewController + overview.html.twig + overview tests. 4) phpunit + phpstan + cs-fixer green; commit; push.
 
 ---
 
