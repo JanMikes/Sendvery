@@ -4,11 +4,26 @@
 {% block breadcrumbs %}<li>Reports</li>{% endblock %}
 
 {% block content %}
+    <twig:ReportsFilterBar
+        filter="{{ filter }}"
+        domains="{{ domains }}"
+        reporterOptions="{{ reporterOptions }}"
+        formAction="dashboard_reports"
+    />
+
     {% if reports is empty and currentPage == 1 %}
-        <twig:EmptyState
-            title="No reports yet"
-            message="DMARC reports will appear here once your mailbox connection starts receiving them."
-        />
+        {% if filter.hasActiveFilters() %}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-8 text-center text-base-content/60">
+                    No reports match the current filters.
+                </div>
+            </div>
+        {% else %}
+            <twig:EmptyState
+                title="No reports yet"
+                message="DMARC reports will appear here once your mailbox connection starts receiving them."
+            />
+        {% endif %}
     {% else %}
         <turbo-frame id="reports-table">
             {% include 'dashboard/_reports_table.html.twig' %}

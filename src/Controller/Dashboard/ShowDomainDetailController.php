@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Controller\Dashboard;
 
+use App\Query\GetAllReports;
 use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainPassRateTrend;
-use App\Query\GetDomainReports;
 use App\Query\GetDomainSenderBreakdown;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
@@ -20,7 +20,7 @@ final class ShowDomainDetailController extends AbstractController
     public function __construct(
         private readonly DashboardContext $dashboardContext,
         private readonly GetDomainDetail $getDomainDetail,
-        private readonly GetDomainReports $getDomainReports,
+        private readonly GetAllReports $getAllReports,
         private readonly GetDomainSenderBreakdown $getDomainSenderBreakdown,
         private readonly GetDomainPassRateTrend $getDomainPassRateTrend,
         private readonly QuarantinedDmarcReportRepository $quarantineRepository,
@@ -38,7 +38,7 @@ final class ShowDomainDetailController extends AbstractController
             throw $this->createNotFoundException('Domain not found.');
         }
 
-        $reports = $this->getDomainReports->forDomain($id, $teamIds, limit: 10);
+        $reports = $this->getAllReports->forTeams($teamIds, limit: 10, domainId: $id);
         $senders = $this->getDomainSenderBreakdown->forDomain($id, $teamIds);
         $trendData = $this->getDomainPassRateTrend->forDomain($id, $teamIds, days: 90);
 

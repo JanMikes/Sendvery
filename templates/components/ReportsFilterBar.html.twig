@@ -1,0 +1,103 @@
+{# Reports filter bar — chip row (pass-rate, date-range) + form row (multiselects, search, dates). #}
+{% props filter, domains = [], reporterOptions = [], formAction = 'dashboard_reports', domainId = null, showDomainFilter = true %}
+
+{% set baseParams = filter.toQueryParams() %}
+{% set routeParams = domainId ? { id: domainId } : {} %}
+
+<div class="card bg-base-100 border border-base-200 shadow-sm mb-4">
+    <div class="card-body p-4 gap-3">
+        {# Row 1: chips #}
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+            <div class="flex gap-2 flex-wrap items-center">
+                <span class="text-xs uppercase tracking-wide text-base-content/50 mr-1">Pass rate</span>
+                {% for opt in [
+                    { value: '', label: 'All' },
+                    { value: 'high', label: '≥ 90%' },
+                    { value: 'medium', label: '70–90%' },
+                    { value: 'low', label: '< 70%' }
+                ] %}
+                    {% set params = opt.value == ''
+                        ? baseParams|merge({ pass_rate: null, page: null })
+                        : baseParams|merge({ pass_rate: opt.value, page: null }) %}
+                    {% set params = params|merge(routeParams) %}
+                    {% set active = (opt.value == '' and filter.passRateBand is null) or (filter.passRateBand == opt.value and opt.value != '') %}
+                    <a href="{{ path(formAction, params) }}"
+                       data-turbo-action="advance"
+                       class="badge badge-lg cursor-pointer {{ active ? 'badge-primary' : 'badge-ghost' }}">{{ opt.label }}</a>
+                {% endfor %}
+            </div>
+
+            <div class="flex gap-2 flex-wrap items-center sm:ml-4">
+                <span class="text-xs uppercase tracking-wide text-base-content/50 mr-1">Date</span>
+                {% for opt in [
+                    { value: '', label: 'All time' },
+                    { value: '7d', label: '7 days' },
+                    { value: '30d', label: '30 days' },
+                    { value: '90d', label: '90 days' },
+                    { value: 'custom', label: 'Custom' }
+                ] %}
+                    {% set params = opt.value == ''
+                        ? baseParams|merge({ date_range: null, date_from: null, date_to: null, page: null })
+                        : baseParams|merge({ date_range: opt.value, page: null }) %}
+                    {% set params = params|merge(routeParams) %}
+                    {% set active = (opt.value == '' and filter.dateRange is null) or (filter.dateRange == opt.value and opt.value != '') %}
+                    <a href="{{ path(formAction, params) }}"
+                       data-turbo-action="advance"
+                       class="badge badge-lg cursor-pointer {{ active ? 'badge-primary' : 'badge-ghost' }}">{{ opt.label }}</a>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Row 2: form inputs #}
+        <form method="GET" action="{{ path(formAction, routeParams) }}" data-turbo-action="advance" class="flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-end">
+            {% if filter.passRateBand %}
+                <input type="hidden" name="pass_rate" value="{{ filter.passRateBand }}">
+            {% endif %}
+            {% if filter.dateRange %}
+                <input type="hidden" name="date_range" value="{{ filter.dateRange }}">
+            {% endif %}
+
+            {% if showDomainFilter %}
+                <label class="flex flex-col gap-1 min-w-[180px]">
+                    <span class="text-xs text-base-content/60">Domains</span>
+                    <select multiple name="domain[]" class="select select-bordered select-sm min-h-[2.25rem]">
+                        {% for d in domains %}
+                            <option value="{{ d.domainId }}" {{ d.domainId in filter.domainIds ? 'selected' : '' }}>{{ d.domainName }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            {% endif %}
+
+            <label class="flex flex-col gap-1 min-w-[180px]">
+                <span class="text-xs text-base-content/60">Reporters</span>
+                <select multiple name="reporter[]" class="select select-bordered select-sm min-h-[2.25rem]">
+                    {% for org in reporterOptions %}
+                        <option value="{{ org }}" {{ org in filter.reporterOrgs ? 'selected' : '' }}>{{ org }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="flex flex-col gap-1 flex-1 min-w-[180px]">
+                <span class="text-xs text-base-content/60">Search</span>
+                <input type="text" name="q" value="{{ filter.search ?? '' }}" placeholder="Reporter or domain…" class="input input-bordered input-sm">
+            </label>
+
+            <label class="flex flex-col gap-1 {{ filter.dateRange == 'custom' ? '' : 'hidden' }}">
+                <span class="text-xs text-base-content/60">From</span>
+                <input type="date" name="date_from" value="{{ filter.dateFrom ? filter.dateFrom|date('Y-m-d') : '' }}" class="input input-bordered input-sm">
+            </label>
+
+            <label class="flex flex-col gap-1 {{ filter.dateRange == 'custom' ? '' : 'hidden' }}">
+                <span class="text-xs text-base-content/60">To</span>
+                <input type="date" name="date_to" value="{{ filter.dateTo ? filter.dateTo|date('Y-m-d') : '' }}" class="input input-bordered input-sm">
+            </label>
+
+            <div class="flex gap-2 items-end">
+                <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                {% if filter.hasActiveFilters() %}
+                    <a href="{{ path(formAction, routeParams) }}" data-turbo-action="advance" class="btn btn-sm btn-ghost">Clear</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>

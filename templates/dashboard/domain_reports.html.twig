@@ -7,11 +7,27 @@
 {% endblock %}
 
 {% block content %}
+    <twig:ReportsFilterBar
+        filter="{{ filter }}"
+        reporterOptions="{{ reporterOptions }}"
+        formAction="dashboard_domain_reports"
+        domainId="{{ domainId }}"
+        showDomainFilter="{{ false }}"
+    />
+
     {% if reports is empty and currentPage == 1 %}
-        <twig:EmptyState
-            title="No reports yet"
-            message="DMARC reports for this domain will appear here."
-        />
+        {% if filter.hasActiveFilters() %}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-8 text-center text-base-content/60">
+                    No reports match the current filters.
+                </div>
+            </div>
+        {% else %}
+            <twig:EmptyState
+                title="No reports yet"
+                message="DMARC reports for this domain will appear here."
+            />
+        {% endif %}
     {% else %}
         <turbo-frame id="domain-reports-table">
             {% include 'dashboard/_domain_reports_table.html.twig' %}

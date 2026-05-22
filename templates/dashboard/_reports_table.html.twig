@@ -37,12 +37,12 @@
                 </div>
                 <div class="join">
                     {% if currentPage > 1 %}
-                        <a href="{{ path('dashboard_reports', { page: currentPage - 1 }) }}"
+                        <a href="{{ path('dashboard_reports', filterParams|merge({ page: currentPage - 1 })) }}"
                            class="join-item btn btn-sm"
                            data-turbo-frame="reports-table">Previous</a>
                     {% endif %}
                     {% if hasNextPage %}
-                        <a href="{{ path('dashboard_reports', { page: currentPage + 1 }) }}"
+                        <a href="{{ path('dashboard_reports', filterParams|merge({ page: currentPage + 1 })) }}"
                            class="join-item btn btn-sm"
                            data-turbo-frame="reports-table">Next</a>
                     {% endif %}

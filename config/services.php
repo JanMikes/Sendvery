@@ -161,9 +161,6 @@ return App::config([
             'App\Query\GetDomainOverview' => [
                 'public' => true,
             ],
-            'App\Query\GetDomainReports' => [
-                'public' => true,
-            ],
             'App\Query\GetReportDetail' => [
                 'public' => true,
             ],
@@ -269,6 +266,9 @@ return App::config([
                 'public' => true,
             ],
             'App\Query\GetAllReports' => [
+                'public' => true,
+            ],
+            'App\Query\GetReporterOrgs' => [
                 'public' => true,
             ],
             'App\Services\DashboardContext' => [

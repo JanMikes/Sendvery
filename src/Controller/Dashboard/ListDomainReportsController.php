@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Controller\Dashboard;
 
-use App\Query\GetDomainReports;
+use App\Query\GetAllReports;
+use App\Query\GetReporterOrgs;
 use App\Services\DashboardContext;
+use App\Value\ReportsFilter;
+use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,7 +18,9 @@ final class ListDomainReportsController extends AbstractController
 {
     public function __construct(
         private readonly DashboardContext $dashboardContext,
-        private readonly GetDomainReports $getDomainReports,
+        private readonly GetAllReports $getAllReports,
+        private readonly GetReporterOrgs $getReporterOrgs,
+        private readonly ClockInterface $clock,
     ) {
     }
 
@@ -26,12 +31,22 @@ final class ListDomainReportsController extends AbstractController
         $limit = 25;
         $offset = ($page - 1) * $limit;
 
-        $reports = $this->getDomainReports->forDomain(
-            $id,
-            $this->dashboardContext->getTeamIdStrings(),
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
+        $filter = ReportsFilter::fromRequest($request, $this->clock);
+
+        $reports = $this->getAllReports->forTeams(
+            $teamIds,
             limit: $limit,
             offset: $offset,
+            domainId: $id,
+            reporterOrgs: [] !== $filter->reporterOrgs ? $filter->reporterOrgs : null,
+            passRateBand: $filter->passRateBand,
+            dateFrom: $filter->dateFrom,
+            dateTo: $filter->dateTo,
+            search: $filter->search,
         );
+
+        $reporterOptions = $this->getReporterOrgs->forTeams($teamIds);
 
         $template = $request->headers->has('Turbo-Frame')
             ? 'dashboard/_domain_reports_table.html.twig'
@@ -42,6 +57,9 @@ final class ListDomainReportsController extends AbstractController
             'domainId' => $id,
             'currentPage' => $page,
             'hasNextPage' => count($reports) === $limit,
+            'filter' => $filter,
+            'reporterOptions' => $reporterOptions,
+            'filterParams' => $filter->toQueryParams(),
         ]);
     }
 }

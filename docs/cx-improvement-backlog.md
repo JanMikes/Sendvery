@@ -1,0 +1,834 @@
+# Sendvery — CX & Feature Improvement Backlog
+
+Single source of truth for the autonomous CX/feature improvement run.
+One block per task, schema as documented in the orchestrator brief.
+
+Tasks the user explicitly named are seeded first and prioritised over
+discovered work. Status transitions: proposed → planned → in-progress →
+in-review → done (or → blocked).
+
+---
+
+## TASK-001: Keep "DNS Health" nav link in-app and show user's domains' DNS health
+
+- Status: done
+- Shipped: 2026-05-22 (commits `3220a5f` impl + `d010bb1` post-review fixups)
+- Area: dashboard
+- Why: The current sidebar "DNS Health" link routes to `tools_domain_health`, the **public** anonymous lookup tool. A signed-in user clicking it leaves their dashboard and has to manually re-type a domain they already added. This is a confusing dead-end and feels like the app doesn't know who they are.
+- Acceptance:
+  - Sidebar "DNS Health" link points to a new in-app route (e.g. `dashboard_dns_health`) that stays inside `templates/dashboard/layout.html.twig`.
+  - Default view lists all the team's monitored domains with their latest DNS health status (SPF, DKIM, DMARC, MX), summarised at a glance.
+  - Clicking a domain drills into its full DNS-health detail (re-using existing `DashboardDomainHealthController` rendering where possible).
+  - If the team has zero domains, the page shows an empty state with a clear "Add your first domain" CTA — not a public lookup form.
+  - Sidebar "active" highlighting works for the new route.
+  - No links from inside the dashboard point at the public `/tools/domain-health` tool.
+  - 100% test coverage on any new controller / query.
+- Notes:
+
+### Architect plan (2026-05-22)
+
+**Files to create:**
+- `src/Query/GetDnsHealthOverview.php`
+- `src/Results/DnsHealthOverviewResult.php`
+- `src/Controller/Dashboard/DnsHealthOverviewController.php`
+- `templates/dashboard/dns_health_overview.html.twig`
+- `tests/Integration/Controller/DnsHealthOverviewTest.php`
+
+**Files to modify:**
+- `templates/dashboard/layout.html.twig` — line 105 (sidebar link)
+- `templates/dashboard/domain_detail.html.twig` — line 32 (header action button)
+- `templates/dashboard/domain_health.html.twig` — line 91 (empty-state CTA)
+
+**Conventions confirmed:** Dashboard controllers are `final` (not readonly, AbstractController extension), single-action `__invoke()`, route name `dashboard_*`, URL `/app/*`. Queries are `readonly final`, inject `Connection`, return DTOs from `src/Results/` (`readonly final` with `fromDatabaseRow()` factory + array-shape docblock). Team scoping via `DashboardContext::getTeamIdStrings()` → `WHERE team_id IN (:teamIds)`.
+
+**Data:** Neither `GetDomainOverview` nor `GetDomainVerificationStatus` covers per-domain verification + latest snapshot. Calling `GetDomainHealthHistory::latestForDomain()` per domain creates N+1. Solution: new `GetDnsHealthOverview` query with single `LEFT JOIN LATERAL` (PG16-supported):
+
+```sql
+SELECT
+    md.id           AS domain_id,
+    md.domain       AS domain_name,
+    md.spf_verified_at,
+    md.dkim_verified_at,
+    md.dmarc_verified_at,
+    dhs.grade       AS latest_snapshot_grade,
+    dhs.score       AS latest_snapshot_score,
+    dhs.spf_score   AS latest_spf_score,
+    dhs.dkim_score  AS latest_dkim_score,
+    dhs.dmarc_score AS latest_dmarc_score,
+    dhs.mx_score    AS latest_mx_score,
+    dhs.checked_at  AS latest_checked_at
+FROM monitored_domain md
+LEFT JOIN LATERAL (
+    SELECT grade, score, spf_score, dkim_score, dmarc_score, mx_score, checked_at
+    FROM domain_health_snapshot
+    WHERE monitored_domain_id = md.id
+    ORDER BY checked_at DESC
+    LIMIT 1
+) dhs ON true
+WHERE md.team_id IN (:teamIds)
+ORDER BY md.domain ASC
+```
+
+**`DnsHealthOverviewResult` fields:** `domainId: string`, `domainName: string`, `spfVerifiedAt: ?\DateTimeImmutable`, `dkimVerifiedAt: ?\DateTimeImmutable`, `dmarcVerifiedAt: ?\DateTimeImmutable`, `latestSnapshotGrade: ?string`, `latestSnapshotScore: ?int`, `latestSpfScore: ?int`, `latestDkimScore: ?int`, `latestDmarcScore: ?int`, `latestMxScore: ?int`, `latestCheckedAt: ?string`. Helpers: `isSpfVerified()`, `isDkimVerified()`, `isDmarcVerified()`, `hasSnapshot()`, `snapshotGradeColor()` (`A=text-success`, `B=text-info`, `C=text-warning`, else `text-error`).
+
+**Controller:** `DnsHealthOverviewController` — `#[Route('/app/dns-health', name: 'dashboard_dns_health')]`, injects `DashboardContext` + `GetDnsHealthOverview`, renders `dashboard/dns_health_overview.html.twig` with `['domains' => $domains]`. Empty state handled by template — no controller-side redirect.
+
+**Template:** Extends `dashboard/layout.html.twig`. Empty-state uses `<twig:EmptyState title="No domains yet" message="Add your first domain to start monitoring its DNS health." actionUrl="{{ path('dashboard_domain_add') }}" actionLabel="Add your first domain" />`. Non-empty: `grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4` of cards, each with domain name, optional grade badge (if `hasSnapshot()`), four status pills (SPF/DKIM/DMARC via `isXxxVerified()`; MX via `latestMxScore`: ≥80=success, 50-79=warning, <50=error, null=ghost "No data"), and "View details" link to `path('dashboard_domain_health', {id: domain.domainId})`.
+
+**Sidebar (`layout.html.twig` lines 105-109):** Replace `href="{{ path('tools_domain_health') }}"` with `href="{{ path('dashboard_dns_health') }}"`; replace hardcoded inactive class with `{{ current_route == 'dashboard_dns_health' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}`. SVG icon unchanged.
+
+**`domain_detail.html.twig` line 32:** Replace `path('tools_domain_health') ~ '?domain=' ~ domain.domainName` with `path('dashboard_domain_health', {id: domain.domainId})`. Label can stay "DNS Health Check" or become "Health Score".
+
+**`domain_health.html.twig` line 91:** Remove the "Run Health Check" CTA button entirely. Replace with static muted text: "Health snapshots are generated automatically during the nightly DNS check."
+
+**Tests (`tests/Integration/Controller/DnsHealthOverviewTest.php`):** 9 methods — `pageReturns200`, `pageShowsDomainName`, `pageShowsEmptyState` (via `withoutDomain()` persona), `pageShowsMultipleDomains` (via `addExtraDomain()`), `pageShowsGradeWhenSnapshotExists` (persist `DomainHealthSnapshot` via EntityManager), `pageShowsNoDataFallbackWithoutSnapshot`, `redirectsAnonymousToLogin`, `sidebarHighlightsDnsHealthWhenActive` (assert `bg-primary` class on the DNS Health `<a>`), `noDashboardPageLinksToPublicTool` (regression guard — no `/tools/domain-health` href in rendered sidebar). `RouteSmokeTest` auto-covers the new GET route.
+
+**Security:** `WHERE md.team_id IN (:teamIds)` mandatory — team IDs from `DashboardContext` only.
+
+**Build phases:** 1) DTO + Query, PHPStan clean. 2) Controller, confirm via `debug:router`. 3) Template, daisyUI v5 classes verified. 4) Sidebar + 2 existing template fixes. 5) Tests; phpunit + phpstan + cs-fixer all green.
+
+---
+
+## TASK-002: Dashboard overview needs a clear "what to do next" + "are we healthy?" surface
+
+- Status: done
+- Shipped: 2026-05-23 (commit `d9c0962`)
+- Area: dashboard
+- Why: User explicitly says: *"the dashboard has no sense of next step, current status, or whether things are OK."* Today the overview shows stats and trends but doesn't tell the user, in one glance, whether their setup is healthy and what the single most-important next action is. New users especially get lost.
+- Acceptance:
+  - Top of `templates/dashboard/overview.html.twig` shows a single **prominent health summary** ("All domains healthy" / "1 domain needs attention" / "Setup not finished") with an unmistakable colour cue (success / warning / error).
+  - Directly below it: a **Next Action card** that picks the single highest-value step for this team right now (e.g. "Add your first domain", "Verify DNS for example.com", "Connect a mailbox to start receiving reports", "Review 3 critical alerts"). Card has a single primary CTA button.
+  - Logic for "next action" lives in a testable service (e.g. `NextActionResolver`) returning a typed result object — not template-inline logic.
+  - Empty / new-user state is graceful: instead of zeros and empty charts, show the onboarding next-action prominently and hide noisy empty widgets.
+  - 100% test coverage on the resolver, including all branches (no domains / unverified / no reports yet / has alerts / fully healthy).
+- Notes:
+
+### Architect plan (2026-05-22)
+
+**Architecture decision:** Pure-computation resolvers. They receive already-fetched data as method parameters (no query injection, no clock, no DB) — controller assembles inputs, resolver applies priority logic, returns typed result. Trivially unit-testable.
+
+**Files to create:**
+- `src/Value/NextAction.php` — backed enum: `AddDomain`, `VerifyDns`, `WaitForReports`, `ReviewAlerts`, `ConnectMailbox`, `AllHealthy`
+- `src/Results/NextActionResult.php` — `readonly final` DTO: `NextAction $actionKey`, `string $title`, `string $description`, `string $ctaLabel`, `string $ctaRoute`, `array<string,string> $ctaRouteParams`, `string $severity` (success|warning|error|info)
+- `src/Results/HealthSummaryResult.php` — `readonly final` DTO: `string $headline`, `string $severity` (success|warning|error), `int $domainsHealthyCount`, `int $domainsAttentionCount`, `int $domainsUnverifiedCount`, `int $domainsTotalCount`
+- `src/Services/NextActionResolver.php` — `readonly final` service, no deps. Method: `resolve(array $domains, ?DomainVerificationStatusResult $verificationStatus, ?DomainVerificationSeverity $verificationSeverity, int $unreadCriticalAlertCount, int $quarantineCount, bool $hasMailbox): NextActionResult`
+- `src/Services/HealthSummaryResolver.php` — `readonly final`, no deps. Method: `resolve(array $domains, ?DomainVerificationStatusResult $verificationStatus, ?DomainVerificationSeverity $verificationSeverity): HealthSummaryResult`
+- `tests/Unit/Services/NextActionResolverTest.php` — pure unit tests, construct DTOs directly, no fixtures
+- `tests/Unit/Services/HealthSummaryResolverTest.php` — pure unit tests
+
+**Files to modify:**
+- `src/Query/GetAlerts.php` — add `countUnreadCriticalForTeams(array $teamIds): int` with `WHERE team_id IN (:teamIds) AND is_read = false AND severity = 'critical'` (match existing `countUnreadForTeams` convention, including the `if ([] === $teamIds) return 0;` guard).
+- `src/Controller/Dashboard/DashboardOverviewController.php` — extract `$verificationSeverity` into a local var (currently inlined at line ~102), inject `NextActionResolver`, `HealthSummaryResolver`, `MailboxConnectionRepository`. Compute `$hasMailbox = [] !== $this->mailboxRepository->findByTeam($teamId);`, `$unreadCriticalAlertCount = $this->getAlerts->countUnreadCriticalForTeams($teamIds);`, then call both resolvers. Pass `nextAction` + `healthSummary` to render.
+- `templates/dashboard/overview.html.twig` — see template section below.
+- `tests/Integration/Controller/DashboardPagesTest.php` — add 8 integration test methods (see test section).
+
+**Priority chain (NextActionResolver, most urgent first — tie-breaks deterministic):**
+1. `count($domains) === 0` → `AddDomain` (severity error). Title: "Add your first domain". CTA: "Add domain" → `dashboard_domain_add`.
+2. `$verificationSeverity === Critical` → `VerifyDns` (severity error). Title: `sprintf('Verify DNS for %s', $verificationStatus->domainName)`. CTA: "Re-check DNS" → `dashboard_domain_reverify` with `{id: $verificationStatus->domainId}`. **Wins over alerts** — alerts are noise without working DMARC.
+3. `$verificationSeverity === Warning || $verificationSeverity === Info` → `WaitForReports` (severity warning). Title: "Waiting for your first report". CTA: "Check DNS setup" → `dashboard_domains` (use `dashboard_domains` until TASK-001's `dashboard_dns_health` is merged, then update to `dashboard_dns_health`).
+4. `$unreadCriticalAlertCount > 0` → `ReviewAlerts` (severity error). Title: `sprintf('Review %d critical alert%s', $n, $n === 1 ? '' : 's')`. CTA: "View alerts" → `dashboard_alerts`.
+5. `!$hasMailbox && every domain has totalReports === 0` → `ConnectMailbox` (severity info). Title: "Connect a mailbox". CTA: "Connect mailbox" → `dashboard_mailboxes_add`. Suppressed if ANY domain has reports (central inbox is working).
+6. Default → `AllHealthy` (severity success). Title: "Everything looks good". CTA: "View reports" → `dashboard_reports`.
+
+**HealthSummaryResolver logic:**
+- Domain is **healthy** when `passRate >= 90.0`; **attention** when `passRate < 90.0`.
+- `$domainsUnverifiedCount`: 1 if `$verificationSeverity === Critical && $verificationStatus->dmarcVerifiedAt === null`, else 0. (Per-domain unverified count for multi-domain teams is a v2 enhancement once TASK-001's `GetDnsHealthOverview` lands.)
+- Headlines:
+  - `domainsTotalCount === 0` → "Setup not finished" / error
+  - `domainsUnverifiedCount === domainsTotalCount && domainsTotalCount > 0` → "Setup not finished" / error
+  - `domainsAttentionCount === 0 && domainsUnverifiedCount === 0` → "All domains healthy" / success
+  - `domainsAttentionCount === 1` → "1 domain needs attention" / warning
+  - `domainsAttentionCount > 1` → `sprintf('%d domains need attention', $n)` / warning
+
+**Template change (`overview.html.twig`):**
+- At very top of `{% block content %}`: `{% set isEmptyState = (nextAction.actionKey.value == 'add_domain') %}`
+- Insert **Health Summary Banner** (rounded card, full-width header bar with `bg-success`/`bg-warning`/`bg-error`, headline + small counts row showing healthy/attention/unverified counts).
+- Insert **Next Action Card** (card with `border-success/30`/`border-warning/30`/`border-error/30`/`border-info/30` border, action icon in tinted square, "Next step" eyebrow, title, description, `btn btn-sm btn-success`/`btn-warning`/`btn-error`/`btn-info btn-outline` CTA linking to `path(nextAction.ctaRoute, nextAction.ctaRouteParams)`).
+- Wrap the existing verification banner (current lines 6–53), stats grid, trend chart, alerts block, and bottom two-column domain-health grid in `{% if not isEmptyState %}...{% endif %}`. This hides "0 domains / 0 reports / 0% pass rate" zero-state noise for new users.
+- Icons per action key (inline SVG, daisyUI v5 compatible): globe (add_domain), shield-check (verify_dns), mail (connect_mailbox), bell (review_alerts), clock (wait_for_reports), checkmark-circle (all_healthy).
+- daisyUI v5 only — no `dark:` prefix.
+
+**Unit tests (NextActionResolver) — 15 cases:**
+- `resolveAddDomainWhenNoDomains`
+- `resolveVerifyDnsWhenDmarcNeverVerified`
+- `resolveVerifyDnsWhenDmarcGoneMissing` (consecutiveFailures ≥ 3)
+- `resolveVerifyDnsWinsOverAlerts` (Critical + alerts > 0)
+- `resolveWaitForReportsWhenDmarcPublishedButNoReports` (Warning)
+- `resolveWaitForReportsWhenSettlingWindowActive` (Info)
+- `resolveWaitForReportsWinsOverConnectMailbox`
+- `resolveReviewAlertsWhenCriticalUnread`
+- `resolveConnectMailboxWhenNoMailboxAndNoReports` (every domain has totalReports = 0)
+- `resolveAllHealthyWhenDomainHasReports`
+- `resolveAllHealthyDoesNotRequireMailbox` (central inbox case)
+- `resolveVerifyDnsContainsDomainNameInTitle`
+- `resolveVerifyDnsCtaRouteParamsContainDomainId`
+- `resolveReviewAlertsCountAppearsInTitle` (n=3)
+- `resolveReviewAlertsUsesSingularForOne` (n=1, "Review 1 critical alert" — no trailing 's')
+
+**Unit tests (HealthSummaryResolver) — 8 cases:**
+- `resolveSetupNotFinishedWhenNoDomains`
+- `resolveSetupNotFinishedWhenDomainUnverified`
+- `resolveAllHealthyWhenSingleDomainAbove90`
+- `resolveAllHealthyWhenMultipleDomainsAllAbove90`
+- `resolveOneNeedsAttentionWhenPassRateBelow90`
+- `resolveTwoNeedAttentionPlural`
+- `resolveCountsAreCorrect` (3 domains: 2 healthy + 1 attention)
+- `resolveUnverifiedCountOne`
+
+**Integration tests (add to `DashboardPagesTest`):**
+- `overviewShowsHealthSummaryBanner` — happy path, expect "All domains healthy" in body
+- `overviewShowsNextActionCard` — happy path, expect ".card" and "Next step" eyebrow text
+- `overviewShowsAddDomainForNewUser` — `withoutDomain()` persona, expect "Add your first domain"
+- `overviewHidesStatsForNewUser` — `withoutDomain()` persona, expect no "DMARC Pass Rate" stat card visible
+- `overviewShowsVerifyDnsNextAction` — domain with `dmarcVerifiedAt = null`, expect "Verify DNS for"
+- `overviewShowsWaitForReportsNextAction` — domain verified ≥ 48h ago + no firstReportAt
+- `overviewShowsReviewAlertsNextAction` — persist `Alert` entity (severity=critical, is_read=false), expect "Review" + "critical alert"
+- `overviewAllHealthyShowsFullStats` — happy path, expect "DMARC Pass Rate" stat card present
+
+**Edge cases (explicit):**
+- One unverified domain + one healthy domain: `VerifyDns` wins; health summary shows "Setup not finished" (unverified count > 0).
+- DMARC working but central inbox delivering reports → `hasMailbox=false` but totalReports > 0 → `AllHealthy` (suppress ConnectMailbox).
+- `$hasMailbox` uses `MailboxConnectionRepository::findByTeam()` (existing). For v1 ORM hydration cost is fine — typical team has 0-1 mailboxes.
+- Existing verification banner stays inside `{% if not isEmptyState %}` — it has a POST form ("Re-check now") that complements the next-action card's GET link.
+
+**Build phases:** 1) Enum + DTOs, PHPStan green. 2) Two resolvers + unit tests, PHPStan + phpunit green. 3) `GetAlerts::countUnreadCriticalForTeams`. 4) Controller wiring. 5) Template + visual verify in browser. 6) Integration tests, 100% coverage gate. Final: phpunit, phpstan, cs-fixer all green; commit; push.
+
+---
+
+## TASK-003: Homepage hero misses the "what is this product" 5-second test
+
+- Status: done
+- Shipped: 2026-05-23 (commit `4e53b7d` + stale-price follow-up)
+
+### Architect plan (2026-05-23)
+
+**Scope:** ONLY the hero section (lines 31-53 of `templates/homepage/index.html.twig`) + `{% block meta_description %}` (line 4). Logo bar at lines 64-72 is TASK-004's territory. Sections 4+ below the fold stay untouched.
+
+**Chosen copy (Candidate C — preserves the brand voice from `docs/09-design-and-branding.md`):**
+- New kicker pill (above H1, replacing "Open source · AGPL-3.0"): `DMARC Monitoring · AI Insights · Open Source` with the green pulse dot pattern preserved.
+- H1: **unchanged** ("Your domain sends email every day. / Do you know who else is?") — the spoofing hook is on-brand and memorable. The 5-second-test fix is in the kicker + subhead, not the headline.
+- Subhead: `Sendvery automatically parses your <strong>DMARC reports</strong>, monitors your <strong>DNS health</strong> continuously, and explains everything with <strong>AI-powered insights</strong> — in plain English, not XML. Free for 1 domain. No DMARC PhD required.` Three `<strong>` spans bold-scan the three product capabilities.
+- Primary CTA: `Get started free` → `path('auth_login')` (was "Check your domain now" → scroll-to). The funnel CTA must be primary above the fold.
+- Secondary CTA: `Check your domain` → `#dns-checker` scroll-to. Preserves Stimulus action `{{ stimulus_action('scroll-to', 'scroll', 'click') }} data-scroll-to-target-value="dns-checker"` verbatim.
+- Trust badge row (below CTAs, replacing the mislabeled "View on GitHub" button): three inline `text-sm text-base-content/50` spans with green checkmark SVG: "Open source · AGPL-3.0", "1 domain free forever", "Self-hostable". Plus a tertiary text link "See the source →" pointing at `https://github.com/janmikes/sendvery` (`target="_blank" rel="noopener"`).
+- Hidden TODO comment above CTAs for future analytics wiring; `data-track="hero-cta-primary"` and `data-track="hero-cta-secondary"` attributes added now (forward-compatible stubs).
+
+**New meta description (replacing `Free DMARC, SPF, DKIM checker tools…From $5.99/mo.`):**
+`DMARC monitoring with AI-powered insights. Automatically parse DMARC reports, monitor DNS health, and get plain-English explanations. Open source, self-hostable. Free for 1 domain. From $4.99/mo.`
+
+(Lead with category, name the three things it does, anchor price to current Personal annual = $4.99/mo. `og:description` auto-inherits via base.html.twig.)
+
+**Visual structure:** keep centered single-column layout. The live DNS checker widget (Section 2) IS the product demo, so no right-column screenshot/illustration (would compete or duplicate). `<section class="relative overflow-hidden bg-gradient-to-br from-base-100 via-base-100 to-primary/5 py-24 lg:py-36">` wrapper preserved.
+
+**Files to modify:**
+- `templates/homepage/index.html.twig` — lines 4 (meta) + 31-53 (hero section). Nothing else.
+- `tests/Integration/Controller/MarketingPagesTest.php` — add 9 new assertions; existing `homepageContainsHeroSection` (line 44, H1 unchanged) stays as-is.
+
+**Tests to add (9):**
+- `heroContainsPrimaryCtaToAuthLogin` — `section:first a.btn-primary` href contains `/login`, text "Get started free"
+- `heroKickerContainsProductCategory` — kicker text contains "DMARC Monitoring" (copy-drift guard — the load-bearing addition)
+- `heroSubheadMentionsDmarc` — first `<p>` in hero contains "DMARC"
+- `heroSubheadMentionsDnsHealth` — contains "DNS health"
+- `heroSubheadMentionsAiInsights` — contains "AI-powered insights"
+- `metaDescriptionContainsCategoryAndPricing` — meta description contains "DMARC monitoring" + "$4.99"
+- `heroDoesNotContainOldInternalGitHubLink` — no `a[href*="about_open_source"]` in hero section (regression guard)
+- `heroTrustBadgesPresent` — hero body contains "Open source", "1 domain free forever", "Self-hostable"
+- `heroSeeTheSourceLinkPointsAtGithub` — anchor in hero with text "See the source" has href starting with `https://github.com/`
+
+**No controller change, no new components, no `HeroSection.html.twig` switch (homepage hero is inlined per existing pattern — leave that alone).**
+
+**Coordination:** TASK-004 (logo bar) will touch lines 64-72; this task touches only lines 1-53. Clean merge boundary.
+
+**Critical details:**
+- `path('auth_login')` confirmed = `/login` from TASK-005 work.
+- `og:description` auto-inherits from `meta_description` block (base.html.twig).
+- Existing Organization JSON-LD (lines 6-26) untouched — `homepageHasStructuredData` test continues to pass.
+- daisyUI v5 only, no `dark:` prefix.
+- Test assertion approach uses `->text()` on stripped HTML, so `<strong>` wrappers don't break "contains DMARC" checks.
+- Area: marketing
+- Why: The current homepage hero in `templates/homepage/index.html.twig` opens with *"Your domain sends email every day. Do you know who else is?"* — a clever spoofing hook, but a first-time visitor learns nothing about **what Sendvery actually is** above the fold. The product category ("DMARC monitoring with AI insights, open source") is buried 8+ sections down. Conversion-optimised SaaS homepages name the category in the H1 or sub-headline so the visitor decides in under 5 seconds whether they're in the right place.
+- Acceptance:
+  - H1 still has a strong hook, but the sub-headline (or a small kicker line above the H1) explicitly states the product category: something like *"Continuous DMARC, SPF & DKIM monitoring with AI-powered insights. Open source. From $4.99/mo."*
+  - The sub-headline mentions all three: **what** (DMARC / email auth monitoring), **how it's different** (AI insights + open source), and **price anchor** (from $X/mo) — at least the first two must be present in the first viewport on a 1280×800 desktop and on iPhone 14 width.
+  - The secondary CTA "View on GitHub" currently points to `path('about_open_source')` (an internal page), which is misleading — change it to either the real `https://github.com/janmikes/sendvery` link **or** rename it to "See the source" / "Learn how" so the label matches its destination.
+  - The "Open source · AGPL-3.0" pill stays as a tertiary trust signal, but is no longer the only category cue.
+  - No regression to existing structured data, OG tags, or the in-page scroll-to-checker behaviour.
+- Notes:
+
+---
+
+## TASK-004: Homepage "Trusted by the founder's own companies" logo bar is a conversion killer as written
+
+- Status: proposed
+- Area: marketing
+- Why: The current logo strip in section 3 of the homepage labels itself literally as *"Trusted by the founder's own companies"* and then renders three text strings at 40% opacity (TheDevs.cz, SpeedPuzzling.com, FajneSklady.cz). The honesty is admirable but the framing tells a visitor "we have no real customers" which is the opposite of the trust signal the section is supposed to deliver. There are also no actual logo images — just opacity-40 text. Either commit to real visual logos OR replace the section with a more compelling trust signal until real customer logos exist.
+- Acceptance:
+  - Either:
+    - **(A)** Replace text strings with real SVG/PNG logos for the three founder-owned companies, drop the apologetic copy, and reframe the heading neutrally — e.g. *"Already running on real production domains"* — with each logo linking to the corresponding company site (and a small *"Built by the founder of these"* footnote so it's still honest); **or**
+    - **(B)** Replace the whole section with a "By the numbers" or "Why developers choose Sendvery" trust block: live counters (X domains protected, Y DMARC reports parsed last month, Z GitHub stars), or a single confident founder quote/photo block with the "I was deleting my own DMARC reports" origin story.
+  - Whichever variant ships, the section reads as a *positive* trust signal, not a disclosure of "we have no customers yet".
+  - Mobile layout works (single column or 2-col grid for logos, not a horizontal strip that overflows).
+- Notes:
+
+---
+
+## TASK-005: Pricing page is a thin wrapper around the pricing component — no comparison table, no FAQ, no objection-handling
+
+- Status: done
+- Shipped: 2026-05-23 (commit `f123e1d`)
+- Area: marketing
+- Why: `templates/about/pricing.html.twig` renders the `<twig:PricingTable />` and a one-line Enterprise blurb — that's the entire page. There is no plan-feature comparison matrix, no pricing-specific FAQ, no "what's included in every plan", no annual-vs-monthly explainer, no refund/cancellation policy mention. Visitors who clicked "Pricing" are the highest-intent traffic and we're giving them the least content. Competitors (EasyDMARC, dmarcian) all have full comparison tables + 8-12 question FAQs on their pricing pages — they out-rank us for "dmarc monitoring pricing" partly because of this content depth.
+- Acceptance:
+  - Add a **plan-comparison table** below the pricing cards (rows: Domains, Reports/mo, Retention, Seats, DMARC + DNS, Real-time alerts, Blacklist, Sender inventory, Email HTML, API + webhooks, White-label PDF, AI Insights, Support). The data already lives in `docs/05-monetization.md` — port it. Render as a responsive HTML table that collapses to per-tier cards on mobile.
+  - Add a **pricing-specific FAQ** with at least 8 questions covering: *Can I cancel anytime?* (link cancel-at-period-end policy), *Do you offer refunds?* (no, per memory `refund-and-cancellation-policy`), *Can I switch plans later?*, *What happens if I exceed limits?* (freeze, never delete — per memory `never-delete-user-data`), *Do you offer annual discounts?*, *Is there a free trial?*, *What payment methods do you accept?*, *Do you charge VAT?* (link to per-doc-05 sticker policy), *Why is self-hosting free?*, *How does the AI add-on work?*.
+  - Add a small "**Why annual?**" callout explaining the "2 months free" math in plain English, since the savings story is the actual marketing headline (per `docs/05-monetization.md`).
+  - Page must include a final CTA section with two routes ("Start free" → auth login, "Talk to us" → mailto Enterprise) — currently the page ends abruptly after the Enterprise blurb.
+  - Update `<meta description>` to mention the annual savings ($12 / $48 / $120 per year) — the current copy says "from $0/mo" which buries the lede.
+- Notes:
+
+### Architect plan (2026-05-23)
+
+**Strategy:** All-static, all-template. No controller change, no PHP data class. `ai_available` is already a Twig global from `PricingFlagsExtension`. Comparison values are hard-coded matching `docs/05-monetization.md`.
+
+**TASK-012 coordination:** `templates/components/PricingTable.html.twig` is **OFF LIMITS** (TASK-012 owns the Free-CTA change there). All work lives in `templates/about/pricing.html.twig` + two new components.
+
+**Files to create:**
+- `templates/components/PricingComparisonTable.html.twig` — feature matrix
+- `templates/components/PricingFaq.html.twig` — 10-question FAQ
+- `tests/Integration/Controller/PricingPageTest.php` — 11 integration tests
+
+**Files to modify:**
+- `templates/about/pricing.html.twig` — restructure: hero header, `<twig:PricingTable />`, "Why annual?" callout, `<twig:PricingComparisonTable />`, `<twig:PricingFaq />`, final CTA section. Update `meta_description` block to lead with annual savings ($12 / $48 / $120 / yr).
+
+**Tier names (match `PricingTable.html.twig` exactly):** Free, Personal, Pro, Business. Enterprise contact is `jan.mikes@sendvery.com` (confirmed at `PricingTable.html.twig:275`).
+
+**Comparison matrix (from `docs/05-monetization.md`):**
+
+| Feature | Free | Personal | Pro | Business |
+|---|---|---|---|---|
+| Domains | 1 | 5 | 20 | 50 |
+| Reports/mo | 100 | 1,000 | 10,000 | 50,000 |
+| Retention | 30 days | 1 year | 2 years | Unlimited |
+| Seats | 1 | 1 | 3 | 10 |
+| DMARC + DNS | ✓ | ✓ | ✓ | ✓ |
+| Real-time alerts | — | ✓ | ✓ | ✓ |
+| Blacklist | — | ✓ | ✓ | ✓ |
+| Sender inventory | — | ✓ | ✓ | ✓ |
+| Email HTML | — | ✓ | ✓ | ✓ |
+| API + webhooks | — | — | ✓ | ✓ |
+| White-label PDF | — | — | — | ✓ |
+| AI Insights (when `ai_available`) | Contact us | ✓ 50/mo | ✓ 200/mo | ✓ 500/mo |
+| Support | Community | Email | Priority | Priority + SLA |
+
+When `ai_available` is false, all paid AI cells render `—` and a "coming soon" badge appears next to the row label. Support values derived from the "What you pay for" prose — **flag for product review**.
+
+**Annual savings (exact):** Personal $12/yr ($4.99 vs $5.99), Pro $48/yr ($19.99 vs $23.99), Business $120/yr ($49.99 vs $59.99).
+
+**`PricingComparisonTable.html.twig` markup:**
+- Desktop variant (`hidden md:block`): `<table class="table table-zebra w-full">`, `<tbody>` grouped by separator rows with `bg-base-300/20` and uppercase tracking-wide labels: Limits / Features / Advanced / Support. Boolean checks use inline SVG checkmark (`text-success`), no-values use `<span class="text-base-content/30">—</span>`.
+- Mobile variant (`md:hidden space-y-6`): four stacked `card bg-base-200/50 border border-base-300` cards, one per tier; `card-body p-4`, header `card-title text-base`, body is a `<dl>` with `dt`/`dd` flex-between rows.
+
+**`PricingFaq.html.twig` markup:**
+- `<div class="space-y-3 max-w-3xl mx-auto">` wrapper
+- Each entry: `<div class="collapse collapse-plus bg-base-200/50 border border-base-300"><input type="checkbox" name="pricing-faq-N"><div class="collapse-title font-semibold">Q</div><div class="collapse-content text-base-content/70 text-sm"><p>A</p></div></div>`
+- **Checkbox NOT radio** — users compare multiple answers; differs from `FaqAccordion.html.twig` which is radio-based.
+- 10 questions (full answer copy per architect plan in agent output; key callouts):
+  1. Cancel anytime? — period-end cancel, no immediate cutoff (per memory `refund-and-cancellation-policy`)
+  2. Refunds? — no self-serve refunds, manual via Stripe only
+  3. Switch plans later? — yes, prorated on upgrade, next-renewal on downgrade
+  4. Exceed limits? — freeze ingestion, never delete (per memory `never-delete-user-data`)
+  5. Annual discounts? — 2 months free
+  6. Free trial? — no separate trial, Free plan is permanent
+  7. Payment methods? — cards via Stripe; Apple/Google Pay where available; no invoicing on self-serve
+  8. VAT? — currently no VAT (OSVČ below threshold); Stripe Tax will handle when needed
+  9. Self-host free? — AGPL-3.0; hosted plans sell managed infra not a license
+  10. AI Insights? — Claude-backed; quotas 50/200/500; phrasing deliberately vague re. rollout so it doesn't age badly (per memory `ai-stub-first-launch-posture`)
+
+**"Why annual?" callout** — inline in `pricing.html.twig`, between the `<twig:PricingTable />` and the comparison table. `alert bg-success/10 border border-success/20 text-sm` daisyUI v5 alert with a calendar SVG, heading "Annual billing = 2 months free, every year", body listing all three savings figures with separators.
+
+**Final CTA section** — `<twig:SectionContainer bgClass="bg-base-200/30">` with headline "Ready to protect your domain?", body "Start free with 1 domain and no credit card. Upgrade when you need more — cancel anytime.", two buttons: "Start free" (`btn btn-primary btn-lg` → `path('auth_login')`) and "Talk to us" (`btn btn-ghost btn-lg` → `mailto:jan.mikes@sendvery.com?subject=Enterprise%20inquiry`), plus fine print enterprise mailto.
+
+**Page structure (overwriting current 19-line `pricing.html.twig`):**
+1. `<twig:SectionContainer>`: hero h1 + subtitle, `<twig:PricingTable />`, "Why annual?" callout
+2. `<twig:SectionContainer bgClass="bg-base-200/20">`: "Compare all features" h2, `<twig:PricingComparisonTable />`
+3. `<twig:SectionContainer>`: "Pricing FAQ" h2, `<twig:PricingFaq />`
+4. `<twig:SectionContainer bgClass="bg-base-200/30">`: Final CTA
+
+**Important:** Do NOT use `{% block content %}{% endblock %}` *inside* `<twig:SectionContainer>` (per CLAUDE.md TwigPreLexer warning). Content auto-maps to the default block.
+
+**Meta description (before → after):**
+- Before: `Sendvery pricing: self-host free forever. Hosted plans from $0/mo. 5 domains for $5.99/mo. AI insights add-on $3.99/mo. Simple, transparent pricing.`
+- After: `Sendvery pricing: Free forever for 1 domain. Personal from $4.99/mo (save $12/yr on annual). Pro from $19.99/mo (save $48/yr). Business from $49.99/mo (save $120/yr). Self-host free, always.`
+
+**Tests (`PricingPageTest.php`, 11 methods, all GET `/pricing` anonymous):**
+1. `pageReturns200`
+2. `comparisonTableDesktopVariantIsPresent` — `.table.table-zebra` count ≥ 1
+3. `comparisonTableMobileVariantIsPresent` — body contains `md:hidden` adjacent to a tier name
+4. `comparisonTableContainsAllTierNames` (Free, Personal, Pro, Business each ≥ 2x)
+5. `comparisonTableContainsAllFeatureRows` (13 row labels)
+6. `faqSectionIsPresent` — `.collapse-plus` count ≥ 8
+7. `faqContainsAllExpectedQuestions` (10 substring checks)
+8. `startFreeCtaPointsToAuthLogin` — `a[href*="/login"]` count ≥ 1 + CTA text "Start free"
+9. `talkToUsCtaIsMailtoLink` — `a[href^="mailto:jan.mikes@sendvery.com"]` count ≥ 1
+10. `metaDescriptionContainsAnnualSavings` — meta description contains `$12`, `$48`, `$120`
+11. `whyAnnualCalloutIsPresent` — body contains "2 months free" and "Annual billing"
+
+**Controller change:** **None.**
+
+**Build phases:** 1) PricingComparisonTable. 2) PricingFaq. 3) pricing.html.twig overhaul + meta. 4) Tests. 5) phpunit + phpstan + cs-fixer green. 6) Browser smoke-test `/pricing` (desktop + narrow viewport for mobile cards, FAQ open/close, CTA links).
+
+---
+
+## TASK-006: Free checker tools don't convert — the post-result CTA is the only conversion hook and it's weak on cold traffic
+
+- Status: proposed
+- Area: marketing
+- Why: A user who lands on `/tools/spf-checker` from Google has very high intent ("my SPF is broken right now"). Today the checker form shows results, then `_StartMonitoringCta.html.twig` renders a single "Start monitoring example.com →" button that goes straight to magic-link login. That's a big leap from "I just looked up a record" to "give me your email and account". There is **no soft conversion** (email me this scan, schedule re-checks, share results) and no email capture below the result besides the global beta-page link. We're leaving a lot of high-intent traffic on the table because the only CTA is "create an account".
+- Acceptance:
+  - On every tool result (SPF, DKIM, DMARC, MX, email-auth, blacklist, domain-health), add a **soft-conversion micro-form** directly under the result card: *"Email me this report + alerts if anything changes"* — a single email field + button that creates a lightweight `BetaSignup` row tagged with the scanned domain and tool, and triggers the existing beta-confirmation email flow, then collapses into a "Check your inbox" confirmation.
+  - The hard-CTA "Start monitoring" stays where it is (this adds a parallel softer option, doesn't replace it).
+  - The micro-form is a single Twig component reusable across all tool results (e.g. `components/MonitorEmailMeMicro.html.twig`), takes `domain` and `source` ("spf-result" / "dkim-result" / etc.) as props, and posts to a Turbo-frame-capable endpoint so the page doesn't reload.
+  - Source tracking lands in `BetaSignup.source` so we can A/B which tool drives the most signups.
+  - 100% test coverage on the new submission endpoint, including the dedup path (existing email re-submits same domain → idempotent).
+- Notes:
+
+---
+
+## TASK-007: Knowledge base has only 3 articles; categories look empty and undermine the SEO-first GTM
+
+- Status: proposed
+- Area: marketing
+- Why: `/learn` lists exactly 3 articles, hard-coded in `KnowledgeBaseIndexController::GUIDES`: *What is DMARC*, *SPF Record Guide*, *Email Authentication Explained*. The category grid renders, but with only two articles in "Email Authentication Basics" and one in "DNS & Records", each category looks like a placeholder. There is no DKIM article (despite a DKIM tool page), no MX article, no blacklist article, no "DMARC p=none → p=quarantine → p=reject migration guide", no Gmail/Yahoo 2024 sender-requirements article (huge organic search demand). For an SEO-first product whose go-to-market is *"rank for long-tail email-auth keywords"* (per `docs/00-project-overview.md`), this is the biggest growth lever and the cheapest to fix.
+- Acceptance:
+  - Add at least **4 new evergreen articles** to `templates/knowledge_base/articles/` and to `KnowledgeBaseIndexController::GUIDES`:
+    1. *"What is DKIM and How Does It Work?"* — pairs with `/tools/dkim-checker`
+    2. *"Gmail & Yahoo Bulk Sender Requirements (2024+): What You Need to Comply"* — high-volume search keyword
+    3. *"How to Move from p=none to p=reject: A Step-by-Step DMARC Migration Guide"* — solves the #1 DMARC user pain
+    4. *"MX Records Explained: How Email Routing Works"* — pairs with `/tools/mx-checker`
+  - Each article follows the existing `_article_layout.html.twig` shell: TOC, related-tools sidebar, structured data, related guides at the bottom, beta-signup CTA at the end.
+  - Each article is at minimum ~1500 words (the existing 3 articles are 162–243 lines of Twig markup — match or exceed that).
+  - Each new article has a unique `<title>` and `<meta description>` targeting the primary keyword from `docs/09-design-and-branding.md`.
+  - All 4 are added to `SitemapController::ROUTES` with appropriate priority/changefreq.
+  - The KB index page collapses to single-column-per-category gracefully when a category has only 1 article (current grid looks broken in that case).
+- Notes:
+
+---
+
+## TASK-008: Static default OG image gives every page identical social-share previews — wasted distribution
+
+- Status: proposed
+- Area: marketing
+- Why: `templates/base.html.twig` sets `og:image` to a single static `images/og-default.webp` for every page. When a knowledge-base article, a tool page, or a public domain-health report (`/health/{hash}`, see `PublicDomainHealthController`) is shared on LinkedIn, Slack, Twitter, or quoted in a blog post, the preview card is generic Sendvery branding instead of the article title / tool name / actual domain grade. Public domain-health reports in particular are designed to be shareable URLs — and the current OG image makes them look like generic homepage links. Per-page OG images dramatically increase click-through from social.
+- Acceptance:
+  - Implement a small **dynamic OG image generator route** (e.g. `/og/{type}/{slug}` rendering a 1200×630 PNG via PHP GD or Imagine, cached on disk) that produces a branded card for:
+    - Each tool page (title + Sendvery logo + tool-category badge)
+    - Each knowledge-base article (article title + category + brand)
+    - Each public domain-health share (`/health/{hash}`) — domain name + big A–F grade in the brand colour + score
+  - `templates/base.html.twig` already exposes an `{% block og_image %}` override — each of the above templates overrides it to point at the generated image URL.
+  - Public domain-health reports become high-value share artifacts: tweet a `/health/{hash}` URL and the unfurled card shows the grade.
+  - The generator route is testable (returns 200, correct content type, identical bytes for identical inputs); 100% test coverage for the route + image-cache logic.
+  - Fallback: if generation fails, `og:image` falls back to the existing static `og-default.webp` — no broken previews.
+- Notes:
+
+---
+
+## TASK-009: No public trust pages (Privacy, Security, Status) — a real blocker for paid signup
+
+- Status: proposed
+- Area: marketing
+- Why: Sendvery asks visitors to entrust it with IMAP credentials and email-authentication data. The marketing surface has **no** privacy policy, no security overview, no incident/uptime status page, no data-processing / sub-processor list, no GDPR statement. The footer (`templates/components/Footer.html.twig`) has only Free Tools / Product / Connect columns — no "Legal" or "Trust" column. For Personas 2 and 3 (Marketing Maria, Agency Alex) and any EU customer, this is a hard signup blocker — most procurement processes require at minimum a privacy-policy URL before signing up. The "all data encrypted at rest, IMAP credentials AES-256-GCM encrypted" claim in the homepage credibility section is great but unbacked by any policy page.
+- Acceptance:
+  - Add three new public routes + Twig templates under `templates/legal/` (or `templates/trust/`):
+    - `/legal/privacy` — Privacy Policy: what we collect, why, retention, sub-processors (Stripe, Anthropic, Sentry, Hetzner), GDPR rights, contact, last-updated date.
+    - `/legal/security` — Security overview: AES-256-GCM at rest, TLS in transit, magic-link auth (no password storage), how IMAP credentials are stored and rotated, where data lives (Hetzner/EU region), responsible-disclosure / `security@sendvery.com` contact.
+    - `/status` — Status / Uptime: either embed a third-party status (BetterStack/StatusPage) widget, or render a simple "Operational" panel with last-24h uptime per subsystem (web app, ingestion workers, DMARC parser, AI service). Data-driving from a JSON file written by ops cron is acceptable as a v1.
+  - Each page extends `marketing_layout.html.twig`, has its own SEO title/meta, structured data where appropriate (Organization for security, etc.), and renders a `Last updated: YYYY-MM-DD` line.
+  - Footer (`templates/components/Footer.html.twig`) gets a new fourth column "Trust" linking to Privacy / Security / Status / Open Source / Refund Policy.
+  - The new routes are added to `SitemapController::ROUTES` at priority 0.6.
+  - 100% test coverage on the new controllers (smoke test that each returns 200 and contains the page heading).
+- Notes:
+
+---
+
+## TASK-010: "What is Sendvery" page is a wall of text — no visuals, no product screenshot, no clear conversion path
+
+- Status: proposed
+- Area: marketing
+- Why: `templates/about/what-is-sendvery.html.twig` is currently a single 30-line `<div class="prose">` block: paragraph, founder quote, persona list, open-source paragraph. No screenshot, no diagram, no real photo of the founder, no "what does the product actually look like", no comparison vs alternatives, no inline CTAs other than a "Check your domain now" button at the end. According to `docs/09-design-and-branding.md`, this page is supposed to be a *"product manifesto"* — instead it reads like a Wikipedia stub. Visitors arriving here from the footer or nav are specifically trying to understand the product before signing up — this is the most influential page for high-consideration buyers and currently fails to convert them.
+- Acceptance:
+  - Add an actual **product screenshot** (or annotated mockup) of the dashboard overview — visitors should see what they're signing up for.
+  - Replace the persona bullet list with a **3-card persona section** (Developer / Small Business / Agency) mirroring `docs/01-vision-and-problem.md` — each card has icon, persona name, "what they need", and a one-line outcome.
+  - Add a **"How is Sendvery different?"** mini comparison panel: side-by-side bullets vs MXToolbox (free, no monitoring), vs dmarcian (expensive, no AI), vs self-hosted PowerDMARC (complex to deploy), vs Sendvery (monitoring + AI + open source + $5.99). Three competitors max — keep it scannable.
+  - Add a **"Built in the open"** strip with a real GitHub commit graph or a "Last commit X days ago" badge — proves the project is actively maintained.
+  - Add at least two **inline mid-page CTAs**, not just the bottom one (after the problem section, after the personas).
+  - Founder quote becomes a proper blockquote with photo + name + role + link — currently it's plain inline text in quotation marks.
+  - Page still passes Lighthouse perf > 90 on mobile.
+- Notes:
+
+---
+
+## TASK-011: `/open-source` page underplays self-host as a value prop — and currently links to a repo that isn't public yet
+
+- Status: proposed
+- Area: marketing
+- Why: `templates/about/open-source.html.twig` has four short paragraphs and a docker-compose snippet. It doesn't show **how trivial** self-hosting is (one-command quickstart), doesn't show the GitHub repo's star count, doesn't link to docs, doesn't show what running Sendvery locally looks like, and doesn't tie back to the hosted plans ("self-host = forever free, hosted = managed infra"). Worse, the page links `https://github.com/janmikes/sendvery` but per `docs/03-features-roadmap.md` Phase 2 the repo is still private — visitors clicking through hit a 404, which is worse than not linking at all. The "free forever if you self-host" hook is a top-3 differentiator in `docs/05-monetization.md`; the page that lives at that URL should be the strongest argument for the product, not the weakest.
+- Acceptance:
+  - Add a **live GitHub stats strip** at the top (star count, fork count, last commit, license badge) — can be a static cached snapshot if hitting the GitHub API on every render is too much, but it must be real numbers, not "10k+ developers".
+  - Add a **"Self-host in 60 seconds" quickstart**: 3 numbered steps with copyable code blocks (clone / configure `.env` / `docker compose up`), each step with a one-line "what this does" explanation.
+  - Add a **"Self-host vs Hosted" comparison table**: rows like *Cost, Time to set up, Auto-updates, Backups, AI key, Support* — making the hosted-tier value prop legible to a technical user who could in principle self-host.
+  - Expand the **"Why AGPL?"** call-out (current page has it but it's three sentences) — explain in plain language what users / contributors can and cannot do; reassures companies whose legal team will read this page.
+  - Add a **"What's in the repo?"** section: brief tour of `src/`, `docs/`, `tests/` — demonstrates code quality and 100% test coverage as a trust signal.
+  - The "View on GitHub" button is gated: if the repo is not yet public (per Phase 2 status in `docs/03-features-roadmap.md`), the button shows *"Coming soon — get notified when we open the repo"* and captures email via a small form. When the repo flips public, change one constant and the button works normally. Do not link to a 404.
+  - End-of-page CTA: two buttons side-by-side: "Self-host (free forever)" → quickstart anchor, "Try hosted (no setup)" → auth login.
+- Notes:
+
+---
+
+## TASK-012: Post-Stripe cutover, the Free-tier CTA still funnels users to the beta waitlist instead of into the signup funnel
+
+- Status: done
+- Shipped: 2026-05-23 (commit `f1d34b3`)
+- Decision (orchestrator, 2026-05-23): **Retire `/beta`** (Option A) — simpler, removes contradictory copy, no new email-list infra to maintain. Repurposing would require new "Get product updates" copy + opt-in semantics that aren't strategically valuable yet post-launch.
+
+### Architect plan (2026-05-23)
+
+**Strategy:** `/beta` becomes a 301 → home. Token-based confirmation links sent before retirement still resolve (controller preserved; final redirect → `auth_login` with success flash). `BetaSignup` entity + table + repository stay in place (existing real users — see "never delete user data" memory).
+
+**Files to modify:**
+- `src/Controller/BetaSignupController.php` — strip all deps, `__invoke()` returns `$this->redirectToRoute('home', [], 301)`. Route stays `GET|POST /beta`.
+- `src/Controller/ConfirmBetaSignupController.php` — keep token lookup + `confirm()` logic; replace final `render('beta/confirmed.html.twig')` with `$this->addFlash('success', 'Your email is confirmed. Sign in to get started with Sendvery.'); return $this->redirectToRoute('auth_login');` (use 302 — token endpoint is dynamic, not a retired stable URL).
+- `src/Controller/SitemapController.php` — remove the `['route' => 'beta_signup', ...]` entry from the `ROUTES` constant.
+- `templates/components/PricingTable.html.twig` line 82 — change `path('beta_signup')` → `path('auth_login')`; label "Get started" → "Get started free".
+- `templates/knowledge_base/_article_layout.html.twig` lines 116-131 — replace lazy turbo-frame beta section with a static `<section>` CTA: heading "Start monitoring your email authentication", subhead "Automated DMARC report parsing, DNS monitoring, and AI-powered insights. Free for 1 domain, no credit card required.", primary button "Get started free" → `path('auth_login')`, fine print "Free plan • No credit card • 2-minute setup".
+- `templates/knowledge_base/index.html.twig` lines 67-82 — same replacement, heading "Ready to put this knowledge into action?" preserved.
+- `templates/tools/spf-checker.html.twig` line 150, `dkim-checker.html.twig` line 124, `dmarc-checker.html.twig` line 124, `email-auth-checker.html.twig` line 97, `dns-monitoring.html.twig` line 67 — each contains "Join the Sendvery beta" copy pointing at `path('home')#pricing`. Replace anchor `href` with `path('auth_login')` and copy with "Start monitoring free" / "Get started free" (variation per architect's plan).
+
+**Files to delete:**
+- `templates/beta/signup.html.twig`
+- `templates/beta/_form.html.twig`
+- `templates/beta/confirmed.html.twig`
+
+**Files to leave untouched:**
+- `src/Entity/BetaSignup.php`, `src/Repository/BetaSignupRepository.php` (existing user data; still consumed by ConfirmBetaSignupController).
+- `src/Message/RegisterBetaSignup.php`, `src/MessageHandler/*` for it, `src/FormData/BetaSignupData.php`, `src/Events/BetaSignupCreated.php`, `templates/emails/beta_confirmation.html.twig` — become unreachable but valid; PHPStan-clean. Separate cleanup PR later if desired.
+- `templates/dashboard/admin_invite.html.twig` — admin-only, out of scope.
+
+**Tests:**
+- **Replace** `tests/Integration/Controller/BetaSignupTest.php` entirely with: `betaRouteRedirectsToHomePermanently` (301 → `/`), `betaRoutePostAlsoRedirects` (301), `confirmWithValidTokenRedirectsToLogin` (302 → `/login`), `confirmWithValidTokenSetsConfirmedAt`, `confirmWithValidTokenShowsFlashMessage` (follow redirects; assert "confirmed" text), `confirmAlreadyConfirmedRedirectsToLogin` (preserves original `confirmedAt`), `confirmWithInvalidTokenReturns404`.
+- `tests/Integration/Controller/PricingTableTest.php` — add `testFreeTierCtaPointsToAuthLogin` and `testNoBetaHrefOnPricingPage`.
+- `tests/Integration/Controller/SeoTest.php` — remove the `/beta` assertion in `sitemapContainsAllPublicRoutes`; add new `sitemapDoesNotContainBeta`.
+- `tests/Integration/Controller/MarketingPagesTest.php` — drop `yield 'beta' => ['/beta']` from the `publicRoutes` provider. `RouteSmokeTest` still auto-covers the 301.
+- `tests/Integration/Controller/KnowledgeBaseTest.php` — add: `indexDoesNotEmbedBetaForm`, `indexHasAuthLoginCta`, `guideDoesNotEmbedBetaForm` (data-provider over guide slugs), `guideHasAuthLoginCta`.
+
+**Critical details:**
+- Verify `auth_login` URL via `docker compose exec app bin/console debug:router auth_login` before locking in `'/login'` test assertions. If it resolves differently, update the assertions.
+- HTTP code: `/beta` = **301** (URL retired, transfer PageRank). `/beta/confirm/{token}` post-confirm = **302** (dynamic endpoint, conventional UX post-action redirect).
+- KB pages currently use `<turbo-frame src="...beta..." loading="lazy">`. After retirement the frame would lazy-load the 301-redirected homepage inside itself — broken UX. Replacing with plain HTML eliminates the frame request entirely.
+- `confirmWithValidTokenShowsFlashMessage` depends on the login template rendering flashes. If it doesn't, either fix the login template or drop the assertion — the redirect itself is the load-bearing behavior.
+
+**Audit (after this PR every public CTA points at `auth_login` or is unauthenticated context-specific):**
+- Homepage final CTA — `auth_login` ✓ already.
+- Pricing Free card — fixed in this PR.
+- KB index + article bottom CTA — fixed.
+- Tool result CTAs (`_StartMonitoringCta`) — already correct.
+- Tool body "Join the beta" copy — fixed in 5 files.
+- `/beta` route — 301 redirects to home.
+
+**Build sequence:** 1) Controllers (3 files). 2) Templates (1 PricingTable + 2 KB + 5 tool pages, delete 3 beta templates). 3) Tests. 4) `phpunit` / `phpstan` / `cs-fixer` green; commit; push. Smoke-test in browser: `/pricing`, `/learn`, `/learn/<slug>`, `/tools/spf-checker`, `/beta` (expect 301).
+- Area: marketing
+- Why: Per `docs/05-monetization.md` and the most recent commit history (`Pricing: post-cutover cleanup`, `Pricing: drop remaining fake-door artifacts`), Stripe is live and the fake-door `/request-access` flow was removed on 2026-05-22. But the **Free** plan card in `templates/components/PricingTable.html.twig` (line ~82) still has its CTA pointing at `path('beta_signup')` — i.e. a visitor who picks the Free plan goes to the waitlist form instead of into the actual signup / auth flow. Similarly, `templates/beta/signup.html.twig` is still the destination for `/beta` and still markets *"Be among the first to try Sendvery when it launches"* as if the product hadn't launched. The homepage final CTA *correctly* sends users to `path('auth_login')`. This inconsistency reads as a half-done launch and will measurably suppress conversion: highest-intent visitors (the ones who click a pricing plan) hit a "join the waitlist" form instead of a real signup. Knowledge-base article CTAs also still lazy-load this beta form.
+- Acceptance:
+  - The Free-tier CTA in `PricingTable.html.twig` points to `path('auth_login')` (or wherever the real Free-tier signup lives), matching the paid tiers' pattern of going directly into the funnel.
+  - Decide and document the post-launch role of `/beta`:
+    - **Either** retire the `beta_signup` route entirely (redirect `/beta` → home or pricing, remove from sitemap, drop the lazy-loaded turbo-frame includes in `templates/knowledge_base/_article_layout.html.twig` and `templates/knowledge_base/index.html.twig`); **or**
+    - Repurpose `/beta` as a generic **"Get product updates"** email-list opt-in with new copy that does **not** imply the product is unreleased.
+  - Whichever route is chosen, the copy and CTA labels across the public surface (homepage final CTA, KB article CTAs, KB index CTA, tool-page bottom CTA) are consistent — they all say either "Get started free" → auth login OR "Subscribe to updates" → email opt-in, never both "Get started" and "Join the beta waitlist" within the same visit.
+  - 100% test coverage on whatever controller change ships (retirement → redirect test; repurpose → updated form test).
+- Notes:
+
+---
+
+## TASK-013: Domain detail page: surface domain-specific DNS health inline instead of bouncing to public tool
+
+- Status: done
+- Shipped: 2026-05-23 (commits `a8fcac3` impl + `24e6c8e` post-review tests)
+- Area: domains
+- Why: `templates/dashboard/domain_detail.html.twig` (lines 32-34) has a "DNS Health Check" header button that links to `tools_domain_health?domain=...` — the **public** anonymous lookup tool. The user already added this domain; they shouldn't be punted back to a marketing form. The domain detail page should answer "is SPF/DKIM/DMARC currently OK for this domain?" without leaving the dashboard.
+- Acceptance:
+  - The "DNS Health Check" button on `domain_detail.html.twig` is replaced (or augmented) with a link to the in-app `dashboard_domain_health` route (already used elsewhere — see `templates/dashboard/domain_health.html.twig`).
+  - Domain header gains an at-a-glance health row: small badges for SPF / DKIM / DMARC / MX with valid / invalid / unknown states, sourced from the latest `DnsCheckResult` rows for that domain (no extra DNS queries on page load — read from `dns_check_result` table).
+  - Clicking any badge deep-links to the relevant section of `dashboard_domain_health` / `dashboard_domain_dns_history`.
+  - The page also drops the redundant `tools_domain_health` button entirely — the same data is already reachable via "DNS History" + the new in-app DNS Health page.
+  - 100% test coverage on the new query (`GetLatestDnsHealthBadgesForDomain` or similar) and the controller change.
+- Notes:
+
+### Architect plan (2026-05-22)
+
+**Scope narrowing:** TASK-001 already replaced the "DNS Health Check" header button (`domain_detail.html.twig` line ~32) with a link to `dashboard_domain_health`. Remaining scope is **the at-a-glance SPF/DKIM/DMARC/MX badge row in the domain header** plus deep-link anchors on the health page.
+
+**Data decision (Option A):** Add `forDomain(string $domainId, list<string> $teamIds): ?DnsHealthOverviewResult` to existing `GetDnsHealthOverview` query (TASK-001). Same SQL as `forTeams()` but with `WHERE md.id = :domainId AND md.team_id IN (:teamIds)` (team-scope guard mandatory). Same DTO — no new result class. The `monitored_domain.{spf,dkim,dmarc}_verified_at` columns are the authoritative real-time signal for SPF/DKIM/DMARC badges; `latestMxScore` from the lateral-joined snapshot drives the MX badge.
+
+**Why not Option B (new query/DTO sourced from `dns_check_result.is_valid`):** The nightly cron writes both `dns_check_result` rows and updates `verified_at`, so they encode the same answer. `verified_at` is the field the rest of the app already trusts. Option B would duplicate SQL + DTO with no real-world signal difference.
+
+**Files to modify (no new files, except the test):**
+- `src/Query/GetDnsHealthOverview.php` — add `forDomain()` method.
+- `src/Controller/Dashboard/ShowDomainDetailController.php` — inject `GetDnsHealthOverview`, call `$this->getDnsHealthOverview->forDomain($id, $teamIds)`, pass `dnsHealth` to render.
+- `templates/dashboard/domain_detail.html.twig` — insert badge row between lines 23-24 (under the existing verified/policy badges row).
+- `templates/dashboard/domain_health.html.twig` — add `id: 'health-spf'` etc. keys to the `categories` array (lines 57-63), use `{{ cat.id }}` in the loop. Add `id="health-score"` to the grade card, `id="health-trend"` to the trend chart card.
+
+**Files to create:**
+- `tests/Integration/Controller/DomainDetailBadgeTest.php` (10 test methods).
+
+**Badge template markup (between lines 23-24 of `domain_detail.html.twig`):**
+
+```twig
+<div class="flex items-center gap-2 mt-2 flex-wrap">
+    {% if dnsHealth is null %}
+        <span class="badge badge-ghost badge-sm">SPF</span>
+        <span class="badge badge-ghost badge-sm">DKIM</span>
+        <span class="badge badge-ghost badge-sm">DMARC</span>
+        <span class="badge badge-ghost badge-sm">MX</span>
+    {% else %}
+        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-spf"
+           class="badge badge-sm {{ dnsHealth.isSpfVerified() ? 'badge-success' : 'badge-error' }}">SPF</a>
+        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-dkim"
+           class="badge badge-sm {{ dnsHealth.isDkimVerified() ? 'badge-success' : 'badge-error' }}">DKIM</a>
+        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-dmarc"
+           class="badge badge-sm {{ dnsHealth.isDmarcVerified() ? 'badge-success' : 'badge-error' }}">DMARC</a>
+        {% if dnsHealth.latestMxScore is null %}
+            <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-ghost">MX</a>
+        {% elseif dnsHealth.latestMxScore >= 80 %}
+            <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-success">MX</a>
+        {% elseif dnsHealth.latestMxScore >= 50 %}
+            <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-warning">MX</a>
+        {% else %}
+            <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-error">MX</a>
+        {% endif %}
+    {% endif %}
+</div>
+```
+
+The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDetailController`'s 404 fires first for cross-tenant domain IDs because `GetDomainDetail::forDomain()` already gates on teamIds), but kept as a defensive fallback.
+
+**Test methods (`DomainDetailBadgeTest`, all integration tests):**
+1. `badgeRowRendersForOnboardedOwner` — basic render, regex for any `badge-success|badge-error` adjacent to `>SPF<`
+2. `badgeRowRendersSuccessForFullyVerifiedDomain` — all timestamps set + snapshot mxScore=95 → 4 success badges
+3. `badgeRowRendersErrorForUnverifiedSpf` — only DKIM+DMARC verified → SPF=error
+4. `badgeRowRendersGhostMxWhenNoSnapshot`
+5. `badgeRowRendersMxWarningForMidScore` (mxScore=65)
+6. `badgeRowRendersMxErrorForLowScore` (mxScore=30)
+7. `badgeRowBadgesDeepLinkToHealthPage` — assert all four `#health-{spf,dkim,dmarc,mx}` fragments in body
+8. `healthPageHasAnchorIdsForDeepLinks` — GET `/app/domains/{id}/health`, assert `id="health-spf"`, `id="health-dkim"`, `id="health-dmarc"`, `id="health-mx"` in response
+9. `domainWithNoSnapshotAndNotVerifiedShowsAllErrorBadges` (extra domain, all `verified_at` null, no snapshot)
+10. `domainWithVerifiedDnsButNoSnapshotShowsThreeSuccessAndGhostMx`
+
+**Query-level tests (add to existing `DnsHealthOverviewTest`):**
+- `forDomainReturnsNullForUnknownDomain` (random UUID)
+- `forDomainReturnsResultForKnownDomain`
+
+**Edge cases (explicit):**
+- All-unverified + no snapshot → 3 error badges + ghost MX, all still linked.
+- Verified + no snapshot yet → 3 success badges + ghost MX (newly verified, before nightly health check).
+- Recently re-verified domain with stale snapshot → `verified_at` is real-time, snapshot is historical — badges reflect verification, MX reflects snapshot (acceptable lag, same as existing health page).
+- Cross-tenant domain ID → 404 from controller before template renders (defence-in-depth: the query also team-scopes).
+
+**Build phases:**
+1. Add `forDomain()` to query — PHPStan green.
+2. Add `id` keys to `categories` array in `domain_health.html.twig` + anchors on cards.
+3. Controller wiring.
+4. Template badge row in `domain_detail.html.twig`.
+5. Tests — 10 new + 2 in existing `DnsHealthOverviewTest`. PHPUnit + PHPStan + cs-fixer all green. Commit + push.
+
+---
+
+## TASK-014: Mailbox setup is a credentials wall — add server presets, port auto-fill, and live "test connection" before save
+
+- Status: proposed
+- Area: onboarding
+- Why: `templates/dashboard/mailbox_add.html.twig` and the onboarding mailbox option throw the user at raw IMAP/POP3 host/port/encryption fields with no guidance. A non-technical Marketing-Maria persona will give up here. Worse, the form accepts the credentials, saves them encrypted, and only finds out it doesn't work via the next 15-min poll cron — so the user sees "Inactive / Error" minutes later with no clear reason on `dashboard_mailboxes`.
+- Acceptance:
+  - Provider preset dropdown above the host field: Gmail (imap.gmail.com:993, SSL), Outlook/Microsoft 365 (outlook.office365.com:993, SSL), Fastmail, Yahoo, Seznam, Custom. Selecting a preset auto-fills host/port/encryption.
+  - Selecting Gmail/Outlook shows a yellow info banner: "Gmail/Outlook require app-passwords or OAuth2 — link to the relevant knowledge-base article (`learn/*`) explaining how to mint one." (OAuth2 button is out of scope for this task — DEC-034 is a later piece of work.)
+  - Submitting the form triggers a synchronous `TestMailboxConnection` (IMAP login + capability check, ~3s timeout) before persisting. On failure: show the exact error inline ("Authentication failed", "Connection refused", "STARTTLS not supported"), keep the user on the form, do NOT persist the row.
+  - On success: persist via existing `ConnectMailbox` command and redirect to mailboxes list with success flash.
+  - The `dashboard_mailboxes` list grows a "Re-test connection" inline action button on each row that runs the same check on demand.
+  - 100% test coverage on the new sync test service (mocked IMAP transport) and the controller branches.
+- Notes:
+
+---
+
+## TASK-015: Alerts list/detail has no in-app actions beyond "mark read" — add snooze, mute-this-type-for-this-domain, and copy-link
+
+- Status: proposed
+- Area: dashboard
+- Why: `templates/dashboard/alerts.html.twig` and `alert_detail.html.twig` only let the user mark an alert read. For a noisy domain (e.g. a forwarder ruining DMARC pass rate, generating "failure spike" alerts daily) the user has no recourse other than "delete email rule + mark every alert read forever." That turns the Alerts page from "what needs attention" into "inbox zero ritual," which kills trust in the channel.
+- Acceptance:
+  - `alert_detail.html.twig`: add a "Snooze" dropdown (1 day / 7 days / 30 days) that sets `snoozed_until` on the alert; snoozed alerts are excluded from the unread count and from the default `alerts.html.twig` list (visible only under a new "Snoozed" filter chip).
+  - `alert_detail.html.twig`: add "Mute this alert type for this domain" — persists a `(team_id, domain_id, alert_type)` row in a new `muted_alert` table; the `RaiseAlert*` handlers consult this table before persisting future alerts (no-op when muted). User can un-mute from a new "Muted alerts" section on `team_settings` or `dashboard_preferences`.
+  - "Copy alert link" button on alert detail header — copies the absolute URL via clipboard API, with a brief flash confirmation. Critical for support/Slack handoff.
+  - Bulk action on `alerts.html.twig`: checkbox per row + a "Mark selected read" / "Snooze selected 7d" toolbar that appears only when at least one row is selected.
+  - 100% test coverage on the snooze/mute commands + handlers + the query filter change.
+- Notes:
+
+---
+
+## TASK-016: Reports list has no filters or search — adding domain/reporter/date-range filters is the single biggest "this app is usable" lift
+
+- Status: done
+- Shipped: 2026-05-23
+- Area: reports
+- Why: `templates/dashboard/reports.html.twig` + `_reports_table.html.twig` show a paginated table with no filters. Once a paying customer has 5+ domains and 100+ reports, finding "the Google reports for example.com in February that had pass rate under 80%" requires manually clicking through pages. The data is in `dmarc_report` already — the missing piece is a filter bar and the matching query parameters in `GetAllReports`.
+- Acceptance:
+  - Filter bar above the table on `dashboard_reports`: Domain (multiselect, populated from team's monitored domains), Reporter Org (multiselect, populated from distinct reporter_org values for the team), Pass-rate range (chips: 90%+, 70–90%, <70%), Date range (last 7d / 30d / 90d / custom).
+  - Filters update the URL query string (so links are shareable) and re-fetch the table via the existing Turbo Frame; no full page reload.
+  - "Search by reporter or domain" text input on the same bar (server-side `ILIKE`).
+  - `GetAllReports::forTeams` gains optional named filter parameters; raw SQL change with parameterised filters (per project DBAL convention).
+  - The same filter bar appears on `dashboard_domain_reports` (currently `_domain_reports_table.html.twig`), minus the Domain filter (already scoped).
+  - 100% test coverage on the query for every combination of filter / no-filter.
+- Notes:
+
+### Architect plan (2026-05-23)
+
+**Strategy:** URL-driven GET filters. Filter form does a full Turbo Drive page navigation (`data-turbo-action="advance"`) so the chip bar AND table both re-render and URL updates. Pagination links keep their existing `data-turbo-frame="reports-table"` for fast partial swaps. Unify `GetDomainReports` → `GetAllReports` (one query path, one filter code path).
+
+**Files to create:**
+- `src/Value/ReportsFilter.php` — `readonly final class` with constructor (domainIds, reporterOrgs, passRateBand, dateRange, dateFrom, dateTo, search), static `fromRequest(Request, ClockInterface): self`, `toQueryParams(): array`, `hasActiveFilters(): bool`, `passRateMin()`, `passRateMax()`. Validation in `fromRequest`: invalid pass_rate → null; non-UUID domain IDs filtered out (`Uuid::isValid()`); empty arrays → no filter; reversed custom dates swapped silently; `date_range=7d|30d|90d` → computes `dateFrom = clock.now().modify('-N days')`, dateTo null.
+- `src/Query/GetReporterOrgs.php` — `readonly final`, single `forTeams(array $teamIds): list<string>`, SQL `SELECT DISTINCT dr.reporter_org FROM dmarc_report dr JOIN monitored_domain md ON md.id = dr.monitored_domain_id WHERE md.team_id IN (:teamIds) ORDER BY dr.reporter_org ASC`, `fetchFirstColumn()`. Empty teamIds guard.
+- `templates/components/ReportsFilterBar.html.twig` — props `domains`, `reporterOptions`, `filter`, `formAction` (route name), `domainId = null`, `showDomainFilter = true`. Two rows in a `card`: chips row (pass-rate + date-range, each a `<a>` link with `data-turbo-action="advance"` that merges its value into `filter.toQueryParams()`); inputs row (`<form method="GET" data-turbo-action="advance" action="path(formAction, ...)">` with multiselect `<select multiple name="domain[]">` if `showDomainFilter`, `<select multiple name="reporter[]">`, text `<input name="q">`, submit + clear (clear is link to same form action without params)). Custom date inputs rendered always but hidden via `class="hidden"` unless `filter.dateRange == 'custom'`. daisyUI v5 `select select-bordered select-sm`, `input input-bordered input-sm`, `badge badge-lg`, `btn btn-sm`. Mobile: `flex-col sm:flex-row`, chips wrap with `flex-wrap`.
+- `tests/Unit/Value/ReportsFilterTest.php` — ~17 unit tests covering each fromRequest branch + toQueryParams + hasActiveFilters + passRateMin/Max.
+- `tests/Integration/Query/GetAllReportsFilterTest.php` — ~20 query-level tests covering each filter independently, combinations, team-scoping under filter, cross-tenant domain ID returns empty.
+- `tests/Integration/Query/GetReporterOrgsTest.php` — distinct/sorted, empty results, empty teamIds, cross-team isolation.
+- `tests/Integration/Controller/ReportsFilterTest.php` — ~18 integration tests on `/app/reports` and `/app/domains/{id}/reports` covering chip rendering, filter application, clear, pagination URL preservation, empty-with-filter vs empty-without-filter copy, cross-team security, invalid pass_rate ignored.
+
+**Files to modify:**
+- `src/Query/GetAllReports.php` — extend `forTeams()` with named args: `?string $domainId`, `?array $domainIds`, `?array $reporterOrgs`, `?string $passRateBand`, `?DateTimeImmutable $dateFrom`, `?DateTimeImmutable $dateTo`, `?string $search`. Build SQL with `$whereClauses[] = '...'` array joined by ` AND `, `$havingClauses[]` for pass-rate band (HAVING required because pass rate is post-GROUP-BY aggregate). Extract `PASS_RATE_EXPR` private constant. Use `ArrayParameterType::STRING` for all IN clauses. Mandatory `WHERE md.team_id IN (:teamIds)` stays.
+- `src/Controller/Dashboard/ListReportsController.php` — inject `GetReporterOrgs`, `GetDomainOverview`, `ClockInterface`. Parse `ReportsFilter::fromRequest($request, $this->clock)`. Pass filtered args to `GetAllReports::forTeams()`. Add `'filter' => $filter, 'domains' => $domains, 'reporterOptions' => $reporterOptions, 'filterParams' => $filter->toQueryParams()` to render.
+- `src/Controller/Dashboard/ListDomainReportsController.php` — switch from `GetDomainReports` to `GetAllReports` (call `forTeams($teamIds, ..., domainId: $id, ...)`). Same filter parse + injection as `ListReportsController`. Pass `showDomainFilter: false` and `domainId: $id` to template.
+- `templates/dashboard/reports.html.twig` — `<twig:ReportsFilterBar domains=... reporterOptions=... filter=... formAction="dashboard_reports" />` ABOVE the `<turbo-frame id="reports-table">`. Empty-state branch differentiates filtered-empty vs truly-empty: `{% if reports is empty and currentPage == 1 %}{% if filter.hasActiveFilters() %}<p>No reports match the current filters.</p>{% else %}<twig:EmptyState .../>{% endif %}{% else %}<turbo-frame>...{% endif %}`.
+- `templates/dashboard/domain_reports.html.twig` — same component with `formAction="dashboard_domain_reports" domainId="{{ domainId }}" showDomainFilter="{{ false }}"`.
+- `templates/dashboard/_reports_table.html.twig` — pagination links use `path('dashboard_reports', filterParams|merge({'page': currentPage - 1}))` (and same for next).
+- `templates/dashboard/_domain_reports_table.html.twig` — same. Switch from `DomainReportListResult` field access to `ReportListResult` (same field names except `domainName` is now present but unused — fine).
+
+**Files to delete:**
+- `src/Query/GetDomainReports.php`
+- `src/Results/DomainReportListResult.php`
+- `tests/Integration/Query/GetDomainReportsTest.php` (migrate any unique tests into `GetAllReportsFilterTest` as `legacyDomainIdParamFiltersCorrectly` etc.)
+
+**URL scheme:** `?domain[]=uuid&reporter[]=foo&pass_rate=high|medium|low&date_range=7d|30d|90d|custom&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&q=text&page=N`.
+
+**Pass-rate bands:** `high` ≥ 90, `medium` 70-89.99, `low` < 70. Implemented as `HAVING` against the existing pass-rate aggregate expression (extract to `PASS_RATE_EXPR` constant). For `medium`, two HAVING conditions joined with `AND`.
+
+**Turbo behaviour:**
+- Filter form: `<form method="GET" data-turbo-action="advance">` → full page navigation, URL updates, both filter bar (with new chip state) and frame re-render.
+- Pagination `<a>`: keep `data-turbo-frame="reports-table"` → partial swap only, filter bar stays.
+- Chip `<a>` links also use `data-turbo-action="advance"` because they need both the filter bar (chip selection visual change) and the table to update.
+
+**Critical security:** Team scoping clause `WHERE md.team_id IN (:teamIds)` is mandatory. Any cross-tenant domain UUID in `domain[]=` just produces no matching rows — no PHP-side validation needed, the SQL guards it. Tests must include `crossTeamDomainIdInFilterDoesNotLeakData` and a query-level equivalent.
+
+**Custom date range without JS:** date inputs always rendered but `class="hidden"` unless `filter.dateRange == 'custom'`. Selecting "Custom" chip via link navigates to `?date_range=custom`, re-renders the form with date inputs visible. User then fills and submits. No JS dependency for v1.
+
+**Edge cases:**
+- Empty `domain[]=` (no UUIDs) → treated as `null` (no filter).
+- Non-UUID values in `domain[]` → filtered out by `Uuid::isValid()`.
+- `pass_rate=garbage` → silently null.
+- `date_from > date_to` → swapped silently.
+- Pagination preserves filters via `filterParams|merge({'page': N})`.
+
+**Build phases:**
+1. Value object + GetReporterOrgs + GetAllReports extension; unit tests + query tests green.
+2. Switch `ListDomainReportsController` to `GetAllReports`; delete `GetDomainReports` + DTO + test; migrate test cases.
+3. Modify `ListReportsController`.
+4. Twig component + template wiring; pagination updates.
+5. Controller integration tests; phpunit + phpstan + cs-fixer all green; commit; push.
+
+---
+
+## TASK-017: Report-detail records table is a wall of raw rows — group by source IP/sender and label "what is this thing"
+
+- Status: proposed
+- Area: reports
+- Why: `templates/dashboard/report_detail.html.twig` renders one row per `DmarcReportRecord`, which for a high-volume reporter like Google can be 50+ rows of `66.249.93.x ... 1 ... none ... fail ... pass ...` that's impossible to interpret. The same source IP appears multiple times. The user can't easily answer "which actual services are sending as my domain?"
+- Acceptance:
+  - Above the existing flat records table, add a new "By sender" grouped view (default open): rows are grouped by `resolved_org` (falling back to PTR/hostname, then IP). Each group row shows: org/hostname, total messages, DKIM pass %, SPF pass %, disposition breakdown.
+  - Clicking a group row expands the underlying per-IP / per-record rows beneath it (HTML `<details>` element — no JS framework needed).
+  - For source IPs that match a known sender in `sender_inventory` for this team, display its authorization status badge (Authorized / Unknown) inline so the user sees "ugh, Mailchimp is failing DKIM" at a glance.
+  - Move the existing flat table behind a "Show raw records" toggle (collapsed by default).
+  - 100% test coverage on the grouping query.
+- Notes:
+
+---
+
+## TASK-018: Mobile dashboard nav highlight is broken on long page titles + table rows use `onclick` instead of `<a>` (a11y & middle-click broken)
+
+- Status: proposed
+- Area: dashboard
+- Why: Two adjacent dashboard-quality cuts that show the app feels rushed: (1) Sidebar uses `current_route starts with 'dashboard_domain'` for the Domains item, which also matches `dashboard_domain_health` — but DNS Health is its own concept. More importantly, every table row that links to a detail page uses `<tr onclick="window.location='...'">` (see `overview.html.twig`, `_reports_table.html.twig`, `domain_detail.html.twig`). This breaks middle-click ("open in new tab"), keyboard navigation (rows are not focusable), screen readers, and right-click → copy link.
+- Acceptance:
+  - Replace every `<tr ... onclick="window.location=...">` in `templates/dashboard/**` with a proper anchor pattern: either wrap the whole row in `<a>` via CSS `display: table-row`, or use a `<td>` with `<a class="absolute inset-0">` (stretched-link pattern) — pick the one that keeps existing daisyUI table styling intact and document the choice in the template.
+  - Rows become keyboard-focusable, middle-clickable, and right-click-copy-link works. Verify by tabbing through `dashboard_reports` and seeing each row receive focus ring.
+  - Sidebar "Domains" active state must NOT trigger on `dashboard_domain_health` (or whatever route the in-app DNS Health page from TASK-001 lands on); use the route name explicitly or split the prefix check.
+  - Mobile (<lg breakpoint): verify the sidebar overlay closes on link click (currently it does via the Stimulus controller, but worth a Cypress / Panther smoke).
+  - Test plan note: include an axe-core accessibility scan baseline for `/app` and `/app/reports` in the PR.
+- Notes:
+
+---
+
+## TASK-019: Billing page hides the most valuable view — show this team's actual usage vs. limit for the metric that actually triggers churn (reports/mo, retention)
+
+- Status: proposed
+- Area: dashboard
+- Why: `templates/dashboard/billing.html.twig` shows only domains-used and seats-used. The real bill-vs-value question for a deliverability customer is: "Am I getting close to my monthly report cap (Free: 100, Personal: 1k, Pro: 10k, Business: 50k)?" and "How far back can I look at my data on this plan?". Those numbers exist in `team_usage` and `PlanLimits::getRetentionDays` already — they're just not surfaced. This is also where the `PlanOverage` quarantine pile-up makes itself felt: a customer can have N reports quarantined and never know unless they bump into the (deferred) usage-warning email.
+- Acceptance:
+  - Billing page grows a third panel after Domains / Seats: "Monthly reports" with current count, limit, percentage bar (matches existing pattern), and the period-reset date pulled from `team_usage.period_ends_at`. Hidden on Unlimited.
+  - Same panel grows a sub-line: "Retention: keeping reports for N days" (or "unlimited"), with a 1-line nudge ("Upgrade to Pro for 2-year retention →") for plans below their next-tier retention.
+  - If the team has any reports in `quarantined_dmarc_report` with reason `PlanOverage`, surface a warning card above the panel: "N reports waiting — they were received after you hit this month's cap. Upgrade to unlock them." with link to upgrade flow.
+  - The same monthly-reports widget is added as a 6th stat card on `dashboard_overview` (only when the team isn't Unlimited and is over 50% used — keeps the overview clean for low-usage users).
+  - 100% test coverage on the new `GetMonthlyReportUsage` query + the overview-card visibility branches.
+- Notes:
+
+---
+
+## TASK-020: Quarantine pile-up is invisible from the dashboard — give users a single page to see "reports we received but parked"
+
+- Status: proposed
+- Area: dashboard
+- Why: `QuarantinedDmarcReport` is referenced from `overview.html.twig` (unverified-domain banner) and from `domain_detail.html.twig` (count badge), but the user can never actually **see** the underlying envelopes. With three quarantine reasons in production (`UnknownDomain`, `PlanOverage`, parser failures), the user has no way to answer "did receivers actually send reports for my domain?" or "what's in the pile?". Per the project's `never-delete-user-data` rule we keep them, so we owe the user visibility.
+- Acceptance:
+  - New in-app route `dashboard_quarantine` (sidebar link added under Reports as a secondary item, or as a tab on the Reports page — pick one and stick to it). Lists quarantined envelopes with: received-at, reporter from address, claimed domain, reason badge, size.
+  - Each row expandable / linked to a detail view showing the raw envelope subject + the structured `quarantine_reason` payload, plus a "Reprocess now" button that dispatches `ReprocessQuarantinedReport` (matches existing `sendvery:reports:reprocess` semantics).
+  - Reason `UnknownDomain` rows offer a one-click "Add this domain" action that pre-fills `dashboard_domain_add` with the claimed domain, and on successful add automatically triggers reprocess of the quarantined envelopes for that domain name.
+  - Reason `PlanOverage` rows show a banner pointing at upgrade flow.
+  - Empty state: friendly "No reports in quarantine — every report we received has been parsed." copy with a link to the most recent report.
+  - 100% test coverage on the new query, controller, and the add-domain-+-reprocess flow.
+- Notes:
+
+---
+
+## TASK-021: Onboarding "I'll set up later" exit is a one-way ramp — bring it back into the dashboard as a dismissible setup checklist
+
+- Status: proposed
+- Area: onboarding
+- Why: The `Skip — I'll set this up later` link on `templates/onboarding/ingestion.html.twig` marks onboarding complete but leaves the user on `dashboard_overview` with no in-app reminder of the work they skipped (verifying DNS, connecting a mailbox). The skipped state is **the most fragile state for retention**: they paid (or signed up), saw a half-empty dashboard, and have nothing nudging them back to finish. Tied to TASK-002 but distinct: this is about persistence and dismissibility, not the "next action" surface itself.
+- Acceptance:
+  - New persistent "Setup checklist" card on `dashboard_overview`, rendered only while at least one of these is incomplete for the active team: DMARC verified, mailbox connected OR DNS-forwarding verified (i.e. first report arrived), domain count > 0, team name customised (still default "My Team"?).
+  - Each row: green check / outline circle, one-line description, "Do it →" link to the exact in-app surface that resolves it.
+  - "Hide checklist" button — sets a `setup_checklist_dismissed_at` column on `team` (not `user` — team-scoped) so dismissal is shared across team members.
+  - Auto-un-dismiss if a previously-completed step regresses (e.g. DMARC TXT goes missing).
+  - Logic lives in a `SetupChecklistResolver` testable service that returns a list of typed step objects (matches the pattern proposed for TASK-002's NextActionResolver — these can share scaffolding).
+  - 100% test coverage on resolver for all completion combinations.
+- Notes:
+
+---
+
+## TASK-022: Sender Inventory authorize/revoke buttons are unlabelled, undoable, and have no bulk action — a single mis-click costs you 20 mins of cleanup
+
+- Status: proposed
+- Area: domains
+- Why: `templates/dashboard/sender_inventory.html.twig` per-row "Authorize" / "Revoke" buttons submit a form with no confirmation, no undo, no batch action, and no audit log entry visible to the user. For a domain with 30+ unique senders (typical for marketing newsletters + transactional + employees) the user has to click 30 individual buttons and has no way to know which ones they already touched if the page reloads or they get distracted. This is also where mis-classification has real consequences — marking Mailchimp "Authorized" then forgetting about it suppresses real failure alerts.
+- Acceptance:
+  - Checkbox per row + bulk action bar ("Authorize selected", "Mark unknown") that appears when ≥1 row is checked.
+  - Each row shows a small "Last changed by Jane on May 22" line under the status badge (sourced from existing `sender_inventory.updated_at` + a new `updated_by_user_id` column). New column means a small migration.
+  - The Authorize action gains a confirm modal on first authorize per session: "Authorizing this sender means we'll trust mail it sends as your domain. Real failures from this IP won't trigger alerts. Continue?" (suppressed for subsequent toggles in the same session via `sessionStorage`.)
+  - Inline notes field per sender — small textarea opens on a "Note" icon click; persists to a `notes` column on `sender_inventory`. Useful for "this is Mailchimp's marketing IP — Jane set up DKIM on 2026-04-12."
+  - 100% test coverage on the bulk-update command + the audit-log column.
+- Notes:
