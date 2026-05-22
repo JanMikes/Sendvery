@@ -1,9 +1,9 @@
 # Pricing Implementation Plan — Free / Personal / Pro / Business + AI
 
 **Last updated:** 2026-05-22
-**Related:** `docs/05-monetization.md` (canonical pricing), `docs/07-decisions-log.md` (DEC-052..DEC-057), `docs/12-fake-door-stripe.md` (cutover runbook).
+**Related:** `docs/05-monetization.md` (canonical pricing), `docs/07-decisions-log.md` (DEC-052..DEC-057), `docs/14-stripe-setup.md` (dashboard setup runbook).
 
-This document is the build plan for executing the pricing-model decisions made on 2026-05-22. It assumes the current state described in `docs/12-fake-door-stripe.md` (fake-door + Stripe code intact for old 2-tier model). The plan is **phased, each phase shippable independently** so we can pause/rearrange without leaving the codebase broken.
+This document is the build plan for executing the pricing-model decisions made on 2026-05-22. The plan is **phased, each phase shippable independently** so we can pause/rearrange without leaving the codebase broken. The fake-door precursor (DEC-050) was fully removed on 2026-05-22 — see the post-cutover cleanup section below.
 
 ---
 
@@ -21,7 +21,7 @@ This document is the build plan for executing the pricing-model decisions made o
 | 3 — Plan limit enforcement | ✅ done | 2026-05-22. Monthly report cap enforced at the central-inbox dispatch point (`ProcessReceivedReportEmailHandler` — over-cap reports go to quarantine with reason `PlanOverage`). `ProcessDmarcReportHandler` increments the counter on every parsed report. New `sendvery:dmarc:purge` command + `DmarcReportRepository::deleteOlderThanForTeam` honor per-team retention from `PlanLimits::getRetentionDays`. `SubscriptionPlan::nextTier()` helper drives upgrade-nudge copy in the AddDomain banner and the InviteTeammate flash. AI quota widget on billing page deferred to Phase 4's UI rewrite. |
 | 4 — Pricing page UI rewrite | ✅ done | 2026-05-22. Full 4-card layout (Free/Personal/Pro/Business), Monthly/Annual cadence toggle, AI Insights checkbox toggle. New `pricing_controller.js` Stimulus controller swaps prices/strikethrough/notes/CTAs based on toggle state with localStorage persistence. Server-rendered fallback defaults to annual + no AI. AI-curious CTAs route to `request_beta_access?source=pricing-ai-curious` (DEC-057 — AI stays in lead-capture until real Anthropic ships). |
 | 5 — Checkout & billing flow | ✅ done | 2026-05-22. `SubscriptionManager::updateSubscription()` flips an existing Stripe subscription to a new (plan, interval) with `create_prorations`. Webhook now handles `customer.subscription.updated` (dispatches plan change) and `invoice.payment_failed` (log-only at launch — Stripe retries handle the downgrade). `UpgradePlanController` routes existing-subscriber actions through `updateSubscription` and new conversions through `createCheckoutSession`. Billing page surfaces the AI quota progress bar for AI plans. |
-| 6 — Cutover | ✅ done | 2026-05-22. Stripe is now the only path: PricingTable CTAs go directly to `dashboard_billing_upgrade`. The `/request-access` route and its entire fake-door machinery (controller, message, handler, event, notification handler, templates, form data) were deleted. The `BetaAccessRequest` entity stays read-only so `sendvery:beta-leads:launch-announce` can email the historical leads once before the table is dropped. AI variants are gated on the presence of `ANTHROPIC_API_KEY` — when unset, the pricing-page AI toggle is hidden and `StripePriceResolver` throws `AiNotYetPurchasable` (caught by `UpgradePlanController` with an error flash). **Human actions:** create the 12 Stripe prices, set `STRIPE_PRICE_*` env vars, set `ANTHROPIC_API_KEY` when ready. |
+| 6 — Cutover | ✅ done | 2026-05-22. Stripe is now the only path: PricingTable CTAs go directly to `dashboard_billing_upgrade`. The `/request-access` route and the entire fake-door machinery (controller, message, handler, event, notification handler, form data, entity, repository, the announce command, templates, migration) were deleted — fresh start, no historical leads to migrate. AI variants are gated on the presence of `ANTHROPIC_API_KEY` — when unset, the pricing-page AI toggle is hidden and `StripePriceResolver` throws `AiNotYetPurchasable` (caught by `UpgradePlanController` with an error flash). **Human actions:** create Stripe products + 12 prices per `docs/14-stripe-setup.md`, set `STRIPE_PRICE_*` env vars, set `ANTHROPIC_API_KEY` when ready. |
 | 7 — Observability polish | ✅ done | 2026-05-22. `sendvery:plan-limits:warn-approaching` cron emails team owners when usage crosses 80% of any cap (domains/seats/reports/AI). De-duped via `team.plan_warning_at`. Sentry breadcrumbs on Stripe webhook dispatch, AI quota-exceeded, and report cap hit so we can debug live without bolting on extra logging. Admin subscription-health email + admin route + AI cost monitoring deferred (build when there's something to measure). |
 
 ### Post-cutover cleanup (2026-05-22)
@@ -30,8 +30,7 @@ After Phase 7, a follow-up commit replaced env-flag-based gating with key-presen
 
 - `SENDVERY_AI_PURCHASABLE` removed — AI variants are now gated on the presence of `ANTHROPIC_API_KEY` (via `App\Twig\PricingFlagsExtension` for the template side and `%env(bool:ANTHROPIC_API_KEY)%` for the StripePriceResolver constructor arg).
 - `SENDVERY_STRIPE_LIVE` removed — pricing-page CTAs always route to `dashboard_billing_upgrade` now. Local dev without Stripe keys still renders the page; clicking through will error at Stripe API time, which is acceptable for non-prod environments.
-- Deleted: `RequestBetaAccessController`, `RequestBetaAccess` message + handler, `BetaAccessRequested` event, `SendBetaAccessNotification` handler, `BetaAccessRequestData` form data, `BetaAccessRequestRepository` (unused), `templates/request_access/`, both beta-access email templates, and the two related test files.
-- `BetaAccessRequest` entity is now event-less and read-only — kept solely so `sendvery:beta-leads:launch-announce` can email historical leads once during cutover.
+- Deleted: `RequestBetaAccessController`, `RequestBetaAccess` message + handler, `BetaAccessRequested` event, `SendBetaAccessNotification` handler, `BetaAccessRequestData` form data, `BetaAccessRequestRepository` (unused), `templates/request_access/`, both beta-access email templates, and the two related test files. Then in a follow-up commit (fresh-start scope): `BetaAccessRequest` entity, the `Version20260514000000` migration that created the table, `AnnounceLaunchToBetaLeadsCommand` + its test, and the `BETA_REQUESTS_EMAIL` env var.
 - `PricingTable.html.twig` always uses `dashboard_billing_upgrade` for paid CTAs; the AI toggle and AI feature lines are wrapped in `{% if ai_available %}` so they disappear cleanly when no API key is configured.
 - `domain_add.html.twig` and `team/settings.html.twig` upgrade buttons now point to `dashboard_billing_upgrade` instead of the removed `request_beta_access` route.
 - `UpgradePlanController` catches `AiNotYetPurchasable` and redirects to billing with an error flash (was: redirect to lead capture).
@@ -50,11 +49,7 @@ After Phase 7, a follow-up commit replaced env-flag-based gating with key-presen
 
 ### What landed in Phase 6 (2026-05-22)
 
-- New env var `SENDVERY_STRIPE_LIVE` (default `false`) — cutover rollback knob. When false, paid non-AI CTAs on `PricingTable` route to `request_beta_access`; when true, they route to `dashboard_billing_upgrade`. AI CTAs always go to lead capture until `SENDVERY_AI_PURCHASABLE` flips.
-- `config/packages/twig.php` — exposes `stripe_live` as a Twig global so the PricingTable can branch without controller-level changes.
-- `templates/components/PricingTable.html.twig` — switches all 12 paid-card CTAs (3 plans × 2 cadences × 2 attribute slots: `href` + `data-href-*`) on the live flag. AI CTAs hardcoded to lead capture.
-- `src/Command/AnnounceLaunchToBetaLeadsCommand.php` — one-shot `sendvery:beta-leads:launch-announce` command. Options: `--since`, `--coupon`, `--dry-run`. Queries the `beta_access_request` table via raw DBAL and sends a single plaintext email per lead.
-- Tests: `AnnounceLaunchToBetaLeadsCommandTest` covers zero-leads, dry-run, and full-send paths. **1122 tests green** (up from 1119).
+The intermediate Phase 6 commit introduced an `SENDVERY_STRIPE_LIVE` env flag for a conditional CTA flip (lead capture vs. Stripe) plus a `sendvery:beta-leads:launch-announce` command for emailing historical leads. Both were superseded by the post-cutover cleanup commit (below) — the env flag is gone (Stripe is always the path), and the announce command + the entire `BetaAccessRequest` machinery is deleted (fresh start, no leads to migrate). The operational setup for Stripe is now `docs/14-stripe-setup.md`.
 
 ### What landed in Phase 5 (2026-05-22)
 
@@ -749,7 +744,7 @@ public function __invoke(string $plan, Request $request): Response
 
 ### 6.1 Stripe production setup
 
-Per `docs/12-fake-door-stripe.md` Steps 1–2: create products + prices, configure env, register webhook endpoint.
+Follow `docs/14-stripe-setup.md` — create the three products + 12 prices, configure env vars, register the webhook endpoint.
 
 ### 6.2 Flip pricing-page CTAs
 
@@ -772,15 +767,7 @@ Locations to update:
 
 ### 6.4 Email existing beta leads
 
-One-shot Symfony Console command:
-
-```bash
-docker compose exec app bin/console sendvery:beta-leads:launch-announce \
-    --since=2026-05-14 \
-    --coupon=LAUNCH20
-```
-
-Pulls `BetaAccessRequest` rows, sends a templated email with magic-link + optional Stripe promo code.
+**Not needed.** Fresh start — there are no historical leads to migrate. The fake-door `BetaAccessRequest` table and the launch-announce command were removed entirely on 2026-05-22 as part of the post-cutover cleanup.
 
 ### 6.5 Old plan mapping (existing internal users)
 

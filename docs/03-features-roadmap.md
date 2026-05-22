@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-05-14
 
-> **State of play (May 2026):** Phases 0A, 0B, 1, and most of Phase 2 are **shipped and merged on `main`**. Stripe billing code is implemented but the user-facing checkout CTAs are currently fake-doored behind a `/request-access` form (see `docs/12-fake-door-stripe.md`). What remains: deploy to production with the sendvery.com domain, Product Hunt / HN announcement, AI add-on (Phase 3), team collaboration UI (Phase 3). Phase 4 (Enterprise / Public API / BIMI / MTA-STS) is descoped for now.
+> **State of play (May 2026):** Phases 0A, 0B, 1, and most of Phase 2 are **shipped and merged on `main`**. Stripe billing is wired end-to-end — pricing CTAs route straight to Stripe checkout, gated only on whether the 12 Stripe prices have been created in the dashboard (see `docs/14-stripe-setup.md`). What remains: deploy to production with the sendvery.com domain, Product Hunt / HN announcement, real AI add-on impl (Phase 3 — plumbing is shipped, stub-first per DEC-057), team collaboration UI (Phase 3). Phase 4 (Enterprise / Public API / BIMI / MTA-STS) is descoped for now.
 
 ---
 
@@ -80,7 +80,7 @@
 **Goal:** Open to public. Start charging. Stripe integration.
 
 **Scope:**
-- [x] Stripe integration (subscriptions, checkout, customer portal, webhooks) — **code complete, currently fake-doored** (DEC-050)
+- [x] Stripe integration (subscriptions, checkout, customer portal, webhooks) — **code complete; fake-door removed 2026-05-22, ready for Stripe products to be created per `docs/14-stripe-setup.md`**
 - [x] Plan enforcement (domain limits, feature flags per tier)
 - [ ] Public registration (open from beta) — gated behind beta access requests
 - [x] Sender inventory / discovery
@@ -95,7 +95,7 @@
 - [ ] Product Hunt launch
 - [ ] HN / Reddit announcements
 
-**Success criteria:** First paying customers. Revenue > $0. *(Blocked by: launch logistics — domain is live, deploy pipeline being wired, then flip the Stripe fake door.)*
+**Success criteria:** First paying customers. Revenue > $0. *(Blocked by: launch logistics — domain is live, deploy pipeline being wired, then create the 12 Stripe prices per `docs/14-stripe-setup.md`.)*
 
 ---
 

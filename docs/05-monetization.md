@@ -2,9 +2,9 @@
 
 **Last updated:** 2026-05-22
 
-> **Current state (May 2026):** Hosted paid plans are **not yet open for self-serve checkout**. The pricing page advertises tiers but the upgrade CTAs lead to `/request-access` — a contact form that captures lead details and emails `jan.mikes@sendvery.com`. Stripe code (`SubscriptionManager`, `PlanEnforcement`, webhook controller, billing/upgrade/manage routes) is fully implemented and tested — it is gated by the absence of UI links, not by feature flags.
+> **Current state (May 2026):** Stripe is wired end-to-end — pricing-page CTAs go to `dashboard_billing_upgrade` and the webhook handler reconciles plan state. The fake-door `/request-access` flow was removed on 2026-05-22; new sign-ups go straight to Stripe Checkout when the dashboard products + prices exist. AI variants gate on `ANTHROPIC_API_KEY` presence.
 >
-> The transition runbook (fake-door → live Stripe with the model below) lives in `docs/12-fake-door-stripe.md`. The detailed implementation plan lives in `docs/13-pricing-implementation-plan.md`. See DEC-050 for the fake-door rationale and DEC-052..DEC-057 for the new pricing-model decisions that supersede DEC-024 and DEC-025.
+> The Stripe-dashboard setup runbook lives in `docs/14-stripe-setup.md`. The detailed implementation status lives in `docs/13-pricing-implementation-plan.md`. See DEC-052..DEC-057 for the pricing-model decisions that supersede DEC-024 and DEC-025.
 >
 > **Price display policy:** all advertised hosted prices are USD and shown as "VAT included where applicable". Jan is OSVČ in CZ and below the VAT threshold, so we collect a flat sticker price and do not break out VAT. If we cross the CZ threshold or expand to EU B2C scale, enable Stripe Tax + OSS at that point (no code changes required).
 
@@ -92,7 +92,7 @@ Four cards (Free / Personal / Pro / Business) in a 4-column grid. Pro carries a 
 ```
 
 - **Billing cadence:** Annual is the default (drives conversion). Monthly is one tap away. Annual badge says "−2 months" (truer than "−17%") and pulses gently for ~1s on first page load.
-- **AI Insights:** off by default. When on, every paid card grows the AI line item and price flips to the AI variant. The Free card switches to a "Curious about AI? Tell us your use case →" reach-out invitation (uses the existing `BetaAccessRequest` infrastructure, just a different `interestType`).
+- **AI Insights:** off by default. When `ANTHROPIC_API_KEY` is set, every paid card grows the AI line item and price flips to the AI variant; when the key isn't set, the toggle is hidden entirely. AI is not available on Free in any case — Free users interested in AI can email enterprise/sales.
 - **Toggle state persists in `localStorage`** so a user who chose Monthly on visit 1 isn't reset to Annual on visit 2.
 
 ### Card price display (Personal example)
@@ -347,7 +347,7 @@ The software is free (AGPL). Hosted tiers sell:
 
 ## Go-to-Market: Fake Door → Closed Beta → Launch
 
-The original 4-phase plan still stands. The pricing model above slots into **Phase 3 (Public Launch)** — that's when self-serve checkout flips on. The transition runbook is in `docs/12-fake-door-stripe.md`; the implementation plan is in `docs/13-pricing-implementation-plan.md`.
+The original 4-phase plan still stands. The pricing model above slots into **Phase 3 (Public Launch)** — that's when self-serve checkout flips on. The Stripe-dashboard setup is `docs/14-stripe-setup.md`; the build status is `docs/13-pricing-implementation-plan.md`.
 
 ### Phases (summary)
 

@@ -429,11 +429,11 @@ Track key decisions, their rationale, and any alternatives considered.
 
 ### DEC-050: Fake-door Stripe — beta access request form
 **Date:** 2026-05-14
-**Status:** Decided
+**Status:** Superseded (2026-05-22 — fake-door fully removed when Stripe became the default path; see `docs/13-pricing-implementation-plan.md` post-cutover cleanup).
 **Decision:** Replace the Stripe checkout CTAs on the pricing page and dashboard billing with a beta access request contact form (`/request-access`). The form persists a `BetaAccessRequest` entity and sends an email notification to `BETA_REQUESTS_EMAIL` (default `jan.mikes@sendvery.com`) plus an acknowledgement to the requester via Symfony Mailer. All existing Stripe code (`SubscriptionManager`, `PlanEnforcement`, webhook controller, upgrade/manage controllers, billing routes) is left in place so the switch is one PR away.
 **Rationale:** Sendvery is not yet ready for paid customers — better to validate plan demand and qualify leads than to take card details we may not be able to honor. The "request access" framing communicates limited beta capacity honestly while still letting us collect signal on which plan visitors actually want. Implementation reuses the project's CQRS + domain-events pattern (entity → command → event → notification handler) for consistency.
 **Alternatives considered:** Show "Coming soon" with no form (loses lead capture); send to `mailto:` link (no persistence, no record); keep Stripe live and absorb refund risk; gate behind invite codes (more friction).
-**Impact:** Pricing page CTAs, dashboard billing page, domain-limit-reached banner, marketing copy. See `docs/12-fake-door-stripe.md` for the runbook on switching Stripe back on.
+**Impact:** Pricing page CTAs, dashboard billing page, domain-limit-reached banner, marketing copy.
 
 ### DEC-051: Free DNS-based blacklists only
 **Date:** 2026-05-14
