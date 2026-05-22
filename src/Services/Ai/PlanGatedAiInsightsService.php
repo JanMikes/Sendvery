@@ -62,6 +62,15 @@ final readonly class PlanGatedAiInsightsService implements AiInsightsService
         $plan = $this->assertPlanHasAi($teamId);
 
         if (!$this->enforcement->canUseOnDemandAi($teamId->toString(), $plan)) {
+            \Sentry\addBreadcrumb(\Sentry\Breadcrumb::fromArray([
+                'category' => 'plan.ai_quota_exceeded',
+                'level' => 'warning',
+                'data' => [
+                    'team_id' => $teamId->toString(),
+                    'plan' => $plan->value,
+                ],
+            ]));
+
             throw new AiQuotaExceeded(used: $this->enforcement->getOnDemandAiUsage($teamId->toString()), limit: $this->limits->getOnDemandAiQuota($plan));
         }
 

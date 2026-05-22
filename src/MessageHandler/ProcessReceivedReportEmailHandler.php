@@ -165,6 +165,15 @@ final readonly class ProcessReceivedReportEmailHandler
     ): void {
         assert(null !== $decision->domain);
 
+        \Sentry\addBreadcrumb(\Sentry\Breadcrumb::fromArray([
+            'category' => 'plan.report_cap_hit',
+            'level' => 'warning',
+            'data' => [
+                'team_id' => $decision->domain->team->id->toString(),
+                'domain' => $decision->domain->domain,
+            ],
+        ]));
+
         $compressed = gzencode($xml);
         assert(false !== $compressed);
 

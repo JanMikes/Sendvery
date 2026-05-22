@@ -427,6 +427,7 @@ Current entries (kept in sync with `crontab`):
 - `0 9 * * 1` — `sendvery:digest:send-all` (weekly digest)
 - `0 0 * * *` — `sendvery:usage:reset` (roll expired monthly plan-usage counters forward)
 - `45 4 * * *` — `sendvery:dmarc:purge` (per-team DMARC report retention purge from `PlanLimits::getRetentionDays`)
+- `0 8 * * *` — `sendvery:plan-limits:warn-approaching` (email team owners crossing 80% of any plan cap; deduped by `team.plan_warning_at`)
 - Blacklist checks: daily (later phase)
 
 Ops:

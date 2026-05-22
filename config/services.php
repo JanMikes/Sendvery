@@ -371,6 +371,9 @@ return App::config([
             'App\Command\AnnounceLaunchToBetaLeadsCommand' => [
                 'public' => true,
             ],
+            'App\Command\WarnApproachingPlanLimitsCommand' => [
+                'public' => true,
+            ],
         ],
     ],
 ]);

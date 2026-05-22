@@ -129,6 +129,17 @@ final readonly class SubscriptionManager
      */
     public function dispatchStripeEvent(string $eventType, array $data): void
     {
+        \Sentry\addBreadcrumb(\Sentry\Breadcrumb::fromArray([
+            'category' => 'stripe.webhook',
+            'level' => 'info',
+            'message' => $eventType,
+            'data' => [
+                'team_id' => $data['metadata']['team_id'] ?? null,
+                'plan' => $data['metadata']['plan'] ?? null,
+                'interval' => $data['metadata']['interval'] ?? null,
+            ],
+        ]));
+
         match ($eventType) {
             'checkout.session.completed' => $this->handleCheckoutCompleted($data),
             'customer.subscription.updated' => $this->handleSubscriptionUpdated($data),
