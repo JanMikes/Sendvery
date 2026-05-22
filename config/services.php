@@ -359,6 +359,9 @@ return App::config([
             'App\Command\ResetMonthlyUsageCountersCommand' => [
                 'public' => true,
             ],
+            'App\Command\PurgeOldDmarcReportsCommand' => [
+                'public' => true,
+            ],
         ],
     ],
 ]);

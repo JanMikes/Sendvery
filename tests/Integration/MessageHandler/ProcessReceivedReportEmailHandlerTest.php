@@ -12,6 +12,7 @@ use App\Entity\Team;
 use App\Message\ProcessReceivedReportEmail;
 use App\MessageHandler\ProcessReceivedReportEmailHandler;
 use App\Services\IdentityProvider;
+use App\Services\Stripe\PlanEnforcement;
 use App\Tests\IntegrationTestCase;
 use App\Value\Reports\EnvelopeProcessingStatus;
 use App\Value\Reports\QuarantineReason;
@@ -88,6 +89,35 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
             ->findOneBy(['domainName' => 'mystery.com']);
         self::assertNotNull($quarantine);
         self::assertSame(QuarantineReason::UnknownDomain, $quarantine->reason);
+    }
+
+    public function testQuarantinesReportWhenTeamIsAtMonthlyCap(): void
+    {
+        $team = $this->createTeam();
+        $this->createDomain($team, 'example.com', verified: true);
+        $envelope = $this->persistEnvelope($this->buildEmlWithReport('example.com', '<over-cap-1@google.com>'));
+        $this->em->flush();
+
+        // Free plan caps at 100 reports/mo. Burn the budget.
+        $enforcement = $this->getService(PlanEnforcement::class);
+        $teamId = $team->id->toString();
+        for ($i = 0; $i < 100; ++$i) {
+            $enforcement->incrementMonthlyReportCount($teamId);
+        }
+
+        $this->em->clear();
+
+        ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+
+        $this->em->clear();
+        $reloaded = $this->em->find(ReceivedReportEmail::class, $envelope->id);
+        self::assertNotNull($reloaded);
+        self::assertSame(EnvelopeProcessingStatus::Quarantined, $reloaded->processingStatus);
+
+        $quarantine = $this->em->getRepository(QuarantinedDmarcReport::class)
+            ->findOneBy(['domainName' => 'example.com']);
+        self::assertNotNull($quarantine);
+        self::assertSame(QuarantineReason::PlanOverage, $quarantine->reason);
     }
 
     public function testIgnoresEnvelopeWithNoAttachments(): void

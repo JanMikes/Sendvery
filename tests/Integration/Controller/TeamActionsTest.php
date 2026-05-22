@@ -68,7 +68,7 @@ final class TeamActionsTest extends WebTestCase
 
         self::assertResponseRedirects('/app/team');
         $client->followRedirect();
-        self::assertSelectorTextContains('body', 'Upgrade your plan to invite more teammates');
+        self::assertSelectorTextContains('body', 'Upgrade to Personal to invite more teammates');
     }
 
     #[Test]
@@ -90,7 +90,7 @@ final class TeamActionsTest extends WebTestCase
 
         self::assertResponseRedirects('/app/team');
         $client->followRedirect();
-        self::assertSelectorTextContains('body', 'Upgrade your plan to invite more teammates');
+        self::assertSelectorTextContains('body', 'Contact us to discuss Enterprise');
     }
 
     #[Test]

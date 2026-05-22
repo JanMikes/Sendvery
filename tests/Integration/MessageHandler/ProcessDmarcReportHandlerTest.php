@@ -10,6 +10,7 @@ use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Message\ProcessDmarcReport;
 use App\MessageHandler\ProcessDmarcReportHandler;
+use App\Services\Stripe\PlanEnforcement;
 use App\Tests\IntegrationTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
@@ -62,6 +63,11 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
         $persistedDomain = $em->find(MonitoredDomain::class, $domainId);
         self::assertNotNull($persistedDomain);
         self::assertNotNull($persistedDomain->firstReportAt);
+
+        // Every parsed report increments the team's monthly counter so the
+        // cap can be enforced upstream.
+        $enforcement = $this->getService(PlanEnforcement::class);
+        self::assertSame(1, $enforcement->getMonthlyReportCount($team->id->toString()));
     }
 
     public function testFirstReportAtStaysFixedOnSubsequentReports(): void

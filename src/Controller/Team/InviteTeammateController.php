@@ -59,13 +59,19 @@ final class InviteTeammateController extends AbstractController
             + count($this->invitationRepository->findPendingForTeam($teamId));
 
         if ($effectiveCount >= $maxMembers) {
+            $nextTier = $plan->nextTier();
+            $upgradeCopy = null !== $nextTier
+                ? sprintf(' Upgrade to %s to invite more teammates.', ucfirst($nextTier->value))
+                : ' Contact us to discuss Enterprise.';
+
             $this->addFlash(
                 'team_error',
                 sprintf(
-                    'Your %s plan only supports %d team member%s. Upgrade your plan to invite more teammates.',
+                    'Your %s plan only supports %d team member%s.%s',
                     $plan->value,
                     $maxMembers,
                     1 === $maxMembers ? '' : 's',
+                    $upgradeCopy,
                 ),
             );
 

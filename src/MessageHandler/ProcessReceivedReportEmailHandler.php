@@ -15,8 +15,10 @@ use App\Services\IdentityProvider;
 use App\Services\Reports\CentralInboxClient;
 use App\Services\Reports\DmarcReportRouter;
 use App\Services\Reports\RawEmailMimeParser;
+use App\Services\Stripe\PlanEnforcement;
 use App\Value\ParsedDmarcReport;
 use App\Value\Reports\CentralInboxFolder;
+use App\Value\Reports\QuarantineReason;
 use App\Value\Reports\RoutingDecision;
 use App\Value\Reports\RoutingKind;
 use Doctrine\ORM\EntityManagerInterface;
@@ -51,6 +53,7 @@ final readonly class ProcessReceivedReportEmailHandler
         private CentralInboxClient $client,
         private ClockInterface $clock,
         private LoggerInterface $logger,
+        private PlanEnforcement $planEnforcement,
         #[Autowire(env: 'int:SENDVERY_QUARANTINE_TTL_DAYS')]
         private int $quarantineTtlDays,
     ) {
@@ -121,8 +124,15 @@ final readonly class ProcessReceivedReportEmailHandler
                 $decision = $this->router->route($parsed->policyDomain);
 
                 if (RoutingKind::Routed === $decision->kind) {
-                    $this->dispatchToTeam($envelope, $decision, $xml);
-                    ++$routedCount;
+                    if ($this->teamIsAtMonthlyReportCap($decision)) {
+                        // Per `never-delete-user-data`: don't drop the report,
+                        // quarantine it so the team can revisit on upgrade.
+                        $this->quarantineOverageReport($envelope, $decision, $parsed, $xml, $now);
+                        ++$quarantinedCount;
+                    } else {
+                        $this->dispatchToTeam($envelope, $decision, $xml);
+                        ++$routedCount;
+                    }
                 } elseif (RoutingKind::Quarantined === $decision->kind) {
                     $this->quarantineReport($envelope, $decision, $parsed, $xml, $now);
                     ++$quarantinedCount;
@@ -136,6 +146,44 @@ final readonly class ProcessReceivedReportEmailHandler
         }
 
         return $this->finalizeStatus($envelope, $routedCount, $quarantinedCount, $errorMessages, $now);
+    }
+
+    private function teamIsAtMonthlyReportCap(RoutingDecision $decision): bool
+    {
+        assert(null !== $decision->domain);
+        $team = $decision->domain->team;
+
+        return !$this->planEnforcement->canParseReport($team->id->toString(), $team->getSubscriptionPlan());
+    }
+
+    private function quarantineOverageReport(
+        ReceivedReportEmail $envelope,
+        RoutingDecision $decision,
+        ParsedDmarcReport $parsed,
+        string $xml,
+        \DateTimeImmutable $now,
+    ): void {
+        assert(null !== $decision->domain);
+
+        $compressed = gzencode($xml);
+        assert(false !== $compressed);
+
+        $quarantined = new QuarantinedDmarcReport(
+            id: $this->identityProvider->nextIdentity(),
+            receivedEmail: $envelope,
+            domainName: $decision->domain->domain,
+            externalReportId: $parsed->reportId,
+            reporterOrg: $parsed->reporterOrg,
+            reporterEmail: $parsed->reporterEmail,
+            dateRangeBegin: $parsed->dateRangeBegin,
+            dateRangeEnd: $parsed->dateRangeEnd,
+            quarantinedAt: $now,
+            expiresAt: $now->modify('+'.$this->quarantineTtlDays.' days'),
+            reason: QuarantineReason::PlanOverage,
+            reportXmlGz: $compressed,
+        );
+
+        $this->entityManager->persist($quarantined);
     }
 
     private function dispatchToTeam(ReceivedReportEmail $envelope, RoutingDecision $decision, string $xml): void

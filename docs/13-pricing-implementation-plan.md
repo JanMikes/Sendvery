@@ -18,11 +18,24 @@ This document is the build plan for executing the pricing-model decisions made o
 | 0 — Test specifications | ✅ done | Tests embedded inside each Phase 1 step rather than landing separately. |
 | 1 — Foundations | ✅ done | 2026-05-22. SubscriptionPlan expanded, BillingInterval added, PlanLimits is canonical matrix, StripePriceResolver takes `(plan, interval)` with AI gating, PlanEnforcement tracks monthly counters via team_usage + team_ai_usage. Test bootstrap also creates migration-only counter tables so integration tests see them. |
 | 2 — AI stub infrastructure | ✅ done | 2026-05-22. `App\Services\Ai\AiInsightsService` interface + 5 result DTOs + `StubAiInsightsService` (honest placeholder copy) + `PlanGatedAiInsightsService` decorator (plan + on-demand quota gating, increment on explainReport success). `AiNotEnabledForPlan` + `AiQuotaExceeded` exceptions. `sendvery:usage:reset` console command + `PlanEnforcement::resetExpiredCounters()`. Bindings wired so the interface resolves to gated→stub; swap is one line when real AI ships. |
-| 3 — Plan limit enforcement | ☐ pending | Wire `PlanEnforcement::canParseReport` into `ProcessDmarcReportHandler`, retention into purge cron, AI quota into dashboard. |
+| 3 — Plan limit enforcement | ✅ done | 2026-05-22. Monthly report cap enforced at the central-inbox dispatch point (`ProcessReceivedReportEmailHandler` — over-cap reports go to quarantine with reason `PlanOverage`). `ProcessDmarcReportHandler` increments the counter on every parsed report. New `sendvery:dmarc:purge` command + `DmarcReportRepository::deleteOlderThanForTeam` honor per-team retention from `PlanLimits::getRetentionDays`. `SubscriptionPlan::nextTier()` helper drives upgrade-nudge copy in the AddDomain banner and the InviteTeammate flash. AI quota widget on billing page deferred to Phase 4's UI rewrite. |
 | 4 — Pricing page UI rewrite | ☐ pending | New 4-card layout, two toggles, Stimulus controller, localStorage. Existing `PricingTable.html.twig` has placeholder "Business" card after rename — full rewrite still required. |
 | 5 — Checkout & billing flow | ☐ pending | Webhook expansion for `customer.subscription.updated`, in-place plan/cadence/AI updates via `updateSubscription()`, billing settings page redesign. |
 | 6 — Cutover | ☐ pending | No legacy data to migrate (see [[clean-slate-no-preexisting-stripe-subs]]). Stripe products + 12 price IDs in dashboard, flip CTAs, copy sweep, email leads. |
 | 7 — Observability polish | ☐ pending | |
+
+### What landed in Phase 3 (2026-05-22)
+
+- `src/Value/SubscriptionPlan.php` — `nextTier(): ?self` helper. Maps Free→Personal, Personal→Pro (AI variants preserved), Pro→Business, etc. Returns null for Business / BusinessAi / Unlimited so callers can render an Enterprise contact-us nudge instead.
+- `src/Value/Reports/QuarantineReason.php` — new `PlanOverage` case for over-cap reports.
+- `src/MessageHandler/ProcessReceivedReportEmailHandler.php` — checks `PlanEnforcement::canParseReport` on every routed report; over-cap reports go to quarantine with reason `PlanOverage` instead of being parsed. Per `never-delete-user-data`, nothing is dropped.
+- `src/MessageHandler/ProcessDmarcReportHandler.php` — increments `team_usage.reports_parsed_count` at the end of every successful parse, regardless of dispatch source. Manual imports and quarantine-releases also count.
+- `src/Repository/DmarcReportRepository.php` — `deleteOlderThanForTeam(teamId, cutoff)` DQL DELETE for per-team retention.
+- `src/Command/PurgeOldDmarcReportsCommand.php` — `sendvery:dmarc:purge` cron. Loops teams; reads `PlanLimits::getRetentionDays`; deletes parsed `DmarcReport` rows older than the cutoff. Skips teams on unlimited retention (Business, Unlimited).
+- `templates/dashboard/domain_add.html.twig` — banner uses `nextTier` helper; falls back to "Contact us to discuss Enterprise" when there's no higher tier.
+- `src/Controller/Team/InviteTeammateController.php` — cap flash references the specific next tier (or Enterprise contact for Business).
+- `CLAUDE.md` — crontab list updated with `45 4 * * * sendvery:dmarc:purge`.
+- Tests: SubscriptionPlanTest gains `nextTier` data provider; ProcessReceivedReportEmailHandlerTest gains a plan-overage case; ProcessDmarcReportHandlerTest asserts the counter increment; PurgeOldDmarcReportsCommandTest covers retention purge across plans. **1107 tests green** (up from 1096).
 
 ### What landed in Phase 2 (2026-05-22)
 

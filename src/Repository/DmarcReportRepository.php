@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Entity\DmarcReport;
+use App\Entity\MonitoredDomain;
 use App\Exceptions\DmarcReportNotFound;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
@@ -67,5 +68,27 @@ final readonly class DmarcReportRepository
         ]);
 
         return $count > 0;
+    }
+
+    /**
+     * Hard-delete DMARC reports for one team whose `processedAt` is older
+     * than the cutoff. Returns the row count removed. Used by the per-team
+     * retention purge (`sendvery:dmarc:purge`) — retention is the one
+     * sanctioned path where Sendvery deletes user data (DMARC reports are
+     * the bulk of storage; envelopes are handled separately).
+     */
+    public function deleteOlderThanForTeam(UuidInterface $teamId, \DateTimeImmutable $cutoff): int
+    {
+        return (int) $this->entityManager
+            ->createQuery(
+                'DELETE FROM '.DmarcReport::class.' r
+                 WHERE r.processedAt < :cutoff
+                 AND r.monitoredDomain IN (
+                    SELECT d.id FROM '.MonitoredDomain::class.' d WHERE d.team = :team
+                 )'
+            )
+            ->setParameter('cutoff', $cutoff)
+            ->setParameter('team', $teamId->toString())
+            ->execute();
     }
 }

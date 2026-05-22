@@ -32,21 +32,23 @@
                 {% endif %}
 
                 {% if not canAddDomain %}
+                    {% set nextTier = currentPlan.nextTier %}
                     <div class="alert alert-warning mb-4">
                         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
                         <div>
                             <p class="text-sm font-medium">Domain limit reached ({{ domainCount }}/{{ maxDomains }})</p>
                             <p class="text-sm mt-1">
-                                {% if currentPlan.value == 'free' %}
-                                    Personal plan ($5.99/mo, up to 5 domains) is in private beta — request access below.
-                                {% elseif currentPlan.value == 'personal' %}
-                                    Pro plan ($23.99/mo, up to 20 domains) is in private beta — request access below.
-                                {% elseif currentPlan.value == 'pro' %}
-                                    Business plan ($59.99/mo, up to 50 domains) is in private beta — request access below.
+                                {% if nextTier is not null %}
+                                    Upgrade to {{ nextTier.value|capitalize }} to add more domains.
+                                {% else %}
+                                    You're on our largest tier — contact us to discuss Enterprise.
                                 {% endif %}
                             </p>
-                            {% set nextPlan = currentPlan.value == 'free' ? 'personal' : (currentPlan.value == 'personal' ? 'pro' : 'business') %}
-                            <a href="{{ path('request_beta_access', {plan: nextPlan, source: 'dashboard-domain-add'}) }}" class="btn btn-sm btn-primary mt-2">Request beta access</a>
+                            {% if nextTier is not null %}
+                                <a href="{{ path('request_beta_access', {plan: nextTier.value, source: 'dashboard-domain-add'}) }}" class="btn btn-sm btn-primary mt-2">Request beta access</a>
+                            {% else %}
+                                <a href="{{ path('request_beta_access', {plan: 'enterprise', source: 'dashboard-domain-add'}) }}" class="btn btn-sm btn-primary mt-2">Contact us</a>
+                            {% endif %}
                         </div>
                     </div>
                 {% endif %}

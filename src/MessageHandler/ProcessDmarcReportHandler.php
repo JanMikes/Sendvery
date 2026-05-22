@@ -14,6 +14,7 @@ use App\Repository\DmarcReportRepository;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\Dmarc\DmarcXmlParser;
 use App\Services\IdentityProvider;
+use App\Services\Stripe\PlanEnforcement;
 use App\Value\AuthResult;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
@@ -29,6 +30,7 @@ final readonly class ProcessDmarcReportHandler
         private DmarcXmlParser $parser,
         private IdentityProvider $identityProvider,
         private ClockInterface $clock,
+        private PlanEnforcement $planEnforcement,
     ) {
     }
 
@@ -118,5 +120,10 @@ final readonly class ProcessDmarcReportHandler
             passCount: $passCount,
             failCount: $failCount,
         ));
+
+        // Every parsed report counts toward the team's monthly cap. Releases
+        // from quarantine and admin imports also flow through here — that's
+        // intentional: they all consume real parse/storage budget.
+        $this->planEnforcement->incrementMonthlyReportCount($domain->team->id->toString());
     }
 }

@@ -426,6 +426,7 @@ Current entries (kept in sync with `crontab`):
 - `0 3 * * *` — `sendvery:dns:check-all` (DNS record + verification re-check)
 - `0 9 * * 1` — `sendvery:digest:send-all` (weekly digest)
 - `0 0 * * *` — `sendvery:usage:reset` (roll expired monthly plan-usage counters forward)
+- `45 4 * * *` — `sendvery:dmarc:purge` (per-team DMARC report retention purge from `PlanLimits::getRetentionDays`)
 - Blacklist checks: daily (later phase)
 
 Ops:

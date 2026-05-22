@@ -11,4 +11,11 @@ enum QuarantineReason: string
 
     /** Domain exists in monitored_domain but no team has verified it yet. */
     case UnverifiedDomain = 'unverified_domain';
+
+    /**
+     * Team has hit its monthly report cap (`PlanLimits::getMaxReportsPerMonth`).
+     * Per `never-delete-user-data`, over-cap reports are queued instead of
+     * dropped; users can revisit on upgrade.
+     */
+    case PlanOverage = 'plan_overage';
 }

@@ -51,6 +51,26 @@ enum SubscriptionPlan: string
     }
 
     /**
+     * Next-up tier to recommend when this plan hits a limit. Preserves the
+     * AI dimension (Personal → Pro, PersonalAi → ProAi). Returns null when
+     * there is no higher tier to nudge toward — Business and BusinessAi
+     * surface an Enterprise contact-us prompt instead.
+     *
+     * `Unlimited` is staff-grant and never appears in user-facing nudges.
+     */
+    public function nextTier(): ?self
+    {
+        return match ($this) {
+            self::Free => self::Personal,
+            self::Personal => self::Pro,
+            self::PersonalAi => self::ProAi,
+            self::Pro => self::Business,
+            self::ProAi => self::BusinessAi,
+            self::Business, self::BusinessAi, self::Unlimited => null,
+        };
+    }
+
+    /**
      * UI grouping for pricing cards: groups *Ai variants under their base tier.
      */
     public function tierGroup(): string

@@ -130,4 +130,23 @@ final class SubscriptionPlanTest extends TestCase
         yield 'business_ai groups with business' => [SubscriptionPlan::BusinessAi, 'business'];
         yield 'unlimited' => [SubscriptionPlan::Unlimited, 'unlimited'];
     }
+
+    #[DataProvider('nextTierProvider')]
+    public function testNextTier(SubscriptionPlan $plan, ?SubscriptionPlan $expected): void
+    {
+        self::assertSame($expected, $plan->nextTier());
+    }
+
+    /** @return iterable<string, array{0: SubscriptionPlan, 1: ?SubscriptionPlan}> */
+    public static function nextTierProvider(): iterable
+    {
+        yield 'free → personal' => [SubscriptionPlan::Free, SubscriptionPlan::Personal];
+        yield 'personal → pro' => [SubscriptionPlan::Personal, SubscriptionPlan::Pro];
+        yield 'personal_ai → pro_ai' => [SubscriptionPlan::PersonalAi, SubscriptionPlan::ProAi];
+        yield 'pro → business' => [SubscriptionPlan::Pro, SubscriptionPlan::Business];
+        yield 'pro_ai → business_ai' => [SubscriptionPlan::ProAi, SubscriptionPlan::BusinessAi];
+        yield 'business has no next tier' => [SubscriptionPlan::Business, null];
+        yield 'business_ai has no next tier' => [SubscriptionPlan::BusinessAi, null];
+        yield 'unlimited has no next tier' => [SubscriptionPlan::Unlimited, null];
+    }
 }
