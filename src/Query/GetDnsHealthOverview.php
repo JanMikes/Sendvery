@@ -66,4 +66,58 @@ final readonly class GetDnsHealthOverview
 
         return array_map(DnsHealthOverviewResult::fromDatabaseRow(...), $rows);
     }
+
+    /**
+     * Single-domain variant used by the domain detail header badge row.
+     * Same SQL as {@see forTeams()} with an extra `md.id = :domainId`
+     * filter — keeps the team-scope guard mandatory so a known domain ID
+     * from another tenant still returns null.
+     *
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function forDomain(string $domainId, array $teamIds): ?DnsHealthOverviewResult
+    {
+        if ([] === $teamIds) {
+            return null;
+        }
+
+        /** @var array{domain_id: string, domain_name: string, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, latest_snapshot_grade: string|null, latest_snapshot_score: int|string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, latest_checked_at: string|null}|false $row */
+        $row = $this->database->executeQuery(
+            'SELECT
+                md.id           AS domain_id,
+                md.domain       AS domain_name,
+                md.spf_verified_at,
+                md.dkim_verified_at,
+                md.dmarc_verified_at,
+                dhs.grade       AS latest_snapshot_grade,
+                dhs.score       AS latest_snapshot_score,
+                dhs.spf_score   AS latest_spf_score,
+                dhs.dkim_score  AS latest_dkim_score,
+                dhs.dmarc_score AS latest_dmarc_score,
+                dhs.mx_score    AS latest_mx_score,
+                dhs.checked_at  AS latest_checked_at
+            FROM monitored_domain md
+            LEFT JOIN LATERAL (
+                SELECT grade, score, spf_score, dkim_score, dmarc_score, mx_score, checked_at
+                FROM domain_health_snapshot
+                WHERE monitored_domain_id = md.id
+                ORDER BY checked_at DESC
+                LIMIT 1
+            ) dhs ON true
+            WHERE md.id = :domainId AND md.team_id IN (:teamIds)',
+            [
+                'domainId' => $domainId,
+                'teamIds' => $teamIds,
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
+            ],
+        )->fetchAssociative();
+
+        if (false === $row) {
+            return null;
+        }
+
+        return DnsHealthOverviewResult::fromDatabaseRow($row);
+    }
 }

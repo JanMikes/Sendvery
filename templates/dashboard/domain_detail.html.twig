@@ -21,6 +21,30 @@
                     <span class="badge badge-sm badge-ghost">Unverified</span>
                 {% endif %}
             </div>
+            <div class="flex items-center gap-2 mt-2 flex-wrap">
+                {% if dnsHealth is null %}
+                    <span class="badge badge-ghost badge-sm">SPF</span>
+                    <span class="badge badge-ghost badge-sm">DKIM</span>
+                    <span class="badge badge-ghost badge-sm">DMARC</span>
+                    <span class="badge badge-ghost badge-sm">MX</span>
+                {% else %}
+                    <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-spf"
+                       class="badge badge-sm {{ dnsHealth.isSpfVerified() ? 'badge-success' : 'badge-error' }}">SPF</a>
+                    <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-dkim"
+                       class="badge badge-sm {{ dnsHealth.isDkimVerified() ? 'badge-success' : 'badge-error' }}">DKIM</a>
+                    <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-dmarc"
+                       class="badge badge-sm {{ dnsHealth.isDmarcVerified() ? 'badge-success' : 'badge-error' }}">DMARC</a>
+                    {% if dnsHealth.latestMxScore is null %}
+                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-ghost">MX</a>
+                    {% elseif dnsHealth.latestMxScore >= 80 %}
+                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-success">MX</a>
+                    {% elseif dnsHealth.latestMxScore >= 50 %}
+                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-warning">MX</a>
+                    {% else %}
+                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-error">MX</a>
+                    {% endif %}
+                {% endif %}
+            </div>
         </div>
         <div class="flex items-center gap-2">
             <a href="{{ path('dashboard_domain_reports', { id: domain.domainId }) }}" class="btn btn-ghost btn-sm">

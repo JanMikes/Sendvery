@@ -42,7 +42,7 @@
     {% if latest %}
         {# Current score #}
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div class="card bg-base-100 shadow">
+            <div id="health-score" class="card bg-base-100 shadow">
                 <div class="card-body items-center text-center">
                     <div class="text-7xl font-bold {{ latest.gradeColor() }}">{{ latest.grade }}</div>
                     <div class="text-2xl font-semibold mt-2">{{ latest.score }}/100</div>
@@ -55,14 +55,14 @@
                     <h3 class="card-title text-lg mb-4">Category Scores</h3>
                     <div class="space-y-3">
                         {% set categories = [
-                            { name: 'SPF', score: latest.spfScore },
-                            { name: 'DKIM', score: latest.dkimScore },
-                            { name: 'DMARC', score: latest.dmarcScore },
-                            { name: 'MX', score: latest.mxScore },
-                            { name: 'Blacklist', score: latest.blacklistScore },
+                            { name: 'SPF',       score: latest.spfScore,       id: 'health-spf' },
+                            { name: 'DKIM',      score: latest.dkimScore,      id: 'health-dkim' },
+                            { name: 'DMARC',     score: latest.dmarcScore,     id: 'health-dmarc' },
+                            { name: 'MX',        score: latest.mxScore,        id: 'health-mx' },
+                            { name: 'Blacklist', score: latest.blacklistScore, id: 'health-blacklist' },
                         ] %}
                         {% for cat in categories %}
-                            <div>
+                            <div id="{{ cat.id }}">
                                 <div class="flex justify-between text-sm mb-1">
                                     <span>{{ cat.name }}</span>
                                     <span class="font-medium">{{ cat.score }}%</span>
@@ -77,7 +77,7 @@
 
         {# Trend chart #}
         {% if trendChartConfig %}
-            <div class="card bg-base-100 shadow mb-6">
+            <div id="health-trend" class="card bg-base-100 shadow mb-6">
                 <div class="card-body">
                     <h3 class="card-title text-lg">Score Trend</h3>
                     <div {{ stimulus_controller('chart') }} {{ stimulus_target('chart', 'canvas') }} data-chart-config-value="{{ trendChartConfig|json_encode }}"></div>

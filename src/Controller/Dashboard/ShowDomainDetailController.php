@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Dashboard;
 
+use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainReports;
@@ -23,6 +24,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly GetDomainSenderBreakdown $getDomainSenderBreakdown,
         private readonly GetDomainPassRateTrend $getDomainPassRateTrend,
         private readonly QuarantinedDmarcReportRepository $quarantineRepository,
+        private readonly GetDnsHealthOverview $getDnsHealthOverview,
     ) {
     }
 
@@ -77,6 +79,8 @@ final class ShowDomainDetailController extends AbstractController
             ? 0
             : $this->quarantineRepository->countForDomain($domain->domainName);
 
+        $dnsHealth = $this->getDnsHealthOverview->forDomain($id, $teamIds);
+
         return $this->render('dashboard/domain_detail.html.twig', [
             'domain' => $domain,
             'reports' => $reports,
@@ -84,6 +88,7 @@ final class ShowDomainDetailController extends AbstractController
             'trendChartConfig' => $trendChartConfig,
             'senderChartConfig' => $senderChartConfig,
             'quarantineCount' => $quarantineCount,
+            'dnsHealth' => $dnsHealth,
         ]);
     }
 }

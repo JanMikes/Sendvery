@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Integration\Controller;
 
 use App\Entity\DomainHealthSnapshot;
+use App\Query\GetDnsHealthOverview;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
 use Doctrine\ORM\EntityManagerInterface;
@@ -172,6 +173,39 @@ final class DnsHealthOverviewTest extends WebTestCase
             '/bg-primary text-primary-content[^<]*<\/a>\s*<a[^>]*>[^<]*<svg[\s\S]*?DNS Health|bg-primary text-primary-content[\s\S]{0,1200}DNS Health/',
             $body,
         );
+    }
+
+    #[Test]
+    public function forDomainReturnsNullForUnknownDomain(): void
+    {
+        self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+
+        $query = self::getContainer()->get(GetDnsHealthOverview::class);
+        assert($query instanceof GetDnsHealthOverview);
+
+        $result = $query->forDomain(Uuid::uuid7()->toString(), [$persona->team->id->toString()]);
+
+        self::assertNull($result);
+    }
+
+    #[Test]
+    public function forDomainReturnsResultForKnownDomain(): void
+    {
+        self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $query = self::getContainer()->get(GetDnsHealthOverview::class);
+        assert($query instanceof GetDnsHealthOverview);
+
+        $result = $query->forDomain($persona->domain->id->toString(), [$persona->team->id->toString()]);
+
+        self::assertNotNull($result);
+        self::assertSame($persona->domain->id->toString(), $result->domainId);
+        self::assertSame($persona->domain->domain, $result->domainName);
     }
 
     #[Test]
