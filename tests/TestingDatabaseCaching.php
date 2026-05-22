@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -87,5 +88,39 @@ final class TestingDatabaseCaching
         if ([] !== $metadata) {
             $schemaTool->createSchema($metadata);
         }
+
+        self::createMigrationOnlyTables($entityManager->getConnection());
+    }
+
+    /**
+     * SchemaTool only knows about ORM-mapped entities. Counter tables
+     * `team_usage` and `team_ai_usage` are accessed via raw DBAL — they
+     * exist only in migrations. Mirror their structure here so integration
+     * tests can hit them without running the full migration chain.
+     */
+    private static function createMigrationOnlyTables(Connection $connection): void
+    {
+        $connection->executeStatement(<<<'SQL'
+            CREATE TABLE team_usage (
+                team_id UUID NOT NULL,
+                reports_parsed_count INT NOT NULL DEFAULT 0,
+                period_started_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+                period_ends_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+                PRIMARY KEY(team_id),
+                CONSTRAINT fk_team_usage_team FOREIGN KEY (team_id)
+                    REFERENCES team (id) ON DELETE CASCADE
+            )
+        SQL);
+        $connection->executeStatement(<<<'SQL'
+            CREATE TABLE team_ai_usage (
+                team_id UUID NOT NULL,
+                on_demand_count INT NOT NULL DEFAULT 0,
+                period_started_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+                period_ends_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+                PRIMARY KEY(team_id),
+                CONSTRAINT fk_team_ai_usage_team FOREIGN KEY (team_id)
+                    REFERENCES team (id) ON DELETE CASCADE
+            )
+        SQL);
     }
 }
