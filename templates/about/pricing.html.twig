@@ -1,19 +1,62 @@
 {% extends 'marketing_layout.html.twig' %}
 
 {% block title %}Pricing — Sendvery Email Monitoring{% endblock %}
-{% block meta_description %}Sendvery pricing: self-host free forever. Hosted plans from $0/mo. 5 domains for $5.99/mo. AI insights add-on $3.99/mo. Simple, transparent pricing.{% endblock %}
+{% block meta_description %}Sendvery pricing: Free forever for 1 domain. Personal from $4.99/mo (save $12/yr on annual). Pro from $19.99/mo (save $48/yr). Business from $49.99/mo (save $120/yr). Self-host free, always.{% endblock %}
 
 {% block content %}
-<twig:SectionContainer>
-    <div class="text-center mb-12">
-        <h1 class="text-3xl md:text-4xl font-bold">Simple, transparent pricing</h1>
-        <p class="mt-4 text-base-content/60 text-lg">Start free. Self-host free forever. Scale as you grow.</p>
-    </div>
-    <twig:PricingTable />
+    <twig:SectionContainer>
+        <div class="text-center mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold">Simple, transparent pricing</h1>
+            <p class="mt-4 text-base-content/60 text-lg">Start free. Self-host free forever. Scale as you grow.</p>
+        </div>
+        <twig:PricingTable />
 
-    <div class="max-w-2xl mx-auto mt-16 text-center">
-        <h2 class="text-xl font-bold mb-4">Enterprise needs?</h2>
-        <p class="text-base-content/60">Custom domain limits, SLA, dedicated support, and custom integrations. <a href="mailto:jan.mikes@sendvery.com" class="link link-primary">Contact us</a>.</p>
-    </div>
-</twig:SectionContainer>
+        <div class="max-w-2xl mx-auto mt-10 mb-4">
+            <div class="alert bg-success/10 border border-success/20 text-sm">
+                <svg class="w-5 h-5 text-success shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 9v7.5"/>
+                </svg>
+                <div>
+                    <p class="font-semibold text-base-content">Annual billing = 2 months free, every year</p>
+                    <p class="text-base-content/60 mt-1">
+                        Personal saves <strong>$12/yr</strong> ($4.99/mo vs $5.99/mo) ·
+                        Pro saves <strong>$48/yr</strong> ($19.99/mo vs $23.99/mo) ·
+                        Business saves <strong>$120/yr</strong> ($49.99/mo vs $59.99/mo).
+                        Switch back to monthly anytime.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </twig:SectionContainer>
+
+    <twig:SectionContainer bgClass="bg-base-200/20">
+        <div class="text-center mb-10">
+            <h2 class="text-2xl md:text-3xl font-bold">Compare all features</h2>
+            <p class="mt-3 text-base-content/60">Everything that's included in each plan.</p>
+        </div>
+        <twig:PricingComparisonTable />
+    </twig:SectionContainer>
+
+    <twig:SectionContainer>
+        <div class="text-center mb-10">
+            <h2 class="text-2xl md:text-3xl font-bold">Pricing FAQ</h2>
+            <p class="mt-3 text-base-content/60">Common questions about billing, limits, and cancellation.</p>
+        </div>
+        <twig:PricingFaq />
+    </twig:SectionContainer>
+
+    <twig:SectionContainer bgClass="bg-base-200/30">
+        <div class="text-center max-w-2xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold">Ready to protect your domain?</h2>
+            <p class="mt-4 text-base-content/60">Start free with 1 domain and no credit card. Upgrade when you need more — cancel anytime.</p>
+            <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="{{ path('auth_login') }}" class="btn btn-primary btn-lg">Start free</a>
+                <a href="mailto:jan.mikes@sendvery.com?subject=Enterprise%20inquiry" class="btn btn-ghost btn-lg">Talk to us</a>
+            </div>
+            <p class="mt-6 text-sm text-base-content/40">
+                Enterprise needs? Custom limits, SLA, dedicated support, AI included.
+                <a href="mailto:jan.mikes@sendvery.com?subject=Enterprise%20inquiry" class="link link-primary">Contact us</a>.
+            </p>
+        </div>
+    </twig:SectionContainer>
 {% endblock %}

@@ -1,0 +1,272 @@
+{# Full feature-by-feature comparison of the four public tiers.
+   No props — all values are static and match docs/05-monetization.md.
+   The "AI Insights" row is conditional on the `ai_available` Twig global. #}
+
+{% set check %}
+<svg class="w-4 h-4 text-success inline" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+</svg>
+{% endset %}
+
+{% set dash %}<span class="text-base-content/30">—</span>{% endset %}
+
+{# Desktop variant — full matrix table. #}
+<div class="hidden md:block overflow-x-auto">
+    <table class="table table-zebra w-full">
+        <thead>
+            <tr>
+                <th class="w-1/3">Feature</th>
+                <th class="text-center">Free</th>
+                <th class="text-center">Personal</th>
+                <th class="text-center">Pro</th>
+                <th class="text-center">Business</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="bg-base-300/20">
+                <td colspan="5" class="text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2">Limits</td>
+            </tr>
+            <tr>
+                <td>Domains</td>
+                <td class="text-center">1</td>
+                <td class="text-center">5</td>
+                <td class="text-center">20</td>
+                <td class="text-center">50</td>
+            </tr>
+            <tr>
+                <td>Reports / month</td>
+                <td class="text-center">100</td>
+                <td class="text-center">1,000</td>
+                <td class="text-center">10,000</td>
+                <td class="text-center">50,000</td>
+            </tr>
+            <tr>
+                <td>Report retention</td>
+                <td class="text-center">30 days</td>
+                <td class="text-center">1 year</td>
+                <td class="text-center">2 years</td>
+                <td class="text-center">Unlimited</td>
+            </tr>
+            <tr>
+                <td>Team members (seats)</td>
+                <td class="text-center">1</td>
+                <td class="text-center">1</td>
+                <td class="text-center">3</td>
+                <td class="text-center">10</td>
+            </tr>
+
+            <tr class="bg-base-300/20">
+                <td colspan="5" class="text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2">Features</td>
+            </tr>
+            <tr>
+                <td>DMARC + DNS monitoring</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+            </tr>
+            <tr>
+                <td>Real-time alerts</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+            </tr>
+            <tr>
+                <td>Blacklist monitoring</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+            </tr>
+            <tr>
+                <td>Sender inventory</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+            </tr>
+            <tr>
+                <td>Email HTML reports</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+            </tr>
+
+            <tr class="bg-base-300/20">
+                <td colspan="5" class="text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2">Advanced</td>
+            </tr>
+            <tr>
+                <td>API access + webhooks</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ check }}</td>
+                <td class="text-center">{{ check }}</td>
+            </tr>
+            <tr>
+                <td>White-label PDF reports</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ dash }}</td>
+                <td class="text-center">{{ check }}</td>
+            </tr>
+            <tr>
+                <td>
+                    AI Insights
+                    {% if not ai_available %}<span class="badge badge-ghost badge-xs ml-1">coming soon</span>{% endif %}
+                </td>
+                <td class="text-center"><span class="text-base-content/40 text-xs">Contact us</span></td>
+                <td class="text-center">
+                    {% if ai_available %}
+                        {{ check }} <span class="text-xs text-base-content/50">50/mo</span>
+                    {% else %}
+                        {{ dash }}
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if ai_available %}
+                        {{ check }} <span class="text-xs text-base-content/50">200/mo</span>
+                    {% else %}
+                        {{ dash }}
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if ai_available %}
+                        {{ check }} <span class="text-xs text-base-content/50">500/mo</span>
+                    {% else %}
+                        {{ dash }}
+                    {% endif %}
+                </td>
+            </tr>
+
+            <tr class="bg-base-300/20">
+                <td colspan="5" class="text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2">Support</td>
+            </tr>
+            <tr>
+                <td>Support</td>
+                <td class="text-center">Community</td>
+                <td class="text-center">Email</td>
+                <td class="text-center">Priority</td>
+                <td class="text-center">Priority + SLA</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+{# Mobile variant — one card per tier with a definition list. #}
+<div class="md:hidden space-y-6">
+    <div class="card bg-base-200/50 border border-base-300">
+        <div class="card-body p-4">
+            <h3 class="card-title text-base">Free</h3>
+            <dl class="mt-3 space-y-2 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>1</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>100</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>30 days</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>1</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
+                    <dd><span class="text-base-content/40 text-xs">Contact us</span></dd>
+                </div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Support</dt><dd>Community</dd></div>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card bg-base-200/50 border border-base-300">
+        <div class="card-body p-4">
+            <h3 class="card-title text-base">Personal</h3>
+            <dl class="mt-3 space-y-2 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>5</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>1,000</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>1 year</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>1</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
+                    <dd>
+                        {% if ai_available %}
+                            {{ check }} <span class="text-xs text-base-content/50">50/mo</span>
+                        {% else %}
+                            {{ dash }}
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Support</dt><dd>Email</dd></div>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card bg-base-200/50 border border-base-300">
+        <div class="card-body p-4">
+            <h3 class="card-title text-base">Pro</h3>
+            <dl class="mt-3 space-y-2 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>20</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>10,000</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>2 years</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>3</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
+                    <dd>
+                        {% if ai_available %}
+                            {{ check }} <span class="text-xs text-base-content/50">200/mo</span>
+                        {% else %}
+                            {{ dash }}
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Support</dt><dd>Priority</dd></div>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card bg-base-200/50 border border-base-300">
+        <div class="card-body p-4">
+            <h3 class="card-title text-base">Business</h3>
+            <dl class="mt-3 space-y-2 text-sm">
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>50</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>50,000</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>Unlimited</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>10</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
+                    <dd>
+                        {% if ai_available %}
+                            {{ check }} <span class="text-xs text-base-content/50">500/mo</span>
+                        {% else %}
+                            {{ dash }}
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Support</dt><dd>Priority + SLA</dd></div>
+            </dl>
+        </div>
+    </div>
+</div>

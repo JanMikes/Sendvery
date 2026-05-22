@@ -1,0 +1,85 @@
+{# Pricing-specific FAQ. Each entry is a daisyUI v5 collapse with a
+   checkbox toggle so visitors can keep multiple answers open while they
+   compare. Answers contain inline HTML (no |raw filter on data). #}
+
+<div class="space-y-3 max-w-3xl mx-auto">
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-1"/>
+        <div class="collapse-title font-semibold">Can I cancel anytime?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>Yes. You can cancel at any time from your billing page, and your subscription stays active until the end of the current billing period — no immediate cutoff and no early-termination fees. After that date your team rolls back to the Free plan automatically, and your data stays where it is (we never delete user data as a consequence of a billing event).</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-2"/>
+        <div class="collapse-title font-semibold">Do you offer refunds?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>We don't offer self-serve refunds. Cancellations take effect at the end of your current billing period — you keep access until then. If something has clearly gone wrong (you were double-billed, charged after cancellation, or you bought the wrong plan by mistake), email <a href="mailto:jan.mikes@sendvery.com?subject=Refund%20request" class="link link-primary">jan.mikes@sendvery.com</a> and we'll sort it out manually.</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-3"/>
+        <div class="collapse-title font-semibold">Can I switch plans later?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>Yes — upgrade or downgrade from your billing page anytime. Upgrades take effect immediately and are prorated against your current period. Downgrades take effect at the next renewal, so you keep the higher tier's features until then. If a downgrade would put you over a smaller plan's limits (e.g. more domains than the new cap allows), we freeze the excess rather than deleting it — you choose what stays active after the change.</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-4"/>
+        <div class="collapse-title font-semibold">What happens if I exceed my plan limits?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>We freeze ingestion at the cap — we never delete your data. If you cross your monthly report cap, additional envelopes are quarantined instead of parsed; if you hit your domain cap, new domains can't be added until you upgrade or remove an existing one. Everything that's already in your account stays put. Upgrade and the frozen data becomes available again.</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-5"/>
+        <div class="collapse-title font-semibold">Do you offer annual discounts?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>Yes — annual billing is exactly two months free. The math is clean: you pay ten months and get twelve. That's <strong>$12/yr off Personal</strong> ($4.99/mo vs $5.99/mo), <strong>$48/yr off Pro</strong> ($19.99/mo vs $23.99/mo), and <strong>$120/yr off Business</strong> ($49.99/mo vs $59.99/mo). Switch between monthly and annual anytime from billing.</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-6"/>
+        <div class="collapse-title font-semibold">Is there a free trial?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>There's no separate trial because the Free plan is permanent. One domain, 100 reports a month, 30-day retention — no credit card, no time limit. You can run a real domain on Free for as long as you like and upgrade only when you actually need more. Self-hosting is also free forever (AGPL-3.0).</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-7"/>
+        <div class="collapse-title font-semibold">What payment methods do you accept?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>All major credit and debit cards via Stripe (Visa, Mastercard, American Express, and the usual long tail). Apple Pay and Google Pay work wherever Stripe supports them on your browser/device. We don't offer manual invoicing or bank transfer on self-serve plans — if you need that for procurement reasons, talk to us about Enterprise.</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-8"/>
+        <div class="collapse-title font-semibold">Do you charge VAT?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>Not currently. Sendvery is operated by a Czech sole-trader (OSVČ) below the CZ VAT threshold, so advertised prices are flat and tax-inclusive — what you see is what you pay. If we cross the threshold or expand commercial operations into wider EU B2C, we'll enable Stripe Tax and break VAT out on receipts at that point. No code or plan change needed on your side when that happens.</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-9"/>
+        <div class="collapse-title font-semibold">Why is self-hosting free?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>Sendvery is open source under the AGPL-3.0 license. You can clone the repo, run it on your own infrastructure, and use every feature — including AI Insights if you bring your own Anthropic API key — without paying us a cent. The hosted plans sell <em>managed infrastructure</em> (servers, backups, updates, monitoring, the AI key, support), not the software itself. If self-hosting is a better fit for your team, that's genuinely OK with us.</p>
+        </div>
+    </div>
+
+    <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-10"/>
+        <div class="collapse-title font-semibold">How does AI Insights work?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>AI Insights is Claude-backed analysis layered on top of your DMARC data — a weekly plain-English digest, on-demand summaries of failing senders, and recommended next actions. Quotas scale with the plan: <strong>50 on-demand calls/month on Personal, 200 on Pro, 500 on Business</strong>. The feature is in the final stages of rollout and will appear automatically in your dashboard once it's enabled for your account; until then, paid plans run without it and the option is reserved on every paid tier. Free-plan users curious about AI can reach out to us directly.</p>
+        </div>
+    </div>
+</div>
