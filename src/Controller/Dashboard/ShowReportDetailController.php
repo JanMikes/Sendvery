@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Dashboard;
 
 use App\Query\GetReportDetail;
+use App\Query\GetReportSenderGroups;
 use App\Services\DashboardContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,17 +16,21 @@ final class ShowReportDetailController extends AbstractController
     public function __construct(
         private readonly DashboardContext $dashboardContext,
         private readonly GetReportDetail $getReportDetail,
+        private readonly GetReportSenderGroups $getReportSenderGroups,
     ) {
     }
 
     #[Route('/app/reports/{id}', name: 'dashboard_report_detail')]
     public function __invoke(string $id): Response
     {
-        $report = $this->getReportDetail->forReport($id, $this->dashboardContext->getTeamIdStrings());
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
+        $report = $this->getReportDetail->forReport($id, $teamIds);
 
         if (null === $report) {
             throw $this->createNotFoundException('Report not found.');
         }
+
+        $senderGroups = $this->getReportSenderGroups->forReport($id, $teamIds);
 
         $totalMessages = 0;
         $passMessages = 0;
@@ -52,6 +57,7 @@ final class ShowReportDetailController extends AbstractController
             'passMessages' => $passMessages,
             'failMessages' => $failMessages,
             'donutConfig' => $donutConfig,
+            'senderGroups' => $senderGroups,
         ]);
     }
 }

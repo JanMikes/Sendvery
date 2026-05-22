@@ -84,39 +84,107 @@
         </div>
     </div>
 
-    {# Records table #}
-    <div class="card bg-base-100 border border-base-200 shadow-sm">
-        <div class="card-body p-4">
-            <h3 class="text-sm font-semibold mb-3">Records ({{ report.records|length }})</h3>
-
-            <div class="overflow-x-auto">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Source IP</th>
-                            <th>Hostname</th>
-                            <th class="text-right">Count</th>
-                            <th>Disposition</th>
-                            <th>DKIM</th>
-                            <th>SPF</th>
-                            <th>Header From</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for record in report.records %}
-                            <tr>
-                                <td class="font-mono text-xs">{{ record.sourceIp }}</td>
-                                <td class="text-xs">{{ record.resolvedHostname ?? record.resolvedOrg ?? '—' }}</td>
-                                <td class="text-right font-medium">{{ record.count }}</td>
-                                <td><twig:StatusBadge status="{{ record.disposition }}" /></td>
-                                <td><twig:StatusBadge status="{{ record.dkimResult }}" /></td>
-                                <td><twig:StatusBadge status="{{ record.spfResult }}" /></td>
-                                <td class="text-xs">{{ record.headerFrom }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    {# By sender grouped view #}
+    <div class="mb-6">
+        <h2 class="text-lg font-semibold mb-3">By sender</h2>
+        <div class="space-y-2">
+            {% for group in senderGroups %}
+                <details open class="group">
+                    <summary class="card bg-base-100 border border-base-200 shadow-sm cursor-pointer list-none">
+                        <div class="card-body p-3 flex flex-row flex-wrap items-center gap-3">
+                            <span class="font-medium truncate max-w-[18rem]" title="{{ group.displayLabel }}">
+                                {{ group.displayLabel|length > 50 ? group.displayLabel[:50] ~ '…' : group.displayLabel }}
+                            </span>
+                            <span class="text-sm text-base-content/60">{{ group.totalMessages }} msg</span>
+                            <span class="badge badge-sm badge-ghost">DKIM {{ group.dkimPassRate|number_format(0) }}%</span>
+                            <span class="badge badge-sm badge-ghost">SPF {{ group.spfPassRate|number_format(0) }}%</span>
+                            {% if group.dispositionNone > 0 %}
+                                <span class="badge badge-sm badge-info">{{ group.dispositionNone }} none</span>
+                            {% endif %}
+                            {% if group.dispositionQuarantine > 0 %}
+                                <span class="badge badge-sm badge-warning">{{ group.dispositionQuarantine }} quarantine</span>
+                            {% endif %}
+                            {% if group.dispositionReject > 0 %}
+                                <span class="badge badge-sm badge-error">{{ group.dispositionReject }} reject</span>
+                            {% endif %}
+                            {% if group.senderIsAuthorized is same as(true) %}
+                                <span class="badge badge-sm badge-success">Authorized</span>
+                            {% elseif group.senderIsAuthorized is same as(false) %}
+                                <span class="badge badge-sm badge-error">Unauthorized</span>
+                            {% endif %}
+                        </div>
+                    </summary>
+                    <div class="overflow-x-auto mt-1 ml-2 border-l-2 border-base-300 pl-3">
+                        <table class="table table-xs">
+                            <thead>
+                                <tr>
+                                    <th>Source IP</th>
+                                    <th>Hostname</th>
+                                    <th class="text-right">Count</th>
+                                    <th>Disposition</th>
+                                    <th>DKIM</th>
+                                    <th>SPF</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in report.records|filter(record => record.sourceIp in group.sourceIps) %}
+                                    <tr>
+                                        <td class="font-mono text-xs">{{ record.sourceIp }}</td>
+                                        <td class="text-xs">{{ record.resolvedHostname ?? record.resolvedOrg ?? '—' }}</td>
+                                        <td class="text-right font-medium">{{ record.count }}</td>
+                                        <td><twig:StatusBadge status="{{ record.disposition }}" /></td>
+                                        <td><twig:StatusBadge status="{{ record.dkimResult }}" /></td>
+                                        <td><twig:StatusBadge status="{{ record.spfResult }}" /></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            {% else %}
+                <p class="text-sm text-base-content/50">No records in this report.</p>
+            {% endfor %}
         </div>
     </div>
+
+    {# Records table #}
+    <details>
+        <summary class="cursor-pointer mb-3">
+            <span class="text-sm font-semibold">Show raw records ({{ report.records|length }})</span>
+        </summary>
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="text-sm font-semibold mb-3">Records ({{ report.records|length }})</h3>
+
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Source IP</th>
+                                <th>Hostname</th>
+                                <th class="text-right">Count</th>
+                                <th>Disposition</th>
+                                <th>DKIM</th>
+                                <th>SPF</th>
+                                <th>Header From</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in report.records %}
+                                <tr>
+                                    <td class="font-mono text-xs">{{ record.sourceIp }}</td>
+                                    <td class="text-xs">{{ record.resolvedHostname ?? record.resolvedOrg ?? '—' }}</td>
+                                    <td class="text-right font-medium">{{ record.count }}</td>
+                                    <td><twig:StatusBadge status="{{ record.disposition }}" /></td>
+                                    <td><twig:StatusBadge status="{{ record.dkimResult }}" /></td>
+                                    <td><twig:StatusBadge status="{{ record.spfResult }}" /></td>
+                                    <td class="text-xs">{{ record.headerFrom }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </details>
 {% endblock %}
