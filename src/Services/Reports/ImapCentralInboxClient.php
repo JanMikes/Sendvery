@@ -11,6 +11,7 @@ use Psr\Log\LoggerInterface;
 use Webklex\PHPIMAP\Client;
 use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Exceptions\ConnectionFailedException;
+use Webklex\PHPIMAP\Exceptions\MessageHeaderFetchingException;
 use Webklex\PHPIMAP\Folder;
 use Webklex\PHPIMAP\Message;
 
@@ -193,7 +194,21 @@ final class ImapCentralInboxClient implements CentralInboxClient
     {
         $path = $this->config->folderPath($folder);
         $this->ensureFolderExists($path);
-        $message->move($path);
+
+        try {
+            $message->move($path);
+        } catch (MessageHeaderFetchingException $e) {
+            // Webklex sends IMAP MOVE first, then tries to re-fetch the message at the
+            // destination using the pre-move UIDNEXT. If that UID doesn't line up
+            // (Seznam Email Profi sometimes returns a stale UIDNEXT), the post-move
+            // header fetch throws even though the MOVE itself already succeeded.
+            // We discard the returned Message anyway, so log and move on.
+            $this->logger->info('Post-move header fetch failed but MOVE succeeded: {error}', [
+                'error' => $e->getMessage(),
+                'uid' => $message->getUid(),
+                'folder' => $path,
+            ]);
+        }
     }
 
     private function ensureFolderExists(string $path): void
