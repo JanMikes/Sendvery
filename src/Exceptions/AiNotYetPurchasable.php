@@ -8,19 +8,19 @@ use App\Value\SubscriptionPlan;
 
 /**
  * Thrown when someone tries to start a checkout for an AI plan variant while
- * AI Insights is still gated behind `SENDVERY_AI_PURCHASABLE=false`. See
- * DEC-057 — ship the gating + stubs first, sell the AI plans once real
- * Anthropic inference is ready.
+ * `ANTHROPIC_API_KEY` is unset. See DEC-057 — AI variants are gated on the
+ * presence of the API key; without it we have no real AI service to charge
+ * for.
  *
- * Callers (UpgradePlanController) should catch this and redirect the user to
- * the AI-curious lead capture instead of bubbling a server error.
+ * Callers (UpgradePlanController) catch this and redirect the user back to
+ * billing with an explanatory flash instead of letting a 500 bubble up.
  */
 final class AiNotYetPurchasable extends \DomainException
 {
     public function __construct(public readonly SubscriptionPlan $plan)
     {
         parent::__construct(sprintf(
-            'AI plan variant "%s" is not yet purchasable — SENDVERY_AI_PURCHASABLE is false.',
+            'AI plan variant "%s" is not yet purchasable — ANTHROPIC_API_KEY is not configured.',
             $plan->value,
         ));
     }

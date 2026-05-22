@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
-use App\Events\BetaAccessRequested;
 use App\Value\SubscriptionPlan;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
 
+/**
+ * Read-only after the fake-door cutover (DEC-050 → Phase 6 of the pricing
+ * rollout). Historical leads stay in the table so
+ * `sendvery:beta-leads:launch-announce` can email them once when Stripe
+ * goes live. New leads are no longer captured — the `/request-access`
+ * endpoint was removed when Stripe became the default checkout path.
+ */
 #[ORM\Entity]
 #[ORM\Table(name: 'beta_access_request')]
-final class BetaAccessRequest implements EntityWithEvents
+final class BetaAccessRequest
 {
-    use HasEvents;
-
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     public UuidInterface $id;
@@ -63,15 +67,5 @@ final class BetaAccessRequest implements EntityWithEvents
         $this->message = $message;
         $this->source = $source;
         $this->requestedAt = $requestedAt;
-
-        $this->recordThat(new BetaAccessRequested(
-            requestId: $this->id,
-            email: $this->email,
-            name: $this->name,
-            company: $this->company,
-            requestedPlan: $this->requestedPlan,
-            domainCount: $this->domainCount,
-            message: $this->message,
-        ));
     }
 }

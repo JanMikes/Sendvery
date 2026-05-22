@@ -13,8 +13,9 @@ use App\Value\SubscriptionPlan;
  * three paid tiers × two AI variants × two cadences.
  *
  * Free and Unlimited never have prices (no Stripe). AI variants throw
- * `AiNotYetPurchasable` when `SENDVERY_AI_PURCHASABLE=false` so checkout
- * naturally redirects to the AI-curious lead form (DEC-057).
+ * `AiNotYetPurchasable` when `ANTHROPIC_API_KEY` is unset so callers can
+ * redirect with an error flash instead of letting the unbuyable tier
+ * 500 at Stripe checkout (DEC-057).
  */
 final readonly class StripePriceResolver
 {

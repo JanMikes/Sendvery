@@ -43,7 +43,12 @@ return App::config([
         ],
         'App\Services\Stripe\StripePriceResolver' => [
             'arguments' => [
-                '$aiPurchasable' => '%env(bool:SENDVERY_AI_PURCHASABLE)%',
+                // DEC-057: AI variants are gated on the presence of an
+                // ANTHROPIC_API_KEY. When the key is set the real AI service
+                // is wired and AI plans become purchasable; when it's not,
+                // StripePriceResolver throws AiNotYetPurchasable on AI plan
+                // lookups (caught by UpgradePlanController).
+                '$aiPurchasable' => '%env(bool:ANTHROPIC_API_KEY)%',
             ],
         ],
         // AI Insights wiring (DEC-057): the interface resolves to the
@@ -61,11 +66,6 @@ return App::config([
         'App\Controller\Webhook\StripeWebhookController' => [
             'arguments' => [
                 '$stripeWebhookSecret' => '%env(STRIPE_WEBHOOK_SECRET)%',
-            ],
-        ],
-        'App\MessageHandler\SendBetaAccessNotification' => [
-            'arguments' => [
-                '$betaRequestsEmail' => '%env(BETA_REQUESTS_EMAIL)%',
             ],
         ],
         'App\Services\Sentry\SentryTracesSampler' => [

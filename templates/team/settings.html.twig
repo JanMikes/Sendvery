@@ -172,7 +172,7 @@
                             Upgrade to <span class="font-medium">Pro</span> (3 seats) or <span class="font-medium">Business</span> (10 seats) to invite colleagues.
                         </p>
                         <div class="mt-3">
-                            <a href="{{ path('request_beta_access', {plan: 'pro', source: 'team-settings'}) }}" class="btn btn-primary btn-sm">
+                            <a href="{{ path('dashboard_billing_upgrade', {plan: 'pro', interval: 'annual'}) }}" class="btn btn-primary btn-sm">
                                 Upgrade to Pro
                             </a>
                             <a href="{{ path('dashboard_billing') }}" class="btn btn-ghost btn-sm">View billing</a>

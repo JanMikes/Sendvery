@@ -45,9 +45,9 @@
                                 {% endif %}
                             </p>
                             {% if nextTier is not null %}
-                                <a href="{{ path('request_beta_access', {plan: nextTier.value, source: 'dashboard-domain-add'}) }}" class="btn btn-sm btn-primary mt-2">Request beta access</a>
+                                <a href="{{ path('dashboard_billing_upgrade', {plan: nextTier.value, interval: 'annual'}) }}" class="btn btn-sm btn-primary mt-2">Upgrade plan</a>
                             {% else %}
-                                <a href="{{ path('request_beta_access', {plan: 'enterprise', source: 'dashboard-domain-add'}) }}" class="btn btn-sm btn-primary mt-2">Contact us</a>
+                                <a href="mailto:jan.mikes@sendvery.com?subject=Enterprise%20inquiry" class="btn btn-sm btn-primary mt-2">Contact us</a>
                             {% endif %}
                         </div>
                     </div>

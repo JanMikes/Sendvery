@@ -1,17 +1,7 @@
-{# Cutover-aware CTAs (Phase 6). When `stripe_live` is true, paid non-AI
-   CTAs route straight to dashboard_billing_upgrade; otherwise they keep
-   the request_beta_access lead-capture path. AI CTAs always go to lead
-   capture until DEC-057 flips (SENDVERY_AI_PURCHASABLE=true). #}
-{% set personal_monthly = stripe_live ? path('dashboard_billing_upgrade', {plan: 'personal', interval: 'monthly'}) : path('request_beta_access', {plan: 'personal', source: 'pricing'}) %}
-{% set personal_annual = stripe_live ? path('dashboard_billing_upgrade', {plan: 'personal', interval: 'annual'}) : path('request_beta_access', {plan: 'personal', source: 'pricing'}) %}
-{% set pro_monthly = stripe_live ? path('dashboard_billing_upgrade', {plan: 'pro', interval: 'monthly'}) : path('request_beta_access', {plan: 'pro', source: 'pricing'}) %}
-{% set pro_annual = stripe_live ? path('dashboard_billing_upgrade', {plan: 'pro', interval: 'annual'}) : path('request_beta_access', {plan: 'pro', source: 'pricing'}) %}
-{% set business_monthly = stripe_live ? path('dashboard_billing_upgrade', {plan: 'business', interval: 'monthly'}) : path('request_beta_access', {plan: 'business', source: 'pricing'}) %}
-{% set business_annual = stripe_live ? path('dashboard_billing_upgrade', {plan: 'business', interval: 'annual'}) : path('request_beta_access', {plan: 'business', source: 'pricing'}) %}
-{% set personal_ai_href = path('request_beta_access', {plan: 'personal', source: 'pricing-ai-curious'}) %}
-{% set pro_ai_href = path('request_beta_access', {plan: 'pro', source: 'pricing-ai-curious'}) %}
-{% set business_ai_href = path('request_beta_access', {plan: 'business', source: 'pricing-ai-curious'}) %}
-{% set free_ai_href = path('request_beta_access', {plan: 'free', source: 'pricing-ai-curious'}) %}
+{# Pricing card grid (DEC-052..057). The "Add AI Insights" toggle only
+   renders when `ai_available` is true — i.e. ANTHROPIC_API_KEY is set.
+   Without the key we have no real AI service to charge for, so the toggle
+   stays hidden and the AI tier markup is suppressed entirely. #}
 
 <div data-controller="pricing"
      data-pricing-billing-value="annual"
@@ -37,15 +27,17 @@
                 class="btn btn-sm join-item btn-active"
             >Annual <span class="badge badge-success badge-xs ml-2">−2 months</span></button>
         </div>
-        <label class="label gap-2 cursor-pointer">
-            <input
-                type="checkbox"
-                data-pricing-target="aiToggle"
-                data-action="pricing#toggleAi"
-                class="toggle toggle-sm toggle-primary"
-            >
-            <span class="label-text">✨ Add AI Insights</span>
-        </label>
+        {% if ai_available %}
+            <label class="label gap-2 cursor-pointer">
+                <input
+                    type="checkbox"
+                    data-pricing-target="aiToggle"
+                    data-action="pricing#toggleAi"
+                    class="toggle toggle-sm toggle-primary"
+                >
+                <span class="label-text">✨ Add AI Insights</span>
+            </label>
+        {% endif %}
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -64,8 +56,8 @@
             data-strike-ai-annual=""
             data-note-monthly="Get started with 1 domain. No credit card."
             data-note-annual="Get started with 1 domain. No credit card."
-            data-note-ai-monthly="AI isn't on Free — tell us your use case below."
-            data-note-ai-annual="AI isn't on Free — tell us your use case below."
+            data-note-ai-monthly="Get started with 1 domain. No credit card."
+            data-note-ai-annual="Get started with 1 domain. No credit card."
             data-chip-monthly=""
             data-chip-annual=""
             data-chip-ai-monthly=""
@@ -85,22 +77,9 @@
                     <li>100 reports/mo</li>
                     <li>30-day retention</li>
                     <li>DMARC + DNS monitoring</li>
-                    <li data-pricing-target="aiFeature" hidden>✨ AI: not on Free — tell us your use case</li>
                 </ul>
                 <div class="card-actions mt-6">
-                    <a
-                        data-pricing-target="cta"
-                        href="{{ path('request_beta_access', {plan: 'free'}) }}"
-                        data-href-monthly="{{ path('request_beta_access', {plan: 'free', source: 'pricing'}) }}"
-                        data-href-annual="{{ path('request_beta_access', {plan: 'free', source: 'pricing'}) }}"
-                        data-href-ai-monthly="{{ free_ai_href }}"
-                        data-href-ai-annual="{{ free_ai_href }}"
-                        data-label-monthly="Get started"
-                        data-label-annual="Get started"
-                        data-label-ai-monthly="Curious about AI? Tell us →"
-                        data-label-ai-annual="Curious about AI? Tell us →"
-                        class="btn btn-outline btn-sm w-full"
-                    >Get started</a>
+                    <a href="{{ path('beta_signup') }}" class="btn btn-outline btn-sm w-full">Get started</a>
                 </div>
             </div>
         </div>
@@ -108,7 +87,7 @@
         <div
             class="card bg-base-200/50 border-2 border-primary shadow-lg relative"
             data-pricing-target="card"
-            data-ai-available="true"
+            data-ai-available="{{ ai_available ? 'true' : 'false' }}"
             data-base-plan="personal"
             data-price-monthly="$5.99"
             data-price-annual="$4.99"
@@ -144,20 +123,24 @@
                     <li>1,000 reports/mo</li>
                     <li>1-year retention</li>
                     <li>Blacklist monitoring</li>
-                    <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 50 on-demand/mo</li>
+                    {% if ai_available %}
+                        <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 50 on-demand/mo</li>
+                    {% endif %}
                 </ul>
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
-                        href="{{ personal_annual }}"
-                        data-href-monthly="{{ personal_monthly }}"
-                        data-href-annual="{{ personal_annual }}"
-                        data-href-ai-monthly="{{ personal_ai_href }}"
-                        data-href-ai-annual="{{ personal_ai_href }}"
+                        href="{{ path('dashboard_billing_upgrade', {plan: 'personal', interval: 'annual'}) }}"
+                        data-href-monthly="{{ path('dashboard_billing_upgrade', {plan: 'personal', interval: 'monthly'}) }}"
+                        data-href-annual="{{ path('dashboard_billing_upgrade', {plan: 'personal', interval: 'annual'}) }}"
+                        {% if ai_available %}
+                            data-href-ai-monthly="{{ path('dashboard_billing_upgrade', {plan: 'personal_ai', interval: 'monthly'}) }}"
+                            data-href-ai-annual="{{ path('dashboard_billing_upgrade', {plan: 'personal_ai', interval: 'annual'}) }}"
+                        {% endif %}
                         data-label-monthly="Get Personal"
                         data-label-annual="Get Personal"
-                        data-label-ai-monthly="Notify me when AI ships →"
-                        data-label-ai-annual="Notify me when AI ships →"
+                        data-label-ai-monthly="Get Personal + AI"
+                        data-label-ai-annual="Get Personal + AI"
                         class="btn btn-primary btn-sm w-full"
                     >Get Personal</a>
                 </div>
@@ -167,7 +150,7 @@
         <div
             class="card bg-base-200/50 border border-base-300"
             data-pricing-target="card"
-            data-ai-available="true"
+            data-ai-available="{{ ai_available ? 'true' : 'false' }}"
             data-base-plan="pro"
             data-price-monthly="$23.99"
             data-price-annual="$19.99"
@@ -201,20 +184,24 @@
                     <li>3 team members</li>
                     <li>2-year retention</li>
                     <li>API access + webhooks</li>
-                    <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 200 on-demand/mo</li>
+                    {% if ai_available %}
+                        <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 200 on-demand/mo</li>
+                    {% endif %}
                 </ul>
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
-                        href="{{ pro_annual }}"
-                        data-href-monthly="{{ pro_monthly }}"
-                        data-href-annual="{{ pro_annual }}"
-                        data-href-ai-monthly="{{ pro_ai_href }}"
-                        data-href-ai-annual="{{ pro_ai_href }}"
+                        href="{{ path('dashboard_billing_upgrade', {plan: 'pro', interval: 'annual'}) }}"
+                        data-href-monthly="{{ path('dashboard_billing_upgrade', {plan: 'pro', interval: 'monthly'}) }}"
+                        data-href-annual="{{ path('dashboard_billing_upgrade', {plan: 'pro', interval: 'annual'}) }}"
+                        {% if ai_available %}
+                            data-href-ai-monthly="{{ path('dashboard_billing_upgrade', {plan: 'pro_ai', interval: 'monthly'}) }}"
+                            data-href-ai-annual="{{ path('dashboard_billing_upgrade', {plan: 'pro_ai', interval: 'annual'}) }}"
+                        {% endif %}
                         data-label-monthly="Get Pro"
                         data-label-annual="Get Pro"
-                        data-label-ai-monthly="Notify me when AI ships →"
-                        data-label-ai-annual="Notify me when AI ships →"
+                        data-label-ai-monthly="Get Pro + AI"
+                        data-label-ai-annual="Get Pro + AI"
                         class="btn btn-primary btn-sm w-full"
                     >Get Pro</a>
                 </div>
@@ -224,7 +211,7 @@
         <div
             class="card bg-base-200/50 border border-base-300"
             data-pricing-target="card"
-            data-ai-available="true"
+            data-ai-available="{{ ai_available ? 'true' : 'false' }}"
             data-base-plan="business"
             data-price-monthly="$59.99"
             data-price-annual="$49.99"
@@ -258,20 +245,24 @@
                     <li>10 team members</li>
                     <li>Unlimited retention</li>
                     <li>White-label PDF reports</li>
-                    <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 500 on-demand/mo</li>
+                    {% if ai_available %}
+                        <li data-pricing-target="aiFeature" hidden>✨ AI Insights · 500 on-demand/mo</li>
+                    {% endif %}
                 </ul>
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
-                        href="{{ business_annual }}"
-                        data-href-monthly="{{ business_monthly }}"
-                        data-href-annual="{{ business_annual }}"
-                        data-href-ai-monthly="{{ business_ai_href }}"
-                        data-href-ai-annual="{{ business_ai_href }}"
+                        href="{{ path('dashboard_billing_upgrade', {plan: 'business', interval: 'annual'}) }}"
+                        data-href-monthly="{{ path('dashboard_billing_upgrade', {plan: 'business', interval: 'monthly'}) }}"
+                        data-href-annual="{{ path('dashboard_billing_upgrade', {plan: 'business', interval: 'annual'}) }}"
+                        {% if ai_available %}
+                            data-href-ai-monthly="{{ path('dashboard_billing_upgrade', {plan: 'business_ai', interval: 'monthly'}) }}"
+                            data-href-ai-annual="{{ path('dashboard_billing_upgrade', {plan: 'business_ai', interval: 'annual'}) }}"
+                        {% endif %}
                         data-label-monthly="Get Business"
                         data-label-annual="Get Business"
-                        data-label-ai-monthly="Notify me when AI ships →"
-                        data-label-ai-annual="Notify me when AI ships →"
+                        data-label-ai-monthly="Get Business + AI"
+                        data-label-ai-annual="Get Business + AI"
                         class="btn btn-primary btn-sm w-full"
                     >Get Business</a>
                 </div>
@@ -281,7 +272,7 @@
     </div>
 
     <p class="text-center mt-8 text-sm text-base-content/60">
-        Need more? <a href="{{ path('request_beta_access', {plan: 'enterprise', source: 'pricing'}) }}" class="link link-primary">Talk to us about Enterprise →</a>
+        Need more? <a href="mailto:jan.mikes@sendvery.com?subject=Enterprise%20inquiry" class="link link-primary">Talk to us about Enterprise →</a>
     </p>
     <p class="text-center mt-3 text-xs text-base-content/40">VAT included where applicable. Prices in USD.</p>
 </div>

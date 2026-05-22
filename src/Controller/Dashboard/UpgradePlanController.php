@@ -61,12 +61,13 @@ final class UpgradePlanController extends AbstractController
 
             $checkoutUrl = $this->subscriptionManager->createCheckoutSession($team, $targetPlan, $interval);
         } catch (AiNotYetPurchasable) {
-            // DEC-057: AI plans aren't purchasable yet — route to the AI-curious
-            // lead form so we collect interest until the real AI service ships.
-            return $this->redirectToRoute('request_beta_access', [
-                'plan' => $targetPlan->baseTier()->value,
-                'source' => 'dashboard-ai-curious',
-            ]);
+            // DEC-057: AI variants are gated on ANTHROPIC_API_KEY presence.
+            // If someone hits this URL while the key isn't configured, the
+            // pricing page's AI toggle is already hidden — this catch is a
+            // belt-and-braces fallback.
+            $this->addFlash('billing_error', 'AI Insights aren\'t available right now. The base plan is still ready to go.');
+
+            return $this->redirectToRoute('dashboard_billing');
         }
 
         return $this->redirect($checkoutUrl);

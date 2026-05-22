@@ -182,6 +182,10 @@ final readonly class PlanEnforcement
      * Ensures the usage row exists and its monthly period is current.
      * Creates the row at zero if missing; resets the counter if the period
      * has expired. Idempotent — safe to call before every read or write.
+     *
+     * Concurrency: two workers racing for the first report of a period both
+     * see no row. `INSERT ... ON CONFLICT DO NOTHING` lets one win cleanly
+     * — the other returns a 0-row update and continues to the period check.
      */
     private function ensureCurrentPeriod(string $table, string $counterColumn, string $teamId): void
     {
@@ -189,27 +193,28 @@ final readonly class PlanEnforcement
         $periodStart = $now->modify('first day of this month')->setTime(0, 0);
         $periodEnd = $periodStart->modify('+1 month');
 
-        $existing = $this->database->executeQuery(
+        $this->database->executeStatement(
+            "INSERT INTO {$table} (team_id, {$counterColumn}, period_started_at, period_ends_at)
+             VALUES (:teamId, 0, :start, :end)
+             ON CONFLICT (team_id) DO NOTHING",
+            [
+                'teamId' => $teamId,
+                'start' => $periodStart->format('Y-m-d H:i:s'),
+                'end' => $periodEnd->format('Y-m-d H:i:s'),
+            ],
+        );
+
+        $endsAt = $this->database->executeQuery(
             "SELECT period_ends_at FROM {$table} WHERE team_id = :teamId",
             ['teamId' => $teamId],
         )->fetchOne();
 
-        if (false === $existing) {
-            // Row missing: insert at zero.
-            $this->database->executeStatement(
-                "INSERT INTO {$table} (team_id, {$counterColumn}, period_started_at, period_ends_at)
-                 VALUES (:teamId, 0, :start, :end)",
-                [
-                    'teamId' => $teamId,
-                    'start' => $periodStart->format('Y-m-d H:i:s'),
-                    'end' => $periodEnd->format('Y-m-d H:i:s'),
-                ],
-            );
-
+        if (false === $endsAt) {
+            // Should be unreachable after the upsert above.
             return;
         }
 
-        $endsAt = new \DateTimeImmutable((string) $existing);
+        $endsAt = new \DateTimeImmutable((string) $endsAt);
         if ($endsAt <= $now) {
             // Period expired: reset counter and roll the window forward.
             $this->database->executeStatement(

@@ -21,7 +21,11 @@ final readonly class UpgradeTeamPlanHandler
         $team = $this->teamRepository->get($message->teamId);
         $team->plan = $message->plan->value;
         $team->stripeSubscriptionId = $message->stripeSubscriptionId;
-        $team->stripeCustomerId = $message->stripeCustomerId;
+        // Stripe sometimes fires customer.subscription.updated with no customer
+        // string (or an unexpected shape); never wipe the existing ID with ''.
+        if ('' !== $message->stripeCustomerId) {
+            $team->stripeCustomerId = $message->stripeCustomerId;
+        }
         $team->planWarningAt = null;
         if (null !== $message->billingInterval) {
             $team->billingInterval = $message->billingInterval->value;

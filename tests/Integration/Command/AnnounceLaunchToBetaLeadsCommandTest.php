@@ -50,9 +50,9 @@ final class AnnounceLaunchToBetaLeadsCommandTest extends IntegrationTestCase
         self::assertStringContainsString('lead-a@example.com', $output);
         self::assertStringContainsString('--dry-run: no emails sent.', $output);
 
-        // The BetaAccessRequested event fires on persist and sends 2 admin/
-        // ack emails — that's expected. The launch announcement must NOT
-        // be among them in dry-run mode.
+        // The launch announcement must NOT be in the mailer queue in
+        // dry-run mode — BetaAccessRequest no longer fires events, so the
+        // only message we expect to land would be from the command itself.
         self::assertSame(0, $this->countEmailsWithSubject('Sendvery is open'));
     }
 

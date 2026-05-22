@@ -61,7 +61,7 @@ final class TeamPagesTest extends WebTestCase
         self::assertSelectorNotExists('input[type="email"][name="email"]');
         // Upgrade CTA instead.
         self::assertSelectorTextContains('body', 'Upgrade to Pro');
-        self::assertSelectorExists('a[href*="request-access"]');
+        self::assertSelectorExists('a[href*="billing/upgrade"]');
     }
 
     #[Test]
