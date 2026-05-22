@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetBillingOverview;
 use App\Services\DashboardContext;
+use App\Services\Stripe\PlanEnforcement;
 use App\Services\Stripe\PlanLimits;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,6 +18,7 @@ final class BillingController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetBillingOverview $getBillingOverview,
         private readonly PlanLimits $planLimits,
+        private readonly PlanEnforcement $planEnforcement,
     ) {
     }
 
@@ -26,10 +28,19 @@ final class BillingController extends AbstractController
         $teamId = $this->dashboardContext->getTeamId();
         $billing = $this->getBillingOverview->forTeam($teamId->toString());
 
+        $aiQuotaUsed = null;
+        $aiQuotaLimit = null;
+        if ($billing->plan->hasAi()) {
+            $aiQuotaUsed = $this->planEnforcement->getOnDemandAiUsage($teamId->toString());
+            $aiQuotaLimit = $this->planLimits->getOnDemandAiQuota($billing->plan);
+        }
+
         return $this->render('dashboard/billing.html.twig', [
             'billing' => $billing,
             'maxDomains' => $this->planLimits->getMaxDomains($billing->plan),
             'maxMembers' => $this->planLimits->getMaxTeamMembers($billing->plan),
+            'aiQuotaUsed' => $aiQuotaUsed,
+            'aiQuotaLimit' => $aiQuotaLimit,
         ]);
     }
 }

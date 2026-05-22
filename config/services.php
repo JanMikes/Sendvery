@@ -362,6 +362,12 @@ return App::config([
             'App\Command\PurgeOldDmarcReportsCommand' => [
                 'public' => true,
             ],
+            'App\Services\Stripe\SubscriptionManager' => [
+                'public' => true,
+                'arguments' => [
+                    '$defaultUri' => '%env(DEFAULT_URI)%',
+                ],
+            ],
         ],
     ],
 ]);

@@ -37,6 +37,18 @@
                         {% endif %}
                     </div>
                 </div>
+
+                {% if aiQuotaLimit is not null %}
+                    <div class="mt-6 pt-6 border-t border-base-200">
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-sm text-base-content/50">✨ AI Insights — On-demand explanations this month</p>
+                            <p class="text-sm font-medium">{{ aiQuotaUsed }} / {{ aiQuotaLimit }}</p>
+                        </div>
+                        <div class="w-full bg-base-200 rounded-full h-2">
+                            <div class="bg-primary rounded-full h-2" style="width: {{ aiQuotaLimit > 0 ? ((aiQuotaUsed / aiQuotaLimit) * 100)|round : 0 }}%"></div>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
 

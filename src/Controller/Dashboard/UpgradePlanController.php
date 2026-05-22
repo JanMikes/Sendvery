@@ -50,13 +50,22 @@ final class UpgradePlanController extends AbstractController
         $team = $this->teamRepository->get($teamId);
 
         try {
+            // Existing subscriber → in-place Stripe update (proration handled
+            // by Stripe). New subscriber → fresh Checkout session.
+            if (null !== $team->stripeSubscriptionId) {
+                $this->subscriptionManager->updateSubscription($team, $targetPlan, $interval);
+                $this->addFlash('billing_success', 'Plan change requested — your subscription will update shortly.');
+
+                return $this->redirectToRoute('dashboard_billing');
+            }
+
             $checkoutUrl = $this->subscriptionManager->createCheckoutSession($team, $targetPlan, $interval);
         } catch (AiNotYetPurchasable) {
             // DEC-057: AI plans aren't purchasable yet — route to the AI-curious
             // lead form so we collect interest until the real AI service ships.
             return $this->redirectToRoute('request_beta_access', [
                 'plan' => $targetPlan->baseTier()->value,
-                'interest' => 'ai',
+                'source' => 'dashboard-ai-curious',
             ]);
         }
 
