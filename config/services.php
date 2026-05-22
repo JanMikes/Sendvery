@@ -33,6 +33,9 @@ return App::config([
         'App\Services\Mail\MailClient' => [
             'alias' => 'App\Services\Mail\ImapMailClient',
         ],
+        'App\Services\Reports\CentralInboxClient' => [
+            'alias' => 'App\Services\Reports\ImapCentralInboxClient',
+        ],
         'App\Services\Stripe\SubscriptionManager' => [
             'arguments' => [
                 '$defaultUri' => '%env(DEFAULT_URI)%',
@@ -170,6 +173,25 @@ return App::config([
             ],
             'App\Services\Mail\MailClient' => [
                 'alias' => 'App\Services\Mail\FakeMailClient',
+                'public' => true,
+            ],
+            'App\Services\Reports\FakeCentralInboxClient' => [
+                'public' => true,
+            ],
+            'App\Services\Reports\CentralInboxClient' => [
+                'alias' => 'App\Services\Reports\FakeCentralInboxClient',
+                'public' => true,
+            ],
+            'App\Services\Reports\CentralInboxConfig' => [
+                'public' => true,
+            ],
+            'App\Services\Reports\ReportEmailIngestor' => [
+                'public' => true,
+            ],
+            'App\Repository\ReceivedReportEmailRepository' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\PollReportsInboxHandler' => [
                 'public' => true,
             ],
             'App\Query\GetDashboardStats' => [
