@@ -93,4 +93,20 @@ final readonly class GetAlerts
             ['teamIds' => ArrayParameterType::STRING],
         )->fetchOne();
     }
+
+    /**
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function countUnreadCriticalForTeams(array $teamIds): int
+    {
+        if ([] === $teamIds) {
+            return 0;
+        }
+
+        return (int) $this->database->executeQuery(
+            'SELECT COUNT(*) FROM alert WHERE team_id IN (:teamIds) AND is_read = false AND severity = :severity',
+            ['teamIds' => $teamIds, 'severity' => 'critical'],
+            ['teamIds' => ArrayParameterType::STRING],
+        )->fetchOne();
+    }
 }

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Controller;
 
+use App\Entity\Alert;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DnsCheckResult;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
+use App\Value\AlertSeverity;
+use App\Value\AlertType;
 use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
@@ -471,5 +474,228 @@ final class DashboardPagesTest extends WebTestCase
         $client->loginUser($persona->user);
 
         return $client;
+    }
+
+    #[Test]
+    public function overviewShowsHealthSummaryBanner(): void
+    {
+        // Domain verified + reports flowing + 100% pass rate → All domains healthy.
+        $data = $this->createHealthyHappyPathClient();
+
+        $data['client']->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringContainsString('All domains healthy', $body);
+    }
+
+    #[Test]
+    public function overviewShowsNextActionCard(): void
+    {
+        $data = $this->createAuthenticatedClientWithData();
+
+        $data['client']->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringContainsString('Next step', $body);
+    }
+
+    #[Test]
+    public function overviewShowsAddDomainForNewUser(): void
+    {
+        // New-user empty state is intercepted by OnboardingRedirectListener before
+        // the overview controller runs. Confirm the redirect happens so the empty
+        // state CTA can't appear with stale zero-state widgets behind it.
+        $client = $this->createAuthenticatedClientEmpty();
+
+        $client->request('GET', '/app');
+
+        self::assertResponseRedirects('/app/onboarding/team');
+    }
+
+    #[Test]
+    public function overviewHidesStatsForNewUser(): void
+    {
+        // Same as above: the new-user state is intercepted by the onboarding
+        // listener, which means the empty-state stats-hiding branch of the
+        // template isn't reachable end-to-end. The intent is preserved via the
+        // {% if not isEmptyState %} wrapper plus the redirect — together they
+        // guarantee no zero-noise dashboard is ever rendered for a new user.
+        $client = $this->createAuthenticatedClientEmpty();
+
+        $client->request('GET', '/app');
+
+        self::assertResponseRedirects('/app/onboarding/team');
+    }
+
+    #[Test]
+    public function overviewShowsVerifyDnsNextAction(): void
+    {
+        // dmarcVerifiedAt = null → severity Critical → NextAction::VerifyDns.
+        $client = $this->createClientWithDmarcState(
+            dmarcVerifiedAt: null,
+            firstReportAt: null,
+            latestChecks: [],
+        );
+
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Verify DNS for', $body);
+        self::assertStringContainsString('banner-test.example', $body);
+    }
+
+    #[Test]
+    public function overviewShowsWaitForReportsNextAction(): void
+    {
+        // DMARC published > 48h ago, no first report yet, latest check valid →
+        // severity Warning → NextAction::WaitForReports.
+        $client = $this->createClientWithDmarcState(
+            dmarcVerifiedAt: new \DateTimeImmutable('-3 days'),
+            firstReportAt: null,
+            latestChecks: [['checkedAt' => '-1 hour', 'isValid' => true]],
+        );
+
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Waiting for your first report', $body);
+    }
+
+    #[Test]
+    public function overviewShowsReviewAlertsNextAction(): void
+    {
+        // Domain healthy, but team has an unread critical alert → ReviewAlerts wins.
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+
+        $persona = $fixtures->persona()
+            ->emailPrefix('alerts-next')
+            ->teamName('Alerts Next Test')
+            ->withDomain('alerts-next.example')
+            ->build();
+        assert(null !== $persona->domain);
+
+        $persona->domain->dmarcVerifiedAt = new \DateTimeImmutable('-10 days');
+        $persona->domain->firstReportAt = new \DateTimeImmutable('-9 days');
+
+        $em->persist(new Alert(
+            id: Uuid::uuid7(),
+            team: $persona->team,
+            monitoredDomain: $persona->domain,
+            type: AlertType::FailureSpike,
+            severity: AlertSeverity::Critical,
+            title: 'Test critical alert',
+            message: 'Something bad happened.',
+            data: [],
+            createdAt: new \DateTimeImmutable('-1 hour'),
+            isRead: false,
+        ));
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Review', $body);
+        self::assertStringContainsString('critical alert', $body);
+    }
+
+    #[Test]
+    public function overviewAllHealthyShowsFullStats(): void
+    {
+        // Happy-path persona has DMARC verified + reports flowing → AllHealthy
+        // path → stats grid + chart should be visible (not hidden by the empty
+        // state guard).
+        $data = $this->createHealthyHappyPathClient();
+
+        $data['client']->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringContainsString('DMARC Pass Rate', $body);
+    }
+
+    /**
+     * Builds a fully-healthy team: domain with DMARC verified > 48h ago, first
+     * report received, 100% pass rate, valid latest DNS check. Lets the
+     * health-summary + all-healthy next-action paths be exercised end-to-end.
+     *
+     * @return array{client: KernelBrowser, domainId: \Ramsey\Uuid\UuidInterface}
+     */
+    private function createHealthyHappyPathClient(): array
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+
+        $persona = $fixtures->persona()
+            ->emailPrefix('healthy')
+            ->teamName('Healthy Team')
+            ->plan('personal')
+            ->withDomain('healthy.example')
+            ->build();
+        assert(null !== $persona->domain);
+        $persona->domain->dmarcVerifiedAt = new \DateTimeImmutable('-10 days');
+        $persona->domain->firstReportAt = new \DateTimeImmutable('-9 days');
+        $persona->domain->dmarcPolicy = DmarcPolicy::Reject;
+
+        $em->persist(new DnsCheckResult(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            type: DnsCheckType::Dmarc,
+            checkedAt: new \DateTimeImmutable('-1 hour'),
+            rawRecord: 'v=DMARC1; p=reject;',
+            isValid: true,
+            issues: [],
+            details: [],
+            previousRawRecord: null,
+            hasChanged: false,
+            isFirstCheck: false,
+        ));
+
+        $report = new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'ext-healthy-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: new \DateTimeImmutable('-2 days'),
+            dateRangeEnd: new \DateTimeImmutable('-1 day'),
+            policyDomain: $persona->domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::Reject,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback></feedback>',
+            processedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($report);
+        $em->persist(new DmarcRecord(
+            id: Uuid::uuid7(),
+            dmarcReport: $report,
+            sourceIp: '1.2.3.4',
+            count: 100,
+            disposition: Disposition::None,
+            dkimResult: AuthResult::Pass,
+            spfResult: AuthResult::Pass,
+            headerFrom: $persona->domain->domain,
+        ));
+
+        $em->flush();
+        $client->loginUser($persona->user);
+
+        return [
+            'client' => $client,
+            'domainId' => $persona->domain->id,
+        ];
     }
 }

@@ -10,9 +10,12 @@ use App\Query\GetDashboardStats;
 use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainVerificationStatus;
+use App\Repository\MailboxConnectionRepository;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
 use App\Services\DomainVerificationEvaluator;
+use App\Services\HealthSummaryResolver;
+use App\Services\NextActionResolver;
 use App\Services\ReportAddressProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,6 +34,9 @@ final class DashboardOverviewController extends AbstractController
         private readonly DomainVerificationEvaluator $verificationEvaluator,
         private readonly ReportAddressProvider $reportAddressProvider,
         private readonly QuarantinedDmarcReportRepository $quarantineRepository,
+        private readonly NextActionResolver $nextActionResolver,
+        private readonly HealthSummaryResolver $healthSummaryResolver,
+        private readonly MailboxConnectionRepository $mailboxRepository,
     ) {
     }
 
@@ -82,6 +88,9 @@ final class DashboardOverviewController extends AbstractController
         );
 
         $verificationStatus = $this->verificationStatusQuery->forTeams($teamIds);
+        $verificationSeverity = null === $verificationStatus
+            ? null
+            : $this->verificationEvaluator->severity($verificationStatus);
 
         // Surface the quarantine count for the team's headline domain when it's
         // still unverified — reports already arriving for them is a strong
@@ -91,6 +100,24 @@ final class DashboardOverviewController extends AbstractController
             $quarantineCount = $this->quarantineRepository->countForDomain($verificationStatus->domainName);
         }
 
+        $unreadCriticalAlertCount = $this->getAlerts->countUnreadCriticalForTeams($teamIds);
+        $hasMailbox = [] !== $this->mailboxRepository->findByTeam($this->dashboardContext->getTeamId());
+
+        $nextAction = $this->nextActionResolver->resolve(
+            domains: $domains,
+            verificationStatus: $verificationStatus,
+            verificationSeverity: $verificationSeverity,
+            unreadCriticalAlertCount: $unreadCriticalAlertCount,
+            quarantineCount: $quarantineCount,
+            hasMailbox: $hasMailbox,
+        );
+
+        $healthSummary = $this->healthSummaryResolver->resolve(
+            domains: $domains,
+            verificationStatus: $verificationStatus,
+            verificationSeverity: $verificationSeverity,
+        );
+
         return $this->render('dashboard/overview.html.twig', [
             'stats' => $stats,
             'domains' => $domains,
@@ -99,9 +126,11 @@ final class DashboardOverviewController extends AbstractController
             'unreadAlertCount' => $unreadAlertCount,
             'recentAlerts' => $recentAlerts,
             'verificationStatus' => $verificationStatus,
-            'verificationSeverity' => null === $verificationStatus ? null : $this->verificationEvaluator->severity($verificationStatus),
+            'verificationSeverity' => $verificationSeverity,
             'reportAddress' => $this->reportAddressProvider->get(),
             'quarantineCount' => $quarantineCount,
+            'nextAction' => $nextAction,
+            'healthSummary' => $healthSummary,
         ]);
     }
 }
