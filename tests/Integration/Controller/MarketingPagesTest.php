@@ -117,6 +117,118 @@ final class MarketingPagesTest extends WebTestCase
         self::assertStringContainsString('Get Started', $footer->text());
     }
 
+    #[Test]
+    public function heroKickerContainsProductCategory(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section')->first();
+        self::assertStringContainsString('DMARC Monitoring', $hero->text());
+    }
+
+    #[Test]
+    public function heroContainsPrimaryCtaToAuthLogin(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section')->first();
+        $primaryCta = $hero->filter('a.btn-primary')->first();
+
+        self::assertCount(1, $primaryCta);
+        self::assertStringContainsString('/login', (string) $primaryCta->attr('href'));
+        self::assertStringContainsString('Get started free', $primaryCta->text());
+    }
+
+    #[Test]
+    public function heroSubheadMentionsDmarc(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section')->first();
+        $subhead = $hero->filter('p')->first();
+
+        self::assertStringContainsString('DMARC', $subhead->text());
+    }
+
+    #[Test]
+    public function heroSubheadMentionsDnsHealth(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section')->first();
+        $subhead = $hero->filter('p')->first();
+
+        self::assertStringContainsString('DNS health', $subhead->text());
+    }
+
+    #[Test]
+    public function heroSubheadMentionsAiInsights(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section')->first();
+        $subhead = $hero->filter('p')->first();
+
+        self::assertStringContainsString('AI-powered insights', $subhead->text());
+    }
+
+    #[Test]
+    public function metaDescriptionContainsCategoryAndPricing(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $metaDescription = (string) $crawler->filter('meta[name="description"]')->attr('content');
+
+        self::assertStringContainsString('DMARC monitoring', $metaDescription);
+        self::assertStringContainsString('$4.99', $metaDescription);
+    }
+
+    #[Test]
+    public function heroDoesNotContainOldInternalGitHubLink(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $heroHtml = $crawler->filter('section')->first()->html();
+
+        self::assertStringNotContainsString('about_open_source', $heroHtml);
+        self::assertStringNotContainsString('/about/open-source', $heroHtml);
+    }
+
+    #[Test]
+    public function heroTrustBadgesPresent(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $heroText = $crawler->filter('section')->first()->text();
+
+        self::assertStringContainsString('Open source', $heroText);
+        self::assertStringContainsString('1 domain free forever', $heroText);
+        self::assertStringContainsString('Self-hostable', $heroText);
+    }
+
+    #[Test]
+    public function heroSeeTheSourceLinkPointsAtGithub(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section')->first();
+        $seeTheSourceLinks = $hero->filter('a')->reduce(static function ($node): bool {
+            return str_contains($node->text(), 'See the source');
+        });
+
+        self::assertGreaterThanOrEqual(1, $seeTheSourceLinks->count());
+        self::assertStringStartsWith('https://github.com/', (string) $seeTheSourceLinks->first()->attr('href'));
+    }
+
     /** @return iterable<string, array{string}> */
     public static function publicRoutes(): iterable
     {
