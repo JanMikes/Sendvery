@@ -10,9 +10,15 @@ use App\Value\DmarcPolicy;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
 
+/**
+ * Domain ownership is system-wide unique: at most one team can monitor a
+ * given domain at any time, enforced by a case-insensitive functional unique
+ * index in the database (see migration Version20260523100000). The Add-time
+ * check in AddDomainController catches the conflict early and redirects the
+ * user to the "domain taken" page; the index is the race-condition backstop.
+ */
 #[ORM\Entity]
 #[ORM\Table(name: 'monitored_domain')]
-#[ORM\UniqueConstraint(name: 'uniq_monitored_domain_team_domain', columns: ['team_id', 'domain'])]
 final class MonitoredDomain implements EntityWithEvents
 {
     use HasEvents;

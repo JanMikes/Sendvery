@@ -44,12 +44,13 @@ final readonly class MonitoredDomainRepository
     }
 
     /**
-     * Looks up the single monitored_domain row that has the given name AND a
-     * non-null dmarc_verified_at. The partial unique index guarantees at most
-     * one such row exists, so this is the canonical "who owns this domain?"
-     * lookup for routing incoming DMARC reports.
+     * Looks up the single monitored_domain row that has the given name
+     * (case-insensitive). The system-wide unique index guarantees at most one
+     * row per domain, so this is the canonical "who owns this domain?"
+     * lookup for routing incoming DMARC reports and for the Add-time
+     * "domain taken" check.
      */
-    public function findVerifiedByName(string $domainName): ?MonitoredDomain
+    public function findAnyByName(string $domainName): ?MonitoredDomain
     {
         $normalized = strtolower(trim($domainName));
 
@@ -57,37 +58,9 @@ final readonly class MonitoredDomainRepository
             ->select('d')
             ->from(MonitoredDomain::class, 'd')
             ->where('LOWER(d.domain) = :name')
-            ->andWhere('d.dmarcVerifiedAt IS NOT NULL')
             ->setParameter('name', $normalized)
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
-    }
-
-    /**
-     * True when some team has this domain verified. Used to surface the
-     * "domain already monitored" hard-block on Add.
-     */
-    public function isVerifiedAnywhere(string $domainName): bool
-    {
-        return null !== $this->findVerifiedByName($domainName);
-    }
-
-    /** @return list<MonitoredDomain> */
-    public function findAllUnverifiedWithName(string $domainName): array
-    {
-        $normalized = strtolower(trim($domainName));
-
-        /** @var list<MonitoredDomain> $rows */
-        $rows = $this->entityManager->createQueryBuilder()
-            ->select('d')
-            ->from(MonitoredDomain::class, 'd')
-            ->where('LOWER(d.domain) = :name')
-            ->andWhere('d.dmarcVerifiedAt IS NULL')
-            ->setParameter('name', $normalized)
-            ->getQuery()
-            ->getResult();
-
-        return $rows;
     }
 }

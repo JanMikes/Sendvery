@@ -7,6 +7,7 @@ namespace App\Controller\Dashboard;
 use App\FormData\AddDomainData;
 use App\Message\AddDomain;
 use App\Query\GetTeamPlan;
+use App\Repository\MonitoredDomainRepository;
 use App\Services\DashboardContext;
 use App\Services\IdentityProvider;
 use App\Services\Stripe\PlanEnforcement;
@@ -28,6 +29,7 @@ final class AddDomainController extends AbstractController
         private readonly PlanEnforcement $planEnforcement,
         private readonly PlanLimits $planLimits,
         private readonly GetTeamPlan $getTeamPlan,
+        private readonly MonitoredDomainRepository $monitoredDomainRepository,
     ) {
     }
 
@@ -60,6 +62,12 @@ final class AddDomainController extends AbstractController
                         $errors[] = (string) $violation->getMessage();
                     }
                 } else {
+                    // Hard-block when another team has already claimed this name.
+                    $conflict = $this->monitoredDomainRepository->findAnyByName($data->domainName);
+                    if (null !== $conflict && $conflict->team->id->toString() !== $teamId->toString()) {
+                        return $this->redirectToRoute('domain_taken', ['domain' => $data->domainName]);
+                    }
+
                     $domainId = $this->identityProvider->nextIdentity();
 
                     $this->commandBus->dispatch(new AddDomain(

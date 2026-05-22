@@ -11,7 +11,6 @@ use App\Entity\User;
 use App\Exceptions\UserAlreadyOnTeam;
 use App\Message\InviteTeammate;
 use App\MessageHandler\InviteTeammateHandler;
-use App\Repository\TeamInvitationRepository;
 use App\Services\IdentityProvider;
 use App\Tests\IntegrationTestCase;
 use App\Value\TeamInvitationStatus;
@@ -24,7 +23,6 @@ final class InviteTeammateHandlerTest extends IntegrationTestCase
     private EntityManagerInterface $em;
     private InviteTeammateHandler $handler;
     private IdentityProvider $identityProvider;
-    private TeamInvitationRepository $invitationRepository;
 
     protected function setUp(): void
     {
@@ -32,7 +30,6 @@ final class InviteTeammateHandlerTest extends IntegrationTestCase
         $this->em = $this->getService(EntityManagerInterface::class);
         $this->handler = $this->getService(InviteTeammateHandler::class);
         $this->identityProvider = $this->getService(IdentityProvider::class);
-        $this->invitationRepository = $this->getService(TeamInvitationRepository::class);
     }
 
     public function testCreatesPendingInvitation(): void

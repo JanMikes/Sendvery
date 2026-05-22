@@ -1,0 +1,77 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Domain already monitored{% endblock %}
+{% block breadcrumbs %}<li>Domain already monitored</li>{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+    <header class="text-center pt-4">
+        <div class="w-14 h-14 mx-auto bg-warning/10 text-warning rounded-full flex items-center justify-center">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <h1 class="text-2xl font-bold mt-3"><span class="font-mono">{{ domain }}</span> is already monitored</h1>
+        <p class="text-base-content/60 mt-2">
+            Another Sendvery team has set up monitoring for this domain. That's almost always a teammate of yours getting there first.
+        </p>
+    </header>
+
+    {% for flash in app.flashes('domain_taken_success') %}
+        <div class="alert alert-success"><span>{{ flash }}</span></div>
+    {% endfor %}
+    {% for flash in app.flashes('domain_taken_error') %}
+        <div class="alert alert-error"><span>{{ flash }}</span></div>
+    {% endfor %}
+
+    {# ─── Most likely path: join the existing team ─── #}
+    <section class="card bg-base-100 border border-primary/30">
+        <div class="card-body">
+            <div class="flex items-start gap-4">
+                <div class="shrink-0 w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="font-semibold text-base">A colleague probably set this up</h2>
+                    <p class="text-sm text-base-content/70 mt-1">
+                        Sendvery accounts are per-team, and a teammate likely added <span class="font-mono">{{ domain }}</span> already.
+                        Ask them to invite you to their team from <em>Settings → Team</em>, and you'll see everything together.
+                    </p>
+                    <p class="text-sm text-base-content/60 mt-2">
+                        Not sure who? Try whoever set up DMARC for your company, your IT/devops team, or the email administrator.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {# ─── Escape hatch: notify admin ─── #}
+    <section class="card bg-base-100 border border-base-300">
+        <div class="card-body">
+            <h2 class="font-semibold text-base">Pretty sure no one at your company has this?</h2>
+            <p class="text-sm text-base-content/70 mt-1">
+                If you're confident <span class="font-mono">{{ domain }}</span> belongs to you and shouldn't be in someone else's account,
+                let our admin know. We'll review the request and follow up by email.
+            </p>
+
+            {% if alreadyPinged %}
+                <div class="alert alert-info mt-3">
+                    <span>You already sent us a request about this domain. We'll get back to you — no need to send another for a day or so.</span>
+                </div>
+            {% else %}
+                <form method="post" action="{{ path('domain_taken_notify_admin') }}" class="mt-4">
+                    <input type="hidden" name="domain" value="{{ domain }}">
+                    <button type="submit" class="btn btn-outline">Notify Sendvery admin</button>
+                </form>
+            {% endif %}
+        </div>
+    </section>
+
+    <div class="text-center text-sm">
+        <a href="{{ path('dashboard_overview') }}" class="link link-hover text-base-content/60">← Back to dashboard</a>
+    </div>
+</div>
+{% endblock %}

@@ -36,25 +36,25 @@ final class RemoveTeamMemberHandlerTest extends IntegrationTestCase
     public function testRemovesNonOwnerMember(): void
     {
         $team = $this->createTeam();
-        $member = $this->createMember($team, 'rm@example.com', TeamRole::Member);
+        [$user, $membership] = $this->createMember($team, 'rm@example.com', TeamRole::Member);
         $this->em->flush();
 
-        ($this->handler)(new RemoveTeamMember($member->membershipId));
+        ($this->handler)(new RemoveTeamMember($membership->id));
         $this->em->flush();
         $this->em->clear();
 
-        self::assertNull($this->membershipRepository->findMembership($member->userId, $team->id));
+        self::assertNull($this->membershipRepository->findMembership($user->id, $team->id));
     }
 
     public function testRefusesToRemoveOwner(): void
     {
         $team = $this->createTeam();
-        $owner = $this->createMember($team, 'owner-rm@example.com', TeamRole::Owner);
+        [, $ownerMembership] = $this->createMember($team, 'owner-rm@example.com', TeamRole::Owner);
         $this->em->flush();
 
         $this->expectException(CannotRemoveTeamOwner::class);
 
-        ($this->handler)(new RemoveTeamMember($owner->membershipId));
+        ($this->handler)(new RemoveTeamMember($ownerMembership->id));
     }
 
     private function createTeam(): Team
@@ -70,7 +70,8 @@ final class RemoveTeamMemberHandlerTest extends IntegrationTestCase
         return $team;
     }
 
-    private function createMember(Team $team, string $email, TeamRole $role): object
+    /** @return array{0: User, 1: TeamMembership} */
+    private function createMember(Team $team, string $email, TeamRole $role): array
     {
         $user = new User(
             id: $this->identityProvider->nextIdentity(),
@@ -88,12 +89,6 @@ final class RemoveTeamMemberHandlerTest extends IntegrationTestCase
         );
         $this->em->persist($membership);
 
-        return new class ($user->id, $membership->id) {
-            public function __construct(
-                public readonly \Ramsey\Uuid\UuidInterface $userId,
-                public readonly \Ramsey\Uuid\UuidInterface $membershipId,
-            ) {
-            }
-        };
+        return [$user, $membership];
     }
 }

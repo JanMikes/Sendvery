@@ -35,16 +35,17 @@ final readonly class DmarcReportRouter
             return RoutingDecision::ignored('Empty policy_published.domain — not a routable DMARC report.');
         }
 
-        $verified = $this->monitoredDomainRepository->findVerifiedByName($normalized);
-        if (null !== $verified) {
-            return RoutingDecision::routed($verified);
+        $domain = $this->monitoredDomainRepository->findAnyByName($normalized);
+        if (null === $domain) {
+            return RoutingDecision::quarantined($normalized, QuarantineReason::UnknownDomain);
         }
 
-        $unverified = $this->monitoredDomainRepository->findAllUnverifiedWithName($normalized);
-        if ([] !== $unverified) {
+        if (null === $domain->dmarcVerifiedAt) {
+            // Domain exists but no one has proven control via DNS yet, so
+            // don't expose reports to the team until they verify.
             return RoutingDecision::quarantined($normalized, QuarantineReason::UnverifiedDomain);
         }
 
-        return RoutingDecision::quarantined($normalized, QuarantineReason::UnknownDomain);
+        return RoutingDecision::routed($domain);
     }
 }

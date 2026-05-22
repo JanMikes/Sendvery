@@ -63,6 +63,14 @@ final class OnboardingDomainController extends AbstractController
                     $errors[] = (string) $violation->getMessage();
                 }
             } else {
+                // Hard-block when another team has already claimed this name.
+                // The /app/domain-taken page guides the user toward joining
+                // that team or pinging admin if they're the rightful owner.
+                $conflict = $this->monitoredDomainRepository->findAnyByName($data->domainName);
+                if (null !== $conflict && $conflict->team->id->toString() !== $teamId->toString()) {
+                    return $this->redirectToRoute('domain_taken', ['domain' => $data->domainName]);
+                }
+
                 // Enforce the post-onboarding invariant of one domain per team:
                 // if the team already has a domain, rename it in place instead of
                 // appending a second row when the user submits a different name.

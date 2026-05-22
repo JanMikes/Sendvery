@@ -8,6 +8,7 @@ use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\ReceivedReportEmail;
 use App\Events\DmarcReportProcessed;
+use App\Events\FirstReportArrivedForDomain;
 use App\Message\ProcessDmarcReport;
 use App\Repository\DmarcReportRepository;
 use App\Repository\MonitoredDomainRepository;
@@ -42,8 +43,15 @@ final readonly class ProcessDmarcReportHandler
         $domain = $this->monitoredDomainRepository->get($message->domainId);
         $now = $this->clock->now();
 
-        if (null === $domain->firstReportAt) {
+        $isFirstReport = null === $domain->firstReportAt;
+        if ($isFirstReport) {
             $domain->firstReportAt = $now;
+            $domain->recordThat(new FirstReportArrivedForDomain(
+                domainId: $domain->id,
+                teamId: $domain->team->id,
+                domainName: $domain->domain,
+                reporterOrg: $parsed->reporterOrg,
+            ));
         }
 
         $compressed = gzcompress($message->xmlContent);
