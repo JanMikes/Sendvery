@@ -16,13 +16,27 @@ This document is the build plan for executing the pricing-model decisions made o
 | Phase | Status | Notes |
 |---|---|---|
 | 0 — Test specifications | ✅ done | Tests embedded inside each Phase 1 step rather than landing separately. |
-| 1 — Foundations | ✅ done | 2026-05-22. SubscriptionPlan expanded, BillingInterval added, PlanLimits is canonical matrix, StripePriceResolver takes `(plan, interval)` with AI gating, PlanEnforcement tracks monthly counters via team_usage + team_ai_usage. **131 Phase-1 unit tests green.** Pre-existing failures in `DomainOverviewResultTest` + `DashboardContext` cs-fixer are unrelated WIP files. |
-| 2 — AI stub infrastructure | ☐ pending | Next phase. `App\Services\Ai` interface + `StubAiInsightsService` + `PlanGatedAiInsightsService` decorator + usage reset cron. |
+| 1 — Foundations | ✅ done | 2026-05-22. SubscriptionPlan expanded, BillingInterval added, PlanLimits is canonical matrix, StripePriceResolver takes `(plan, interval)` with AI gating, PlanEnforcement tracks monthly counters via team_usage + team_ai_usage. Test bootstrap also creates migration-only counter tables so integration tests see them. |
+| 2 — AI stub infrastructure | ✅ done | 2026-05-22. `App\Services\Ai\AiInsightsService` interface + 5 result DTOs + `StubAiInsightsService` (honest placeholder copy) + `PlanGatedAiInsightsService` decorator (plan + on-demand quota gating, increment on explainReport success). `AiNotEnabledForPlan` + `AiQuotaExceeded` exceptions. `sendvery:usage:reset` console command + `PlanEnforcement::resetExpiredCounters()`. Bindings wired so the interface resolves to gated→stub; swap is one line when real AI ships. |
 | 3 — Plan limit enforcement | ☐ pending | Wire `PlanEnforcement::canParseReport` into `ProcessDmarcReportHandler`, retention into purge cron, AI quota into dashboard. |
 | 4 — Pricing page UI rewrite | ☐ pending | New 4-card layout, two toggles, Stimulus controller, localStorage. Existing `PricingTable.html.twig` has placeholder "Business" card after rename — full rewrite still required. |
 | 5 — Checkout & billing flow | ☐ pending | Webhook expansion for `customer.subscription.updated`, in-place plan/cadence/AI updates via `updateSubscription()`, billing settings page redesign. |
 | 6 — Cutover | ☐ pending | No legacy data to migrate (see [[clean-slate-no-preexisting-stripe-subs]]). Stripe products + 12 price IDs in dashboard, flip CTAs, copy sweep, email leads. |
 | 7 — Observability polish | ☐ pending | |
+
+### What landed in Phase 2 (2026-05-22)
+
+- `src/Services/Ai/AiInsightsService.php` — interface with 5 operations (digest, anomaly, on-demand explain, remediation, sender label).
+- `src/Services/Ai/StubAiInsightsService.php` — canned placeholder copy ("AI Insights is being prepared — your account is ready").
+- `src/Services/Ai/PlanGatedAiInsightsService.php` — decorator. `explainReport` enforces monthly quota + increments counter on success; other ops gated by `plan->hasAi()` only. Remediation + sender label pass through (caller controls dispatch).
+- `src/Services/Ai/Result/*` — DTOs: `WeeklyDigestResult`, `AnomalyExplanationResult`, `OnDemandExplanationResult`, `RemediationResult`, `SenderLabelResult`, plus sub-DTOs `KeyMetric` and `SuggestedDnsRecord` (objects over arrays).
+- `src/Services/Ai/Input/DnsCheckFailure.php` — minimal input DTO for remediation guidance.
+- `src/Exceptions/AiNotEnabledForPlan.php` — carries the rejecting plan.
+- `src/Exceptions/AiQuotaExceeded.php` — carries `used` and `limit` for accurate UI rendering.
+- `src/Services/Stripe/PlanEnforcement.php` — new `resetExpiredCounters(): int` method (single UPDATE per table for expired rows).
+- `src/Command/ResetMonthlyUsageCountersCommand.php` — `sendvery:usage:reset` cron. Idempotent; reports zero when nothing to reset.
+- `config/services.php` — `AiInsightsService` aliased to `PlanGatedAiInsightsService` wrapping `StubAiInsightsService`. When real AI ships, only the `$inner` binding changes.
+- Tests: 28 new tests covering stub canned data, decorator gating + quota burn, exceptions, result DTOs, and reset command behavior. **1096 tests green** (up from 1068).
 
 ### What landed in Phase 1 (2026-05-22)
 

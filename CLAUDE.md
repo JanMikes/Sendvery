@@ -425,6 +425,7 @@ Current entries (kept in sync with `crontab`):
 - `30 4 * * *` — `sendvery:reports:quarantine:purge` (drop quarantined reports past their TTL)
 - `0 3 * * *` — `sendvery:dns:check-all` (DNS record + verification re-check)
 - `0 9 * * 1` — `sendvery:digest:send-all` (weekly digest)
+- `0 0 * * *` — `sendvery:usage:reset` (roll expired monthly plan-usage counters forward)
 - Blacklist checks: daily (later phase)
 
 Ops:

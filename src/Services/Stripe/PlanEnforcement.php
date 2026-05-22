@@ -136,6 +136,49 @@ final readonly class PlanEnforcement
     // ─── Period management ────────────────────────────────────────────────
 
     /**
+     * Roll every expired usage row in `team_usage` and `team_ai_usage`
+     * forward to the current month, zeroing its counter. Intended for the
+     * `sendvery:usage:reset` cron — `ensureCurrentPeriod()` already does
+     * this lazily on read/write, but the cron normalizes idle teams so
+     * dashboards always show fresh "0 used this month" instead of
+     * potentially-stale numbers from a yet-to-be-touched account.
+     *
+     * Returns the total number of rows reset across both tables.
+     */
+    public function resetExpiredCounters(): int
+    {
+        $now = $this->clock->now();
+        $periodStart = $now->modify('first day of this month')->setTime(0, 0);
+        $periodEnd = $periodStart->modify('+1 month');
+
+        $params = [
+            'start' => $periodStart->format('Y-m-d H:i:s'),
+            'end' => $periodEnd->format('Y-m-d H:i:s'),
+            'now' => $now->format('Y-m-d H:i:s'),
+        ];
+
+        $reportRows = $this->database->executeStatement(
+            'UPDATE team_usage
+             SET reports_parsed_count = 0,
+                 period_started_at = :start,
+                 period_ends_at = :end
+             WHERE period_ends_at <= :now',
+            $params,
+        );
+
+        $aiRows = $this->database->executeStatement(
+            'UPDATE team_ai_usage
+             SET on_demand_count = 0,
+                 period_started_at = :start,
+                 period_ends_at = :end
+             WHERE period_ends_at <= :now',
+            $params,
+        );
+
+        return (int) $reportRows + (int) $aiRows;
+    }
+
+    /**
      * Ensures the usage row exists and its monthly period is current.
      * Creates the row at zero if missing; resets the counter if the period
      * has expired. Idempotent — safe to call before every read or write.

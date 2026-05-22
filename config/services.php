@@ -46,6 +46,18 @@ return App::config([
                 '$aiPurchasable' => '%env(bool:SENDVERY_AI_PURCHASABLE)%',
             ],
         ],
+        // AI Insights wiring (DEC-057): the interface resolves to the
+        // PlanGatedAiInsightsService decorator, which wraps the stub. When
+        // real AI lands, only the $inner binding swaps to
+        // AnthropicAiInsightsService — gating and quota plumbing stay put.
+        'App\Services\Ai\AiInsightsService' => [
+            'alias' => 'App\Services\Ai\PlanGatedAiInsightsService',
+        ],
+        'App\Services\Ai\PlanGatedAiInsightsService' => [
+            'arguments' => [
+                '$inner' => '@App\Services\Ai\StubAiInsightsService',
+            ],
+        ],
         'App\Controller\Webhook\StripeWebhookController' => [
             'arguments' => [
                 '$stripeWebhookSecret' => '%env(STRIPE_WEBHOOK_SECRET)%',
@@ -329,6 +341,22 @@ return App::config([
                 'public' => true,
             ],
             'App\MessageHandler\MarkSenderAuthorizedHandler' => [
+                'public' => true,
+            ],
+            'App\Services\Ai\StubAiInsightsService' => [
+                'public' => true,
+            ],
+            'App\Services\Ai\PlanGatedAiInsightsService' => [
+                'public' => true,
+                'arguments' => [
+                    '$inner' => '@App\Services\Ai\StubAiInsightsService',
+                ],
+            ],
+            'App\Services\Ai\AiInsightsService' => [
+                'alias' => 'App\Services\Ai\PlanGatedAiInsightsService',
+                'public' => true,
+            ],
+            'App\Command\ResetMonthlyUsageCountersCommand' => [
                 'public' => true,
             ],
         ],
