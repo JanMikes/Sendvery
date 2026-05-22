@@ -148,6 +148,54 @@ final class KnowledgeBaseTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    #[Test]
+    public function indexDoesNotEmbedBetaForm(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/learn');
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('beta-signup-form', $body);
+        self::assertStringNotContainsString('href="/beta"', $body);
+        self::assertStringNotContainsString('src="/beta"', $body);
+    }
+
+    #[Test]
+    public function indexHasAuthLoginCta(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/learn');
+
+        $loginCtaLinks = $crawler->filter('a[href="/login"]');
+        self::assertGreaterThanOrEqual(1, $loginCtaLinks->count(), 'KB index should have at least one CTA pointing to /login');
+        self::assertSelectorTextContains('body', 'Get started free');
+    }
+
+    #[Test]
+    #[DataProvider('guideRoutes')]
+    public function guideDoesNotEmbedBetaForm(string $slug): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/learn/'.$slug);
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('beta-signup-form', $body);
+        self::assertStringNotContainsString('href="/beta"', $body);
+        self::assertStringNotContainsString('src="/beta"', $body);
+    }
+
+    #[Test]
+    #[DataProvider('guideRoutes')]
+    public function guideHasAuthLoginCta(string $slug): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/learn/'.$slug);
+
+        $loginCtaLinks = $crawler->filter('a[href="/login"]');
+        self::assertGreaterThanOrEqual(1, $loginCtaLinks->count(), 'KB article should have at least one CTA pointing to /login');
+        self::assertSelectorTextContains('body', 'Get started free');
+    }
+
     /** @return iterable<string, array{string}> */
     public static function guideRoutes(): iterable
     {

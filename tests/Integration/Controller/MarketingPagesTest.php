@@ -132,7 +132,6 @@ final class MarketingPagesTest extends WebTestCase
         yield 'pricing' => ['/pricing'];
         yield 'what-is-sendvery' => ['/about/what-is-sendvery'];
         yield 'open-source' => ['/about/open-source'];
-        yield 'beta' => ['/beta'];
         yield 'knowledge-base' => ['/learn'];
         yield 'learn-what-is-dmarc' => ['/learn/what-is-dmarc'];
         yield 'learn-spf-record-guide' => ['/learn/spf-record-guide'];

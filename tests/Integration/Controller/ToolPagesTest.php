@@ -144,13 +144,14 @@ final class ToolPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function dnsMonitoringShowsBetaCta(): void
+    public function dnsMonitoringHasAuthLoginCta(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/tools/dns-monitoring');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'DNS Record Monitoring');
+        self::assertGreaterThanOrEqual(1, $crawler->filter('a[href="/login"]')->count(), 'DNS monitoring page should link to /login');
     }
 
     /** @return iterable<string, array{string}> */

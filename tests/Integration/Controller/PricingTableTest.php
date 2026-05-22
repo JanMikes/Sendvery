@@ -89,4 +89,25 @@ final class PricingTableTest extends WebTestCase
         self::assertCount(2, $crawler->filter('[data-pricing-target="billingButton"]'));
         self::assertCount(1, $crawler->filter('[data-pricing-target="aiToggle"]'));
     }
+
+    public function testFreeTierCtaPointsToAuthLogin(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/pricing');
+
+        $freeCard = $crawler->filter('[data-pricing-target="card"]')->first();
+        $cta = $freeCard->filter('a.btn');
+        self::assertCount(1, $cta);
+        self::assertSame('/login', $cta->attr('href'));
+        self::assertStringContainsString('Get started free', $cta->text());
+    }
+
+    public function testNoBetaHrefOnPricingPage(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/pricing');
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('href="/beta"', $body);
+    }
 }

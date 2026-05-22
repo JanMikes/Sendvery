@@ -45,11 +45,22 @@ final class SeoTest extends WebTestCase
         self::assertStringContainsString('/pricing', $content);
         self::assertStringContainsString('/about/what-is-sendvery', $content);
         self::assertStringContainsString('/about/open-source', $content);
-        self::assertStringContainsString('/beta', $content);
         self::assertStringContainsString('/learn', $content);
         self::assertStringContainsString('/learn/what-is-dmarc', $content);
         self::assertStringContainsString('/learn/spf-record-guide', $content);
         self::assertStringContainsString('/learn/email-authentication-explained', $content);
+    }
+
+    #[Test]
+    public function sitemapDoesNotContainBeta(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/sitemap.xml');
+
+        $content = (string) $client->getResponse()->getContent();
+
+        self::assertStringNotContainsString('<loc>http://localhost/beta</loc>', $content);
+        self::assertStringNotContainsString('/beta</loc>', $content);
     }
 
     #[Test]

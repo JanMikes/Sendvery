@@ -35,6 +35,8 @@ final class ConfirmBetaSignupController extends AbstractController
             $this->entityManager->flush();
         }
 
-        return $this->render('beta/confirmed.html.twig');
+        $this->addFlash('success', 'Your email is confirmed. Sign in to get started with Sendvery.');
+
+        return $this->redirectToRoute('auth_login');
     }
 }

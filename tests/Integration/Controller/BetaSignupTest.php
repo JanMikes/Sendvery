@@ -13,123 +13,29 @@ use Ramsey\Uuid\Uuid;
 final class BetaSignupTest extends WebTestCase
 {
     #[Test]
-    public function betaPageReturns200(): void
+    public function betaRouteRedirectsToHomePermanently(): void
     {
         $client = self::createClient();
         $client->request('GET', '/beta');
 
-        self::assertResponseIsSuccessful();
+        self::assertResponseStatusCodeSame(301);
+        self::assertResponseRedirects('/');
     }
 
     #[Test]
-    public function betaPageHasSignupForm(): void
-    {
-        $client = self::createClient();
-        $crawler = $client->request('GET', '/beta');
-
-        self::assertSelectorExists('input[name="email"]');
-        self::assertSelectorExists('button[type="submit"]');
-    }
-
-    #[Test]
-    public function betaPageHasTitleAndMeta(): void
-    {
-        $client = self::createClient();
-        $crawler = $client->request('GET', '/beta');
-
-        $title = $crawler->filter('title')->text();
-        self::assertStringContainsString('Sendvery', $title);
-
-        $metaDescription = $crawler->filter('meta[name="description"]')->attr('content');
-        self::assertNotEmpty($metaDescription);
-    }
-
-    #[Test]
-    public function submitValidSignupShowsSuccess(): void
+    public function betaRoutePostAlsoRedirects(): void
     {
         $client = self::createClient();
         $client->request('POST', '/beta', [
-            'email' => 'test-signup-'.Uuid::uuid7()->toString().'@example.com',
-            'source' => 'beta-page',
+            'email' => 'whatever@example.com',
         ]);
 
-        self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h3', "You're on the list");
+        self::assertResponseStatusCodeSame(301);
+        self::assertResponseRedirects('/');
     }
 
     #[Test]
-    public function submitValidSignupCreatesEntity(): void
-    {
-        $client = self::createClient();
-        $email = 'entity-test-'.Uuid::uuid7()->toString().'@example.com';
-
-        $client->request('POST', '/beta', [
-            'email' => $email,
-            'domain_count' => '10',
-            'pain_point' => 'Too many DNS records',
-            'source' => 'beta-page',
-        ]);
-
-        self::assertResponseIsSuccessful();
-
-        $em = self::getContainer()->get(EntityManagerInterface::class);
-        assert($em instanceof EntityManagerInterface);
-        $signup = $em->getRepository(BetaSignup::class)->findOneBy(['email' => $email]);
-
-        self::assertNotNull($signup);
-        self::assertSame(10, $signup->domainCount);
-        self::assertSame('Too many DNS records', $signup->painPoint);
-        self::assertSame('beta-page', $signup->source);
-    }
-
-    #[Test]
-    public function submitInvalidEmailShowsError(): void
-    {
-        $client = self::createClient();
-        $client->request('POST', '/beta', [
-            'email' => 'not-an-email',
-            'source' => 'beta-page',
-        ]);
-
-        self::assertResponseIsSuccessful();
-        self::assertSelectorExists('.alert-error');
-    }
-
-    #[Test]
-    public function submitEmptyEmailShowsError(): void
-    {
-        $client = self::createClient();
-        $client->request('POST', '/beta', [
-            'email' => '',
-            'source' => 'beta-page',
-        ]);
-
-        self::assertResponseIsSuccessful();
-        self::assertSelectorExists('.alert-error');
-    }
-
-    #[Test]
-    public function duplicateEmailShowsSuccessSilently(): void
-    {
-        $client = self::createClient();
-        $email = 'duplicate-'.Uuid::uuid7()->toString().'@example.com';
-
-        $client->request('POST', '/beta', [
-            'email' => $email,
-            'source' => 'beta-page',
-        ]);
-        self::assertResponseIsSuccessful();
-
-        $client->request('POST', '/beta', [
-            'email' => $email,
-            'source' => 'beta-page',
-        ]);
-        self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h3', "You're on the list");
-    }
-
-    #[Test]
-    public function confirmWithValidToken(): void
+    public function confirmWithValidTokenRedirectsToLogin(): void
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -151,8 +57,32 @@ final class BetaSignupTest extends WebTestCase
 
         $client->request('GET', '/beta/confirm/'.$token);
 
-        self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h1', "You're confirmed");
+        self::assertResponseStatusCodeSame(302);
+        self::assertResponseRedirects('/login');
+    }
+
+    #[Test]
+    public function confirmWithValidTokenSetsConfirmedAt(): void
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $token = bin2hex(random_bytes(32));
+        $signup = new BetaSignup(
+            id: Uuid::uuid7(),
+            email: 'confirm-set-'.Uuid::uuid7()->toString().'@example.com',
+            domainCount: null,
+            painPoint: null,
+            source: 'test',
+            signedUpAt: new \DateTimeImmutable(),
+            confirmationToken: $token,
+        );
+        $signup->popEvents();
+        $em->persist($signup);
+        $em->flush();
+
+        $client->request('GET', '/beta/confirm/'.$token);
 
         $em->clear();
         $refreshed = $em->find(BetaSignup::class, $signup->id);
@@ -161,16 +91,35 @@ final class BetaSignupTest extends WebTestCase
     }
 
     #[Test]
-    public function confirmWithInvalidTokenReturns404(): void
+    public function confirmWithValidTokenShowsFlashMessage(): void
     {
         $client = self::createClient();
-        $client->request('GET', '/beta/confirm/nonexistenttoken');
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
 
-        self::assertResponseStatusCodeSame(404);
+        $token = bin2hex(random_bytes(32));
+        $signup = new BetaSignup(
+            id: Uuid::uuid7(),
+            email: 'confirm-flash-'.Uuid::uuid7()->toString().'@example.com',
+            domainCount: null,
+            painPoint: null,
+            source: 'test',
+            signedUpAt: new \DateTimeImmutable(),
+            confirmationToken: $token,
+        );
+        $signup->popEvents();
+        $em->persist($signup);
+        $em->flush();
+
+        $client->request('GET', '/beta/confirm/'.$token);
+        $client->followRedirect();
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('body', 'confirmed');
     }
 
     #[Test]
-    public function confirmAlreadyConfirmedDoesNotChangeDate(): void
+    public function confirmAlreadyConfirmedRedirectsToLogin(): void
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -194,7 +143,8 @@ final class BetaSignupTest extends WebTestCase
 
         $client->request('GET', '/beta/confirm/'.$token);
 
-        self::assertResponseIsSuccessful();
+        self::assertResponseStatusCodeSame(302);
+        self::assertResponseRedirects('/login');
 
         $em->clear();
         $refreshed = $em->find(BetaSignup::class, $signup->id);
@@ -204,5 +154,14 @@ final class BetaSignupTest extends WebTestCase
             $confirmedAt->format('Y-m-d H:i:s'),
             $refreshed->confirmedAt->format('Y-m-d H:i:s'),
         );
+    }
+
+    #[Test]
+    public function confirmWithInvalidTokenReturns404(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/beta/confirm/nonexistenttoken');
+
+        self::assertResponseStatusCodeSame(404);
     }
 }

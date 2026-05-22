@@ -22,7 +22,6 @@ final class SitemapController extends AbstractController
         ['route' => 'tools_mx_checker', 'priority' => '0.9', 'changefreq' => 'monthly'],
         ['route' => 'tools_blacklist_checker', 'priority' => '0.9', 'changefreq' => 'monthly'],
         ['route' => 'tools_domain_health', 'priority' => '0.9', 'changefreq' => 'monthly'],
-        ['route' => 'beta_signup', 'priority' => '0.8', 'changefreq' => 'monthly'],
         ['route' => 'knowledge_base_index', 'priority' => '0.8', 'changefreq' => 'weekly'],
         ['route' => 'knowledge_base_article', 'priority' => '0.8', 'changefreq' => 'monthly', 'params' => ['slug' => 'what-is-dmarc']],
         ['route' => 'knowledge_base_article', 'priority' => '0.8', 'changefreq' => 'monthly', 'params' => ['slug' => 'spf-record-guide']],
