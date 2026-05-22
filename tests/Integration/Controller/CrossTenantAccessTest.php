@@ -92,8 +92,8 @@ final class CrossTenantAccessTest extends WebTestCase
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
 
-        $victim = $fixtures->persona()->emailPrefix('victim')->plan('team')->build();
-        $attacker = $fixtures->persona()->emailPrefix('attacker')->plan('team')->build();
+        $victim = $fixtures->persona()->emailPrefix('victim')->plan('business')->build();
+        $attacker = $fixtures->persona()->emailPrefix('attacker')->plan('business')->build();
         assert(null !== $victim->domain);
 
         $client->loginUser($attacker->user);

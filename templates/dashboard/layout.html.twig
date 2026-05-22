@@ -20,6 +20,60 @@
             <p class="text-xs text-base-content/50 mt-0.5">Email Health Dashboard</p>
         </div>
 
+        {# Team switcher / chip — the always-visible "which team am I working with" affordance #}
+        {% set _active_membership = active_membership() %}
+        {% set _memberships = all_memberships() %}
+        {% if _active_membership %}
+            <div class="px-3 py-3 border-b border-base-300">
+                <p class="text-[10px] uppercase tracking-wider text-base-content/40 mb-1.5">Team</p>
+                {% if _memberships|length > 1 %}
+                    <div class="dropdown dropdown-bottom w-full">
+                        <label tabindex="0" class="btn btn-ghost btn-sm w-full justify-between font-normal normal-case">
+                            <span class="truncate text-left">
+                                <span class="font-medium block truncate">{{ _active_membership.team.name }}</span>
+                                <span class="text-[10px] text-base-content/50 block">{{ _active_membership.team.plan | capitalize }} plan · {{ _active_membership.role.value | capitalize }}</span>
+                            </span>
+                            <svg class="w-4 h-4 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+                        </label>
+                        <ul tabindex="0" class="dropdown-content menu menu-sm z-50 mt-1 w-60 rounded-box bg-base-100 border border-base-300 shadow-lg p-1">
+                            <li class="menu-title">
+                                <span class="text-[10px] uppercase tracking-wider">Switch team</span>
+                            </li>
+                            {% for option in _memberships %}
+                                <li>
+                                    <form method="post" action="{{ path('team_switch_active') }}" class="p-0">
+                                        <input type="hidden" name="team_id" value="{{ option.team.id }}">
+                                        <input type="hidden" name="return_to" value="{{ app.request.requestUri }}">
+                                        <button type="submit" class="flex items-center justify-between w-full text-left {% if option.team.id == _active_membership.team.id %}bg-base-200{% endif %}">
+                                            <span class="truncate">
+                                                <span class="font-medium block truncate">{{ option.team.name }}</span>
+                                                <span class="text-[10px] text-base-content/50 block">{{ option.team.plan | capitalize }} · {{ option.role.value | capitalize }}</span>
+                                            </span>
+                                            {% if option.team.id == _active_membership.team.id %}
+                                                <svg class="w-4 h-4 text-primary flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                </li>
+                            {% endfor %}
+                            <div class="divider my-1"></div>
+                            <li>
+                                <a href="{{ path('team_settings') }}" class="text-xs text-base-content/70">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                    Manage team
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                {% else %}
+                    <div class="px-1">
+                        <p class="font-medium text-sm truncate">{{ _active_membership.team.name }}</p>
+                        <p class="text-[10px] text-base-content/50">{{ _active_membership.team.plan | capitalize }} plan · {{ _active_membership.role.value | capitalize }}</p>
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
         {# Navigation #}
         <nav class="flex-1 overflow-y-auto p-3 space-y-1">
             {% set current_route = app.request.attributes.get('_route') %}

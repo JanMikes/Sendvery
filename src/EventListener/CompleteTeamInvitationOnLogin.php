@@ -6,6 +6,8 @@ namespace App\EventListener;
 
 use App\Entity\User;
 use App\Message\AcceptTeamInvitation;
+use App\Repository\TeamInvitationRepository;
+use App\Services\DashboardContext;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -28,6 +30,8 @@ final readonly class CompleteTeamInvitationOnLogin
     public function __construct(
         private RequestStack $requestStack,
         private MessageBusInterface $commandBus,
+        private TeamInvitationRepository $invitationRepository,
+        private DashboardContext $dashboardContext,
     ) {
     }
 
@@ -47,6 +51,10 @@ final readonly class CompleteTeamInvitationOnLogin
             return;
         }
 
+        // Resolve the team BEFORE dispatching so we know which team to switch
+        // into. The dispatch may consume the invitation row.
+        $invitation = $this->invitationRepository->findByToken($token);
+
         try {
             $this->commandBus->dispatch(new AcceptTeamInvitation(
                 invitationToken: $token,
@@ -57,6 +65,18 @@ final readonly class CompleteTeamInvitationOnLogin
             // already a member), the auth itself still succeeded. The
             // AcceptTeamInvitationController will surface a clear error if the
             // user revisits the invite link explicitly.
+            return;
+        }
+
+        if (null !== $invitation) {
+            try {
+                $this->dashboardContext->setActiveTeam($invitation->team->id);
+            } catch (\DomainException) {
+                // The accept succeeded but DashboardContext can't see the new
+                // membership yet (Doctrine identity map). Falling back to the
+                // first membership on the next request is safe — the user
+                // just won't land in the new team automatically.
+            }
         }
     }
 }

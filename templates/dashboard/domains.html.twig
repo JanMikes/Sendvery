@@ -27,6 +27,7 @@
                     passRate="{{ domain.passRate }}"
                     totalReports="{{ domain.totalReports }}"
                     latestReportDate="{{ domain.latestReportDate }}"
+                    teamName="{{ showTeamColumn ? domain.teamName : null }}"
                 />
             {% endfor %}
         </div>

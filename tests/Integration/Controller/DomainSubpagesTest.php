@@ -124,7 +124,7 @@ final class DomainSubpagesTest extends WebTestCase
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
-        $persona = $fixtures->persona()->plan('team')->build();
+        $persona = $fixtures->persona()->plan('business')->build();
         $client->loginUser($persona->user);
 
         $client->request('GET', '/app/domains/'.Uuid::uuid7().'/export/pdf');

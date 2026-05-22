@@ -12,6 +12,7 @@ use App\Repository\TeamRepository;
 use App\Security\TeamVoter;
 use App\Services\DashboardContext;
 use App\Services\Stripe\PlanLimits;
+use App\Value\SubscriptionPlan;
 use App\Value\TeamRole;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -61,6 +62,15 @@ final class TeamSettingsController extends AbstractController
         $effectiveCount = $memberCount + $pendingCount;
         $canInvite = $effectiveCount < $maxMembers;
 
+        // Normalise across base + *_ai variants: Personal AI is still a
+        // single-seat plan, so the template can't just check the literal
+        // enum value to decide which copy to show.
+        $isSingleSeatPlan = in_array(
+            $plan->baseTier(),
+            [SubscriptionPlan::Free, SubscriptionPlan::Personal],
+            true,
+        );
+
         return $this->render('team/settings.html.twig', [
             'team' => $team,
             'currentMembership' => $currentMembership,
@@ -74,6 +84,7 @@ final class TeamSettingsController extends AbstractController
             'pendingInvitationCount' => $pendingCount,
             'maxMembers' => $maxMembers,
             'canInvite' => $canInvite,
+            'isSingleSeatPlan' => $isSingleSeatPlan,
         ]);
     }
 }

@@ -18,7 +18,7 @@ final class TeamPagesTest extends WebTestCase
         // crashed whenever the owner viewed a team with at least one teammate.
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
-        $persona = $fixtures->persona()->plan('team')->build();
+        $persona = $fixtures->persona()->plan('business')->build();
         $member = $fixtures->addExtraTeammate($persona->team);
 
         $client->loginUser($persona->user);
@@ -60,7 +60,7 @@ final class TeamPagesTest extends WebTestCase
         // No invite form.
         self::assertSelectorNotExists('input[type="email"][name="email"]');
         // Upgrade CTA instead.
-        self::assertSelectorTextContains('body', 'Upgrade to Team');
+        self::assertSelectorTextContains('body', 'Upgrade to Pro');
         self::assertSelectorExists('a[href*="request-access"]');
     }
 
@@ -78,7 +78,7 @@ final class TeamPagesTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('body', 'Personal plan');
         self::assertSelectorNotExists('input[type="email"][name="email"]');
-        self::assertSelectorTextContains('body', 'Upgrade to Team');
+        self::assertSelectorTextContains('body', 'Upgrade to Pro');
     }
 
     #[Test]
@@ -86,13 +86,13 @@ final class TeamPagesTest extends WebTestCase
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
-        $persona = $fixtures->persona()->plan('team')->build();
+        $persona = $fixtures->persona()->plan('business')->build();
 
         $client->loginUser($persona->user);
         $client->request('GET', '/app/team');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'Team plan');
+        self::assertSelectorTextContains('body', 'Business plan');
         self::assertSelectorTextContains('body', '1/10');
         // Invite form present.
         self::assertSelectorExists('input[type="email"][name="email"]');
@@ -104,7 +104,7 @@ final class TeamPagesTest extends WebTestCase
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
         // Owner + 9 teammates = 10 = Team plan cap.
-        $persona = $fixtures->persona()->plan('team')->build();
+        $persona = $fixtures->persona()->plan('business')->build();
         for ($i = 0; $i < 9; ++$i) {
             $fixtures->addExtraTeammate($persona->team);
         }
@@ -127,7 +127,7 @@ final class TeamPagesTest extends WebTestCase
         assert($em instanceof \Doctrine\ORM\EntityManagerInterface);
         $fixtures = TestFixtures::fromContainer(self::getContainer());
 
-        $persona = $fixtures->persona()->plan('team')->build();
+        $persona = $fixtures->persona()->plan('business')->build();
         // 1 owner + 8 teammates + 1 pending invitation = 10 effective = cap.
         for ($i = 0; $i < 8; ++$i) {
             $fixtures->addExtraTeammate($persona->team);

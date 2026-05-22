@@ -34,7 +34,7 @@ final class TeamActionsTest extends WebTestCase
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
-        $persona = $fixtures->persona()->plan('team')->build();
+        $persona = $fixtures->persona()->plan('business')->build();
         $client->loginUser($persona->user);
 
         $invitee = 'invitee-'.Uuid::uuid7()->toString().'@example.com';
@@ -77,7 +77,7 @@ final class TeamActionsTest extends WebTestCase
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
         // Team plan: max 10 members. Owner + 9 teammates = at the cap.
-        $persona = $fixtures->persona()->plan('team')->build();
+        $persona = $fixtures->persona()->plan('business')->build();
         for ($i = 0; $i < 9; ++$i) {
             $fixtures->addExtraTeammate($persona->team);
         }

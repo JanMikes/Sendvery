@@ -26,11 +26,13 @@ final readonly class GetDomainOverview
             return [];
         }
 
-        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string}> $data */
+        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 md.id AS domain_id,
                 md.domain AS domain_name,
+                t.id::text AS team_id,
+                t.name AS team_name,
                 COUNT(dr.id) AS total_reports,
                 MAX(dr.date_range_end) AS latest_report_date,
                 COALESCE(
@@ -40,10 +42,11 @@ final readonly class GetDomainOverview
                     0
                 ) AS pass_rate
             FROM monitored_domain md
+            JOIN team t ON t.id = md.team_id
             LEFT JOIN dmarc_report dr ON dr.monitored_domain_id = md.id
             LEFT JOIN dmarc_record rec ON rec.dmarc_report_id = dr.id
             WHERE md.team_id IN (:teamIds)
-            GROUP BY md.id, md.domain
+            GROUP BY md.id, md.domain, t.id, t.name
             ORDER BY md.domain ASC',
             [
                 'teamIds' => $teamIds,

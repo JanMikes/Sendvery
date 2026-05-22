@@ -12,10 +12,12 @@ final readonly class DomainOverviewResult
         public int $totalReports,
         public ?string $latestReportDate,
         public float $passRate,
+        public string $teamId,
+        public string $teamName,
     ) {
     }
 
-    /** @param array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string} $row */
+    /** @param array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(
@@ -24,6 +26,8 @@ final readonly class DomainOverviewResult
             totalReports: (int) $row['total_reports'],
             latestReportDate: $row['latest_report_date'],
             passRate: (float) $row['pass_rate'],
+            teamId: $row['team_id'],
+            teamName: $row['team_name'],
         );
     }
 }

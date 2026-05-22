@@ -17,6 +17,8 @@ final class DomainOverviewResultTest extends TestCase
             'total_reports' => '5',
             'latest_report_date' => '2024-04-02 00:00:00',
             'pass_rate' => '95.5',
+            'team_id' => 'team-123',
+            'team_name' => 'Acme Inc',
         ]);
 
         self::assertSame('abc-123', $result->domainId);
@@ -24,6 +26,8 @@ final class DomainOverviewResultTest extends TestCase
         self::assertSame(5, $result->totalReports);
         self::assertSame('2024-04-02 00:00:00', $result->latestReportDate);
         self::assertSame(95.5, $result->passRate);
+        self::assertSame('team-123', $result->teamId);
+        self::assertSame('Acme Inc', $result->teamName);
     }
 
     public function testFromDatabaseRowWithNullLatestDate(): void
@@ -34,6 +38,8 @@ final class DomainOverviewResultTest extends TestCase
             'total_reports' => '0',
             'latest_report_date' => null,
             'pass_rate' => '0',
+            'team_id' => 'team-456',
+            'team_name' => 'Beta Corp',
         ]);
 
         self::assertNull($result->latestReportDate);

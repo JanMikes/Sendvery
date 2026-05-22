@@ -8,6 +8,7 @@ use App\FormData\AddDomainData;
 use App\Message\AddDomain;
 use App\Query\GetTeamPlan;
 use App\Repository\MonitoredDomainRepository;
+use App\Repository\TeamRepository;
 use App\Services\DashboardContext;
 use App\Services\IdentityProvider;
 use App\Services\Stripe\PlanEnforcement;
@@ -30,6 +31,7 @@ final class AddDomainController extends AbstractController
         private readonly PlanLimits $planLimits,
         private readonly GetTeamPlan $getTeamPlan,
         private readonly MonitoredDomainRepository $monitoredDomainRepository,
+        private readonly TeamRepository $teamRepository,
     ) {
     }
 
@@ -88,6 +90,7 @@ final class AddDomainController extends AbstractController
             'currentPlan' => $plan,
             'maxDomains' => $this->planLimits->getMaxDomains($plan),
             'domainCount' => $this->planEnforcement->getDomainCount($teamId->toString()),
+            'targetTeam' => $this->teamRepository->get($teamId),
         ]);
     }
 }

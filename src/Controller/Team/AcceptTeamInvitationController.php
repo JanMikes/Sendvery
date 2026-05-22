@@ -11,6 +11,7 @@ use App\Exceptions\InvitationNoLongerAcceptable;
 use App\Exceptions\UserAlreadyOnTeam;
 use App\Message\AcceptTeamInvitation;
 use App\Repository\TeamInvitationRepository;
+use App\Services\DashboardContext;
 use App\Value\TeamInvitationStatus;
 use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -35,6 +36,7 @@ final class AcceptTeamInvitationController extends AbstractController
         private readonly TeamInvitationRepository $invitationRepository,
         private readonly MessageBusInterface $commandBus,
         private readonly ClockInterface $clock,
+        private readonly DashboardContext $dashboardContext,
     ) {
     }
 
@@ -106,6 +108,11 @@ final class AcceptTeamInvitationController extends AbstractController
 
             return $this->render('team/invitation_invalid.html.twig', ['reason' => $reason]);
         }
+
+        // Newly-joined team becomes active so the "Go to dashboard" link on
+        // the confirmation page (and the next request) shows the team the
+        // user just chose to join, not whichever team was active before.
+        $this->dashboardContext->setActiveTeam($invitation->team->id);
 
         return $this->render('team/invitation_accepted.html.twig', [
             'teamName' => $invitation->team->name,

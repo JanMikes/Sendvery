@@ -25,6 +25,10 @@ final class ListDomainsController extends AbstractController
 
         return $this->render('dashboard/domains.html.twig', [
             'domains' => $domains,
+            // Show the Team column only when the user actually belongs to
+            // more than one team — single-team users would just see a noisy
+            // column repeating the same name on every row.
+            'showTeamColumn' => count($this->dashboardContext->getTeamIds()) > 1,
         ]);
     }
 }
