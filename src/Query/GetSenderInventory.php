@@ -26,9 +26,16 @@ final readonly class GetSenderInventory
             return [];
         }
 
-        $sql = 'SELECT ks.id, ks.source_ip, ks.hostname, ks.organization, ks.label, ks.is_authorized, ks.first_seen_at, ks.last_seen_at, ks.total_messages, ks.pass_rate
+        // The "user" table name is quoted because "user" is a PostgreSQL
+        // reserved keyword. The LEFT JOIN preserves rows where the actor
+        // user was later deleted (FK is ON DELETE SET NULL) so the audit
+        // line still renders with a "system" fallback.
+        $sql = 'SELECT ks.id, ks.source_ip, ks.hostname, ks.organization, ks.label, ks.is_authorized,
+                       ks.first_seen_at, ks.last_seen_at, ks.total_messages, ks.pass_rate,
+                       ks.updated_at, ks.notes, u.email AS updated_by_user_email
                 FROM known_sender ks
                 JOIN monitored_domain md ON md.id = ks.monitored_domain_id
+                LEFT JOIN "user" u ON u.id = ks.updated_by_user_id
                 WHERE ks.monitored_domain_id = :domainId
                 AND md.team_id IN (:teamIds)';
         $params = [
@@ -46,7 +53,7 @@ final readonly class GetSenderInventory
 
         $sql .= ' ORDER BY ks.total_messages DESC';
 
-        /** @var list<array{id: string, source_ip: string, hostname: string|null, organization: string|null, label: string|null, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string}> $data */
+        /** @var list<array{id: string, source_ip: string, hostname: string|null, organization: string|null, label: string|null, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string, updated_at: string|null, notes: string|null, updated_by_user_email: string|null}> $data */
         $data = $this->database->executeQuery($sql, $params, $types)->fetchAllAssociative();
 
         return array_map(SenderInventoryResult::fromDatabaseRow(...), $data);

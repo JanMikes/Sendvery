@@ -11,6 +11,7 @@ use Ramsey\Uuid\UuidInterface;
 #[ORM\Table(name: 'known_sender')]
 #[ORM\UniqueConstraint(name: 'uniq_known_sender_domain_ip', columns: ['monitored_domain_id', 'source_ip'])]
 #[ORM\Index(name: 'idx_known_sender_domain', columns: ['monitored_domain_id'])]
+#[ORM\Index(name: 'idx_known_sender_updated_by_user', columns: ['updated_by_user_id'])]
 final class KnownSender
 {
     #[ORM\Id]
@@ -48,6 +49,16 @@ final class KnownSender
     #[ORM\Column(type: 'float')]
     public float $passRate;
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $updatedAt;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    public ?string $notes;
+
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'updated_by_user_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    public ?User $updatedByUser;
+
     public function __construct(
         UuidInterface $id,
         MonitoredDomain $monitoredDomain,
@@ -72,6 +83,9 @@ final class KnownSender
         $this->lastSeenAt = $lastSeenAt;
         $this->totalMessages = $totalMessages;
         $this->passRate = $passRate;
+        $this->updatedAt = null;
+        $this->notes = null;
+        $this->updatedByUser = null;
     }
 
     public function updateStats(
@@ -82,5 +96,26 @@ final class KnownSender
         $this->lastSeenAt = $lastSeenAt;
         $this->totalMessages = $totalMessages;
         $this->passRate = $passRate;
+    }
+
+    public function authorize(User $by, \DateTimeImmutable $at): void
+    {
+        $this->isAuthorized = true;
+        $this->updatedAt = $at;
+        $this->updatedByUser = $by;
+    }
+
+    public function markUnknown(User $by, \DateTimeImmutable $at): void
+    {
+        $this->isAuthorized = false;
+        $this->updatedAt = $at;
+        $this->updatedByUser = $by;
+    }
+
+    public function setNotes(?string $notes, User $by, \DateTimeImmutable $at): void
+    {
+        $this->notes = $notes;
+        $this->updatedAt = $at;
+        $this->updatedByUser = $by;
     }
 }

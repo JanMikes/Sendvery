@@ -1076,7 +1076,8 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
 
 ## TASK-022: Sender Inventory authorize/revoke buttons are unlabelled, undoable, and have no bulk action — a single mis-click costs you 20 mins of cleanup
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: domains
 - Why: `templates/dashboard/sender_inventory.html.twig` per-row "Authorize" / "Revoke" buttons submit a form with no confirmation, no undo, no batch action, and no audit log entry visible to the user. For a domain with 30+ unique senders (typical for marketing newsletters + transactional + employees) the user has to click 30 individual buttons and has no way to know which ones they already touched if the page reloads or they get distracted. This is also where mis-classification has real consequences — marking Mailchimp "Authorized" then forgetting about it suppresses real failure alerts.
 - Acceptance:
@@ -1086,3 +1087,61 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
   - Inline notes field per sender — small textarea opens on a "Note" icon click; persists to a `notes` column on `sender_inventory`. Useful for "this is Mailchimp's marketing IP — Jane set up DKIM on 2026-04-12."
   - 100% test coverage on the bulk-update command + the audit-log column.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Schema migration `Version20260526000000.php`:** ALTER `known_sender` ADD `updated_at TIMESTAMP NULL`, `notes TEXT NULL`, `updated_by_user_id UUID NULL` (FK to user.id, ON DELETE SET NULL). The `updated_by_user_id` is nullable because existing rows have no historical attribution; future updates fill it in. Index on `(updated_by_user_id)`.
+
+**Entity `KnownSender`:** add 3 properties + 3 mutation methods — `authorize(User $by, \DateTimeImmutable $at)`, `markUnknown(User $by, \DateTimeImmutable $at)`, `setNotes(?string $notes, User $by, \DateTimeImmutable $at)` — each updates the audit fields.
+
+**Commands (modify + 3 new in `src/Message/`):**
+- Modify existing `MarkSenderAuthorized` — add `public UuidInterface $actorUserId`.
+- New: `BulkAuthorizeSenders(list<UuidInterface> $senderIds, UuidInterface $teamId, UuidInterface $actorUserId)`.
+- New: `BulkMarkSendersUnknown(...)`.
+- New: `SetSenderNote(UuidInterface $senderId, UuidInterface $teamId, ?string $note, UuidInterface $actorUserId)`.
+
+**Handlers:** Modify `MarkSenderAuthorizedHandler` (inject UserRepository + ClockInterface, call entity methods). New: 3 bulk/note handlers, all `readonly final` with `#[AsMessageHandler]`. Bulk handlers iterate IDs, call `findForTeam` per ID, silently skip nulls (defense-in-depth). No explicit flush — rely on `doctrine_transaction` middleware (matches TASK-015 alert pattern).
+
+**Repository:** add `KnownSenderRepository::findForTeam(UuidInterface $id, UuidInterface $teamId): ?KnownSender`.
+
+**Query:** `GetSenderInventory.php` — extend SQL with `LEFT JOIN "user" u ON u.id = ks.updated_by_user_id` (quoted because PostgreSQL reserved word). Select `ks.updated_at`, `ks.notes`, `u.email AS updated_by_user_email`. `SenderInventoryResult` gains `updatedAt: ?string`, `notes: ?string`, `updatedByUserEmail: ?string`.
+
+**Controllers (4 new + 1 modify):**
+- Modify `SenderInventoryController` — strip POST handling (moves to dedicated controllers), GET-only, route param `{id}` → `{domainId}` for clarity.
+- New `AuthorizeSenderController` POST `/app/domains/{domainId}/senders/{senderId}/authorize` (CSRF `sender_action`).
+- New `RevokeSenderController` POST `/app/domains/{domainId}/senders/{senderId}/revoke` (CSRF `sender_action` — shared with authorize).
+- New `BulkSenderActionController` POST `/app/domains/{domainId}/senders/bulk` (CSRF `bulk_sender_action`, `action ∈ {authorize, mark_unknown}`, no-op on empty selection).
+- New `UpdateSenderNoteController` POST `/app/domains/{domainId}/senders/{senderId}/note` (CSRF `sender_note`).
+
+All write controllers: `findForTeam` lookup → 404 on null; team scoped via `DashboardContext::getTeamId()`; `getUser()` cast via `assert($user instanceof User)`.
+
+**Stimulus controllers (2 new):**
+- `assets/controllers/sender_selection_controller.js` — structural copy of `alert_selection_controller.js` with `senderIds[]` filter (rename of name attribute requires separate controller — alternative is renaming the alert one to a generic `bulk_selection`, but that's churn). Targets `toolbar`+`count`, actions `updateCount`+`clearAll`.
+- `assets/controllers/sender_authorize_confirm_controller.js` — attaches to the hidden authorize form via `data-action="submit->sender-authorize-confirm#confirmIfNeeded"`. First-submit-per-session calls `confirm(...)` with the explanatory message and sets `sessionStorage.setItem('senderAuthorizeConfirmed', '1')`. Subsequent submissions skip.
+
+**Template `sender_inventory.html.twig` rewrite (HTML-valid pattern for nested forms):**
+- Outer `<form id="bulk-sender-form" method="post" action="dashboard_sender_bulk" data-controller="sender-selection">` wraps the table (checkboxes + bulk toolbar).
+- Per-row Authorize/Revoke buttons use HTML5 `form="authorize-form-{id}"` / `form="revoke-form-{id}"` attribute pointing to hidden `<form>` elements rendered AFTER the table (outside the bulk form). Each hidden form has its own CSRF + action URL. This avoids invalid nested `<form>` tags.
+- Note button per row opens a daisyUI `<dialog id="note-dialog-{id}">` with a textarea (maxlength=10000) + save form (action `dashboard_sender_note`).
+- Authorize button has `data-controller="sender-authorize-confirm"` on its linked hidden form.
+- Status column gains audit sub-line: `Last changed by {{ updatedByUserEmail ?? 'system' }} on {{ updatedAt|date('M j, Y') }}` when `updatedAt` non-null.
+
+**Tests (~22 new in `tests/Integration/Controller/SenderInventoryActionsTest.php`):**
+- Page renders (checkboxes, toolbar, note buttons present)
+- Audit line renders when `updatedAt` set; "system" fallback when `updatedByUser` null (ON DELETE SET NULL case)
+- Authorize/Revoke single-row: CSRF rejected, happy path sets `isAuthorized` + `updatedByUser` + `updatedAt`, 404 unknown, 404 cross-tenant
+- Bulk: CSRF rejected, authorize happy, mark_unknown happy, empty selection no-op redirect, cross-tenant IDs silently skipped, unknown action 404
+- Notes: CSRF rejected, save persists + redirects, empty string normalizes to null, 15000-char string truncates at 10000
+
+Plus message constructor tests and entity audit method tests.
+
+**Critical details:**
+- CSRF token IDs: `sender_action` (authorize+revoke shared), `bulk_sender_action`, `sender_note`.
+- Bulk handler safety: per-ID `findForTeam` skip-null pattern matches TASK-015 alerts; forged cross-tenant IDs silently dropped.
+- `getUser()` narrowed via `assert($user instanceof User)` — PHPStan+symfony understands this.
+- Existing route name `dashboard_sender_inventory` parameter `{id}` becomes `{domainId}` — rename throughout (grep `dashboard_sender_inventory` to find callers).
+- `sender_authorize_confirm` controller attaches to the hidden form, not the button, so `event.preventDefault()` on `submit` reliably blocks. The linked button via `form=` attribute triggers a form `submit` event.
+- Default empty-string note normalized to null in handler.
+- Note max length 10000 chars; handler truncates if exceeded (defense — also maxlength on textarea).
+
+**Build phases:** 1) Migration + entity + entity tests. 2) Commands + repository + message tests. 3) Handlers. 4) Query + DTO + result tests. 5) Controllers + route registration. 6) 2 Stimulus controllers + template rewrite + browser smoke. 7) Integration tests; phpunit + phpstan + cs-fixer green; commit + push.

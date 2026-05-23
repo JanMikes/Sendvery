@@ -4,15 +4,12 @@ declare(strict_types=1);
 
 namespace App\Controller\Dashboard;
 
-use App\Message\MarkSenderAuthorized;
 use App\Query\GetDomainDetail;
 use App\Query\GetSenderInventory;
 use App\Services\DashboardContext;
-use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 
 final class SenderInventoryController extends AbstractController
@@ -21,30 +18,17 @@ final class SenderInventoryController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetSenderInventory $getSenderInventory,
-        private readonly MessageBusInterface $commandBus,
     ) {
     }
 
-    #[Route('/app/domains/{id}/senders', name: 'dashboard_sender_inventory')]
-    public function __invoke(string $id, Request $request): Response
+    #[Route('/app/domains/{domainId}/senders', name: 'dashboard_sender_inventory', methods: ['GET'])]
+    public function __invoke(string $domainId, Request $request): Response
     {
         $teamIds = $this->dashboardContext->getTeamIdStrings();
-        $domain = $this->getDomainDetail->forDomain($id, $teamIds);
+        $domain = $this->getDomainDetail->forDomain($domainId, $teamIds);
 
         if (null === $domain) {
             throw $this->createNotFoundException('Domain not found.');
-        }
-
-        if ($request->isMethod('POST') && $request->request->has('sender_id')) {
-            $senderId = Uuid::fromString($request->request->getString('sender_id'));
-            $isAuthorized = $request->request->getBoolean('is_authorized');
-
-            $this->commandBus->dispatch(new MarkSenderAuthorized(
-                senderId: $senderId,
-                isAuthorized: $isAuthorized,
-            ));
-
-            return $this->redirectToRoute('dashboard_sender_inventory', ['id' => $id]);
         }
 
         $filterParam = $request->query->getString('filter');
@@ -54,7 +38,7 @@ final class SenderInventoryController extends AbstractController
             default => null,
         };
 
-        $senders = $this->getSenderInventory->forDomain($id, $teamIds, $authorizedFilter);
+        $senders = $this->getSenderInventory->forDomain($domainId, $teamIds, $authorizedFilter);
 
         return $this->render('dashboard/sender_inventory.html.twig', [
             'domain' => $domain,

@@ -15,13 +15,16 @@ final class MarkSenderAuthorizedTest extends TestCase
     public function constructorSetsFields(): void
     {
         $senderId = Uuid::uuid7();
+        $actorUserId = Uuid::uuid7();
 
         $message = new MarkSenderAuthorized(
             senderId: $senderId,
             isAuthorized: true,
+            actorUserId: $actorUserId,
         );
 
         self::assertSame($senderId, $message->senderId);
         self::assertTrue($message->isAuthorized);
+        self::assertSame($actorUserId, $message->actorUserId);
     }
 }

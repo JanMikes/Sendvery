@@ -6,11 +6,12 @@ namespace App\Message;
 
 use Ramsey\Uuid\UuidInterface;
 
-final readonly class MarkSenderAuthorized
+final readonly class SetSenderNote
 {
     public function __construct(
         public UuidInterface $senderId,
-        public bool $isAuthorized,
+        public UuidInterface $teamId,
+        public ?string $note,
         public UuidInterface $actorUserId,
     ) {
     }

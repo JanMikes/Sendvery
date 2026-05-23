@@ -17,10 +17,13 @@ final readonly class SenderInventoryResult
         public string $lastSeenAt,
         public int $totalMessages,
         public float $passRate,
+        public ?string $updatedAt,
+        public ?string $notes,
+        public ?string $updatedByUserEmail,
     ) {
     }
 
-    /** @param array{id: string, source_ip: string, hostname: string|null, organization: string|null, label: string|null, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string} $row */
+    /** @param array{id: string, source_ip: string, hostname: string|null, organization: string|null, label: string|null, is_authorized: bool|string, first_seen_at: string, last_seen_at: string, total_messages: int|string, pass_rate: float|string, updated_at: string|null, notes: string|null, updated_by_user_email: string|null} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(
@@ -34,6 +37,9 @@ final readonly class SenderInventoryResult
             lastSeenAt: $row['last_seen_at'],
             totalMessages: (int) $row['total_messages'],
             passRate: (float) $row['pass_rate'],
+            updatedAt: $row['updated_at'],
+            notes: $row['notes'],
+            updatedByUserEmail: $row['updated_by_user_email'],
         );
     }
 }

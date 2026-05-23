@@ -89,6 +89,9 @@ final class KnownSenderTest extends TestCase
         self::assertNull($sender->organization);
         self::assertNull($sender->label);
         self::assertFalse($sender->isAuthorized);
+        self::assertNull($sender->updatedAt);
+        self::assertNull($sender->notes);
+        self::assertNull($sender->updatedByUser);
     }
 
     #[Test]
