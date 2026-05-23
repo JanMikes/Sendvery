@@ -1,0 +1,103 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Quarantine{% endblock %}
+{% block breadcrumbs %}<li>Quarantine</li>{% endblock %}
+
+{% block content %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">Quarantine</h1>
+        <p class="text-sm text-base-content/60 mt-1">
+            DMARC reports we received but couldn't immediately route to your dashboard — typically because the domain isn't verified yet, the report is for a domain we don't recognise, or you've hit this month's plan cap.
+        </p>
+    </div>
+
+    {# Flash messages #}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    {% if items is empty and currentPage == 1 %}
+        {# Plain card empty state — we need a conditional link inside, which
+           the EmptyState component doesn't expose. #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-8 text-center">
+                <div class="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4 mx-auto text-success">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold mb-1">No reports in quarantine</h3>
+                <p class="text-sm text-base-content/60 max-w-md mx-auto">
+                    Every report we received has been parsed.
+                </p>
+                {% if mostRecentReportId %}
+                    <a href="{{ path('dashboard_report_detail', { id: mostRecentReportId }) }}" class="btn btn-sm btn-primary mt-4">
+                        View most recent report
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Received</th>
+                                <th>Domain</th>
+                                <th>Reporter</th>
+                                <th>Reason</th>
+                                <th class="text-right">Size</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {# Stretched-link row navigation per TASK-018. #}
+                            {% for item in items %}
+                                <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                                    <td class="whitespace-nowrap">
+                                        <a href="{{ path('dashboard_quarantine_detail', { id: item.quarantineId }) }}"
+                                           class="absolute inset-0 z-10"
+                                           aria-label="Open quarantined report for {{ item.domainName }}"></a>
+                                        {{ item.quarantinedAt|date('M j, H:i') }}
+                                    </td>
+                                    <td class="font-medium">{{ item.domainName }}</td>
+                                    <td class="text-sm text-base-content/70">{{ item.reporterEmail }}</td>
+                                    <td>
+                                        {% if item.reason == 'unknown_domain' %}
+                                            <span class="badge badge-sm badge-warning">Unknown domain</span>
+                                        {% elseif item.reason == 'unverified_domain' %}
+                                            <span class="badge badge-sm badge-info">Unverified domain</span>
+                                        {% elseif item.reason == 'plan_overage' %}
+                                            <span class="badge badge-sm badge-error">Plan overage</span>
+                                        {% else %}
+                                            <span class="badge badge-sm badge-ghost">{{ item.reason }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-right text-sm text-base-content/60">
+                                        {{ (item.sizeBytes / 1024)|number_format(1) }} KB
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {# Pagination #}
+                <div class="flex items-center justify-between mt-4">
+                    <div class="text-xs text-base-content/50">Page {{ currentPage }}</div>
+                    <div class="join">
+                        {% if currentPage > 1 %}
+                            <a href="{{ path('dashboard_quarantine', { page: currentPage - 1 }) }}" class="join-item btn btn-sm btn-ghost">Previous</a>
+                        {% endif %}
+                        {% if hasNextPage %}
+                            <a href="{{ path('dashboard_quarantine', { page: currentPage + 1 }) }}" class="join-item btn btn-sm btn-ghost">Next</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

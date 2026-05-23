@@ -6,12 +6,18 @@ namespace App\Repository;
 
 use App\Entity\QuarantinedDmarcReport;
 use Doctrine\ORM\EntityManagerInterface;
+use Ramsey\Uuid\UuidInterface;
 
 final readonly class QuarantinedDmarcReportRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
     ) {
+    }
+
+    public function find(UuidInterface $id): ?QuarantinedDmarcReport
+    {
+        return $this->entityManager->find(QuarantinedDmarcReport::class, $id);
     }
 
     /** @return list<QuarantinedDmarcReport> */

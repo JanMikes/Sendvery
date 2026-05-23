@@ -1,0 +1,124 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}Quarantined report{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_quarantine') }}">Quarantine</a></li>
+    <li>{{ item.domainName }}</li>
+{% endblock %}
+
+{% block content %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">Quarantined report</h1>
+        <p class="text-sm text-base-content/60 mt-1">{{ item.domainName }}</p>
+    </div>
+
+    {# Flash messages #}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    {# Reason-specific guidance banners. #}
+    {% if item.reason == 'plan_overage' %}
+        <div class="alert alert-warning mb-4">
+            <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/>
+            </svg>
+            <div>
+                <p class="font-semibold">This report is over this month's cap</p>
+                <p class="text-sm">Upgrade to unlock it (and any other reports queued this month).</p>
+            </div>
+            <a href="{{ path('dashboard_billing') }}" class="btn btn-warning btn-sm">View billing</a>
+        </div>
+    {% elseif item.reason == 'unknown_domain' %}
+        <div class="alert alert-info mb-4">
+            <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <p class="font-semibold">We received this report for a domain you don't yet monitor</p>
+                <p class="text-sm">Add <span class="font-mono">{{ item.domainName }}</span> to release it into the dashboard.</p>
+            </div>
+        </div>
+    {% elseif item.reason == 'unverified_domain' %}
+        <div class="alert alert-info mb-4">
+            <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <p class="font-semibold">This domain isn't verified yet</p>
+                <p class="text-sm">Finish DNS verification — we'll release any quarantined reports automatically.</p>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="card bg-base-100 border border-base-200 shadow-sm mb-4">
+        <div class="card-body p-6">
+            <h3 class="text-sm font-semibold mb-4">Envelope details</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <span class="text-base-content/50">Subject</span>
+                    <p class="font-medium break-words">{{ item.subject }}</p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">Domain</span>
+                    <p class="font-medium font-mono">{{ item.domainName }}</p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">Reporter</span>
+                    <p class="font-medium">{{ item.reporterEmail }}</p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">Reason</span>
+                    <p>
+                        {% if item.reason == 'unknown_domain' %}
+                            <span class="badge badge-sm badge-warning">Unknown domain</span>
+                        {% elseif item.reason == 'unverified_domain' %}
+                            <span class="badge badge-sm badge-info">Unverified domain</span>
+                        {% elseif item.reason == 'plan_overage' %}
+                            <span class="badge badge-sm badge-error">Plan overage</span>
+                        {% else %}
+                            <span class="badge badge-sm badge-ghost">{{ item.reason }}</span>
+                        {% endif %}
+                    </p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">Quarantined</span>
+                    <p class="font-medium">{{ item.quarantinedAt|date('M j, Y H:i') }}</p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">Expires</span>
+                    <p class="font-medium">{{ item.expiresAt|date('M j, Y H:i') }}</p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">Size</span>
+                    <p class="font-medium">{{ (item.sizeBytes / 1024)|number_format(1) }} KB</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Action forms — kept as siblings (NOT nested) to keep the HTML valid. #}
+    <div class="flex flex-wrap items-center gap-3">
+        {% if item.reason == 'unknown_domain' %}
+            <form method="post" action="{{ path('dashboard_quarantine_add_domain', { id: item.quarantineId }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('quarantine_add_domain') }}">
+                <button type="submit" class="btn btn-warning btn-sm">
+                    Add {{ item.domainName }} and release
+                </button>
+            </form>
+        {% endif %}
+
+        <form method="post" action="{{ path('dashboard_quarantine_reprocess', { id: item.quarantineId }) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('quarantine_reprocess') }}">
+            <button type="submit" class="btn btn-primary btn-sm">
+                Reprocess now
+            </button>
+        </form>
+
+        <a href="{{ path('dashboard_quarantine') }}" class="btn btn-ghost btn-sm ml-auto">Back to list</a>
+    </div>
+{% endblock %}

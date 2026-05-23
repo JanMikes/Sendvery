@@ -1044,7 +1044,8 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
 
 ## TASK-020: Quarantine pile-up is invisible from the dashboard — give users a single page to see "reports we received but parked"
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: dashboard
 - Why: `QuarantinedDmarcReport` is referenced from `overview.html.twig` (unverified-domain banner) and from `domain_detail.html.twig` (count badge), but the user can never actually **see** the underlying envelopes. With three quarantine reasons in production (`UnknownDomain`, `PlanOverage`, parser failures), the user has no way to answer "did receivers actually send reports for my domain?" or "what's in the pile?". Per the project's `never-delete-user-data` rule we keep them, so we owe the user visibility.
 - Acceptance:
@@ -1055,6 +1056,82 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
   - Empty state: friendly "No reports in quarantine — every report we received has been parsed." copy with a link to the most recent report.
   - 100% test coverage on the new query, controller, and the add-domain-+-reprocess flow.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**No migration needed.** `QuarantinedDmarcReport` entity is complete. `ReceivedReportEmail` (joined via `received_email_id` FK) carries `from_address`, `subject`, `size_bytes`, `received_at`. No schema change.
+
+**Sidebar placement: dedicated top-level nav entry** between Reports and Alerts, always visible (hiding when empty would make the empty state unreachable). Active-state check: `current_route starts with 'dashboard_quarantine'`. Inline `badge badge-xs badge-warning` shows when count > 0.
+
+**Team-scoping for the DBAL query.** `quarantined_dmarc_report` has no `team_id`. Scope via `monitored_domain`: `LEFT JOIN monitored_domain md ON LOWER(md.domain) = LOWER(q.domain_name) AND md.team_id = :teamId`, with WHERE `md.team_id = :teamId OR (q.reason = 'unknown_domain' AND EXISTS (SELECT 1 FROM monitored_domain mdx WHERE LOWER(mdx.domain) = LOWER(q.domain_name) AND mdx.team_id = :teamId))`. Shows `UnverifiedDomain` + `PlanOverage` rows for the team's own domains and `UnknownDomain` rows for domains the team has since added.
+
+**`src/Query/GetQuarantineList.php`** (readonly final, DBAL Connection):
+- `forTeam(string $teamId, int $limit = 50, int $offset = 0): array<QuarantineListResult>` — team-scoping WHERE, ORDER BY `q.quarantined_at DESC`, LIMIT/OFFSET. SELECTs: `q.id AS quarantine_id`, `q.domain_name`, `q.reporter_email`, `q.reason`, `q.quarantined_at`, `q.expires_at`, `e.subject`, `e.size_bytes`. JOIN `received_report_email e ON e.id = q.received_email_id`.
+- `countForTeam(string $teamId): int` — same WHERE, `SELECT COUNT(*)`; used by sidebar Twig extension.
+
+**`src/Results/QuarantineListResult.php`** (readonly final): `quarantineId, domainName, reporterEmail, reason, quarantinedAt, expiresAt: string`, `subject: string`, `sizeBytes: int`. Static `fromDatabaseRow(array $row): self` with docblock shape.
+
+**`src/Query/GetQuarantineDetail.php`** (readonly final, DBAL): `forTeam(string $quarantineId, string $teamId): ?QuarantineDetailResult` — same team-scoping WHERE plus `q.id = :quarantineId`; additionally SELECTs `e.id AS envelope_id`. Null → 404 in controller.
+
+**`src/Results/QuarantineDetailResult.php`** (readonly final): list-result fields + `envelopeId: string`.
+
+**Empty-state "most recent report" link:** Use `GetAllReports::forTeams($teamIds, limit: 1)` (already ORDER BY `date_range_end DESC`). Pass `mostRecentReportId: ?string` to template.
+
+**`src/Message/ReprocessQuarantinedReport.php`** (readonly final): `public UuidInterface $quarantineId`, `public UuidInterface $teamId`. Handler reloads quarantine row, dispatches `ProcessReceivedReportEmail($quarantined->receivedEmail->id)`, removes the row, flushes. Null-load → return silently (idempotent).
+
+**`src/MessageHandler/ReprocessQuarantinedReportHandler.php`** (readonly final, `#[AsMessageHandler]`): injects `QuarantinedDmarcReportRepository`, `MessageBusInterface`, `EntityManagerInterface`.
+
+**`QuarantinedDmarcReportRepository::find(UuidInterface $id): ?QuarantinedDmarcReport`** — single `entityManager->find(...)`.
+
+**Add-domain-from-quarantine flow — two existing messages, zero new commands.** Controller dispatches `AddDomain($domainId from IdentityProvider, $teamId, $domainName)` then `ReleaseQuarantinedReportsForDomain($domainId, $domainName)`. Gated to `reason === 'unknown_domain'` (404 otherwise). Guard via `MonitoredDomainRepository::findAnyByName` — if same team, skip `AddDomain`; if other team, redirect to `domain_taken`. `PlanEnforcement::canAddDomain` first.
+
+**Controllers (`src/Controller/Dashboard/`, single-action `__invoke`):**
+1. `ListQuarantineController` — `#[Route('/app/quarantine', name: 'dashboard_quarantine', methods: ['GET'])]`. Injects `DashboardContext`, `GetQuarantineList`, `GetAllReports`. Paginates at 50.
+2. `ShowQuarantineDetailController` — `#[Route('/app/quarantine/{id}', name: 'dashboard_quarantine_detail', methods: ['GET'])]`.
+3. `ReprocessQuarantinedReportController` — `#[Route('/app/quarantine/{id}/reprocess', name: 'dashboard_quarantine_reprocess', methods: ['POST'])]`. CSRF `quarantine_reprocess`. 404-guard via `GetQuarantineDetail::forTeam`. Dispatches `ReprocessQuarantinedReport`. Flash + redirect to list.
+4. `AddDomainFromQuarantineController` — `#[Route('/app/quarantine/{id}/add-domain', name: 'dashboard_quarantine_add_domain', methods: ['POST'])]`. CSRF `quarantine_add_domain`. `reason === 'unknown_domain'` guard (404). Plan limit + conflict guards. Dispatches `AddDomain` + `ReleaseQuarantinedReportsForDomain`. Redirects to `dashboard_domain_detail`.
+
+**Authorization:** `DashboardContext::getTeamId()` → query WHERE — same pattern as `ShowReportDetailController`. No voter.
+
+**`src/Twig/QuarantineCountExtension.php`** — `AbstractExtension` + `GlobalsInterface`. `getGlobals()` returns `['quarantine_count' => $this->resolveCount()]`. Wraps `countForTeam` in try/catch `\RuntimeException` → 0 (public/unauth pages). Autoconfigured as `twig.extension`.
+
+**Sidebar nav change in `templates/dashboard/layout.html.twig`** — new `<a>` block after Reports, before Alerts:
+
+```twig
+<a href="{{ path('dashboard_quarantine') }}"
+   class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route starts with 'dashboard_quarantine' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8M10 12v4m4-4v4"></path></svg>
+    Quarantine
+    {% if quarantine_count > 0 %}<span class="badge badge-xs badge-warning ml-auto">{{ quarantine_count }}</span>{% endif %}
+</a>
+```
+
+**`templates/dashboard/quarantine.html.twig`** — extends layout. Breadcrumbs `<li>Quarantine</li>`. Table columns: Received, Domain, Reporter, Reason, Size. Rows use stretched-link anchor pattern (TASK-018) → `dashboard_quarantine_detail`. Reason badges: `unknown_domain → badge-warning "Unknown domain"`, `unverified_domain → badge-info "Unverified domain"`, `plan_overage → badge-error "Plan overage"`. Size `{{ (item.sizeBytes / 1024)|number_format(1) }} KB`. Pagination via `btn btn-sm btn-ghost` prev/next. Empty state: plain `<div>` card (avoid `<twig:EmptyState>` because we need a conditional link inside) with copy + optional "View most recent report" `btn btn-sm btn-primary`.
+
+**`templates/dashboard/quarantine_detail.html.twig`** — extends layout. Metadata card (subject, domain, reporter, timestamps, size, reason badge). `plan_overage` → `<div class="alert alert-warning">` + billing link. `unknown_domain` → add-domain form (CSRF + `btn btn-warning btn-sm`). Reprocess form always present (CSRF + `btn btn-primary btn-sm`). Two **sibling** `<form>` tags — no nesting.
+
+**Tests — `tests/Integration/Controller/QuarantineTest.php`** (~20 cases). Helper `bootClientWithQuarantinedReport(QuarantineReason $reason): array` creates `User`+`Team`+`TeamMembership`+(conditional `MonitoredDomain`)+`ReceivedReportEmail` (unique `messageId = Uuid::uuid7()->toString()`, valid `source` enum, `gzencode('<xml/>')`)+`QuarantinedDmarcReport`.
+
+Cases: list renders / empty-state / empty-with-recent-link / empty-without-recent-link / detail renders / 404-unknown / 404-cross-tenant / add-form visible for unknown / add-form hidden for plan-overage / plan-overage banner / reprocess CSRF rejected / reprocess happy (redirects + deletes row) / reprocess 404 cross-tenant / add-domain CSRF rejected / add-domain happy (creates `monitored_domain`, redirects to detail) / add-domain 404 non-unknown / add-domain 404 cross-tenant / sidebar badge present / sidebar badge absent.
+
+**Tests — `tests/Integration/Query/GetQuarantineListTest.php`** (~4 cases): count excludes cross-tenant / count includes unknown-domain rows after team adds the domain / `forTeam` paginates / count = 0 for fresh team.
+
+**Critical details:**
+- `ReceivedReportEmail` `messageId` must be unique per row (constraint `uniq_envelope_source_msgid`) → `Uuid::uuid7()->toString()` in helper.
+- DBAL query must NOT select `q.report_xml_gz` (blob).
+- After `AddDomain` + `ReleaseQuarantinedReportsForDomain`, the domain is owned by the team — releasing its quarantine rows is correct.
+- The Twig `quarantine_count` global handles unauth pages via try/catch → 0.
+- The unknown-domain add-domain path must handle the race where the team already added the domain between page load and submit: `findAnyByName` non-null + same team → skip `AddDomain`, just release.
+
+**Build phases:**
+1. `QuarantinedDmarcReportRepository::find`.
+2. Result DTOs + `GetQuarantineList` (forTeam + countForTeam) + `GetQuarantineDetail`. Write `GetQuarantineListTest` (4 cases).
+3. `ReprocessQuarantinedReport` message + handler.
+4. Four controllers; `bin/console debug:router | grep quarantine`.
+5. `QuarantineCountExtension`.
+6. Sidebar nav entry.
+7. Two templates.
+8. `QuarantineTest` (~20 cases). phpunit --coverage-min=100 + phpstan + cs-fixer all green; commit + push.
 
 ---
 
