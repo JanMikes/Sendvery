@@ -1145,3 +1145,67 @@ Plus message constructor tests and entity audit method tests.
 - Note max length 10000 chars; handler truncates if exceeded (defense — also maxlength on textarea).
 
 **Build phases:** 1) Migration + entity + entity tests. 2) Commands + repository + message tests. 3) Handlers. 4) Query + DTO + result tests. 5) Controllers + route registration. 6) 2 Stimulus controllers + template rewrite + browser smoke. 7) Integration tests; phpunit + phpstan + cs-fixer green; commit + push.
+
+
+---
+
+## RUN SUMMARY — 2026-05-23 autonomous CX/feature loop
+
+### Shipped (14 tasks)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 001 | DNS Health in-app nav | `3220a5f` + `d010bb1` | dashboard | Sidebar DNS Health stops bouncing to public tool; in-app per-domain overview with SPF/DKIM/DMARC/MX badges |
+| 002 | Dashboard guidance | `d9c0962` + `24e6c8e` | dashboard | Health summary banner + Next-Action card at top of `/app`, picks single highest-value step; empty-state hides zero-value widgets |
+| 003 | Homepage 5-second test | `4e53b7d` + `fdadad1` | marketing | Category-explicit kicker, named DMARC/DNS/AI capabilities in subhead, primary CTA flipped to Get-started-free, trust badges, mislabeled "View on GitHub" replaced |
+| 004 | Logo bar | `7882623` | marketing | "Trusted by founder's own companies" reframed positively; companies linked to live sites |
+| 005 | Pricing depth | `f123e1d` | marketing | Comparison table + 10-Q FAQ + annual-savings callout + final CTA + corrected meta description |
+| 009 | Trust pages | `0142506` + `9d9df9f` | marketing | New /legal/privacy + /legal/security + /status; footer Trust column; **Halite/XChaCha20-Poly1305 truth fix** on homepage (was "AES-256-GCM" — false claim) |
+| 012 | Retire /beta | `f1d34b3` | marketing | Free-tier CTA → auth_login; /beta → 301 to home; KB lazy turbo-frame embeds replaced; 5 tool-page "Join the beta" instances rewritten |
+| 013 | Domain detail badges | `a8fcac3` + `24e6c8e` | domains | At-a-glance SPF/DKIM/DMARC/MX badges in header, deep-link to per-health anchors |
+| 015 | Alerts snooze/mute/bulk | `07a5975` | dashboard | snoozed_until column + muted_alert table; AlertEngine.createAlert single mute-check seam; per-row checkboxes + bulk toolbar; copy-link button; "Muted Alert Types" section on preferences |
+| 016 | Reports filters + search | `56b575e` | reports | URL-driven filter bar (domain/reporter/pass-rate band/date range/search); Turbo-Drive advance; unified GetDomainReports into GetAllReports |
+| 017 | Records grouping | `51c0612` + `00d9113` | reports | By-sender grouped view with DKIM/SPF pass-rate + disposition + KnownSender auth badge; raw records moved behind details toggle |
+| 018 | Dashboard a11y | `add6655` | dashboard | All 4 `<tr onclick>` patterns replaced with stretched-link anchors (middle-click + keyboard + screen-reader safe); regression test guards against re-introduction |
+| 019 | Billing usage panel | `c39edcc` | dashboard | Monthly Reports panel + retention nudge + PlanOverage warning on /billing; conditional 6th stat card on overview at ≥50% usage |
+| 022 | Sender Inventory bulk + audit + notes | `7fa8acb` | domains | Bulk authorize/mark-unknown + per-row audit ("Last changed by X on Y") + inline notes textarea + first-authorize-per-session confirm |
+
+**Suite at run end:** 1422 tests, 3709 assertions, all green. PHPStan clean. PHP-CS-Fixer clean. ~95 new test files + ~150 new test methods across the run.
+
+### Not shipped (8 tasks remaining)
+
+- **TASK-006** — Tool-result micro-conversion (soft email-me form on /tools/*)
+- **TASK-007** — KB content depth (need ~5+ new long-form articles; copy-writing-heavy)
+- **TASK-008** — Per-page OG images (touches every public controller)
+- **TASK-010** — "What is Sendvery" page polish (visuals + screenshot + conversion path)
+- **TASK-011** — `/open-source` page (60-second quickstart + comparison table + GitHub stats; gated repo-link until repo is public per `docs/03-features-roadmap.md` Phase 2)
+- **TASK-014** — Mailbox setup wizard (large: provider presets + synchronous IMAP `TestMailboxConnection` service + new sync test endpoint)
+- **TASK-020** — Quarantine visibility (new `/app/quarantine` route + reprocess UI + UnknownDomain → add-domain pre-fill flow)
+- **TASK-021** — Onboarding checklist (overview surface — touches TASK-002's NextActionResolver / overview.html.twig; needs careful integration)
+
+### Blocked: 0
+
+No task was blocked. Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds caught and fixed 4 real defects during the run:
+- TASK-001: `domain_health.html.twig` orphaned "Run a DNS health check" copy + test only covered DNS Health page → expanded to cover domain detail + per-domain health.
+- TASK-002: Missing multi-domain `ConnectMailbox` suppression test (the "ALL domains have zero reports" invariant was untested).
+- TASK-009: `#faq` anchor missing from `/pricing` (footer Refund Policy link landed at page top); `TrustPagesTest` used bare Symfony `WebTestCase` instead of project's `App\Tests\WebTestCase`.
+- TASK-013: Cross-tenant security test missing on the new `GetDnsHealthOverview::forDomain()`; `id="health-trend"` anchor unverified by tests; "Run a DNS health check" copy was orphaned.
+
+### Suggested next moves (priority ordered)
+
+1. **TASK-011 (/open-source)** — medium scope, high marketing differentiator. Watch for the "repo not public yet" caveat in `docs/03-features-roadmap.md` Phase 2; gate the GitHub link behind a config flag or just confirm the repo is now public before linking. Quickstart + comparison table + Why-AGPL expansion fit a single PR.
+2. **TASK-020 (Quarantine visibility)** — high-value for paying customers (visible "data you paid for that's stuck"). New route + new query + reprocess action. Builds on existing `QuarantinedDmarcReport` infrastructure already referenced from `overview.html.twig` (unverified-domain banner) and `domain_detail.html.twig` (count badge).
+3. **TASK-014 (Mailbox setup wizard)** — biggest single drop-off risk per the dashboard Product agent's analysis. Largest remaining task — provider presets + synchronous IMAP connection test service. Pays dividends on every non-developer signup.
+4. **TASK-021 (Onboarding checklist)** — dismissible setup checklist back on `overview.html.twig`. Must coordinate with TASK-002's `isEmptyState` guard (the empty-state branch hides the checklist trivially; the medium-state needs the checklist *and* the next-action card to coexist). Medium scope.
+5. **TASK-008 (Per-page OG images)** — distributed scope (touches many controllers). Moderate SEO/social distribution lift. Can be parallelised across many tool pages.
+6. **TASK-007 (KB content)** — copy-writing-heavy. Best done by a human with product context + SEO target keywords from `docs/00-project-overview.md`'s GTM thesis. AI-drafted articles risk shallow content that competitors already rank for.
+7. **TASK-006 (Tool soft conversion)** — tied to retired-but-not-deleted `BetaSignup` infrastructure (TASK-012 left the entity in place). Decide whether to repurpose that as a generic "email me updates" capture or build new lightweight subscriber infra.
+8. **TASK-010 (What is Sendvery polish)** — medium scope, mostly visual; needs product screenshots to make impactful.
+
+### Architectural notes for future work
+
+- **`AlertEngine::createAlert()` is the single chokepoint for all alert emission.** TASK-015 used this seam for mute checks; future per-team alert preferences (e.g. "only critical via email, all in app") should also hook in here.
+- **`ReportsFilter` value object pattern (TASK-016)** is the template for URL-driven dashboard filters. Apply the same shape if/when filtering is added to alerts (`AlertsFilter`) or domains (`DomainsFilter`).
+- **Stretched-link pattern (TASK-018)** is the canonical row-navigation idiom. Future tables MUST follow it — the `noOnclickInAnyDashboardPage` regression test will fail loudly if anyone reintroduces `<tr onclick>`.
+- **Bulk action pattern (TASK-015 + TASK-022)** is consistent: outer `<form data-controller="*-selection">`, per-row `name="ids[]"` checkboxes, sticky toolbar via Stimulus targets. The two `*_selection_controller.js` files are nearly identical and could be unified into a generic `bulk_selection_controller.js` taking the input name as a Stimulus value attribute. Refactor opportunity once a third instance lands.
+- **Halite vs AES-256-GCM correction (TASK-009)**: the actual encryption library is paragonie/halite (XChaCha20-Poly1305 via libsodium). The homepage previously claimed AES-256-GCM in three places — all fixed. New security copy must use the Halite description; `TrustPagesTest::testSecurityPageContainsEncryptionClaim` is the regression guard.
