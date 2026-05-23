@@ -2,6 +2,7 @@
 
 {% block title %}{{ domainName }} Domain Health — Sendvery{% endblock %}
 {% block meta_description %}Domain health score for {{ domainName }}: Grade {{ snapshot.grade }} ({{ snapshot.score }}/100). Check your own domain's email authentication health.{% endblock %}
+{% block og_image %}{% if snapshot.shareHash %}{{ absolute_url(path('og_image', {type: 'health', slug: snapshot.shareHash})) }}{% else %}{{ parent() }}{% endif %}{% endblock %}
 
 {% block body %}
 <div class="min-h-screen bg-base-200">

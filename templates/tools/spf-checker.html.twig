@@ -2,6 +2,7 @@
 
 {% block title %}Free SPF Record Checker — SPF Lookup & Validator | Sendvery{% endblock %}
 {% block meta_description %}Check your SPF record instantly. Validate syntax, count DNS lookups (10-limit), detect misconfigurations. Free SPF checker tool by Sendvery.{% endblock %}
+{% block og_image %}{{ absolute_url(path('og_image', {type: 'tool', slug: 'spf-checker'})) }}{% endblock %}
 
 {% block tool_structured_data %}
 <script type="application/ld+json">

@@ -403,6 +403,12 @@ return App::config([
             'App\Twig\GithubStatsExtension' => [
                 'public' => true,
             ],
+            'App\Services\OgImage\OgImageRenderer' => [
+                'public' => true,
+            ],
+            'App\Services\OgImage\HealthOgImageContentResolver' => [
+                'public' => true,
+            ],
         ],
     ],
 ]);

@@ -2,6 +2,7 @@
 
 {% block title %}Free DKIM Record Checker — DKIM Key Lookup & Validation | Sendvery{% endblock %}
 {% block meta_description %}Check your DKIM record and key strength. Verify selectors, detect stale keys, validate configuration. Free DKIM checker tool by Sendvery.{% endblock %}
+{% block og_image %}{{ absolute_url(path('og_image', {type: 'tool', slug: 'dkim-checker'})) }}{% endblock %}
 
 {% block tool_structured_data %}
 <script type="application/ld+json">

@@ -418,7 +418,8 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
 
 ## TASK-008: Static default OG image gives every page identical social-share previews — wasted distribution
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: marketing
 - Why: `templates/base.html.twig` sets `og:image` to a single static `images/og-default.webp` for every page. When a knowledge-base article, a tool page, or a public domain-health report (`/health/{hash}`, see `PublicDomainHealthController`) is shared on LinkedIn, Slack, Twitter, or quoted in a blog post, the preview card is generic Sendvery branding instead of the article title / tool name / actual domain grade. Public domain-health reports in particular are designed to be shareable URLs — and the current OG image makes them look like generic homepage links. Per-page OG images dramatically increase click-through from social.
 - Acceptance:
@@ -431,6 +432,56 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
   - The generator route is testable (returns 200, correct content type, identical bytes for identical inputs); 100% test coverage for the route + image-cache logic.
   - Fallback: if generation fails, `og:image` falls back to the existing static `og-default.webp` — no broken previews.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Key decisions:**
+- **PHP GD** (confirmed in `ghcr.io/thedevs-cz/php:8.5` base image, both `gd` + `imagick` present). GD chosen over Imagick — simpler, no external binary dep, sufficient for 3 static card layouts.
+- **Self-hosted Inter TTF** committed to `assets/fonts/OgImage/Inter-Bold.ttf` + `Inter-Regular.ttf` + `LICENSE` (OFL-1.1).
+- **Logo asset**: optional `assets/images/og-logo.png` (240×60 transparent). If absent, painter falls back to drawing "Sendvery" wordmark text. Ship without logo first; design asset can land later without code change.
+- **Cache** at `var/og_cache/{type}/{md5(SCHEMA_VERSION:slug)}.png`. Immutable Cache-Control header (30 days). Bump `SCHEMA_VERSION` constant to invalidate.
+
+**Architecture:**
+- `src/Value/OgImageType.php` enum: `Tool/Kb/Health` with string-backed values.
+- `src/Value/OgImageContent.php` (readonly final): `title, subtitle, badgeText: string`, `badgeRgbR/G/B: int`.
+- `src/Value/ToolRegistry.php`: `public const array TOOLS` with 8 entries (dmarc-checker, spf-checker, dkim-checker, mx-checker, email-auth-checker, domain-health, blacklist-checker, dns-monitoring). Mirrors `KnowledgeBaseIndexController::GUIDES` pattern.
+- `src/Exceptions/OgImageContentNotFoundException.php` (final, extends `\RuntimeException`).
+- `src/Services/OgImage/{Tool|Kb|Health}OgImageContentResolver.php` — readonly final. Each `resolve(string $slug): OgImageContent`. Tool reads `ToolRegistry::TOOLS`. KB reads `KnowledgeBaseIndexController::GUIDES`. Health injects `GetDomainHealthHistory` (existing) — `findByShareHash` + `getDomainNameByShareHash`. Grade→RGB map: A=green, B=blue, C=amber, D/F=red.
+- `src/Services/OgImage/GdOgImagePainter.php` (readonly final, ctor `string $projectDir`). Single `paint(OgImageContent, string $cacheFilePath): void`. 1200×630 canvas, near-white bg, 6px teal accent bar left, logo top-left (if file exists else text fallback), title centred (Inter Bold 52pt, wrapped via `imagettfbbox` at ~900px), subtitle below in slate-600 (Inter Regular 28pt), badge rectangle top-right with grade-colour fill + white text. Atomic write via `.tmp` + `rename`.
+- `src/Services/OgImage/OgImageRenderer.php` (readonly final). `SCHEMA_VERSION = 'v1'`. `render(OgImageType $type, string $slug): string` — checks cache file, dispatches to resolver + painter on miss, returns absolute path.
+- `src/Controller/OgImageController.php` — `#[Route('/og/{type}/{slug}', requirements: ['type' => 'tool|kb|health', 'slug' => '[a-zA-Z0-9_-]+'], methods: ['GET'])]`. Try renderer; on `OgImageContentNotFoundException` or any `\Throwable`: log warning/error + `$this->redirect($this->assetHelper->getUrl('images/og-default.webp'))` (302). On success: `BinaryFileResponse` with `Content-Type: image/png` + `Cache-Control: public, max-age=2592000, immutable`.
+
+**Template overrides:**
+- 8 tool templates: `templates/tools/{slug}.html.twig` add `{% block og_image %}{{ absolute_url(path('og_image', {type: 'tool', slug: '<slug>'})) }}{% endblock %}`.
+- 3 KB article templates: `templates/knowledge_base/articles/{slug}.html.twig` — same with `type: 'kb'`.
+- `templates/public/domain_health.html.twig` — `type: 'health', slug: snapshot.shareHash`. Guard with `{% if snapshot.shareHash %}` (falls back to parent default when null).
+
+**Service wiring (`config/services.php` — create if absent, or modify):** bind `$projectDir` to `%kernel.project_dir%` and `$ogCacheDir` to `%kernel.project_dir%/var/og_cache` under `_defaults`.
+
+**Tests:**
+- Unit: `OgImageTypeTest`, `OgImageContentTest`, `ToolRegistryTest`, three `*OgImageContentResolverTest` (each resolves known slug + throws on unknown).
+- Integration `GdOgImagePainterTest` — `paint()` writes valid 1200×630 PNG (`getimagesize` assertion); both logo-present and logo-absent branches via test fixture.
+- Integration `OgImageRendererTest` — cache miss then cache hit returns same path; SHA-256 of output pinned in a constant (document how to regenerate when layout changes).
+- Integration `OgImageControllerTest` — `tool` happy path (200 + image/png + non-empty body), cache-control immutable header, second request returns identical bytes, KB happy path, health happy path (with DB fixture using `domain_health_snapshot` row + share_hash), unknown slug → 302 redirect to `og-default.webp`, unknown type → 404 (route requirement blocks before controller).
+
+**Critical details:**
+- Atomic write via temp-file + `rename()` — handles concurrent first-request collisions.
+- GD return-value guards (`\GdImage|false`) — `|| throw new \RuntimeException(...)` everywhere.
+- Painter accepts optional `?string $logoPath` ctor arg; null/missing → text fallback. This both ships without a logo design asset AND keeps the no-logo branch testable.
+- `var/og_cache/.gitkeep` so dir exists in fresh checkouts; `var/` is already in `.gitignore`.
+- Inter TTF: download from https://github.com/rsms/inter/releases (OFL-1.1). Commit both `Inter-Bold.ttf` + `Inter-Regular.ttf` + `LICENSE` text.
+- Verification: `docker compose exec app php -r "echo extension_loaded('gd') ? 'yes' : 'no';"` before phase 4.
+- Cache invalidation on layout change: bump `SCHEMA_VERSION` constant. Old files become orphaned — note in commit that `rm -rf var/og_cache/` on deploy clears them.
+- The `BinaryFileResponse` streams via `X-Sendfile` if available — no full file load into PHP memory.
+
+**Build phases:**
+1. Fonts + logo asset placeholder + `var/og_cache/.gitkeep` + GD extension verification.
+2. Value objects + `ToolRegistry` + exception + unit tests.
+3. Three content resolvers + unit tests (with mocked `GetDomainHealthHistory` for health resolver).
+4. `GdOgImagePainter` + `OgImageRenderer` + DI binding + integration tests.
+5. `OgImageController` + integration tests including the cross-tenant / unknown-slug / unknown-type branches.
+6. 12 template `{% block og_image %}` overrides + smoke (assert HTML contains `/og/tool/dmarc-checker` URL).
+7. `phpunit --coverage-min=100` + `phpstan` + `cs-fixer` all green; commit + push.
 
 ---
 

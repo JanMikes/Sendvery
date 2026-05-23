@@ -2,6 +2,7 @@
 
 {% block title %}Free DMARC Record Checker — DMARC Lookup & Analyzer | Sendvery{% endblock %}
 {% block meta_description %}Check your DMARC record instantly. Analyze policy (none/quarantine/reject), verify reporting addresses, get actionable recommendations. Free DMARC checker.{% endblock %}
+{% block og_image %}{{ absolute_url(path('og_image', {type: 'tool', slug: 'dmarc-checker'})) }}{% endblock %}
 
 {% block tool_structured_data %}
 <script type="application/ld+json">
