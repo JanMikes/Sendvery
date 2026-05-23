@@ -117,4 +117,31 @@ final class TeamTest extends TestCase
         self::assertSame('annual', $team->billingInterval);
         self::assertSame(BillingInterval::Annual, $team->getBillingInterval());
     }
+
+    public function testSetupChecklistDismissedAtDefaultsNull(): void
+    {
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Default Dismiss Test',
+            slug: 'default-dismiss-test',
+            createdAt: new \DateTimeImmutable(),
+        );
+
+        self::assertNull($team->setupChecklistDismissedAt);
+    }
+
+    public function testDismissSetupChecklistSetsTimestamp(): void
+    {
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Dismiss Test',
+            slug: 'dismiss-test',
+            createdAt: new \DateTimeImmutable(),
+        );
+
+        $at = new \DateTimeImmutable('2026-05-23 14:30:00');
+        $team->dismissSetupChecklist($at);
+
+        self::assertSame($at, $team->setupChecklistDismissedAt);
+    }
 }

@@ -41,6 +41,9 @@ final class Team implements EntityWithEvents
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     public ?\DateTimeImmutable $planWarningAt;
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $setupChecklistDismissedAt;
+
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
 
@@ -54,6 +57,7 @@ final class Team implements EntityWithEvents
         ?string $stripeSubscriptionId = null,
         ?\DateTimeImmutable $planWarningAt = null,
         ?string $billingInterval = null,
+        ?\DateTimeImmutable $setupChecklistDismissedAt = null,
     ) {
         $this->id = $id;
         $this->name = $name;
@@ -64,8 +68,20 @@ final class Team implements EntityWithEvents
         $this->stripeSubscriptionId = $stripeSubscriptionId;
         $this->planWarningAt = $planWarningAt;
         $this->billingInterval = $billingInterval;
+        $this->setupChecklistDismissedAt = $setupChecklistDismissedAt;
 
         $this->recordThat(new TeamCreated($this->id));
+    }
+
+    /**
+     * Hide the onboarding checklist for every member of this team. The
+     * dismissal is intentionally not cleared on regression — the resolver
+     * recomputes visibility every render and overrides the dismissal when
+     * a previously-completed DMARC step regresses.
+     */
+    public function dismissSetupChecklist(\DateTimeImmutable $at): void
+    {
+        $this->setupChecklistDismissedAt = $at;
     }
 
     public function getSubscriptionPlan(): SubscriptionPlan

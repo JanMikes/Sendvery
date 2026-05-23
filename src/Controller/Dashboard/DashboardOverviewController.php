@@ -14,12 +14,14 @@ use App\Query\GetMonthlyReportUsage;
 use App\Query\GetTeamPlan;
 use App\Repository\MailboxConnectionRepository;
 use App\Repository\QuarantinedDmarcReportRepository;
+use App\Repository\TeamRepository;
 use App\Results\MonthlyReportUsageResult;
 use App\Services\DashboardContext;
 use App\Services\DomainVerificationEvaluator;
 use App\Services\HealthSummaryResolver;
 use App\Services\NextActionResolver;
 use App\Services\ReportAddressProvider;
+use App\Services\SetupChecklistResolver;
 use App\Services\Stripe\PlanLimits;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -44,6 +46,8 @@ final class DashboardOverviewController extends AbstractController
         private readonly GetMonthlyReportUsage $getMonthlyReportUsage,
         private readonly GetTeamPlan $getTeamPlan,
         private readonly PlanLimits $planLimits,
+        private readonly SetupChecklistResolver $setupChecklistResolver,
+        private readonly TeamRepository $teamRepository,
     ) {
     }
 
@@ -150,6 +154,30 @@ final class DashboardOverviewController extends AbstractController
             $showReportUsageCard = !$isUnlimited && $overviewReportUsage->percentageUsed >= 50.0;
         }
 
+        // Onboarding setup checklist — persistent, dismissible, auto-re-shown
+        // on DMARC regression. Inputs come from already-fetched team state so
+        // we don't add any extra DB round-trips on the overview hot path.
+        // Note: $verificationStatus reflects only the most-recently-added
+        // domain (LIMIT 1 in GetDomainVerificationStatus), so the DMARC /
+        // first-report signals here are single-domain — same as the Next
+        // Action card. A multi-domain "any" check is a v2 enhancement.
+        $team = $this->teamRepository->get($this->dashboardContext->getTeamId());
+        $hasDmarcRegression = null !== $verificationStatus
+            && null !== $verificationStatus->dmarcVerifiedAt
+            && $verificationStatus->consecutiveDmarcFailures >= 2;
+        $anyDomainHasDmarcVerified = null !== $verificationStatus
+            && null !== $verificationStatus->dmarcVerifiedAt;
+        $anyDomainHasFirstReport = null !== $verificationStatus
+            && null !== $verificationStatus->firstReportAt;
+        $setupChecklist = $this->setupChecklistResolver->resolve(
+            domainCount: count($domains),
+            anyDomainHasDmarcVerified: $anyDomainHasDmarcVerified,
+            anyDomainHasFirstReport: $anyDomainHasFirstReport,
+            hasMailbox: $hasMailbox,
+            dismissedAt: $team->setupChecklistDismissedAt,
+            hasDmarcRegression: $hasDmarcRegression,
+        );
+
         return $this->render('dashboard/overview.html.twig', [
             'stats' => $stats,
             'domains' => $domains,
@@ -165,6 +193,7 @@ final class DashboardOverviewController extends AbstractController
             'healthSummary' => $healthSummary,
             'overviewReportUsage' => $overviewReportUsage,
             'showReportUsageCard' => $showReportUsageCard,
+            'setupChecklist' => $setupChecklist,
         ]);
     }
 }

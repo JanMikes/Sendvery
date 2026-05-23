@@ -1056,6 +1056,7 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
   - Empty state: friendly "No reports in quarantine — every report we received has been parsed." copy with a link to the most recent report.
   - 100% test coverage on the new query, controller, and the add-domain-+-reprocess flow.
 - Notes:
+  - Shipped commit `820dc8d`. Critical scoping fix during review round: `UnknownDomain` rows for domains no team yet owns require visibility via the receiving `mailbox_connection.team_id` (the architect's two-branch WHERE missed this case entirely). The query now unions monitored-domain ownership OR mailbox ownership; central-inbox (`mailbox_connection_id IS NULL`) UnknownDomain rows remain invisible (correct — no team can claim ownership).
 
 ### Architect plan (2026-05-23)
 
@@ -1137,7 +1138,8 @@ Cases: list renders / empty-state / empty-with-recent-link / empty-without-recen
 
 ## TASK-021: Onboarding "I'll set up later" exit is a one-way ramp — bring it back into the dashboard as a dismissible setup checklist
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: onboarding
 - Why: The `Skip — I'll set this up later` link on `templates/onboarding/ingestion.html.twig` marks onboarding complete but leaves the user on `dashboard_overview` with no in-app reminder of the work they skipped (verifying DNS, connecting a mailbox). The skipped state is **the most fragile state for retention**: they paid (or signed up), saw a half-empty dashboard, and have nothing nudging them back to finish. Tied to TASK-002 but distinct: this is about persistence and dismissibility, not the "next action" surface itself.
 - Acceptance:
@@ -1148,6 +1150,68 @@ Cases: list renders / empty-state / empty-with-recent-link / empty-without-recen
   - Logic lives in a `SetupChecklistResolver` testable service that returns a list of typed step objects (matches the pattern proposed for TASK-002's NextActionResolver — these can share scaffolding).
   - 100% test coverage on resolver for all completion combinations.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Important findings from codebase scan:**
+- Teams are auto-named after the user's email domain in `src/Services/TeamProvisioner.php` (lines 43-48) — NOT `"My Team"`. The acceptance criterion's "team name customised" step is **dropped** (no stable default to compare against). 3 steps total, not 4.
+- `MonitoredDomain` already has `dmarcVerifiedAt` and `firstReportAt` non-null timestamps — these are the completion signals for steps 2 and 3.
+- `GetDomainVerificationStatus` already provides `dmarcVerifiedAt`, `firstReportAt`, `consecutiveDmarcFailures` — perfect inputs for the resolver.
+- `NextActionResolver` (TASK-002) is the pattern to mirror: pure computation service, no DB access, typed result objects.
+
+**Regression auto-un-dismiss decision:** The resolver computes `isVisible` from current state + a `hasDmarcRegression` flag. The DB column `setup_checklist_dismissed_at` is never cleared on regression — the resolver overrides the dismissal in-memory when `dmarcVerifiedAt != null && consecutiveDmarcFailures >= 2`. Simpler, no new event listeners, no extra flushes on DNS-check hot path.
+
+**Steps (3):**
+1. `add_domain` — `domainCount > 0` — links to `dashboard_domain_add`
+2. `publish_dmarc` — any team domain has `dmarcVerifiedAt != null` — links to `dashboard_domains`
+3. `receive_reports` — any domain has `firstReportAt != null` OR `hasMailbox == true` — links to `dashboard_dns_health`
+
+**Migration `Version20260527000000.php`:** ALTER TABLE team ADD COLUMN `setup_checklist_dismissed_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL` with `(DC2Type:datetime_immutable)` comment. No index.
+
+**Entity `Team`:** Add `public ?\DateTimeImmutable $setupChecklistDismissedAt = null` (after `planWarningAt`, same pattern), and a `dismissSetupChecklist(\DateTimeImmutable $at): void` mutator. No unset/clear method (resolver handles regression in-memory).
+
+**Value object `src/Value/SetupChecklistStep.php`** (readonly final): `id, title, description, actionRoute, actionLabel: string`, `actionRouteParams: array<string,string>`, `isComplete: bool`.
+
+**Result `src/Results/SetupChecklistResult.php`** (readonly final): `steps: array<SetupChecklistStep>`, `completedCount, totalCount: int`, `isVisible, isFullyComplete: bool`.
+
+**Service `src/Services/SetupChecklistResolver.php`** (readonly final) — pure computation:
+```
+resolve(
+    int $domainCount,
+    bool $anyDomainHasDmarcVerified,
+    bool $anyDomainHasFirstReport,
+    bool $hasMailbox,
+    ?\DateTimeImmutable $dismissedAt,
+    bool $hasDmarcRegression,
+): SetupChecklistResult
+```
+Visibility rule: `$anyIncomplete && (!$isDismissed || ($hasDmarcRegression && $publishDmarcStep->isComplete))`. Fully-complete trumps everything (never visible when all 3 steps done).
+
+**Controller modification — `DashboardOverviewController`:** Inject `SetupChecklistResolver` + `TeamRepository`. Compute inputs from already-fetched `$verificationStatus`, `$hasMailbox`, `count($domains)`. Load team via `TeamRepository::get($teamId)` to access `setupChecklistDismissedAt`. Pass `setupChecklist` to template render.
+
+**New controller `DismissSetupChecklistController`** — `#[Route('/app/setup-checklist/dismiss', name: 'dashboard_setup_checklist_dismiss', methods: ['POST'])]`. CSRF token id `setup_checklist_dismiss`. On valid token: load team via `TeamRepository::get`, call `dismissSetupChecklist($clock->now())`, flush, redirect to `dashboard_overview`. Invalid CSRF → 403.
+
+**Template change — `templates/dashboard/overview.html.twig`:** Insert checklist block BEFORE the Next Action card (before the `{% set actionTone ... %}` line ~55). Renders only when `setupChecklist.isVisible`. Card has: header with "Setup checklist" + "X of N steps complete" + "Hide checklist" button (form POSTing to the dismiss route). Each step row: filled green circle with check (if complete, opacity-60 + strikethrough title) or outline circle (if incomplete, full description + "Do it →" outline-primary button). daisyUI 5 only — no `dark:` prefix, no nested `<twig:>`, no `{% block %}` inside loops.
+
+**Unit tests `tests/Unit/Services/SetupChecklistResolverTest.php`** (~14 cases):
+- All steps incomplete / only domain added / dmarc-verified completes step 2 / first-report completes step 3 / mailbox completes step 3 / mailbox without domain doesn't complete step 1 / dismissed hides when no regression / dismissed+regression overrides / regression without ever-verified DMARC doesn't override / fully-complete is not visible / fully-complete ignores regression / step count always 3 / step ids correct / route names correct.
+
+**Integration tests `tests/Integration/Controller/SetupChecklistTest.php`** (~8 cases):
+- Dismiss with valid CSRF redirects + sets `setupChecklistDismissedAt` / dismiss with invalid CSRF → 403 / GET dismiss route → 405 / dismissed checklist doesn't render / checklist renders when not dismissed / checklist hidden when fully complete / checklist shows Hide button / checklist shows "X of 3 steps complete".
+
+**Critical details:**
+- The `verificationStatus` query reflects only the most-recently-created domain, not all team domains. For multi-domain teams, step 2 completeness might appear "wrong" relative to other domains — but this is the same view the Next Action card uses, so the mental model is consistent. Document as v2 enhancement (full DBAL count of `dmarc_verified_at IS NOT NULL`) once multi-domain DMARC status is exposed broadly.
+- CSRF token id `setup_checklist_dismiss`. Field name `_csrf_token` (matches the AddDomainFromQuarantine pattern).
+- No flash on dismiss — the absence of the card on redirect is feedback enough.
+
+**Build phases:**
+1. Migration + `Team` entity property + mutator. Verify with `phpunit` (existing tests stay green).
+2. `SetupChecklistStep` value object + `SetupChecklistResult`.
+3. `SetupChecklistResolver` service + unit tests (~14). All green.
+4. `DismissSetupChecklistController`.
+5. `DashboardOverviewController` modification (inject + compute + pass to template).
+6. Template block in `overview.html.twig`.
+7. `SetupChecklistTest` integration tests (~8). `phpunit` + `phpstan` + `php-cs-fixer fix --dry-run` all green.
 
 ---
 
