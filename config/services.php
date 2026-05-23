@@ -36,6 +36,9 @@ return App::config([
         'App\Services\Reports\CentralInboxClient' => [
             'alias' => 'App\Services\Reports\ImapCentralInboxClient',
         ],
+        'App\Services\Github\GithubApiClient' => [
+            'alias' => 'App\Services\Github\FileGetContentsGithubApiClient',
+        ],
         'App\Services\Stripe\SubscriptionManager' => [
             'arguments' => [
                 '$defaultUri' => '%env(DEFAULT_URI)%',
@@ -369,6 +372,19 @@ return App::config([
                 ],
             ],
             'App\Command\WarnApproachingPlanLimitsCommand' => [
+                'public' => true,
+            ],
+            'App\Services\Github\FakeGithubApiClient' => [
+                'public' => true,
+            ],
+            'App\Services\Github\GithubApiClient' => [
+                'alias' => 'App\Services\Github\FakeGithubApiClient',
+                'public' => true,
+            ],
+            'App\Twig\OpenSourceExtension' => [
+                'public' => true,
+            ],
+            'App\Twig\GithubStatsExtension' => [
                 'public' => true,
             ],
         ],

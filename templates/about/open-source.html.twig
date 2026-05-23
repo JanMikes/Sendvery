@@ -1,44 +1,257 @@
 {% extends 'marketing_layout.html.twig' %}
 
-{% block title %}Open Source — Sendvery is AGPL-3.0 Licensed{% endblock %}
-{% block meta_description %}Sendvery is open source under AGPL-3.0. Self-host free forever with Docker. All features, no limits. View source on GitHub.{% endblock %}
+{% block title %}Open Source — Self-host Sendvery free, forever{% endblock %}
+{% block meta_description %}Sendvery is open source under AGPL-3.0. Self-host with Docker in under 60 seconds. No domain limits, no feature gates, no telemetry. Hosted plans available when you'd rather not run it yourself.{% endblock %}
 
 {% block content %}
-<twig:SectionContainer>
-    <div class="max-w-3xl mx-auto">
-        <h1 class="text-3xl md:text-4xl font-bold">Open Source</h1>
-
-        <div class="mt-8 prose prose-lg max-w-none text-base-content/80">
-            <p>
-                Sendvery is fully open source under the <strong>AGPL-3.0 license</strong>. Every line of code is available on GitHub. You can inspect it, modify it, and run it on your own infrastructure — free forever.
+    <twig:SectionContainer>
+        <div class="max-w-4xl mx-auto text-center">
+            <div class="inline-flex">
+                <span class="badge badge-outline badge-lg">Open Source · AGPL-3.0</span>
+            </div>
+            <h1 class="text-3xl md:text-5xl font-bold mt-6">Self-host Sendvery free, forever</h1>
+            <p class="mt-6 text-lg text-base-content/70 max-w-2xl mx-auto">
+                Every line of code is public. Run it on your own server with one docker-compose command — no limits on domains, users, or features. Or let us run it for you.
             </p>
+            <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="#quickstart" class="btn btn-primary btn-lg">Self-host in 60 seconds</a>
+                <a href="{{ path('auth_login') }}" class="btn btn-outline btn-lg">Try hosted (no setup)</a>
+            </div>
+        </div>
+    </twig:SectionContainer>
 
-            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Self-hosting with Docker</h2>
-            <p>
-                Sendvery ships as a Docker image. Pull it, configure your database and mail settings, and you're running. No limits on domains, users, or features.
-            </p>
-            <div class="mockup-code bg-base-300 text-base-content mt-4">
-                <pre><code>docker pull ghcr.io/janmikes/sendvery:latest
-docker compose up -d</code></pre>
+    {% if github_stats is not null %}
+        <twig:SectionContainer bgClass="bg-base-200/30" class="py-10">
+            <div class="max-w-4xl mx-auto">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body items-center text-center py-6">
+                            <div class="text-3xl font-bold">{{ github_stats.stars|number_format }}</div>
+                            <div class="text-sm text-base-content/60">GitHub stars</div>
+                        </div>
+                    </div>
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body items-center text-center py-6">
+                            <div class="text-3xl font-bold">{{ github_stats.forks|number_format }}</div>
+                            <div class="text-sm text-base-content/60">Forks</div>
+                        </div>
+                    </div>
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body items-center text-center py-6">
+                            <div class="text-3xl font-bold">{{ github_stats.lastCommitAt|date('M j') }}</div>
+                            <div class="text-sm text-base-content/60">Last commit</div>
+                        </div>
+                    </div>
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body items-center text-center py-6">
+                            <div class="text-3xl font-bold">AGPL-3.0</div>
+                            <div class="text-sm text-base-content/60">License</div>
+                        </div>
+                    </div>
+                </div>
+                {% if is_repo_public %}
+                    <div class="text-center mt-8">
+                        <a href="{{ github_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost">
+                            <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"></path></svg>
+                            View on GitHub
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </twig:SectionContainer>
+    {% endif %}
+
+    <twig:SectionContainer id="quickstart">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-12">
+                <h2 class="text-2xl md:text-3xl font-bold">Self-host in 60 seconds</h2>
+                <p class="mt-3 text-base-content/60">Three commands. Then open <code class="bg-base-200 px-2 py-0.5 rounded">http://localhost</code> in your browser.</p>
             </div>
 
-            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Why AGPL-3.0?</h2>
-            <p>
-                AGPL ensures that if someone modifies and deploys Sendvery as a service, they must share their changes. This protects the community while allowing full self-hosting freedom. It's the same license used by Grafana, MongoDB, and Nextcloud.
-            </p>
+            <div class="space-y-8">
+                <div class="flex gap-4 md:gap-6">
+                    <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">1</div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-lg font-semibold">Clone the repo</h3>
+                        <p class="text-sm text-base-content/60 mt-1">Grab the source. Anything you see on the hosted site is in this tree — no closed-source bits.</p>
+                        <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
+                             data-controller="clipboard-copy"
+                             data-clipboard-copy-text-value="git clone https://github.com/janmikes/sendvery.git && cd sendvery">
+                            <pre data-prefix="$"><code>git clone https://github.com/janmikes/sendvery.git &amp;&amp; cd sendvery</code></pre>
+                            <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
+                                <span data-clipboard-copy-target="label">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Contributing</h2>
-            <p>
-                We welcome contributions. Whether it's bug reports, feature requests, or pull requests — check out the GitHub repository to get started.
+                <div class="flex gap-4 md:gap-6">
+                    <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">2</div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-lg font-semibold">Configure your <code class="text-sm">.env</code></h3>
+                        <p class="text-sm text-base-content/60 mt-1">Copy the template and fill in a database URL plus your inbox credentials. Defaults work locally out of the box.</p>
+                        <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
+                             data-controller="clipboard-copy"
+                             data-clipboard-copy-text-value="cp .env .env.local && $EDITOR .env.local">
+                            <pre data-prefix="$"><code>cp .env .env.local &amp;&amp; $EDITOR .env.local</code></pre>
+                            <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
+                                <span data-clipboard-copy-target="label">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 md:gap-6">
+                    <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">3</div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-lg font-semibold">Boot the stack</h3>
+                        <p class="text-sm text-base-content/60 mt-1">One command brings up the app, PostgreSQL, and the Messenger worker. Open <code>http://localhost</code> and sign in with the magic link sent to Mailpit.</p>
+                        <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
+                             data-controller="clipboard-copy"
+                             data-clipboard-copy-text-value="docker compose up -d">
+                            <pre data-prefix="$"><code>docker compose up -d</code></pre>
+                            <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
+                                <span data-clipboard-copy-target="label">Copy</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </twig:SectionContainer>
+
+    <twig:SectionContainer bgClass="bg-base-200/30" id="comparison">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-10">
+                <h2 class="text-2xl md:text-3xl font-bold">Self-host vs Hosted</h2>
+                <p class="mt-3 text-base-content/60">Same product. Pick the deployment model that fits.</p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th class="text-base-content">Self-host</th>
+                            <th class="text-base-content">Hosted (sendvery.com)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="font-semibold">Cost</td>
+                            <td>Free forever — your server, your bill.</td>
+                            <td>From $0/mo (Free plan, 1 domain).</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">Time to set up</td>
+                            <td>~60 seconds with Docker.</td>
+                            <td>~2 minutes (signup + add domain).</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">Auto-updates</td>
+                            <td>You pull new images on your schedule.</td>
+                            <td>Always on the latest release.</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">Backups</td>
+                            <td>Your PostgreSQL, your backup strategy.</td>
+                            <td>Daily managed backups included.</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">AI insights key</td>
+                            <td>Bring your own Anthropic API key.</td>
+                            <td>Included on AI plan tiers.</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">Support</td>
+                            <td>Community via GitHub issues.</td>
+                            <td>Email support; SLA on Business.</td>
+                        </tr>
+                        <tr>
+                            <td class="font-semibold">Data ownership</td>
+                            <td>100% on your infrastructure.</td>
+                            <td>On our infrastructure; export anytime.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </twig:SectionContainer>
+
+    <twig:SectionContainer>
+        <div class="max-w-3xl mx-auto">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl md:text-3xl font-bold">Why AGPL-3.0?</h2>
+                <p class="mt-3 text-base-content/60">The same license that protects Grafana, MongoDB, and Nextcloud — picked deliberately.</p>
+            </div>
+            <div class="prose prose-lg max-w-none text-base-content/80">
+                <p>
+                    AGPL-3.0 grants you four freedoms: use the software for anything (including commercially), study how it works, modify it, and share it.
+                    The one obligation it adds is reciprocity: if you offer a modified version of Sendvery to other people as a network service, you have to publish your modifications under the same license.
+                </p>
+                <p class="font-semibold text-base-content">In plain language — what you can do:</p>
+                <ul>
+                    <li><strong>Self-host privately</strong> for your company, team, or yourself — no obligations to anyone.</li>
+                    <li><strong>Fork and modify</strong> for your own use — even commercially, as long as the modifications stay with you.</li>
+                    <li><strong>Embed it</strong> inside other internal tooling, agencies, MSP stacks — all fine.</li>
+                </ul>
+                <p class="font-semibold text-base-content">What AGPL does NOT let you do:</p>
+                <ul>
+                    <li>Take Sendvery, modify it, and resell it as a closed-source SaaS without publishing your modifications.</li>
+                    <li>Strip the copyright headers or relicense the source under a more permissive license.</li>
+                </ul>
+                <p>
+                    For 99% of users this means absolutely nothing changes: download, run, use. The license exists so that a competitor can't take this work, close-source their fork, and turn around to sell it — that's the whole reason it's possible to give the code away for free in the first place.
+                </p>
+            </div>
+        </div>
+    </twig:SectionContainer>
+
+    <twig:SectionContainer bgClass="bg-base-200/30">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-10">
+                <h2 class="text-2xl md:text-3xl font-bold">What's in the repo?</h2>
+                <p class="mt-3 text-base-content/60">A quick tour of the codebase. Tests are the spec — 100% line coverage is enforced in CI.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="card bg-base-100 border border-base-300/60">
+                    <div class="card-body">
+                        <h3 class="card-title font-mono text-base">src/</h3>
+                        <p class="text-sm text-base-content/70">PHP 8.5 + Symfony 8 application. CQRS commands and queries, Doctrine entities, Twig components, Stripe + Stimulus + Turbo wiring.</p>
+                    </div>
+                </div>
+                <div class="card bg-base-100 border border-base-300/60">
+                    <div class="card-body">
+                        <h3 class="card-title font-mono text-base">docs/</h3>
+                        <p class="text-sm text-base-content/70">Architecture decisions, features roadmap, monetization model, pricing implementation plan. Every product decision is documented before it ships.</p>
+                    </div>
+                </div>
+                <div class="card bg-base-100 border border-base-300/60">
+                    <div class="card-body">
+                        <h3 class="card-title font-mono text-base">tests/</h3>
+                        <p class="text-sm text-base-content/70">Unit + Integration tests. Behaviour-driven — the test names <em>are</em> the business requirements. Mutation testing via Infection.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </twig:SectionContainer>
+
+    <twig:SectionContainer bgClass="bg-base-200/40">
+        <div class="text-center max-w-2xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-bold">Pick your path</h2>
+            <p class="mt-4 text-base-content/60">Self-host stays free forever. Hosted saves you the infrastructure work.</p>
+            <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="#quickstart" class="btn btn-primary btn-lg">Self-host (free forever)</a>
+                <a href="{{ path('auth_login') }}" class="btn btn-outline btn-lg">Try hosted (no setup)</a>
+            </div>
+            <p class="mt-6 text-sm text-base-content/50">
+                {% if is_repo_public %}
+                    Source on GitHub: <a href="{{ github_url }}" target="_blank" rel="noopener" class="link link-primary">{{ github_url }}</a>
+                {% else %}
+                    <button type="button" class="btn btn-sm btn-disabled" disabled aria-disabled="true">Coming soon — repo opens at launch</button>
+                {% endif %}
             </p>
         </div>
-
-        <div class="mt-12 flex gap-4">
-            <a href="https://github.com/janmikes/sendvery" target="_blank" rel="noopener" class="btn btn-primary">
-                <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"></path></svg>
-                View on GitHub
-            </a>
-        </div>
-    </div>
-</twig:SectionContainer>
+    </twig:SectionContainer>
 {% endblock %}

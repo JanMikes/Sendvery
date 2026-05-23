@@ -512,7 +512,8 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
 
 ## TASK-011: `/open-source` page underplays self-host as a value prop — and currently links to a repo that isn't public yet
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: marketing
 - Why: `templates/about/open-source.html.twig` has four short paragraphs and a docker-compose snippet. It doesn't show **how trivial** self-hosting is (one-command quickstart), doesn't show the GitHub repo's star count, doesn't link to docs, doesn't show what running Sendvery locally looks like, and doesn't tie back to the hosted plans ("self-host = forever free, hosted = managed infra"). Worse, the page links `https://github.com/janmikes/sendvery` but per `docs/03-features-roadmap.md` Phase 2 the repo is still private — visitors clicking through hit a 404, which is worse than not linking at all. The "free forever if you self-host" hook is a top-3 differentiator in `docs/05-monetization.md`; the page that lives at that URL should be the strongest argument for the product, not the weakest.
 - Acceptance:
@@ -524,6 +525,65 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
   - The "View on GitHub" button is gated: if the repo is not yet public (per Phase 2 status in `docs/03-features-roadmap.md`), the button shows *"Coming soon — get notified when we open the repo"* and captures email via a small form. When the repo flips public, change one constant and the button works normally. Do not link to a 404.
   - End-of-page CTA: two buttons side-by-side: "Self-host (free forever)" → quickstart anchor, "Try hosted (no setup)" → auth login.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Key decisions:**
+- **Repo-public gate** = env var `SENDVERY_REPO_PUBLIC` (default `0`). Exposed via new Twig extension `OpenSourceExtension` (clone of `PricingFlagsExtension`'s pattern). Globals: `is_repo_public: bool`, `github_url: string` (constant `https://github.com/janmikes/sendvery` — change one line when repo URL changes).
+- **GitHub stats** = cached JSON file at `var/github_stats.json`, refreshed by a new cron command. Twig extension `GithubStatsExtension` reads it and exposes `github_stats: ?GithubStats`. Missing/malformed file → null → stats strip is omitted entirely (no fake placeholders). `symfony/http-client` is NOT in composer.json — use stock `file_get_contents` with a User-Agent stream context. No new dep.
+- **Email capture for the "Coming soon" button** = DROPPED. Just a disabled `<button>` with copy "Coming soon — repo opens at launch". Rationale: TASK-012 deliberately retired `BetaSignup`; reactivating it for a different capture flow re-entangles a retired path. No site-wide email drip infra exists yet. Honest copy + no 404 is enough.
+- **Cron registration** = OUT OF SCOPE for the code commit (lives in `~/www/spare.srv/deployment/crontab` which is outside the repo). Document in the build report so user can add `0 */6 * * * sentry-cli monitors run sendvery-github-stats -- docker compose run --rm worker bin/console sendvery:opensource:refresh-github-stats` when deploying.
+
+**Architecture:**
+- `src/Value/GithubStats.php` (readonly final): `stars: int`, `forks: int`, `lastCommitAt: \DateTimeImmutable`, `defaultBranch: string`. Static `fromJson(string $json): ?self` factory — null on any parse failure.
+- `src/Services/Github/GithubApiClient.php` interface: `fetchRepoStats(string $repo): array|false`.
+- `src/Services/Github/FileGetContentsGithubApiClient.php` (readonly final, production impl): wraps `file_get_contents` with `User-Agent: sendvery-cron/1.0` stream context against `https://api.github.com/repos/janmikes/sendvery`. Interface lets tests bind a fake.
+- `src/Twig/OpenSourceExtension.php`: `#[Autowire(env: 'SENDVERY_REPO_PUBLIC')] string $repoPublic`. Globals `is_repo_public` + `github_url`.
+- `src/Twig/GithubStatsExtension.php`: `#[Autowire('%kernel.project_dir%')] string $projectDir`. Reads `$projectDir/var/github_stats.json` via `GithubStats::fromJson`. Returns `['github_stats' => $stats]` where `$stats` may be null.
+- `src/Command/RefreshGithubStatsCommand.php`: `#[AsCommand(name: 'sendvery:opensource:refresh-github-stats')]`. Injects `GithubApiClient`. Writes file atomically: write `.tmp` then `rename()` (POSIX-atomic). Failure leaves existing file intact. Exit `SUCCESS`/`FAILURE`.
+- `assets/controllers/clipboard_copy_controller.js`: new Stimulus controller. Values: `text: String`. Targets: `label`. Action `copy` writes `this.textValue` to clipboard, flashes label "Copied!" for 1500ms. Same defensive try/catch pattern as `copy_link_controller.js`. Auto-discovered via Symfony UX naming convention (no manual registration in `controllers.json`).
+
+**Template rewrite — `templates/about/open-source.html.twig`** — extends `marketing_layout`. Seven sections:
+1. Hero: `<div class="badge badge-outline badge-lg">Open Source · AGPL-3.0</div>` + title "Self-host Sendvery free, forever" + subtitle + dual CTA (`#quickstart` anchor + `auth_login`).
+2. GitHub stats strip — conditional `{% if github_stats is not null %}`. Renders stars / forks / last commit / AGPL-3.0 badge. If `is_repo_public` also true, includes "View on GitHub →" link.
+3. Quickstart `<section id="quickstart">`: 3 numbered steps, each with `<div class="mockup-code relative">` containing a `<pre><code>` block + absolutely-positioned copy button using `data-controller="clipboard-copy" data-clipboard-copy-text-value="..."`. Step copy as in plan body.
+4. Comparison table (7 rows): Cost, Time to set up, Auto-updates, Backups, AI key, Support, Data ownership.
+5. "Why AGPL?" expanded explanation (plain language: what users can/cannot do).
+6. "What's in the repo?" — brief directory tour (`src/`, `docs/`, `tests/`, mention 100% coverage).
+7. End-of-page CTA repeat: two buttons — "Self-host (free forever)" → `#quickstart`, "Try hosted (no setup)" → `auth_login`.
+
+GitHub button gating:
+```twig
+{% if is_repo_public %}
+  <a href="{{ github_url }}" target="_blank" rel="noopener" class="btn btn-sm">View on GitHub</a>
+{% else %}
+  <button class="btn btn-sm btn-disabled" disabled aria-disabled="true">Coming soon — repo opens at launch</button>
+{% endif %}
+```
+
+**Tests:**
+- `tests/Integration/Controller/OpenSourcePageTest.php`: 200, headings present, quickstart anchor, comparison-table text, "Why AGPL" + "What's in the repo" headings, dual end CTA, GitHub button disabled when env=0, enabled when env=1.
+- `tests/Integration/Twig/OpenSourceExtensionTest.php`: globals contain `is_repo_public` + `github_url`; falsy for `""`, `"0"`; truthy for `"1"`.
+- `tests/Integration/Twig/GithubStatsExtensionTest.php`: null when file missing / malformed / valid → `GithubStats` instance with correct types.
+- `tests/Integration/Command/RefreshGithubStatsCommandTest.php`: fake `GithubApiClient` → writes JSON with correct fields, exits SUCCESS; fake returns false → exits FAILURE + does NOT overwrite existing file.
+- `tests/Unit/Value/GithubStatsTest.php`: `fromJson` returns null on invalid JSON / missing fields / invalid date; instance on valid data.
+
+**Critical details:**
+- Atomic write via `rename()` — prevents `GithubStatsExtension` from reading a partial file during cron.
+- GitHub API unauthenticated rate limit: 60 req/hr — cron runs 4/hr per deployment (every 6h).
+- `is_repo_public` env parsing: `'' !== $repoPublic && '0' !== $repoPublic` (handles unset / `"0"` / truthy).
+- No `dark:` Tailwind prefix anywhere. daisyUI theme tokens only.
+- No `{% block %}` nested inside `<twig:SectionContainer>` tags — content auto-routes to `content` block.
+
+**Build phases:**
+1. Add `SENDVERY_REPO_PUBLIC=0` to `.env`. Create `GithubStats` value object + tests.
+2. `GithubApiClient` interface + `FileGetContentsGithubApiClient` impl + service alias.
+3. `OpenSourceExtension` + `GithubStatsExtension` + tests.
+4. `clipboard_copy_controller.js`.
+5. `RefreshGithubStatsCommand` + test (with `FakeGithubApiClient` bound in `when@test` services block).
+6. Full rewrite of `templates/about/open-source.html.twig`.
+7. Controller integration test.
+8. `phpunit` + `phpstan` + `cs-fixer` all green. Smoke: run cron command, reload page, flip env var to confirm gating. Document deployment cron line in the commit message.
 
 ---
 
