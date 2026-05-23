@@ -1,0 +1,93 @@
+{#
+    Shared transactional email layout.
+
+    Email clients (Outlook, Gmail webmail, Apple Mail, mobile) only reliably
+    render a small subset of HTML/CSS, so this layout stays table-based with
+    inline styles. Keep external assets, web fonts, and <style> blocks out —
+    use the design tokens defined here as inline values in each child template.
+
+    Blocks a child template fills:
+      - subject       <title> and email subject (optional)
+      - preheader     Hidden text used as the inbox preview snippet
+      - accent_color  6-digit hex for the top brand strip (default: brand teal)
+      - header_meta   Small right-aligned text inside the header (optional)
+      - content       The main body content
+      - footer_note   Optional small note above the standard footer line
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>{% block subject %}Sendvery{% endblock %}</title>
+    {#- Outlook fallback so the layout doesn't render in Times New Roman -#}
+    <!--[if mso]>
+    <style type="text/css">
+        body, table, td, p, a, h1, h2, h3 { font-family: 'Segoe UI', Arial, sans-serif !important; }
+    </style>
+    <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; color: #0f172a; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;">
+    {#- Hidden preheader: shows up as the preview snippet in most inboxes. -#}
+    <div style="display: none; max-height: 0; overflow: hidden; opacity: 0; mso-hide: all; font-size: 1px; line-height: 1px; color: #f1f5f9;">
+        {% block preheader %}{% endblock %}
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f1f5f9; padding: 32px 16px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0;">
+                    {#- Brand accent strip — overridden for alert / severity emails. -#}
+                    <tr>
+                        <td style="background-color: {% block accent_color %}#0f766e{% endblock %}; height: 4px; line-height: 0; font-size: 0;">&nbsp;</td>
+                    </tr>
+
+                    {#- Header with wordmark. -#}
+                    <tr>
+                        <td style="padding: 28px 40px 8px 40px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td style="vertical-align: middle;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                            <tr>
+                                                <td style="width: 36px; height: 36px; background-color: #0f766e; border-radius: 9px; color: #ffffff; font-size: 17px; font-weight: 700; text-align: center; vertical-align: middle; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; letter-spacing: -0.02em;">S</td>
+                                                <td style="padding-left: 12px; vertical-align: middle; font-size: 18px; font-weight: 700; color: #0f172a; letter-spacing: -0.015em;">Sendvery</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td align="right" style="vertical-align: middle; font-size: 12px; font-weight: 500; color: #64748b;">
+                                        {% block header_meta %}{% endblock %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    {#- Body content. -#}
+                    <tr>
+                        <td style="padding: 16px 40px 32px 40px;">
+                            {% block content %}{% endblock %}
+                        </td>
+                    </tr>
+
+                    {#- Footer. -#}
+                    <tr>
+                        <td style="padding: 20px 40px 24px 40px; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
+                            {% block footer_note %}{% endblock %}
+                            <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #64748b;">
+                                Sent by <strong style="color: #0f172a; font-weight: 600;">Sendvery</strong> — email health &amp; deliverability monitoring.
+                            </p>
+                            <p style="margin: 6px 0 0 0; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                                Open source under AGPL-3.0 · <a href="https://sendvery.com" style="color: #0f766e; text-decoration: none; font-weight: 500;">sendvery.com</a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

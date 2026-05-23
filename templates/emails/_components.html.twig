@@ -1,0 +1,97 @@
+{#
+    Reusable email content building blocks.
+
+    Import in a template with:
+        {% import 'emails/_components.html.twig' as ui %}
+
+    Then call e.g.:
+        {{ ui.pretitle('Sign in', '#0f766e') }}
+        {{ ui.heading('Sign in to Sendvery') }}
+        {{ ui.lead('Click the button below…') }}
+        {{ ui.button('Sign in', url) }}
+        {{ ui.callout('warning', '<strong>Heads up</strong> — …') }}
+        {{ ui.divider() }}
+        {{ ui.fineprint('Link expires in 15 minutes.') }}
+
+    Each macro returns a self-contained chunk of inline-styled HTML so child
+    templates stay readable without copy-pasting markup.
+#}
+
+{% macro pretitle(label, color = '#0f766e') %}
+    <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: {{ color }}; text-transform: uppercase; letter-spacing: 0.08em;">{{ label }}</p>
+{% endmacro %}
+
+{% macro heading(text) %}
+    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 700; line-height: 1.25; color: #0f172a; letter-spacing: -0.015em;">{{ text|raw }}</h1>
+{% endmacro %}
+
+{% macro subheading(text) %}
+    <h2 style="margin: 24px 0 12px 0; font-size: 15px; font-weight: 600; line-height: 1.4; color: #0f172a; letter-spacing: -0.005em;">{{ text|raw }}</h2>
+{% endmacro %}
+
+{% macro lead(html) %}
+    <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #334155;">{{ html|raw }}</p>
+{% endmacro %}
+
+{% macro paragraph(html) %}
+    <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.65; color: #334155;">{{ html|raw }}</p>
+{% endmacro %}
+
+{% macro muted(html) %}
+    <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #64748b;">{{ html|raw }}</p>
+{% endmacro %}
+
+{% macro fineprint(html) %}
+    <p style="margin: 16px 0 0 0; font-size: 12px; line-height: 1.6; color: #94a3b8;">{{ html|raw }}</p>
+{% endmacro %}
+
+{#- Bulletproof button: table wrapper survives Outlook desktop. -#}
+{% macro button(label, url, color = '#0f766e') %}
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
+        <tr>
+            <td style="background-color: {{ color }}; border-radius: 10px;">
+                <a href="{{ url }}" style="display: inline-block; padding: 14px 32px; font-size: 15px; font-weight: 600; color: #ffffff; text-decoration: none; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; letter-spacing: -0.005em;">{{ label }}</a>
+            </td>
+        </tr>
+    </table>
+{% endmacro %}
+
+{#- Callout card — variants: info, success, warning, danger, neutral. -#}
+{% macro callout(variant, html) %}
+    {%- set palette = {
+        info:    { bg: '#eff6ff', border: '#bfdbfe', text: '#1e3a8a' },
+        success: { bg: '#f0fdf4', border: '#bbf7d0', text: '#14532d' },
+        warning: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
+        danger:  { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' },
+        neutral: { bg: '#f8fafc', border: '#e2e8f0', text: '#334155' }
+    } -%}
+    {%- set c = palette[variant] ?? palette.neutral -%}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 16px 0;">
+        <tr>
+            <td style="padding: 14px 18px; background-color: {{ c.bg }}; border: 1px solid {{ c.border }}; border-radius: 10px; font-size: 14px; line-height: 1.6; color: {{ c.text }};">{{ html|raw }}</td>
+        </tr>
+    </table>
+{% endmacro %}
+
+{#- A single key/value row used in detail tables. -#}
+{% macro detail_row(label, value_html, last = false) %}
+    <tr>
+        <td style="padding: 10px 0; font-size: 13px; color: #64748b; vertical-align: top; width: 40%; {% if not last %}border-bottom: 1px solid #f1f5f9;{% endif %}">{{ label }}</td>
+        <td style="padding: 10px 0; font-size: 13px; color: #0f172a; vertical-align: top; {% if not last %}border-bottom: 1px solid #f1f5f9;{% endif %}">{{ value_html|raw }}</td>
+    </tr>
+{% endmacro %}
+
+{#- A horizontal rule with breathing room. -#}
+{% macro divider() %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 24px 0;">
+        <tr><td style="border-top: 1px solid #e2e8f0; height: 1px; line-height: 0; font-size: 0;">&nbsp;</td></tr>
+    </table>
+{% endmacro %}
+
+{#- Plain-link fallback shown beneath buttons for clients that strip them. -#}
+{% macro link_fallback(url, label = "If the button doesn't work, copy and paste this link into your browser:") %}
+    <p style="margin: 12px 0 0 0; font-size: 12px; line-height: 1.6; color: #94a3b8;">
+        {{ label }}<br>
+        <a href="{{ url }}" style="color: #0f766e; text-decoration: none; word-break: break-all;">{{ url }}</a>
+    </p>
+{% endmacro %}

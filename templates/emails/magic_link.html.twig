@@ -1,0 +1,22 @@
+{% extends 'emails/_layout.html.twig' %}
+{% import 'emails/_components.html.twig' as ui %}
+
+{% block subject %}Sign in to Sendvery{% endblock %}
+{% block preheader %}Your one-time sign-in link — expires in {{ expiryMinutes }} minutes.{% endblock %}
+
+{% block content %}
+    {{ ui.pretitle('Sign in link') }}
+    {{ ui.heading('Sign in to Sendvery') }}
+
+    {{ ui.lead('Click the button below to sign in. No password required — this link works once.') }}
+
+    {{ ui.button('Sign in to Sendvery', verifyUrl) }}
+
+    {{ ui.callout('neutral', 'For your security, this link expires in <strong>' ~ expiryMinutes ~ ' minutes</strong> and can only be used once.') }}
+
+    {{ ui.link_fallback(verifyUrl) }}
+
+    {{ ui.divider() }}
+
+    {{ ui.fineprint("Didn't request this? You can safely ignore this email — we won't sign anyone in without the link above.") }}
+{% endblock %}

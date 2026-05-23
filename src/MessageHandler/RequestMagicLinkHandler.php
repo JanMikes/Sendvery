@@ -14,6 +14,7 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Twig\Environment;
 
 #[AsMessageHandler]
 final readonly class RequestMagicLinkHandler
@@ -28,6 +29,7 @@ final readonly class RequestMagicLinkHandler
         private MailerInterface $mailer,
         private UrlGeneratorInterface $urlGenerator,
         private ClockInterface $clock,
+        private Environment $twig,
     ) {
     }
 
@@ -67,48 +69,33 @@ final readonly class RequestMagicLinkHandler
             UrlGeneratorInterface::ABSOLUTE_URL,
         );
 
+        $html = $this->twig->render('emails/magic_link.html.twig', [
+            'verifyUrl' => $verifyUrl,
+            'expiryMinutes' => self::TOKEN_EXPIRY_MINUTES,
+        ]);
+
         $email = (new Email())
             ->to($message->email)
             ->subject('Sign in to Sendvery')
-            ->html($this->renderEmailHtml($verifyUrl))
+            ->html($html)
             ->text($this->renderEmailText($verifyUrl));
 
         $this->mailer->send($email);
     }
 
-    private function renderEmailHtml(string $verifyUrl): string
-    {
-        return <<<HTML
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8"></head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #1a1a2e;">
-            <div style="text-align: center; margin-bottom: 32px;">
-                <h1 style="font-size: 24px; font-weight: 700; color: #0f766e; margin: 0;">Sendvery</h1>
-            </div>
-            <div style="background: #f8fafc; border-radius: 12px; padding: 32px; text-align: center;">
-                <h2 style="font-size: 20px; margin: 0 0 16px;">Sign in to Sendvery</h2>
-                <p style="color: #64748b; margin: 0 0 24px;">Click the button below to sign in. This link expires in 15 minutes.</p>
-                <a href="{$verifyUrl}" style="display: inline-block; background: #0f766e; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Sign in</a>
-            </div>
-            <p style="text-align: center; color: #94a3b8; font-size: 13px; margin-top: 24px;">
-                If you didn't request this link, you can safely ignore this email.
-            </p>
-        </body>
-        </html>
-        HTML;
-    }
-
     private function renderEmailText(string $verifyUrl): string
     {
+        $minutes = self::TOKEN_EXPIRY_MINUTES;
+
         return <<<TEXT
         Sign in to Sendvery
 
         Click this link to sign in: {$verifyUrl}
 
-        This link expires in 15 minutes.
+        This link expires in {$minutes} minutes and can only be used once.
 
-        If you didn't request this link, you can safely ignore this email.
+        Didn't request this? You can safely ignore this email — we won't sign
+        anyone in without the link above.
         TEXT;
     }
 }
