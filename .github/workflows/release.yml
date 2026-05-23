@@ -59,6 +59,13 @@ jobs:
         environment:
             name: production
             url: ${{ steps.env-url.outputs.url }}
+        # Serialize production deploys. Without this, two CI runs finishing seconds apart
+        # SSH in and run deploy.sh in parallel — the second one's cleanup pass kills the
+        # first's new container mid-healthcheck (`disappeared mid-healthcheck`).
+        # cancel-in-progress: false → running deploys are never cancelled; newer runs queue.
+        concurrency:
+            group: sendvery-deploy-production
+            cancel-in-progress: false
         steps:
             -   name: Resolve environment URL
                 id: env-url
