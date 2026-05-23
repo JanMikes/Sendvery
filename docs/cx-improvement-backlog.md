@@ -546,7 +546,8 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
 
 ## TASK-010: "What is Sendvery" page is a wall of text — no visuals, no product screenshot, no clear conversion path
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: marketing
 - Why: `templates/about/what-is-sendvery.html.twig` is currently a single 30-line `<div class="prose">` block: paragraph, founder quote, persona list, open-source paragraph. No screenshot, no diagram, no real photo of the founder, no "what does the product actually look like", no comparison vs alternatives, no inline CTAs other than a "Check your domain now" button at the end. According to `docs/09-design-and-branding.md`, this page is supposed to be a *"product manifesto"* — instead it reads like a Wikipedia stub. Visitors arriving here from the footer or nav are specifically trying to understand the product before signing up — this is the most influential page for high-consideration buyers and currently fails to convert them.
 - Acceptance:
