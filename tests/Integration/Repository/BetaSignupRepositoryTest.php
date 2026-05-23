@@ -74,4 +74,51 @@ final class BetaSignupRepositoryTest extends IntegrationTestCase
         $found = $repository->findByEmail('nonexistent@example.com');
         self::assertNull($found);
     }
+
+    public function testFindByEmailAndSourceMatchesPairExactly(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $repository = $this->getService(BetaSignupRepository::class);
+
+        // TASK-006: uniqueness moved to (email, source), so a single address
+        // can hold one row per source. The repository helper is the
+        // dedup-keyed lookup used by NotifyMeAboutToolHandler.
+        $email = 'pair-'.Uuid::uuid7()->toString().'@example.com';
+
+        $spfRow = new BetaSignup(
+            id: Uuid::uuid7(),
+            email: $email,
+            domainCount: 1,
+            painPoint: 'domain=example.com',
+            source: 'spf-result',
+            signedUpAt: new \DateTimeImmutable(),
+            confirmationToken: 'spf-'.Uuid::uuid7()->toString(),
+        );
+        $spfRow->popEvents();
+        $em->persist($spfRow);
+
+        $dkimRow = new BetaSignup(
+            id: Uuid::uuid7(),
+            email: $email,
+            domainCount: 1,
+            painPoint: 'domain=example.com',
+            source: 'dkim-result',
+            signedUpAt: new \DateTimeImmutable(),
+            confirmationToken: 'dkim-'.Uuid::uuid7()->toString(),
+        );
+        $dkimRow->popEvents();
+        $em->persist($dkimRow);
+        $em->flush();
+
+        $foundSpf = $repository->findByEmailAndSource($email, 'spf-result');
+        self::assertNotNull($foundSpf);
+        self::assertSame($spfRow->id->toString(), $foundSpf->id->toString());
+
+        $foundDkim = $repository->findByEmailAndSource($email, 'dkim-result');
+        self::assertNotNull($foundDkim);
+        self::assertSame($dkimRow->id->toString(), $foundDkim->id->toString());
+
+        self::assertNull($repository->findByEmailAndSource($email, 'mx-result'));
+        self::assertNull($repository->findByEmailAndSource('nobody@example.com', 'spf-result'));
+    }
 }

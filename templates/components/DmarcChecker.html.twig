@@ -9,6 +9,7 @@
         <div data-loading="addClass(hidden)">
             {% include 'tools/_results/dmarc-results.html.twig' with {result: this.result, domain: this.domain} %}
             {% include 'components/_StartMonitoringCta.html.twig' with {domain: this.domain} %}
+            <twig:MonitorEmailMeMicro domain="{{ this.domain }}" source="dmarc-result" />
         </div>
     {% endif %}
 </div>

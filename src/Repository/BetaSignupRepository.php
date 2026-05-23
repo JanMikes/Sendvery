@@ -23,8 +23,17 @@ final readonly class BetaSignupRepository
 
     public function findByEmail(string $email): ?BetaSignup
     {
+        return $this->entityManager->getRepository(BetaSignup::class)->findOneBy(
+            ['email' => $email],
+            ['signedUpAt' => 'DESC'],
+        );
+    }
+
+    public function findByEmailAndSource(string $email, string $source): ?BetaSignup
+    {
         return $this->entityManager->getRepository(BetaSignup::class)->findOneBy([
             'email' => $email,
+            'source' => $source,
         ]);
     }
 }

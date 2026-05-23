@@ -155,6 +155,9 @@ return App::config([
             'App\MessageHandler\RegisterBetaSignupHandler' => [
                 'public' => true,
             ],
+            'App\MessageHandler\NotifyMeAboutToolHandler' => [
+                'public' => true,
+            ],
             'App\MessageHandler\ProcessDmarcReportHandler' => [
                 'public' => true,
             ],

@@ -13,6 +13,7 @@
         <div data-loading="addClass(hidden)">
             {% include 'tools/_results/dkim-results.html.twig' with {result: this.result, domain: this.domain} %}
             {% include 'components/_StartMonitoringCta.html.twig' with {domain: this.domain} %}
+            <twig:MonitorEmailMeMicro domain="{{ this.domain }}" source="dkim-result" />
         </div>
     {% endif %}
 </div>

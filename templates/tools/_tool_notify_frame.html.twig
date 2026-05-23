@@ -1,0 +1,77 @@
+{# TASK-006 — turbo-frame fragment for the tool-result "email me this report"
+   micro-form. Rendered both as the initial state by MonitorEmailMeMicro and as
+   the POST response by SubmitToolNotifyController so the same markup powers
+   form, error, and success states.
+
+   Context:
+     - domain (string)   Hidden input — domain to subscribe for.
+     - source (string)   Hidden input — ToolNotifySource value.
+     - email (string)    Sticky email value when re-rendering after an error.
+     - success (?bool)   When true, render the "Check your inbox" confirmation.
+     - error (?string)   When set, render the form with an inline error banner. #}
+{% set frameId = 'tool-notify-' ~ source %}
+
+<turbo-frame id="{{ frameId }}" class="block">
+    {% if success ?? false %}
+        <div class="rounded-xl border border-success/20 bg-success/5 p-4 sm:p-5 flex items-start gap-3">
+            <svg class="w-5 h-5 text-success shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            <div class="min-w-0">
+                <p class="font-semibold text-sm">Check your inbox</p>
+                <p class="text-xs text-base-content/70 mt-1">
+                    We sent a confirmation to
+                    <span class="font-mono break-all">{{ email }}</span>.
+                    Click the link inside to start watching
+                    <span class="font-mono break-all">{{ domain }}</span>.
+                </p>
+            </div>
+        </div>
+    {% else %}
+        <div class="rounded-2xl border border-base-300 bg-base-100 p-4 sm:p-5">
+            <div class="flex items-start gap-3 mb-3">
+                <div class="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div class="min-w-0">
+                    <h3 class="font-semibold text-sm sm:text-base leading-snug">Want updates if this changes?</h3>
+                    <p class="text-xs text-base-content/60 mt-0.5">
+                        We'll email you this report plus an alert if anything about
+                        <span class="font-mono">{{ domain }}</span>
+                        breaks later. No account needed.
+                    </p>
+                </div>
+            </div>
+
+            {% if error is defined and error %}
+                <div class="alert alert-error alert-sm mb-3 py-2">
+                    <span class="text-xs">{{ error }}</span>
+                </div>
+            {% endif %}
+
+            <form method="POST"
+                  action="{{ path('tools_notify_submit') }}"
+                  data-turbo-frame="{{ frameId }}"
+                  class="flex flex-col sm:flex-row gap-2">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('tool_notify') }}">
+                <input type="hidden" name="domain" value="{{ domain }}">
+                <input type="hidden" name="source" value="{{ source }}">
+                <input type="email"
+                       name="email"
+                       value="{{ email|default('') }}"
+                       required
+                       placeholder="you@company.com"
+                       autocomplete="email"
+                       class="input input-bordered input-sm sm:input-md flex-1 min-w-0">
+                <button type="submit" class="btn btn-primary btn-sm sm:btn-md whitespace-nowrap">
+                    Email me this report
+                </button>
+            </form>
+            <p class="text-[11px] text-base-content/50 mt-2 leading-relaxed">
+                We'll send a confirmation link to verify your address. No account, no spam.
+            </p>
+        </div>
+    {% endif %}
+</turbo-frame>

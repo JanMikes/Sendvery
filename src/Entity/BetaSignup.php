@@ -10,7 +10,11 @@ use Ramsey\Uuid\UuidInterface;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'beta_signup')]
-#[ORM\UniqueConstraint(name: 'uniq_beta_signup_email', columns: ['email'])]
+// TASK-006: the original `email` unique constraint was relaxed to `(email, source)`
+// so the same address can opt into multiple tool-result notifications (one row per
+// source slug like `spf-result`, `dkim-result`, …). The repository's findByEmail
+// helper now returns the most-recent row and is only used as a back-compat read.
+#[ORM\UniqueConstraint(name: 'uniq_beta_signup_email_source', columns: ['email', 'source'])]
 final class BetaSignup implements EntityWithEvents
 {
     use HasEvents;
@@ -19,7 +23,7 @@ final class BetaSignup implements EntityWithEvents
     #[ORM\Column(type: 'uuid', unique: true)]
     public UuidInterface $id;
 
-    #[ORM\Column(length: 255, unique: true)]
+    #[ORM\Column(length: 255)]
     public string $email;
 
     #[ORM\Column(type: 'integer', nullable: true)]

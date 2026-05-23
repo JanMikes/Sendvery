@@ -1,0 +1,19 @@
+{# TASK-006 — soft-conversion micro-form rendered directly under every tool
+   result. The hard CTA (_StartMonitoringCta) keeps its place above; this
+   component is the lower-commitment "just email me updates" alternative.
+
+   Props:
+     - domain (string)   The domain that was just scanned (passed as hidden input).
+     - source (string)   Source slug from ToolNotifySource enum (e.g. 'spf-result').
+
+   The wrapping <turbo-frame> swaps in a "Check your inbox" confirmation on
+   success without reloading the page, so the result above stays put. #}
+{% props domain, source %}
+
+<div class="mt-4">
+    {% include 'tools/_tool_notify_frame.html.twig' with {
+        domain: domain,
+        source: source,
+        email: '',
+    } only %}
+</div>

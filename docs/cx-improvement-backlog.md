@@ -383,7 +383,8 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
 
 ## TASK-006: Free checker tools don't convert — the post-result CTA is the only conversion hook and it's weak on cold traffic
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: marketing
 - Why: A user who lands on `/tools/spf-checker` from Google has very high intent ("my SPF is broken right now"). Today the checker form shows results, then `_StartMonitoringCta.html.twig` renders a single "Start monitoring example.com →" button that goes straight to magic-link login. That's a big leap from "I just looked up a record" to "give me your email and account". There is **no soft conversion** (email me this scan, schedule re-checks, share results) and no email capture below the result besides the global beta-page link. We're leaving a lot of high-intent traffic on the table because the only CTA is "create an account".
 - Acceptance:
