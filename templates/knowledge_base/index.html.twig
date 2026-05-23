@@ -45,7 +45,9 @@
 <twig:SectionContainer bgClass="{{ loop.index is odd ? '' : 'bg-base-200/50' }}">
     <div class="max-w-4xl mx-auto">
         <h2 class="text-xl md:text-2xl font-bold mb-8">{{ category }}</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {# Auto-fill minmax so the grid collapses gracefully when a category has 1 or 2 articles
+           (avoids the "broken" empty-half-column look with a rigid grid-cols-2). #}
+        <div class="grid gap-6 [grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr))]">
             {% for guide in categoryGuides %}
                 <a href="{{ path('knowledge_base_article', {slug: guide.slug}) }}"
                    class="card bg-base-100 shadow-sm border border-base-200 hover:border-primary/30 hover:shadow-md transition-all">

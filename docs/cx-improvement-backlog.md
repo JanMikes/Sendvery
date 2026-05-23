@@ -399,7 +399,8 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
 
 ## TASK-007: Knowledge base has only 3 articles; categories look empty and undermine the SEO-first GTM
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: marketing
 - Why: `/learn` lists exactly 3 articles, hard-coded in `KnowledgeBaseIndexController::GUIDES`: *What is DMARC*, *SPF Record Guide*, *Email Authentication Explained*. The category grid renders, but with only two articles in "Email Authentication Basics" and one in "DNS & Records", each category looks like a placeholder. There is no DKIM article (despite a DKIM tool page), no MX article, no blacklist article, no "DMARC p=none → p=quarantine → p=reject migration guide", no Gmail/Yahoo 2024 sender-requirements article (huge organic search demand). For an SEO-first product whose go-to-market is *"rank for long-tail email-auth keywords"* (per `docs/00-project-overview.md`), this is the biggest growth lever and the cheapest to fix.
 - Acceptance:

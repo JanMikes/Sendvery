@@ -1,0 +1,242 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}Gmail &amp; Yahoo Bulk Sender Requirements (2024+): What You Need to Comply — Sendvery{% endblock %}
+{% block meta_description %}A practical guide to the February 2024 Gmail and Yahoo bulk-sender requirements: required SPF/DKIM/DMARC, one-click List-Unsubscribe, the 0.3% complaint threshold, and how to check if your domain is compliant.{% endblock %}
+{% block og_image %}{{ absolute_url(path('og_image', {type: 'kb', slug: 'gmail-yahoo-bulk-sender-requirements-2024'})) }}{% endblock %}
+
+{% block article_title %}Gmail &amp; Yahoo Bulk Sender Requirements (2024+): What You Need to Comply{% endblock %}
+{% block article_intro %}A practical, engineer-focused walkthrough of the rules Google and Yahoo started enforcing in February 2024 &mdash; and how to confirm your domain meets them.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#background" class="link link-hover text-base-content/60">Background: what changed in 2024</a></li>
+    <li><a href="#who-is-affected" class="link link-hover text-base-content/60">Who counts as a "bulk sender"</a></li>
+    <li><a href="#requirement-spf-dkim" class="link link-hover text-base-content/60">Requirement 1: SPF and DKIM</a></li>
+    <li><a href="#requirement-dmarc" class="link link-hover text-base-content/60">Requirement 2: DMARC with alignment</a></li>
+    <li><a href="#requirement-unsubscribe" class="link link-hover text-base-content/60">Requirement 3: One-click List-Unsubscribe</a></li>
+    <li><a href="#requirement-complaint-rate" class="link link-hover text-base-content/60">Requirement 4: Complaint rate under 0.3%</a></li>
+    <li><a href="#tls-and-other" class="link link-hover text-base-content/60">Other requirements: TLS, reverse DNS</a></li>
+    <li><a href="#transactional-vs-marketing" class="link link-hover text-base-content/60">Transactional vs marketing senders</a></li>
+    <li><a href="#how-to-check" class="link link-hover text-base-content/60">How to check if you're compliant</a></li>
+    <li><a href="#common-gotchas" class="link link-hover text-base-content/60">Common gotchas</a></li>
+    <li><a href="#next-steps" class="link link-hover text-base-content/60">Next steps</a></li>
+</ul>
+{% endblock %}
+
+{% block related_tools %}
+<a href="{{ path('tools_spf_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">SPF Checker</a>
+<a href="{{ path('tools_dkim_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">DKIM Checker</a>
+<a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DMARC Checker</a>
+<a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">Email Auth Checker</a>
+<a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm btn-block justify-start">Domain Health</a>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="background">Background: what changed in 2024</h2>
+
+<p>In October 2023 Google and Yahoo jointly announced new requirements for anyone sending large volumes of email to their users. Enforcement began on <strong>February 1, 2024</strong>, with a graduated rollout: non-compliant bulk mail first hit a temporary error code, then started being rate-limited, then rejected outright. By mid-2024 enforcement was essentially universal at both providers.</p>
+
+<p>The headline rules:</p>
+
+<ol>
+    <li>Authenticate every message with both <strong>SPF</strong> and <strong>DKIM</strong>.</li>
+    <li>Publish a <strong>DMARC</strong> record (at minimum <code>p=none</code>), and the <code>From</code> domain must align with SPF or DKIM.</li>
+    <li>Provide <strong>one-click List-Unsubscribe</strong> on marketing messages (RFC 8058 + RFC 2369).</li>
+    <li>Keep <strong>spam complaint rate</strong> below 0.3% (ideally below 0.1%).</li>
+    <li>Send only over <strong>TLS</strong> with valid forward and reverse DNS.</li>
+</ol>
+
+<p>Microsoft followed with a similar policy in 2025 for Outlook.com / Hotmail mailboxes, and Apple's iCloud uses comparable thresholds. In practice, "Gmail and Yahoo compliant" has become the de facto baseline for B2C deliverability worldwide.</p>
+
+<h2 id="who-is-affected">Who counts as a "bulk sender"</h2>
+
+<p>Google defines a bulk sender as a domain (or IP) that sends <strong>more than 5,000 messages to personal Gmail addresses in a single day</strong>. Yahoo uses a similar threshold. Important details:</p>
+
+<ul>
+    <li>The 5,000 threshold is per <strong>day</strong>, not per month or per campaign.</li>
+    <li>It's measured at the Gmail/Yahoo receiver, not at your MTA. If you send 4,000 to Gmail and 4,000 to Yahoo, you're under threshold at each &mdash; but a single 6,000-recipient Gmail blast lights up the rules.</li>
+    <li>The threshold is per <strong>sending domain</strong>. Sending from <code>news.example.com</code> and <code>billing.example.com</code> counts separately at the subdomain level, but Google may still treat both as "example.com" for reputation purposes.</li>
+    <li>Personal Gmail (<code>@gmail.com</code>) and Google Workspace accounts both count.</li>
+</ul>
+
+<p>If you cross the threshold once, Google's heuristics increase scrutiny for some time afterwards. Senders who hover near the line are best off complying anyway &mdash; the requirements are good practice regardless of volume.</p>
+
+<h2 id="requirement-spf-dkim">Requirement 1: SPF and DKIM on every message</h2>
+
+<p>Every message must carry <strong>both</strong> SPF and DKIM authentication. Before 2024, providers tolerated SPF-only or DKIM-only setups; that's over.</p>
+
+<h3>SPF</h3>
+
+<ul>
+    <li>The Return-Path / envelope-sender domain (often called "MAIL FROM") must publish a valid SPF record.</li>
+    <li>The record must list the sending IP(s).</li>
+    <li>Use a real failure qualifier &mdash; <code>~all</code> or <code>-all</code>. Never <code>+all</code>.</li>
+    <li>Stay under the 10-DNS-lookup limit (see our <a href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">SPF guide</a>).</li>
+</ul>
+
+<p>Example for a domain sending through Google Workspace plus a transactional provider:</p>
+
+<pre><code>example.com. IN TXT "v=spf1 include:_spf.google.com include:spf.postmarkapp.com -all"</code></pre>
+
+<h3>DKIM</h3>
+
+<ul>
+    <li>Every outgoing message must include at least one valid <code>DKIM-Signature</code>.</li>
+    <li>The signing key should be <strong>at least 1024 bits</strong>. Google recommends 2048. Keys below 1024 bits are rejected outright as weak.</li>
+    <li>The signing domain (<code>d=</code>) should be your domain &mdash; not the vendor's &mdash; so it aligns with the <code>From</code> header for DMARC.</li>
+</ul>
+
+<p>If you use multiple sending platforms, each gets its own DKIM selector under your domain. See our <a href="{{ path('knowledge_base_article', {slug: 'what-is-dkim'}) }}">DKIM guide</a> for the deep-dive on selectors and rotation.</p>
+
+<h2 id="requirement-dmarc">Requirement 2: DMARC with alignment</h2>
+
+<p>The 2024 rules require a published DMARC record. The minimum acceptable policy is <code>p=none</code>:</p>
+
+<pre><code>_dmarc.example.com. IN TXT "v=DMARC1; p=none; rua=mailto:reports@example.com"</code></pre>
+
+<p>That bare-minimum record satisfies the rule technically, but Gmail explicitly recommends moving to <code>p=quarantine</code> or <code>p=reject</code> as soon as your reports show legitimate mail is passing. Domains stuck on <code>p=none</code> long-term will start being deprioritized in inbox placement.</p>
+
+<p>The critical detail most senders miss: <strong>DMARC requires alignment, not just SPF or DKIM passing</strong>. A message can pass SPF (the envelope sender's domain has a valid SPF record covering the sending IP) and still fail DMARC if that envelope-sender domain doesn't match the <code>From</code> header.</p>
+
+<p>Example failure:</p>
+
+<pre><code>From: marketing@example.com
+Return-Path: bounce@email-provider.com   ← SPF checked against this
+DKIM-Signature: d=email-provider.com     ← DKIM signed by this</code></pre>
+
+<p>SPF passes (the provider's IP is in their record), DKIM passes (their key verifies), but <strong>nothing aligns with <code>example.com</code></strong>, so DMARC fails. The fix is to ask the provider to sign with <code>d=example.com</code> (DKIM alignment) or to use a custom Return-Path under your domain (SPF alignment).
+
+To work toward strong DMARC enforcement, follow the staged rollout in our <a href="{{ path('knowledge_base_article', {slug: 'dmarc-migration-guide-none-to-reject'}) }}">migration guide</a>.</p>
+
+<h2 id="requirement-unsubscribe">Requirement 3: One-click List-Unsubscribe</h2>
+
+<p>All <strong>marketing</strong> messages must include two headers that together implement RFC 8058 one-click unsubscribe:</p>
+
+<pre><code>List-Unsubscribe: &lt;https://example.com/unsubscribe?u=abc123&gt;, &lt;mailto:unsub@example.com&gt;
+List-Unsubscribe-Post: List-Unsubscribe=One-Click</code></pre>
+
+<p>The behaviour spec:</p>
+
+<ol>
+    <li>When a recipient clicks "unsubscribe" in Gmail/Yahoo, the mail client sends an <strong>HTTP POST</strong> with body <code>List-Unsubscribe=One-Click</code> to the URL.</li>
+    <li>Your endpoint must accept the POST, unsubscribe the user immediately, and return a 2xx response &mdash; <strong>without requiring login, captcha, or any further confirmation</strong>.</li>
+    <li>The unsubscribe must take effect within <strong>two days</strong> of the click (Gmail's stated requirement, but plan for immediate).</li>
+</ol>
+
+<p>Common implementation mistakes:</p>
+
+<ul>
+    <li>Requiring the user to log in to confirm &mdash; not allowed.</li>
+    <li>Returning a 302 redirect to a "confirm your unsubscribe" page &mdash; not allowed.</li>
+    <li>Including only the <code>mailto:</code> form without the HTTPS one &mdash; will work, but loses the one-click UX.</li>
+    <li>Tokenless URLs (<code>?email=user@example.com</code>) &mdash; enables enumeration. Use opaque, signed tokens.</li>
+</ul>
+
+<p>The header is <strong>not required on transactional mail</strong> (password resets, order confirmations) but it doesn't hurt to include it.</p>
+
+<h2 id="requirement-complaint-rate">Requirement 4: Complaint rate under 0.3%</h2>
+
+<p>Both Google and Yahoo enforce a hard ceiling: keep your <strong>user-reported spam rate below 0.3%</strong>, measured over a rolling window. Google publishes this in Postmaster Tools. Above 0.3% your mail is throttled; sustained, it's rejected.</p>
+
+<p>The recommended ceiling is much tighter: <strong>under 0.1%</strong>. That's one spam complaint per 1,000 delivered messages. Healthy senders sit at 0.01&ndash;0.05%.</p>
+
+<p>Concretely, for 100,000 Gmail recipients per day:</p>
+
+<ul>
+    <li>&le; 100 complaints &rarr; healthy</li>
+    <li>100&ndash;300 complaints &rarr; warning territory; expect inbox-placement degradation</li>
+    <li>&ge; 300 complaints &rarr; you'll hit the hard threshold; throttling begins</li>
+</ul>
+
+<p>What drives complaint rate up:</p>
+
+<ul>
+    <li>Re-engaging cold or purchased lists.</li>
+    <li>Missing or hidden unsubscribe.</li>
+    <li>Misleading <code>From</code> names ("Customer Support" instead of your brand).</li>
+    <li>Frequency &mdash; daily marketing emails get reported more than weekly.</li>
+    <li>Content that triggers "this isn't what I signed up for" &mdash; e.g. subscribing for newsletters and receiving sales pitches.</li>
+</ul>
+
+<p>If you're approaching the threshold, the first response should always be <strong>list hygiene</strong>: sunset unengaged contacts, double-opt-in new ones, and audit your unsubscribe flow. There's no DNS fix for a complaint problem.</p>
+
+<h2 id="tls-and-other">Other requirements: TLS, reverse DNS, message format</h2>
+
+<p>The 2024 rules also tighten several long-standing best practices into hard requirements:</p>
+
+<ul>
+    <li><strong>TLS for SMTP delivery.</strong> Connections to Gmail/Yahoo MX servers must negotiate TLS. Any modern MTA does this by default; the failure mode is using an ancient SMTP relay.</li>
+    <li><strong>Valid forward and reverse DNS.</strong> The sending IP must have a PTR record, and the PTR's hostname must resolve back to the same IP. Mismatched or missing PTR is a fast track to rejection.</li>
+    <li><strong>RFC 5322 compliant messages.</strong> A single <code>From</code> header with a single mailbox, proper <code>Date</code>, <code>Message-ID</code>, etc. Malformed messages are dropped.</li>
+    <li><strong>Don't impersonate Gmail/Yahoo in the <code>From</code>.</strong> Sending with <code>From: noreply@gmail.com</code> from your own infrastructure has always been a deliverability disaster; the 2024 rules make it an explicit ban.</li>
+</ul>
+
+<h2 id="transactional-vs-marketing">Transactional vs marketing: what differs</h2>
+
+<p>The bulk-sender rules apply to all messages above the 5,000/day threshold, but the <strong>List-Unsubscribe</strong> requirement is specifically for marketing/promotional messages. Transactional mail (password resets, receipts, shipping notifications) is exempt from the unsubscribe rule.</p>
+
+<p>Practical separation patterns:</p>
+
+<ol>
+    <li><strong>Separate subdomains.</strong> Send transactional from <code>mail.example.com</code> and marketing from <code>news.example.com</code>. Each has its own DKIM key and reputation. A spam complaint on marketing doesn't poison password resets.</li>
+    <li><strong>Separate IP pools.</strong> If your volume justifies dedicated IPs, marketing and transactional should be on different ones for the same reputation-isolation reason.</li>
+    <li><strong>Same domain, different headers.</strong> If you must mix, at least include <code>List-Unsubscribe</strong> on the marketing messages and not the transactional ones, and use clear <code>From</code> names (<code>billing@</code> vs <code>news@</code>).</li>
+</ol>
+
+<p>Note: even though transactional mail doesn't need List-Unsubscribe, it still needs SPF, DKIM, DMARC, TLS, valid PTR, and clean complaint rates.</p>
+
+<h2 id="how-to-check">How to check if you're compliant</h2>
+
+<p>A 10-minute audit:</p>
+
+<ol>
+    <li><strong>SPF + DKIM + DMARC on your sending domain.</strong> Run our <a href="{{ path('tools_email_auth_checker') }}">Email Auth Checker</a> against your domain. All three should show <em>pass</em>. Also run <a href="{{ path('tools_spf_checker') }}">SPF Checker</a> to verify you're under the 10-lookup limit and <a href="{{ path('tools_dkim_checker') }}">DKIM Checker</a> for each selector you use.</li>
+    <li><strong>DMARC alignment.</strong> Send a test message to <code>check-auth@verifier.port25.com</code> (or use any DMARC validator that returns the full report). Look for <code>dmarc=pass</code> in the response, not just SPF/DKIM pass.</li>
+    <li><strong>List-Unsubscribe.</strong> Send a campaign to your own Gmail address and inspect the raw source. You should see both <code>List-Unsubscribe</code> and <code>List-Unsubscribe-Post: List-Unsubscribe=One-Click</code> headers.</li>
+    <li><strong>Postmaster Tools.</strong> Register your sending domain at <a href="https://postmaster.google.com/" rel="noopener nofollow">postmaster.google.com</a> and at Yahoo's CFL/postmaster. Both expose your current authentication and complaint rates.</li>
+    <li><strong>Reverse DNS.</strong> <code>dig -x &lt;your-sending-ip&gt;</code> should return a hostname; that hostname's A record should point back to the same IP.</li>
+</ol>
+
+<div class="alert alert-info not-prose my-8">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Sendvery monitors all four authentication checks plus alignment continuously, and parses your DMARC aggregate reports so you can see <em>per-sender</em> compliance. Try the <a href="{{ path('tools_domain_health') }}" class="link font-semibold">Domain Health</a> tool for a single-screen snapshot.</span>
+</div>
+
+<h2 id="common-gotchas">Common gotchas that fail the audit</h2>
+
+<h3>"DKIM passes but DMARC fails"</h3>
+
+<p>The vendor is signing with <code>d=&lt;their-domain&gt;.com</code> instead of <code>d=example.com</code>. Switch to your domain's DKIM via CNAME or by publishing the vendor's public key under your selector.</p>
+
+<h3>"SPF works in testing but breaks in production"</h3>
+
+<p>Usually a 10-DNS-lookup overflow. Adding one more <code>include:</code> for the new vendor pushed the count over. Drop unused includes; flatten if needed.</p>
+
+<h3>"List-Unsubscribe is there but Gmail still doesn't show one-click"</h3>
+
+<p>Missing the <code>List-Unsubscribe-Post: List-Unsubscribe=One-Click</code> header, or the URL only supports GET. Both pieces must be present.</p>
+
+<h3>"My complaint rate spiked"</h3>
+
+<p>Look at the last campaign change. New From-name? New design that hides the unsubscribe link? Email to a re-imported list? Roll back the change first, then investigate.</p>
+
+<h3>"Subdomain DKIM key is fine but main domain fails"</h3>
+
+<p>You configured <code>news.example.com</code> properly but the marketing tool is sending with <code>From: hello@example.com</code>. DKIM <code>d=news.example.com</code> aligns relaxed-mode with <code>example.com</code>, but only if your DMARC record is on the organizational domain. Check <code>_dmarc.example.com</code> &mdash; not <code>_dmarc.news.example.com</code>.</p>
+
+<h3>"Weak DKIM key warning from Gmail"</h3>
+
+<p>A 768-bit RSA key generated years ago. Rotate to 2048 with a new selector immediately. Leave the old selector in DNS for a week, then revoke (<code>p=</code> empty).</p>
+
+<h2 id="next-steps">Next steps</h2>
+
+<ol>
+    <li><strong><a href="{{ path('tools_email_auth_checker') }}">Run the Email Auth Checker</a></strong> on your domain to verify SPF + DKIM + DMARC + alignment.</li>
+    <li><strong>Sign up at Google Postmaster Tools</strong> to monitor authentication rate, IP reputation, and spam-rate trends.</li>
+    <li><strong>Implement one-click unsubscribe</strong> if you send marketing &mdash; it's a one-day engineering task and a hard requirement.</li>
+    <li><strong>Read our <a href="{{ path('knowledge_base_article', {slug: 'dmarc-migration-guide-none-to-reject'}) }}">DMARC migration guide</a></strong> to move beyond the minimum <code>p=none</code> compliance and into real spoofing protection.</li>
+    <li><strong>Audit your sending vendors</strong> with our <a href="{{ path('knowledge_base_article', {slug: 'what-is-dkim'}) }}">DKIM guide</a> &mdash; each one needs DKIM aligned to your domain.</li>
+</ol>
+
+{% endblock %}

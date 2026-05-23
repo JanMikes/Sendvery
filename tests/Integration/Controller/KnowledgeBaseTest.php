@@ -42,6 +42,29 @@ final class KnowledgeBaseTest extends WebTestCase
         self::assertSelectorTextContains('body', 'What is DMARC');
         self::assertSelectorTextContains('body', 'SPF Record');
         self::assertSelectorTextContains('body', 'Email Authentication');
+        self::assertSelectorTextContains('body', 'What is DKIM');
+        self::assertSelectorTextContains('body', 'Gmail & Yahoo Bulk Sender Requirements');
+        self::assertSelectorTextContains('body', 'p=none to p=reject');
+        self::assertSelectorTextContains('body', 'MX Records Explained');
+    }
+
+    #[Test]
+    public function indexRendersAllSevenArticles(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/learn');
+
+        // The KB index should render one card per published guide. We count
+        // article-card links pointing at /learn/<slug> to avoid double-counting
+        // category headings or CTA buttons.
+        $articleLinks = $crawler->filter('a[href^="/learn/"]')->reduce(static function ($node): bool {
+            $href = (string) $node->attr('href');
+
+            // Skip the index itself and any non-article anchors.
+            return '/learn' !== $href && '/learn/' !== $href;
+        });
+
+        self::assertCount(7, $articleLinks, 'KB index should render exactly 7 article links');
     }
 
     #[Test]
@@ -202,5 +225,9 @@ final class KnowledgeBaseTest extends WebTestCase
         yield 'what-is-dmarc' => ['what-is-dmarc'];
         yield 'spf-record-guide' => ['spf-record-guide'];
         yield 'email-authentication-explained' => ['email-authentication-explained'];
+        yield 'what-is-dkim' => ['what-is-dkim'];
+        yield 'gmail-yahoo-bulk-sender-requirements-2024' => ['gmail-yahoo-bulk-sender-requirements-2024'];
+        yield 'dmarc-migration-guide-none-to-reject' => ['dmarc-migration-guide-none-to-reject'];
+        yield 'mx-records-explained' => ['mx-records-explained'];
     }
 }

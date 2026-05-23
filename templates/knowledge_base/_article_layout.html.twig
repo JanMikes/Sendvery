@@ -96,7 +96,8 @@
 <twig:SectionContainer bgClass="bg-base-200/50">
     <div class="max-w-4xl mx-auto">
         <h2 class="text-xl font-bold mb-8 text-center">More guides</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {# Auto-fill minmax so the grid stays balanced whether there are 2 or 10 sibling guides. #}
+        <div class="grid gap-6 [grid-template-columns:repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
             {% for otherGuide in guides %}
                 {% if otherGuide.slug != guide.slug %}
                     <a href="{{ path('knowledge_base_article', {slug: otherGuide.slug}) }}"

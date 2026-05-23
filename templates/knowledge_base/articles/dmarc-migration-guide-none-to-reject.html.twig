@@ -1,0 +1,255 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}How to Move from p=none to p=reject: A Step-by-Step DMARC Migration Guide — Sendvery{% endblock %}
+{% block meta_description %}A safe, phased DMARC migration: monitor with p=none, ramp p=quarantine and p=reject by percentage, tighten alignment, and learn how to read aggregate reports at each stage.{% endblock %}
+{% block og_image %}{{ absolute_url(path('og_image', {type: 'kb', slug: 'dmarc-migration-guide-none-to-reject'})) }}{% endblock %}
+
+{% block article_title %}How to Move from p=none to p=reject: A Step-by-Step DMARC Migration Guide{% endblock %}
+{% block article_intro %}A phased migration plan with explicit checkpoints, percentage ramps, rollback rules, and a step-by-step reading of the aggregate reports that should guide each move.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#why-migrate" class="link link-hover text-base-content/60">Why move past p=none</a></li>
+    <li><a href="#pre-flight" class="link link-hover text-base-content/60">Pre-flight checks</a></li>
+    <li><a href="#phase-1-monitor" class="link link-hover text-base-content/60">Phase 1: p=none, monitor (2&ndash;4 weeks)</a></li>
+    <li><a href="#phase-2-quarantine-10" class="link link-hover text-base-content/60">Phase 2: p=quarantine pct=10</a></li>
+    <li><a href="#phase-3-ramp-quarantine" class="link link-hover text-base-content/60">Phase 3: ramp quarantine 25 &rarr; 50 &rarr; 100</a></li>
+    <li><a href="#phase-4-reject" class="link link-hover text-base-content/60">Phase 4: p=reject 10 &rarr; 50 &rarr; 100</a></li>
+    <li><a href="#phase-5-tighten" class="link link-hover text-base-content/60">Phase 5: tighten alignment</a></li>
+    <li><a href="#reading-reports" class="link link-hover text-base-content/60">Reading DMARC aggregate reports</a></li>
+    <li><a href="#triaging-failures" class="link link-hover text-base-content/60">Triaging failures</a></li>
+    <li><a href="#when-to-roll-back" class="link link-hover text-base-content/60">When to roll back</a></li>
+    <li><a href="#how-sendvery-helps" class="link link-hover text-base-content/60">How Sendvery surfaces this</a></li>
+</ul>
+{% endblock %}
+
+{% block related_tools %}
+<a href="{{ path('tools_dmarc_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">DMARC Checker</a>
+<a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">SPF Checker</a>
+<a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DKIM Checker</a>
+<a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">Email Auth Checker</a>
+<a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm btn-block justify-start">Domain Health</a>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="why-migrate">Why moving past p=none matters</h2>
+
+<p>A DMARC record with <code>p=none</code> is a monitoring tool, not a security control. It tells receiving mail servers: "Here are my reporting addresses, but don't actually do anything when something fails." Spoofers go through unhindered. <strong>p=none provides zero protection.</strong></p>
+
+<p>The whole point of DMARC is the policy: <code>p=quarantine</code> sends failures to the spam folder, and <code>p=reject</code> tells receivers to drop them at the SMTP layer so they never land in any folder. Until you reach <code>p=reject</code> at 100%, your brand is still exposed to spoofing.</p>
+
+<p>The reason most domains stall at <code>p=none</code> is the (entirely justified) fear of blocking their own legitimate mail &mdash; a third-party platform you forgot about, a subdomain a different team owns, a transactional service no one documented. This guide is the de-risking plan: a phased rollout where every transition is small, reversible, and gated on what your aggregate reports actually show.</p>
+
+<h2 id="pre-flight">Pre-flight checks before you start</h2>
+
+<p>Before you even publish <code>p=none</code>, do the basics:</p>
+
+<ol>
+    <li><strong>SPF is published and clean.</strong> Run our <a href="{{ path('tools_spf_checker') }}">SPF Checker</a>. Under the 10-DNS-lookup limit, ending with <code>-all</code> or <code>~all</code>, no <code>+all</code>, no duplicate records. Read the full <a href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">SPF guide</a> if you're not sure.</li>
+    <li><strong>DKIM is published for every sender.</strong> Each platform that sends as your domain needs a DKIM selector under your domain &mdash; not the vendor's. See the <a href="{{ path('knowledge_base_article', {slug: 'what-is-dkim'}) }}">DKIM guide</a> for selectors, key sizes, and multi-vendor patterns.</li>
+    <li><strong>You have a reporting mailbox or service.</strong> Aggregate reports arrive as gzipped XML attachments daily from dozens of receivers. Don't pipe them to a human's inbox &mdash; use a dedicated mailbox or a DMARC analyser that ingests and parses them.</li>
+    <li><strong>You can roll back the DNS record in minutes.</strong> Make sure you have access to the DNS provider and that TTL on the DMARC record is short (300&ndash;3600 seconds) during the migration window. Long TTLs hurt &mdash; you can't roll back fast.</li>
+    <li><strong>Inventory of senders.</strong> Make a list: marketing platform, CRM, helpdesk, transactional provider, in-house mail, accounting tool, e-commerce notifications. You'll cross-check this against the reports.</li>
+</ol>
+
+<h2 id="phase-1-monitor">Phase 1: p=none, monitor for 2&ndash;4 weeks</h2>
+
+<p>Publish:</p>
+
+<pre><code>_dmarc.example.com. IN TXT
+"v=DMARC1; p=none; rua=mailto:dmarc@example.com; pct=100; adkim=r; aspf=r"</code></pre>
+
+<p>Tags explained:</p>
+
+<ul>
+    <li><code>p=none</code> &mdash; No enforcement, just reporting.</li>
+    <li><code>rua=mailto:...</code> &mdash; Where aggregate reports are sent. You can list multiple addresses comma-separated. If the reporting mailbox is on a different domain than the DMARC record, that domain needs to authorise the reporting; see RFC 7489 &sect;7.1.</li>
+    <li><code>pct=100</code> &mdash; "Apply this policy to 100% of messages." It's a no-op at <code>p=none</code> but lets you copy/paste this template into the next phases.</li>
+    <li><code>adkim=r</code>, <code>aspf=r</code> &mdash; Relaxed alignment. We'll tighten these in Phase 5.</li>
+</ul>
+
+<p>What to do during this phase:</p>
+
+<ol>
+    <li><strong>Wait 7&ndash;10 days</strong> before reading reports. Reports trickle in &mdash; if you check on day 2 you'll see a tiny fraction of your real volume.</li>
+    <li><strong>Build a sender catalogue from the reports.</strong> Every <code>&lt;record&gt;</code> element in the XML lists a source IP and authentication results. Map each IP to a real-world sender: "203.0.113.45 = our marketing platform", "198.51.100.12 = a vendor we forgot about".</li>
+    <li><strong>Identify unauthenticated legitimate senders.</strong> Anything sending on your behalf with <code>dmarc=fail</code> needs fixing &mdash; usually by adding DKIM under your domain or extending SPF.</li>
+    <li><strong>Identify spoofers.</strong> IPs you don't recognise that fail DMARC are either bad actors or shadow-IT senders. Investigate; if confirmed malicious, you're ready to enforce.</li>
+</ol>
+
+<p>Exit criteria for Phase 1: <strong>at least 95% of your legitimate mail volume passes DMARC</strong>, every passing IP is mapped to a known sender, and you understand which failing IPs are legitimate vs malicious.</p>
+
+<h2 id="phase-2-quarantine-10">Phase 2: p=quarantine, pct=10 (1&ndash;2 weeks)</h2>
+
+<p>This is the first transition that actually affects delivery. By starting at <code>pct=10</code>, only 10% of failing messages get the quarantine treatment &mdash; the other 90% still pass through. This is a controlled bleed test.</p>
+
+<pre><code>v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com; pct=10; adkim=r; aspf=r</code></pre>
+
+<p>What to watch:</p>
+
+<ul>
+    <li>Aggregate-report failure rate. Compare to the Phase 1 baseline; it should be roughly the same.</li>
+    <li>Any spike in support tickets &mdash; "I'm not getting your password reset email." This is your early signal that a transactional sender is failing alignment.</li>
+    <li>Postmaster Tools (Gmail / Microsoft / Yahoo) for changes in spam rate or authentication.</li>
+</ul>
+
+<p>If the failure rate is stable and there are no incident reports for 7&ndash;10 days, move to Phase 3. If you see a real failure (legitimate mail going to spam), roll back to <code>p=none</code>, fix the alignment issue, and re-enter Phase 2.</p>
+
+<h2 id="phase-3-ramp-quarantine">Phase 3: ramp quarantine to 100%</h2>
+
+<p>Bump <code>pct</code> in stages, holding each level for a week or so:</p>
+
+<ol>
+    <li><code>p=quarantine; pct=25</code> &mdash; hold 7 days.</li>
+    <li><code>p=quarantine; pct=50</code> &mdash; hold 7 days.</li>
+    <li><code>p=quarantine; pct=100</code> &mdash; hold 7&ndash;14 days.</li>
+</ol>
+
+<p>At each step the rule is the same: <strong>watch for new failures in reports, watch Postmaster Tools, watch the support queue</strong>. If something legitimate breaks, drop back one level and fix it before climbing again.</p>
+
+<p>An important quirk: <code>pct</code> only applies to <code>quarantine</code> and <code>reject</code>. Receivers that don't honour <code>pct</code> (a minority but they exist) treat everything as the full policy. Treat <code>pct</code> as a soft guardrail, not a guarantee.</p>
+
+<p>By the end of Phase 3 you've effectively eliminated spoofed mail to inboxes &mdash; it's all going to spam &mdash; but it's still being delivered. Phase 4 closes that.</p>
+
+<h2 id="phase-4-reject">Phase 4: p=reject, ramp 10 &rarr; 50 &rarr; 100</h2>
+
+<p>Now you're moving from "delivered to spam" to "rejected at SMTP." A bad alignment failure here means the sender bounces. The percentage ramp matters more than ever.</p>
+
+<ol>
+    <li><code>p=reject; pct=10</code> &mdash; hold 7 days. 10% of failing mail bounces; 90% gets the previous quarantine treatment.</li>
+    <li><code>p=reject; pct=25</code> &mdash; hold 7 days.</li>
+    <li><code>p=reject; pct=50</code> &mdash; hold 7&ndash;10 days.</li>
+    <li><code>p=reject; pct=100</code> &mdash; hold indefinitely. You're now fully enforced.</li>
+</ol>
+
+<p>At <code>p=reject; pct=100</code>, your DMARC record becomes:</p>
+
+<pre><code>v=DMARC1; p=reject; rua=mailto:dmarc@example.com; adkim=r; aspf=r</code></pre>
+
+<p>(You can drop the <code>pct=100</code> &mdash; it's the default &mdash; but leaving it for explicitness is fine.)</p>
+
+<p>One often-overlooked extra: the <code>sp=</code> tag for subdomain policy. If you don't send from subdomains, set <code>sp=reject</code> from the start to block subdomain spoofing too:</p>
+
+<pre><code>v=DMARC1; p=reject; sp=reject; rua=mailto:dmarc@example.com</code></pre>
+
+<p>If subdomains <em>do</em> send mail, give each a dedicated policy record at <code>_dmarc.&lt;sub&gt;.example.com</code> and run its own ramp.</p>
+
+<h2 id="phase-5-tighten">Phase 5: tighten alignment (adkim=s, aspf=s)</h2>
+
+<p>By default, DMARC uses <strong>relaxed alignment</strong>: <code>d=mail.example.com</code> in DKIM aligns with <code>From: hello@example.com</code> as long as they share the organizational domain (<code>example.com</code>).</p>
+
+<p>Strict alignment requires an <strong>exact match</strong>. <code>d=mail.example.com</code> would not align with <code>From: hello@example.com</code> under strict mode &mdash; only <code>d=example.com</code> would.</p>
+
+<p>Strict alignment is appropriate for high-value domains where you want to prevent spoofing of the parent by anyone using a subdomain &mdash; including your own infrastructure. It's the highest assurance level but the most fragile: any vendor that signs with a different subdomain breaks alignment.</p>
+
+<pre><code>v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s; rua=mailto:dmarc@example.com</code></pre>
+
+<p>Roll this out only after several weeks of clean reports at <code>p=reject; pct=100</code>, and only if every vendor is signing with your exact organizational domain.</p>
+
+<h2 id="reading-reports">Reading DMARC aggregate reports</h2>
+
+<p>An aggregate report is a gzipped XML document covering one day's traffic from one receiver to your domain. The structure:</p>
+
+<pre><code>&lt;feedback&gt;
+  &lt;report_metadata&gt;
+    &lt;org_name&gt;google.com&lt;/org_name&gt;
+    &lt;date_range&gt;
+      &lt;begin&gt;1716422400&lt;/begin&gt;
+      &lt;end&gt;1716508800&lt;/end&gt;
+    &lt;/date_range&gt;
+  &lt;/report_metadata&gt;
+  &lt;policy_published&gt;
+    &lt;domain&gt;example.com&lt;/domain&gt;
+    &lt;p&gt;quarantine&lt;/p&gt;
+    &lt;pct&gt;25&lt;/pct&gt;
+  &lt;/policy_published&gt;
+  &lt;record&gt;
+    &lt;row&gt;
+      &lt;source_ip&gt;203.0.113.45&lt;/source_ip&gt;
+      &lt;count&gt;1240&lt;/count&gt;
+      &lt;policy_evaluated&gt;
+        &lt;disposition&gt;none&lt;/disposition&gt;
+        &lt;dkim&gt;pass&lt;/dkim&gt;
+        &lt;spf&gt;pass&lt;/spf&gt;
+      &lt;/policy_evaluated&gt;
+    &lt;/row&gt;
+    &lt;identifiers&gt;
+      &lt;header_from&gt;example.com&lt;/header_from&gt;
+    &lt;/identifiers&gt;
+    &lt;auth_results&gt;
+      &lt;dkim&gt;&lt;domain&gt;example.com&lt;/domain&gt;&lt;result&gt;pass&lt;/result&gt;&lt;/dkim&gt;
+      &lt;spf&gt;&lt;domain&gt;example.com&lt;/domain&gt;&lt;result&gt;pass&lt;/result&gt;&lt;/spf&gt;
+    &lt;/auth_results&gt;
+  &lt;/record&gt;
+  &lt;!-- more records --&gt;
+&lt;/feedback&gt;</code></pre>
+
+<p>Each <code>&lt;record&gt;</code> is one source IP's batch for that day. The fields to focus on:</p>
+
+<ul>
+    <li><code>source_ip</code> &mdash; Map this to a real-world sender.</li>
+    <li><code>count</code> &mdash; Number of messages.</li>
+    <li><code>policy_evaluated/disposition</code> &mdash; What the receiver did: <code>none</code>, <code>quarantine</code>, or <code>reject</code>.</li>
+    <li><code>policy_evaluated/dkim</code> and <code>spf</code> &mdash; The DMARC alignment result (pass/fail), not just the raw check.</li>
+    <li><code>auth_results</code> &mdash; The raw protocol-level results, including which domain signed/passed.</li>
+</ul>
+
+<p>The key distinction: <code>auth_results/dkim/result=pass</code> means DKIM verified cryptographically. <code>policy_evaluated/dkim=pass</code> means it verified <strong>and aligned with the From header</strong>. You can have one without the other &mdash; that's the classic third-party-sender problem.</p>
+
+<h2 id="triaging-failures">Triaging failures at each phase</h2>
+
+<p>When a record shows <code>policy_evaluated/dkim=fail</code> and <code>policy_evaluated/spf=fail</code>, classify the source IP into one of these buckets:</p>
+
+<ol>
+    <li><strong>Known legitimate sender, misconfigured.</strong> Action: fix the alignment. Usually means asking the vendor to sign with <code>d=example.com</code>, or adding a custom Return-Path under your domain to bring SPF into alignment.</li>
+    <li><strong>Forgotten legitimate sender.</strong> Someone in marketing signed up for a tool a year ago. Action: either retire the tool, or onboard it properly with DKIM-on-your-domain.</li>
+    <li><strong>Forwarded mail.</strong> A recipient set up automatic forwarding from <code>customer@example.com</code> &rarr; <code>customer@gmail.com</code>. Your DKIM survives forwarding (good), but SPF doesn't (the forwarding server's IP isn't in your SPF). As long as DKIM aligns, DMARC still passes. If only SPF passed originally, forwarded mail fails. This is normal background noise &mdash; usually under 1% of volume.</li>
+    <li><strong>Mailing list rewrites.</strong> Lists frequently rewrite <code>From</code> and modify the body, breaking DKIM. The fix is ARC (which lists are slowly adopting). Until then, mailing-list failures are expected; their volume is usually negligible.</li>
+    <li><strong>Spoofers.</strong> Unknown IPs sending in volume with no authentication. Action: this is exactly what DMARC enforcement is for. Move forward in your migration.</li>
+</ol>
+
+<div class="alert alert-info not-prose my-8">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Check your current policy and reporting setup with our <a href="{{ path('tools_dmarc_checker') }}" class="link font-semibold">DMARC Checker</a>, then run a full <a href="{{ path('tools_domain_health') }}" class="link font-semibold">Domain Health</a> report to see how your authentication is doing end-to-end.</span>
+</div>
+
+<h2 id="when-to-roll-back">When to roll back</h2>
+
+<p>The rule: <strong>any incident affecting real users is grounds for an immediate one-level rollback</strong>. Examples:</p>
+
+<ul>
+    <li>Support tickets about missing password resets.</li>
+    <li>A spike in <code>quarantine</code> or <code>reject</code> dispositions for a known internal sender.</li>
+    <li>A drop in deliverability in Postmaster Tools.</li>
+    <li>A new vendor onboarded mid-migration without DKIM setup &mdash; their mail is now failing.</li>
+</ul>
+
+<p>Roll back, fix, and resume. Don't try to push through &mdash; the goal is to reach <code>p=reject</code> sustainably, not to hit a deadline.</p>
+
+<p>What "roll back" means in practice:</p>
+
+<ol>
+    <li>At <code>p=reject; pct=25</code> with an incident &rarr; drop to <code>p=quarantine; pct=100</code>.</li>
+    <li>At <code>p=quarantine; pct=50</code> with an incident &rarr; drop to <code>p=quarantine; pct=10</code>.</li>
+    <li>Major incident at any phase &rarr; drop straight to <code>p=none</code>, investigate, then re-enter from Phase 2 (you don't need to redo Phase 1).</li>
+</ol>
+
+<p>Because TTL on the DMARC record is short, the rollback propagates in minutes &mdash; not hours.</p>
+
+<h2 id="how-sendvery-helps">How Sendvery surfaces these signals</h2>
+
+<p>The whole migration depends on visibility into your aggregate reports &mdash; which IPs are passing, which are failing, what their alignment looks like, and how the trend is moving. That's exactly what Sendvery does:</p>
+
+<ul>
+    <li><strong>Auto-ingests aggregate reports</strong> from a dedicated reporting mailbox &mdash; no manual XML parsing.</li>
+    <li><strong>Maps source IPs to senders</strong> using RDAP and known-vendor heuristics, so you see "Mailchimp" instead of "23.249.218.X".</li>
+    <li><strong>Per-sender alignment status</strong>: a vendor with DKIM passing but not aligned shows up as a yellow row, not a green one. That's the actionable signal.</li>
+    <li><strong>Trend dashboards</strong> per source so you can see "this vendor's failure rate doubled last week" before users notice.</li>
+    <li><strong>Phase-by-phase guidance</strong>: pre-built filters for "what's currently failing DMARC?" &mdash; the list that drives your migration decisions.</li>
+    <li><strong>DNS monitoring</strong> for the DMARC record itself, so accidental changes (someone fat-fingered <code>p=none</code> back on) trigger an alert.</li>
+</ul>
+
+<p>Ready to start? Run our <a href="{{ path('tools_dmarc_checker') }}">DMARC Checker</a> against your domain to confirm your current policy, then read the <a href="{{ path('knowledge_base_article', {slug: 'what-is-dmarc'}) }}">DMARC fundamentals</a> if you need a refresher. For the broader picture, the <a href="{{ path('knowledge_base_article', {slug: 'email-authentication-explained'}) }}">SPF/DKIM/DMARC overview</a> covers how the three protocols fit together.</p>
+
+{% endblock %}

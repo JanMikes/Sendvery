@@ -49,6 +49,10 @@ final class SeoTest extends WebTestCase
         self::assertStringContainsString('/learn/what-is-dmarc', $content);
         self::assertStringContainsString('/learn/spf-record-guide', $content);
         self::assertStringContainsString('/learn/email-authentication-explained', $content);
+        self::assertStringContainsString('/learn/what-is-dkim', $content);
+        self::assertStringContainsString('/learn/gmail-yahoo-bulk-sender-requirements-2024', $content);
+        self::assertStringContainsString('/learn/dmarc-migration-guide-none-to-reject', $content);
+        self::assertStringContainsString('/learn/mx-records-explained', $content);
         self::assertStringContainsString('/legal/privacy', $content);
         self::assertStringContainsString('/legal/security', $content);
         self::assertStringContainsString('/status', $content);

@@ -1,0 +1,222 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}What is DKIM and How Does It Work? — Sendvery{% endblock %}
+{% block meta_description %}A complete guide to DomainKeys Identified Mail (DKIM): how the signing process works, the d= and s= tags, selector rotation, DNS record format, key sizes, and the role of DKIM in DMARC alignment.{% endblock %}
+{% block og_image %}{{ absolute_url(path('og_image', {type: 'kb', slug: 'what-is-dkim'})) }}{% endblock %}
+
+{% block article_title %}What is DKIM and How Does It Work?{% endblock %}
+{% block article_intro %}DomainKeys Identified Mail explained from scratch &mdash; how signing works, what the DNS record contains, why selector rotation matters, and how DKIM keeps your mail aligned with DMARC.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#what-is-dkim" class="link link-hover text-base-content/60">What is DKIM?</a></li>
+    <li><a href="#how-signing-works" class="link link-hover text-base-content/60">How DKIM signing works</a></li>
+    <li><a href="#dkim-signature-header" class="link link-hover text-base-content/60">The DKIM-Signature header</a></li>
+    <li><a href="#dns-record-format" class="link link-hover text-base-content/60">The DKIM DNS record</a></li>
+    <li><a href="#verification" class="link link-hover text-base-content/60">How receivers verify</a></li>
+    <li><a href="#selectors-rotation" class="link link-hover text-base-content/60">Selectors and key rotation</a></li>
+    <li><a href="#dkim-and-dmarc" class="link link-hover text-base-content/60">DKIM and DMARC alignment</a></li>
+    <li><a href="#common-breakage" class="link link-hover text-base-content/60">Common breakage modes</a></li>
+    <li><a href="#multi-vendor" class="link link-hover text-base-content/60">Multi-vendor and shared services</a></li>
+    <li><a href="#next-steps" class="link link-hover text-base-content/60">Next steps</a></li>
+</ul>
+{% endblock %}
+
+{% block related_tools %}
+<a href="{{ path('tools_dkim_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">DKIM Checker</a>
+<a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">Email Auth Checker</a>
+<a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">DMARC Checker</a>
+<a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm btn-block justify-start">Domain Health</a>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="what-is-dkim">What is DKIM?</h2>
+
+<p><strong>DKIM</strong> (DomainKeys Identified Mail, RFC 6376) is an email authentication standard that lets a sending domain cryptographically sign outgoing messages so receiving mail servers can verify two things:</p>
+
+<ol>
+    <li>The message was authorized by the owner of the signing domain.</li>
+    <li>The signed parts of the message &mdash; the body and selected headers &mdash; were not modified in transit.</li>
+</ol>
+
+<p>DKIM works by combining standard public-key cryptography with DNS. The sender keeps a <strong>private key</strong> on the mail server and publishes the matching <strong>public key</strong> as a DNS TXT record. Every outgoing email gets a <code>DKIM-Signature</code> header that contains a hash of the message signed with that private key. Receivers fetch the public key from DNS and verify the signature.</p>
+
+<p>DKIM doesn't encrypt the email and doesn't tell receivers what to do when verification fails &mdash; it only proves the message is authentic. The policy layer ("reject failures") is DMARC's job. SPF, DKIM, and DMARC are designed to be deployed together; you can read our <a href="{{ path('knowledge_base_article', {slug: 'email-authentication-explained'}) }}">overview of all three</a> for the bigger picture.</p>
+
+<h2 id="how-signing-works">How DKIM signing works</h2>
+
+<p>When your mail server sends an email, the DKIM signer does the following:</p>
+
+<ol>
+    <li><strong>Pick the headers to sign.</strong> Common choices: <code>From</code>, <code>To</code>, <code>Subject</code>, <code>Date</code>, <code>Message-ID</code>, <code>MIME-Version</code>, <code>Content-Type</code>. The <code>From</code> header must be signed &mdash; this is what links DKIM to DMARC.</li>
+    <li><strong>Canonicalize</strong> the headers and the body so trivial whitespace differences on the receiving end don't break the signature. RFC 6376 defines two canonicalization modes: <code>simple</code> (strict) and <code>relaxed</code> (forgiving). Most modern setups use <code>relaxed/relaxed</code> because intermediary servers commonly rewrite whitespace.</li>
+    <li><strong>Hash the body</strong> with SHA-256 and record the result in a <code>bh=</code> tag.</li>
+    <li><strong>Hash the canonicalized headers</strong>, sign that hash with the private key, and place the base64-encoded signature in the <code>b=</code> tag.</li>
+    <li><strong>Prepend a <code>DKIM-Signature</code> header</strong> to the message and hand it off to SMTP.</li>
+</ol>
+
+<p>Because the headers list (<code>h=</code>) and body hash (<code>bh=</code>) are both covered by the signature, any modification to a signed header or to the body invalidates the signature.</p>
+
+<h2 id="dkim-signature-header">The DKIM-Signature header</h2>
+
+<p>A typical signed message contains a header like this:</p>
+
+<pre><code>DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+    d=example.com; s=mail2025; t=1716491400;
+    h=from:to:subject:date:message-id:mime-version:content-type;
+    bh=jaT4xZl1Vh6oZkrhgBgD4ZkY7Jdfb8hQ+JeDV2KkUSk=;
+    b=Q5q0G3...d2zN1wA==</code></pre>
+
+<p>The important tags:</p>
+
+<ul>
+    <li><code>v=1</code> &mdash; DKIM version (always 1 today).</li>
+    <li><code>a=rsa-sha256</code> &mdash; Signing algorithm. <code>rsa-sha256</code> is the universally supported default. <code>ed25519-sha256</code> is also defined (RFC 8463) but support is still uneven, so RSA remains the safe choice.</li>
+    <li><code>c=relaxed/relaxed</code> &mdash; Canonicalization for headers/body.</li>
+    <li><code>d=example.com</code> &mdash; The <strong>signing domain</strong>. This is the value receivers look up in DNS. It is also the value DMARC compares against the <code>From</code> header for alignment.</li>
+    <li><code>s=mail2025</code> &mdash; The <strong>selector</strong>. Combined with <code>d=</code>, it tells the receiver which DNS record to fetch: <code>mail2025._domainkey.example.com</code>.</li>
+    <li><code>t=1716491400</code> &mdash; Signing timestamp (optional).</li>
+    <li><code>h=from:to:...</code> &mdash; The headers covered by the signature.</li>
+    <li><code>bh=...</code> &mdash; Base64 hash of the canonicalized body.</li>
+    <li><code>b=...</code> &mdash; The actual signature.</li>
+</ul>
+
+<p>Other tags you may see: <code>i=</code> (the agent or user identity, less commonly used), <code>l=</code> (signed body length &mdash; usually avoided because it allows trailing content to be appended without breaking the signature), <code>x=</code> (expiration timestamp), <code>q=dns/txt</code> (query method, always <code>dns/txt</code> in practice).</p>
+
+<h2 id="dns-record-format">The DKIM DNS record</h2>
+
+<p>The public key lives in a TXT record at <code>&lt;selector&gt;._domainkey.&lt;domain&gt;</code>. For the signature above, the receiver looks up <code>mail2025._domainkey.example.com</code> and finds something like:</p>
+
+<pre><code>mail2025._domainkey.example.com. 3600 IN TXT
+"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...IDAQAB"</code></pre>
+
+<p>Tags inside the record:</p>
+
+<ul>
+    <li><code>v=DKIM1</code> &mdash; Always <code>DKIM1</code>. If present, it must be the first tag.</li>
+    <li><code>k=rsa</code> &mdash; Key type (<code>rsa</code> or <code>ed25519</code>). Defaults to <code>rsa</code> if absent.</li>
+    <li><code>p=...</code> &mdash; Base64-encoded public key. An empty <code>p=</code> means the key has been <strong>revoked</strong>; receivers must treat any message signed with it as failing.</li>
+    <li><code>t=y</code> (optional) &mdash; "Testing" flag. Receivers should not reject solely because a test-mode key fails. Useful while rolling out new keys; remove once you're confident.</li>
+    <li><code>t=s</code> (optional) &mdash; Strict mode; the <code>i=</code> domain must exactly match <code>d=</code>.</li>
+    <li><code>s=email</code> (optional) &mdash; Service type, usually <code>email</code> or <code>*</code>.</li>
+    <li><code>h=sha256</code> (optional) &mdash; Allowed hash algorithms.</li>
+</ul>
+
+<p>The base64 <code>p=</code> value is long &mdash; a 2048-bit RSA key is about 392 characters of base64. Many DNS providers limit individual TXT strings to 255 characters, so the value is often split into multiple quoted strings. Receivers concatenate them. Don't split inside the base64 alphabet manually; let the DNS provider's UI do it, or use the documented multi-string syntax.</p>
+
+<h2 id="verification">How receivers verify a signature</h2>
+
+<p>When a receiver sees a message with a <code>DKIM-Signature</code> header:</p>
+
+<ol>
+    <li>Parse the header. Read <code>d=</code>, <code>s=</code>, <code>a=</code>, <code>c=</code>, <code>h=</code>, <code>bh=</code>, and <code>b=</code>.</li>
+    <li>Fetch the public key from <code>&lt;s&gt;._domainkey.&lt;d&gt;</code> via DNS.</li>
+    <li>Canonicalize the body the same way the signer did, hash it, and compare against <code>bh=</code>. If they don't match, fail.</li>
+    <li>Canonicalize the signed headers, hash them, and verify the signature in <code>b=</code> using the public key. If it doesn't verify, fail.</li>
+    <li>Pass the result &mdash; <code>dkim=pass d=example.com</code> &mdash; to the DMARC evaluator and downstream filters.</li>
+</ol>
+
+<p>A message can carry <strong>multiple</strong> <code>DKIM-Signature</code> headers. Only one needs to pass for DKIM to be considered "pass" for that domain. Receivers commonly stamp every result in <code>Authentication-Results</code> so you can see exactly which signature passed:</p>
+
+<pre><code>Authentication-Results: mx.google.com;
+    dkim=pass header.i=@example.com header.s=mail2025;
+    spf=pass smtp.mailfrom=bounce.example.com;
+    dmarc=pass header.from=example.com</code></pre>
+
+<h2 id="selectors-rotation">Selectors and key rotation</h2>
+
+<p>The <strong>selector</strong> is just a label; you can pick any value. Common conventions:</p>
+
+<ul>
+    <li>Date-based: <code>2025a</code>, <code>jul2025</code>, <code>2025q3</code>.</li>
+    <li>Vendor-based: <code>google</code>, <code>mailchimp</code>, <code>postmark1</code>.</li>
+    <li>Purpose-based: <code>marketing</code>, <code>transactional</code>, <code>support</code>.</li>
+</ul>
+
+<p>Selectors let you publish <strong>multiple keys at the same time</strong> &mdash; one per vendor, plus an old key during a rotation window. To rotate a key without downtime:</p>
+
+<ol>
+    <li>Generate a new key pair and publish the new public key at <code>&lt;new-selector&gt;._domainkey.example.com</code>.</li>
+    <li>Configure the mail server to sign with the new private key and the new selector.</li>
+    <li>Leave the <strong>old</strong> selector's record in DNS for at least the longest delivery delay you reasonably expect &mdash; typically 7&ndash;14 days. Messages signed with the old key but delivered late will still verify.</li>
+    <li>After the grace window, either replace the old record's <code>p=</code> with an empty value (explicit revocation) or delete the record entirely.</li>
+</ol>
+
+<p>How often should you rotate? NIST recommends rotating signing keys at least <strong>annually</strong>; many security teams rotate every 6 months. Always rotate immediately if you suspect the private key has been exposed (former employee with access, compromised server, backup leak).</p>
+
+<h2 id="dkim-and-dmarc">DKIM and DMARC alignment</h2>
+
+<p>DKIM alone proves that <em>some</em> domain signed the message. DMARC adds the requirement that the signing domain must match the visible <code>From</code> header &mdash; this is called <strong>alignment</strong>.</p>
+
+<p>Two alignment modes:</p>
+
+<ul>
+    <li><code>adkim=r</code> (relaxed, the default): The DKIM <code>d=</code> domain must share an organizational domain with the <code>From</code> header. So <code>d=mail.example.com</code> aligns with <code>From: hello@example.com</code>.</li>
+    <li><code>adkim=s</code> (strict): The <code>d=</code> must <em>exactly</em> match the <code>From</code> domain. <code>d=mail.example.com</code> would not align with <code>From: hello@example.com</code> under strict mode.</li>
+</ul>
+
+<p>This is why third-party senders often ask you to set up DKIM under your own domain (e.g. <code>postmark1._domainkey.example.com</code>) instead of signing with their domain. A signature from <code>d=postmarkapp.com</code> would verify cryptographically, but it would <strong>not align</strong> with <code>From: support@example.com</code> &mdash; so DMARC would fail.</p>
+
+<div class="alert alert-info not-prose my-8">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Use our <a href="{{ path('tools_dkim_checker') }}" class="link font-semibold">DKIM Checker</a> to look up any selector and see the parsed record &mdash; including the key size and any rotation warnings.</span>
+</div>
+
+<h2 id="common-breakage">Common DKIM breakage modes</h2>
+
+<h3>Missing DNS record</h3>
+
+<p>The most common failure: the mail server is signing with selector <code>s=mail2025</code> but no TXT record exists at <code>mail2025._domainkey.example.com</code>. The signature can't be verified, so DKIM fails and the message often falls back to SPF-only authentication. If SPF doesn't align either, DMARC fails.</p>
+
+<h3>Key too short</h3>
+
+<p>RSA keys shorter than 1024 bits are considered weak and rejected by major receivers (notably Gmail). The minimum acceptable size today is <strong>1024 bits</strong>; the recommended size is <strong>2048 bits</strong>. Anything you generate fresh should be 2048. If you inherited a 512- or 768-bit key from an old system, rotate it immediately.</p>
+
+<h3>Body modified in transit</h3>
+
+<p>Mailing lists, antivirus scanners, and footer-injecting forwarders can modify the body after signing. If the body hash no longer matches <code>bh=</code>, DKIM fails. This is one of the original motivations for ARC (Authenticated Received Chain) and for choosing <code>relaxed</code> body canonicalization.</p>
+
+<h3>Header rewrites that break the signature</h3>
+
+<p>If any signed header is modified by an intermediary &mdash; e.g. a mailing list rewrites <code>Subject</code> to add <code>[List]</code> &mdash; the signature fails. The mitigation is to sign fewer headers (only the essentials) or to deploy ARC at the boundary.</p>
+
+<h3>DNS truncation</h3>
+
+<p>A public key over 255 characters needs to be split into multiple quoted strings in the TXT record. Some DNS providers' UIs silently truncate or mangle the split. Check the record with <code>dig +short TXT mail2025._domainkey.example.com</code> after publishing.</p>
+
+<h3>Revoked but not removed</h3>
+
+<p>A record with an empty <code>p=</code> is an explicit revocation. If you publish an empty <code>p=</code> by accident (some panels do this when you "delete" a value), every signed message from that selector fails.</p>
+
+<h3>Misaligned <code>d=</code></h3>
+
+<p>The signature verifies cryptographically (DKIM passes) but the signing domain doesn't match the <code>From</code> header (DMARC fails on alignment). This is the classic third-party-sender problem &mdash; see the next section.</p>
+
+<h2 id="multi-vendor">Multi-vendor and shared-service setups</h2>
+
+<p>A typical business sends email through several services: a transactional provider (Postmark, Sendgrid), a marketing platform (Mailchimp, Customer.io), a CRM (HubSpot), a helpdesk (Zendesk), and the in-house mail server. Each needs its own DKIM setup if you want DMARC to align.</p>
+
+<p>The standard pattern:</p>
+
+<ol>
+    <li>Each vendor gives you a unique selector (often vendor-suffixed: <code>pm._domainkey</code> for Postmark, <code>k1._domainkey</code> for Mailchimp).</li>
+    <li>The vendor either gives you a public key to publish or asks you to <strong>CNAME</strong> the selector to a record they manage (<code>pm._domainkey.example.com</code> CNAME &rarr; <code>pm.pm-bounces.example.com.dkim.postmarkapp.com</code>).</li>
+    <li>The vendor signs with <code>d=example.com</code> so it aligns with your <code>From</code> header.</li>
+</ol>
+
+<p>The CNAME approach is preferred where available because the vendor can rotate keys without your involvement &mdash; they update the target record, your CNAME stays the same.</p>
+
+<p>One gotcha: every vendor signs with its own selector, so the <code>Authentication-Results</code> header will show different <code>s=</code> values for different messages. That's normal. As long as <code>d=</code> aligns with <code>From</code>, DMARC is happy.</p>
+
+<h2 id="next-steps">Next steps</h2>
+
+<ol>
+    <li><strong><a href="{{ path('tools_dkim_checker') }}">Check your DKIM record</a></strong> for any selector &mdash; you'll see the key size, validity, and warnings about weak keys.</li>
+    <li><strong>Audit every sending vendor.</strong> Each one needs DKIM under your domain. Vendors without DKIM-on-your-domain support break DMARC alignment.</li>
+    <li><strong>Read our <a href="{{ path('knowledge_base_article', {slug: 'email-authentication-explained'}) }}">authentication overview</a></strong> for how DKIM, SPF, and DMARC fit together.</li>
+    <li><strong>Plan a rotation cadence.</strong> Annual rotation at minimum; biannual if you can. Set a calendar reminder.</li>
+    <li><strong>Read our <a href="{{ path('knowledge_base_article', {slug: 'dmarc-migration-guide-none-to-reject'}) }}">DMARC migration guide</a></strong> to put DKIM to work blocking spoofers.</li>
+</ol>
+
+{% endblock %}

@@ -1,0 +1,265 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}MX Records Explained: How Email Routing Works — Sendvery{% endblock %}
+{% block meta_description %}A complete guide to MX records: how email routing works, the priority field, multi-MX failover, common provider records, the relationship to SPF and reverse DNS, and the bounces caused by misconfigurations.{% endblock %}
+{% block og_image %}{{ absolute_url(path('og_image', {type: 'kb', slug: 'mx-records-explained'})) }}{% endblock %}
+
+{% block article_title %}MX Records Explained: How Email Routing Works{% endblock %}
+{% block article_intro %}Where mail actually goes when someone sends an email to your domain &mdash; from DNS lookups and priorities through multi-MX failover, common-provider records, and the subtle interaction with SPF.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#what-is-an-mx" class="link link-hover text-base-content/60">What is an MX record?</a></li>
+    <li><a href="#how-routing-works" class="link link-hover text-base-content/60">How email routing works</a></li>
+    <li><a href="#priority-field" class="link link-hover text-base-content/60">The priority field</a></li>
+    <li><a href="#multi-mx-failover" class="link link-hover text-base-content/60">Multi-MX failover</a></li>
+    <li><a href="#primary-vs-backup" class="link link-hover text-base-content/60">Primary vs backup MX</a></li>
+    <li><a href="#common-providers" class="link link-hover text-base-content/60">Common provider configurations</a></li>
+    <li><a href="#mx-vs-spf" class="link link-hover text-base-content/60">MX, SPF, and the sending IP</a></li>
+    <li><a href="#reverse-dns" class="link link-hover text-base-content/60">Reverse DNS / PTR records</a></li>
+    <li><a href="#common-breakage" class="link link-hover text-base-content/60">Common breakage</a></li>
+    <li><a href="#next-steps" class="link link-hover text-base-content/60">Next steps</a></li>
+</ul>
+{% endblock %}
+
+{% block related_tools %}
+<a href="{{ path('tools_mx_checker') }}" class="btn btn-primary btn-sm btn-block justify-start">MX Checker</a>
+<a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">SPF Checker</a>
+<a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm btn-block justify-start">Email Auth Checker</a>
+<a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm btn-block justify-start">Domain Health</a>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="what-is-an-mx">What is an MX record?</h2>
+
+<p><strong>MX</strong> stands for <em>Mail Exchanger</em>. An MX record is a DNS record that tells the world: "If you want to send email to anyone <code>@example.com</code>, here's the server (or servers) to deliver it to." Without MX records, no one can email your domain.</p>
+
+<p>An MX record has two essential parts:</p>
+
+<ol>
+    <li>The <strong>hostname</strong> of a mail server. Always a hostname, never an IP &mdash; that's a strict requirement of the DNS spec (RFC 5321 &sect;5.1).</li>
+    <li>A <strong>priority</strong> number that orders multiple MX records when more than one is defined.</li>
+</ol>
+
+<p>A typical MX record in zone-file format looks like this:</p>
+
+<pre><code>example.com.   3600   IN   MX   10   mail.example.com.
+example.com.   3600   IN   MX   20   mail-backup.example.com.</code></pre>
+
+<p>This says: "To deliver mail to <code>example.com</code>, try <code>mail.example.com</code> first (priority 10). If it's unreachable, fall back to <code>mail-backup.example.com</code> (priority 20)."</p>
+
+<p>The hostnames themselves resolve via separate A or AAAA records:</p>
+
+<pre><code>mail.example.com.        3600   IN   A      203.0.113.10
+mail-backup.example.com. 3600   IN   A      198.51.100.20</code></pre>
+
+<h2 id="how-routing-works">How email routing actually works</h2>
+
+<p>When <code>alice@othercompany.com</code> sends mail to <code>bob@example.com</code>, the sending server (Alice's MTA) does this:</p>
+
+<ol>
+    <li><strong>Extract the recipient domain.</strong> "<code>example.com</code>".</li>
+    <li><strong>Query DNS for MX records</strong> at <code>example.com</code>.</li>
+    <li><strong>Sort the returned MX records by priority</strong>, ascending (lower number = higher priority).</li>
+    <li><strong>Resolve each MX hostname</strong> to one or more A/AAAA records.</li>
+    <li><strong>Open an SMTP connection</strong> to the highest-priority host on port 25.</li>
+    <li><strong>If that fails</strong> (connection refused, timeout, 4xx temporary failure), try the next host in the list.</li>
+    <li><strong>If every MX fails</strong>, the sender queues the message and retries periodically &mdash; typically for 3&ndash;5 days &mdash; then bounces it with a 5xx delivery failure to the original sender.</li>
+</ol>
+
+<p>An important fallback rule (RFC 5321 &sect;5.1): if a domain has <em>no</em> MX records, the sender falls back to the domain's <strong>A record</strong> and attempts delivery there. This is called the "implicit MX" rule. It exists for historical reasons and is widely supported, but you should never rely on it &mdash; always publish explicit MX records.</p>
+
+<p>A related but stricter modern recommendation (RFC 7505): if a domain explicitly doesn't accept email, publish a <strong>null MX</strong> &mdash; a single MX record with priority 0 and hostname ".":</p>
+
+<pre><code>noreply.example.com.   3600   IN   MX   0   .</code></pre>
+
+<p>This signals "this domain does not receive email" and causes well-behaved senders to bounce immediately instead of queuing for days.</p>
+
+<h2 id="priority-field">The priority field</h2>
+
+<p>The priority (also called "preference" in the DNS spec) is a 16-bit unsigned integer &mdash; any value from <strong>0 to 65535</strong>. Lower values are preferred. The number itself has no meaning beyond the ordering: a record with priority 10 and one with priority 20 behave identically to records with priorities 1 and 2, or 100 and 200.</p>
+
+<p>The convention is to use round numbers with gaps, so you can insert new records without renumbering. A typical scheme:</p>
+
+<ul>
+    <li><strong>10</strong> &mdash; primary MX</li>
+    <li><strong>20</strong> &mdash; secondary</li>
+    <li><strong>30</strong> &mdash; tertiary / backup</li>
+    <li><strong>40&ndash;100</strong> &mdash; reserved for future additions</li>
+</ul>
+
+<p>If two MX records have the <strong>same priority</strong>, senders distribute traffic between them &mdash; usually round-robin, sometimes randomised. This is how cloud providers like Google Workspace spread inbound mail across four equally-weighted servers (more on that below).</p>
+
+<h2 id="multi-mx-failover">Multi-MX failover</h2>
+
+<p>Failover is the original reason MX records have priorities. Picture a small business with two mail servers: a primary in their office and a secondary at a colocation facility. Their MX records:</p>
+
+<pre><code>example.com.   3600   IN   MX   10   primary.mail.example.com.
+example.com.   3600   IN   MX   50   colo.mail.example.com.</code></pre>
+
+<p>Day-to-day, all inbound mail goes to <code>primary</code>. If the office loses its internet connection, sending MTAs try <code>primary</code>, get a timeout, and fall through to <code>colo</code>. <code>colo</code> queues the messages and forwards them to <code>primary</code> when it comes back online.</p>
+
+<p>What does "failure" mean for the fallback to trigger? An SMTP sender treats these as reasons to try the next MX:</p>
+
+<ul>
+    <li>TCP connection refused or timeout.</li>
+    <li>SMTP greeting timeout or malformed.</li>
+    <li>4xx response codes (temporary failure) on <code>MAIL FROM</code> or <code>RCPT TO</code>.</li>
+</ul>
+
+<p>It does <strong>not</strong> fall through on 5xx responses &mdash; those are permanent failures and the message bounces.</p>
+
+<p>An important subtlety: the sender's queue is its own. The fallback decision happens per-attempt. A message rejected by the primary with a 5xx never reaches the backup; a message that gets a 4xx is requeued, and the next retry might land at the primary again (which by then may be working) or at the backup.</p>
+
+<h2 id="primary-vs-backup">Primary vs backup MX: when does it actually matter?</h2>
+
+<p>Twenty years ago, backup MX records were standard practice &mdash; ISPs ran "secondary MX" services that would receive mail when your server was down and forward it later. Today, with cloud-hosted email (Google Workspace, Microsoft 365, Fastmail, etc.) and MTAs that retry for days, backup MX is mostly unnecessary and sometimes counterproductive.</p>
+
+<p>Reasons modern setups often skip a backup MX:</p>
+
+<ul>
+    <li><strong>Cloud providers are highly available.</strong> Google Workspace publishes four equally-priority MX records, all of which point at Google's redundant infrastructure. A backup MX outside Google adds no real reliability.</li>
+    <li><strong>Backup MX is a spam vector.</strong> Spammers often deliver to the lowest-priority backup MX because backups historically have looser anti-spam policies than the primary. If your backup doesn't have <em>identical</em> filtering to your primary, you've opened a hole.</li>
+    <li><strong>Modern senders queue for days anyway.</strong> A temporary primary outage means a few hours' delay, not lost mail.</li>
+</ul>
+
+<p>When does a backup MX still make sense? Self-hosted setups with limited redundancy, or organisations with regulatory requirements around uptime. If you use one, configure it to run the same anti-spam and relay rules as the primary.</p>
+
+<h2 id="common-providers">Common provider MX configurations</h2>
+
+<p>Most domains use a hosted email provider rather than running their own mail server. Here are the canonical MX records for the major providers:</p>
+
+<h3>Google Workspace</h3>
+
+<pre><code>example.com.   3600   IN   MX   1   smtp.google.com.</code></pre>
+
+<p>As of 2023, Google replaced the older <code>aspmx.l.google.com</code> / <code>alt1&ndash;alt4.aspmx.l.google.com</code> setup with a single <code>smtp.google.com</code> record. Behind the scenes, <code>smtp.google.com</code> still resolves to multiple IPs across Google's network for redundancy. The older setup still works, but new domains should use the simplified form.</p>
+
+<p>Older (still functional) configuration:</p>
+
+<pre><code>example.com.  3600  IN  MX   1   aspmx.l.google.com.
+example.com.  3600  IN  MX   5   alt1.aspmx.l.google.com.
+example.com.  3600  IN  MX   5   alt2.aspmx.l.google.com.
+example.com.  3600  IN  MX  10   alt3.aspmx.l.google.com.
+example.com.  3600  IN  MX  10   alt4.aspmx.l.google.com.</code></pre>
+
+<h3>Microsoft 365 / Exchange Online</h3>
+
+<pre><code>example.com.   3600   IN   MX   0   example-com.mail.protection.outlook.com.</code></pre>
+
+<p>The hostname is your domain with dots replaced by hyphens, suffixed with <code>.mail.protection.outlook.com</code>. Microsoft routes mail to the appropriate datacenter automatically based on this hostname.</p>
+
+<h3>Fastmail</h3>
+
+<pre><code>example.com.   3600   IN   MX   10   in1-smtp.messagingengine.com.
+example.com.   3600   IN   MX   20   in2-smtp.messagingengine.com.</code></pre>
+
+<h3>Apple iCloud Custom Email Domain</h3>
+
+<pre><code>example.com.   3600   IN   MX   10   mx01.mail.icloud.com.
+example.com.   3600   IN   MX   10   mx02.mail.icloud.com.</code></pre>
+
+<h3>Zoho Mail</h3>
+
+<pre><code>example.com.   3600   IN   MX  10   mx.zoho.com.
+example.com.   3600   IN   MX  20   mx2.zoho.com.
+example.com.   3600   IN   MX  50   mx3.zoho.com.</code></pre>
+
+<p>Always check your provider's current official documentation &mdash; these records do occasionally change, and providers usually publish a single canonical source for the correct values.</p>
+
+<h2 id="mx-vs-spf">MX, SPF, and the sending IP</h2>
+
+<p>One of the most common confusions in email is the relationship between MX records (receiving) and SPF / sending IPs.</p>
+
+<p><strong>MX is for inbound only.</strong> It says "send mail addressed to my domain to these servers." It says nothing about where your <em>outbound</em> mail comes from.</p>
+
+<p>The IPs that send mail <em>from</em> your domain are governed by SPF. They <strong>do not need to be your MX hosts</strong>. It's normal &mdash; in fact, almost universal &mdash; for outbound mail to go through a completely different infrastructure than inbound:</p>
+
+<ul>
+    <li>Inbound to <code>example.com</code> &rarr; Google Workspace MX.</li>
+    <li>Outbound transactional mail from <code>example.com</code> &rarr; Postmark IPs (different network).</li>
+    <li>Outbound marketing from <code>example.com</code> &rarr; Mailchimp IPs (yet another network).</li>
+</ul>
+
+<p>All three of those outbound sources must appear in your SPF record. Your MX record can stay pointed only at Google. The mistake to avoid is publishing <code>v=spf1 mx ~all</code> (the <code>mx</code> mechanism) and assuming that covers your outbound. The <code>mx</code> mechanism only authorises mail from your MX <em>hosts</em>; if your outbound goes through Postmark, that mechanism doesn't help.</p>
+
+<p>See our <a href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">SPF guide</a> for how to build a record that covers all your outbound senders.</p>
+
+<h2 id="reverse-dns">Reverse DNS / PTR records</h2>
+
+<p>Reverse DNS (PTR records) is the other half of the IP &harr; hostname mapping. While A records map <code>mail.example.com</code> &rarr; <code>203.0.113.10</code>, PTR maps <code>203.0.113.10</code> &rarr; <code>mail.example.com</code>.</p>
+
+<p>For email, PTR matters in two places:</p>
+
+<ol>
+    <li><strong>Outbound deliverability.</strong> When your mail server connects to a remote MX, the remote server looks up the PTR of your IP. If the PTR is missing, generic ("static-203-0-113-10.isp.net"), or doesn't resolve back to the same IP (a "matching PTR"), spam filters become much more suspicious. Major providers like Gmail outright require valid forward-confirmed reverse DNS (FCrDNS) for bulk senders &mdash; see our <a href="{{ path('knowledge_base_article', {slug: 'gmail-yahoo-bulk-sender-requirements-2024'}) }}">Gmail/Yahoo requirements guide</a>.</li>
+    <li><strong>Receiving mail server identification.</strong> Your MX hostnames should also have proper PTRs. This helps the sender's logs and diagnostic tools.</li>
+</ol>
+
+<p>To check the PTR for an IP:</p>
+
+<pre><code>$ dig -x 203.0.113.10 +short
+mail.example.com.</code></pre>
+
+<p>PTRs are configured by the IP block's owner &mdash; that's your hosting provider (AWS, Hetzner, Linode, etc.), not your DNS host. For each outbound sending IP you control, log into the hoster's panel and set the PTR. The PTR's value should be a hostname whose A record points back to the same IP &mdash; that's the FCrDNS requirement.</p>
+
+<h2 id="common-breakage">Common breakage modes</h2>
+
+<h3>No MX record &rarr; "address rejected" bounces</h3>
+
+<p>Without MX records (and without an A record fallback), sending mail to your domain returns a permanent failure like <code>550 5.1.2 Address rejected: domain doesn't accept mail</code>. Always publish an MX, even if you're using a "do-not-reply" address.</p>
+
+<h3>MX pointing to a CNAME &rarr; technically invalid</h3>
+
+<p>RFC 2181 &sect;10.3 explicitly forbids MX records from pointing to CNAMEs. Many resolvers tolerate it; others (especially older mail servers) silently fail. If you must alias a mail host, do it at the A record level instead.</p>
+
+<p>Wrong:</p>
+
+<pre><code>example.com.        IN   MX     10   mail.example.com.
+mail.example.com.   IN   CNAME       mail.provider.com.   ; ← invalid</code></pre>
+
+<p>Right:</p>
+
+<pre><code>example.com.        IN   MX     10   mail.provider.com.</code></pre>
+
+<h3>MX pointing to an IP &rarr; not allowed</h3>
+
+<p>Same RFC, different clause: the right-hand side of an MX must be a hostname. <code>example.com IN MX 10 203.0.113.10</code> is invalid, even though some sloppy resolvers accept it.</p>
+
+<h3>Trailing dot mistakes in zone files</h3>
+
+<p>In zone-file syntax, a hostname without a trailing dot is interpreted as relative to the current zone. So in <code>example.com</code>'s zone:</p>
+
+<pre><code>example.com.   IN   MX   10   mail   ; resolved as mail.example.com.</code></pre>
+
+<p>That might be what you want &mdash; or it might silently break if you intended <code>mail.provider.com</code>. Always use fully qualified names with the trailing dot, especially when pointing at an external provider.</p>
+
+<h3>Wrong priority causes provider switching during failover</h3>
+
+<p>If your primary and backup MX have different filtering rules, an upstream issue at the primary that returns 4xx codes will spill traffic over to the backup. If the backup is on a different domain, your DKIM, SPF, and DMARC behaviour can change unexpectedly. Test that failover by temporarily firewalling traffic to the primary.</p>
+
+<h3>"<code>mx</code>" mechanism in SPF doesn't cover outbound</h3>
+
+<p>Covered above &mdash; using <code>v=spf1 mx ~all</code> authorises your <em>receiving</em> servers to send mail, but it does nothing for your transactional and marketing providers.</p>
+
+<h3>TXT records mistaken for MX</h3>
+
+<p>SPF and DMARC records are TXT records, not MX. They live alongside the MX record but serve completely different purposes. Confusing the two is surprisingly common in early setups.</p>
+
+<div class="alert alert-info not-prose my-8">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Check any domain's MX records (with priority, resolution, and provider detection) using our <a href="{{ path('tools_mx_checker') }}" class="link font-semibold">MX Checker</a>.</span>
+</div>
+
+<h2 id="next-steps">Next steps</h2>
+
+<ol>
+    <li><strong><a href="{{ path('tools_mx_checker') }}">Check your MX records</a></strong> &mdash; verify priority, resolution, and provider.</li>
+    <li><strong><a href="{{ path('tools_spf_checker') }}">Audit your SPF record</a></strong> to make sure outbound senders are covered (remember: <code>mx</code> mechanism only covers your inbound hosts).</li>
+    <li><strong>Read the <a href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">SPF guide</a></strong> for the full inbound vs outbound separation.</li>
+    <li><strong>Read the <a href="{{ path('knowledge_base_article', {slug: 'gmail-yahoo-bulk-sender-requirements-2024'}) }}">Gmail/Yahoo requirements guide</a></strong> &mdash; PTR records, TLS, and other infrastructure that interacts with your MX setup.</li>
+    <li><strong><a href="{{ path('tools_domain_health') }}">Run a Domain Health report</a></strong> to see everything &mdash; MX, SPF, DKIM, DMARC, PTR &mdash; on a single screen.</li>
+</ol>
+
+{% endblock %}
