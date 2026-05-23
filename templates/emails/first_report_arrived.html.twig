@@ -1,43 +1,24 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Your first DMARC report just arrived</title>
-</head>
-<body style="margin: 0; padding: 0; background: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background: #f4f4f5; padding: 32px 16px;">
-        <tr>
-            <td align="center">
-                <table width="560" cellpadding="0" cellspacing="0" style="background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08);">
-                    <tr>
-                        <td style="padding: 24px 32px; background: #0f766e;">
-                            <h1 style="margin: 0; color: #fff; font-size: 20px;">You're all set 🎉</h1>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 32px; font-size: 15px; color: #3f3f46; line-height: 1.6;">
-                            <p style="margin: 0 0 16px 0;">
-                                Your first DMARC aggregate report just arrived for
-                                <strong style="font-family: monospace;">{{ domainName }}</strong>
-                                {% if reporterOrg %}(from <strong>{{ reporterOrg }}</strong>){% endif %}.
-                            </p>
-                            <p style="margin: 0 0 24px 0; color: #71717a;">
-                                That means your DNS is published correctly and email receivers are sending you visibility into what's happening with your domain.
-                                Sendvery is now collecting and parsing reports for you.
-                            </p>
-                            <div style="text-align: center; margin: 32px 0;">
-                                <a href="{{ dashboardUrl }}" style="display: inline-block; padding: 14px 36px; background: #0f766e; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">
-                                    See your report
-                                </a>
-                            </div>
-                            <p style="margin: 16px 0 0 0; font-size: 13px; color: #a1a1aa;">
-                                Most senders batch DMARC reports daily, so you'll see more arrive every day from now on.
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>
+{% extends 'emails/_layout.html.twig' %}
+{% import 'emails/_components.html.twig' as ui %}
+
+{% block subject %}Your first DMARC report just arrived{% endblock %}
+{% block preheader %}DMARC reports are now flowing for {{ domainName }}. You're officially monitored.{% endblock %}
+
+{% block content %}
+    {{ ui.pretitle('You’re all set', '#16a34a') }}
+    {{ ui.heading('Your first DMARC report just arrived') }}
+
+    {{ ui.lead(
+        'We just received the first DMARC aggregate report for <strong style="color:#0f172a;font-family:\'JetBrains Mono\',ui-monospace,Menlo,Consolas,monospace;">'
+        ~ domainName|e
+        ~ '</strong>'
+        ~ (reporterOrg ? ' from <strong style="color:#0f172a;">' ~ reporterOrg|e ~ '</strong>' : '')
+        ~ '.'
+    ) }}
+
+    {{ ui.paragraph('That means your DNS is published correctly and email receivers are sending you visibility into what’s happening with your domain. Sendvery is now collecting and parsing these reports for you.') }}
+
+    {{ ui.button('See your report', dashboardUrl) }}
+
+    {{ ui.callout('info', 'Most senders batch DMARC reports daily, so you’ll see more arrive every day from now on. Pass-rate trends become meaningful after about a week of data.') }}
+{% endblock %}
