@@ -24,7 +24,7 @@ final readonly class GetAlertDetail
             return null;
         }
 
-        /** @var array{alert_id: string, type: string, severity: string, title: string, message: string, data: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null}|false $row */
+        /** @var array{alert_id: string, type: string, severity: string, title: string, message: string, data: string, is_read: bool|string, created_at: string, snoozed_until: string|null, domain_id: string|null, domain_name: string|null}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 a.id AS alert_id,
@@ -35,6 +35,7 @@ final readonly class GetAlertDetail
                 a.data,
                 a.is_read,
                 a.created_at,
+                a.snoozed_until,
                 md.id AS domain_id,
                 md.domain AS domain_name
             FROM alert a

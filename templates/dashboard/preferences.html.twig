@@ -45,5 +45,48 @@
             </form>
         </div>
     </div>
+
+    {# Muted alert types — surfaced here (rather than per-team-settings) so a
+       single user with multiple teams sees every active mute in one place. #}
+    <h2 class="text-xl font-bold mt-10 mb-3">Muted Alert Types</h2>
+    <p class="text-sm text-base-content/60 mb-4">
+        Future alerts of these (domain, type) pairs are silently dropped. Past alerts already in your list are unaffected.
+    </p>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            {% if mutedAlerts is empty %}
+                <p class="text-sm text-base-content/50">No muted alert types. Use the "Mute this type" button on an alert's detail page to silence future occurrences for a domain.</p>
+            {% else %}
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Alert type</th>
+                                <th>Muted</th>
+                                <th class="text-right"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for muted in mutedAlerts %}
+                                <tr>
+                                    <td class="font-medium">{{ muted.domainName }}</td>
+                                    <td>{{ muted.alertType|replace({'_': ' '})|capitalize }}</td>
+                                    <td class="text-base-content/60 text-xs">{{ muted.mutedAt|date('M j, Y') }}</td>
+                                    <td class="text-right">
+                                        <form method="post" action="{{ path('dashboard_alert_unmute', { id: muted.mutedAlertId }) }}">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('unmute_alert') }}">
+                                            <button type="submit" class="btn btn-xs btn-ghost">Unmute</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}

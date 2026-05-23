@@ -702,7 +702,8 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
 
 ## TASK-015: Alerts list/detail has no in-app actions beyond "mark read" — add snooze, mute-this-type-for-this-domain, and copy-link
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: dashboard
 - Why: `templates/dashboard/alerts.html.twig` and `alert_detail.html.twig` only let the user mark an alert read. For a noisy domain (e.g. a forwarder ruining DMARC pass rate, generating "failure spike" alerts daily) the user has no recourse other than "delete email rule + mark every alert read forever." That turns the Alerts page from "what needs attention" into "inbox zero ritual," which kills trust in the channel.
 - Acceptance:
@@ -712,6 +713,77 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
   - Bulk action on `alerts.html.twig`: checkbox per row + a "Mark selected read" / "Snooze selected 7d" toolbar that appears only when at least one row is selected.
   - 100% test coverage on the snooze/mute commands + handlers + the query filter change.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Key architectural finding:** `AlertEngine::createAlert()` in `src/Services/AlertEngine.php` is the **single chokepoint** for all 5 alert-emitting handlers. Inject `MutedAlertRepository` there and add the mute check ONCE — no need to touch any of the 5 individual handlers. Return type changes from `Alert` to `?Alert`; all callers ignore the return.
+
+**Migration `Version20260525000000.php`:** 
+- ALTER `alert` ADD `snoozed_until TIMESTAMP NULL`; index `idx_alert_team_unread_snoozed (team_id, is_read, snoozed_until)`.
+- CREATE `muted_alert(id UUID PK, team_id UUID, monitored_domain_id UUID, alert_type VARCHAR(64), muted_at TIMESTAMP)` with `UNIQUE(team_id, monitored_domain_id, alert_type)` and FKs to team + monitored_domain (ON DELETE CASCADE).
+
+**Entities:**
+- Modify `Alert.php` — add `?\DateTimeImmutable $snoozedUntil = null` property + `snoozeUntil(now)`, `unsnooze()`, `isSnoozed(now): bool` methods + index annotation.
+- New `MutedAlert.php` — `final class` (Doctrine, not readonly), `readonly` properties: `id`, `team`, `monitoredDomain`, `alertType` (enum), `mutedAt`. NO `EntityWithEvents` (no events).
+
+**New `MutedAlertRepository`** with: `isMuted(teamId, domainId, AlertType): bool` (DBAL hot path, indexed SELECT 1 LIMIT 1), `findForTeam(teamId): MutedAlert[]`, `findOneForTeamDomainType(...)`, `get($id)`, `findForTeams($id, $teamIds)`.
+
+**Commands (`readonly final` in `src/Message/`):**
+- `SnoozeAlert(UuidInterface $alertId, \DateTimeImmutable $snoozedUntil)`
+- `UnsnoozeAlert(UuidInterface $alertId)`
+- `MuteAlertType(UuidInterface $mutedAlertId, UuidInterface $teamId, UuidInterface $domainId, AlertType $alertType)`
+- `UnmuteAlertType(UuidInterface $mutedAlertId)`
+- `BulkMarkAlertsRead(list<UuidInterface> $alertIds, UuidInterface $teamId)`
+- `BulkSnoozeAlerts(list<UuidInterface> $alertIds, UuidInterface $teamId, \DateTimeImmutable $snoozedUntil)`
+
+**Handlers (`#[AsMessageHandler] readonly final`):** 6 corresponding handlers. Snooze/Unsnooze/BulkMarkRead/BulkSnooze follow `MarkAlertAsReadHandler` pattern (entity mutation, no explicit flush — Doctrine flushes at request end). **`MuteAlertTypeHandler` and `UnmuteAlertTypeHandler` MUST call `$entityManager->flush()` explicitly** because `MutedAlert` doesn't implement `EntityWithEvents` — no postFlush listener exists for it. Bulk handlers iterate IDs, call `findForTeams()` per id (cross-tenant IDs silently skipped).
+
+**Query changes:**
+- `GetAlerts::forTeams()` — add `bool $onlySnoozed = false` param. Default: `AND (a.snoozed_until IS NULL OR a.snoozed_until <= NOW())`. When `onlySnoozed`: `AND a.snoozed_until IS NOT NULL AND a.snoozed_until > NOW()`. Add `a.snoozed_until` to SELECT.
+- `countUnreadForTeams` + `countUnreadCriticalForTeams` — both exclude currently-snoozed.
+- `GetAlertDetail` — add `a.snoozed_until` to SELECT.
+- New `GetMutedAlerts::forTeam(teamId): MutedAlertResult[]` joining `muted_alert` to `monitored_domain` for the preferences page.
+- `AlertListResult` + `AlertDetailResult` + new `MutedAlertResult` get `snoozedUntil`/`mutedAt` fields.
+
+**Controllers (CSRF tokens listed in architect plan: `snooze_alert`, `unsnooze_alert`, `mute_alert`, `unmute_alert`, `bulk_alert_action`):**
+- `SnoozeAlertController` POST `/app/alerts/{id}/snooze` — whitelist `days` to {1,7,30}, default 7. Validates alert via `findForTeams` (team scoping). Redirects to referer or alerts list.
+- `UnsnoozeAlertController` POST `/app/alerts/{id}/unsnooze`
+- `MuteAlertTypeController` POST `/app/alerts/{id}/mute` — guards on `$alert->monitoredDomain !== null` (cannot mute team-wide alerts), checks for existing mute (idempotent), dispatches.
+- `UnmuteAlertTypeController` POST `/app/muted-alerts/{id}/unmute`
+- `BulkAlertActionController` POST `/app/alerts/bulk` — `action=mark_read` or `snooze_7d`, validates UUIDs from `alertIds[]`, no-op on empty selection.
+- Modify `ListAlertsController` — add `snoozed=1` query param.
+- Modify `ShowAlertDetailController` — inject `MutedAlertRepository`, pass `existingMute` to template.
+- Modify `UserPreferencesController` — inject `GetMutedAlerts`, pass list to template.
+
+**Templates:**
+- `alert_detail.html.twig`: header gains Copy-link button (inline `navigator.clipboard.writeText` JS, no Stimulus needed); Snooze dropdown (daisyUI `dropdown` with three form-submits 1d/7d/30d) when not snoozed, "Snoozed until X — Unsnooze" form-submit when snoozed; Mute/Unmute form when alert has a domain (hidden when domain-less).
+- `alerts.html.twig`: new Snoozed filter chip; bulk-action `<form>` wrapping the list with hidden CSRF + per-row `<input type="checkbox" name="alertIds[]">`; sticky bulk toolbar (`data-alert-selection-target="toolbar"`) with Mark read / Snooze 7d / Clear buttons; toolbar hidden until ≥1 selected. The existing alert card converts from anchor-wrapping-card to flex-row with checkbox + stretched-link card (matches TASK-018 pattern).
+- `preferences.html.twig`: new "Muted Alert Types" section at the bottom — table of muted (domain × alert type × muted_at × Unmute button). Empty-state message when none.
+
+**Stimulus:** new `assets/controllers/alert_selection_controller.js` — targets `toolbar`+`count`; actions `updateCount` on checkbox change, `clearAll` for the Clear button.
+
+**Edge cases (decisions):**
+- Muting is forward-only — doesn't retroactively hide existing raised alerts.
+- Marking a snoozed alert read doesn't unsnooze it; both states coexist.
+- Cross-tenant snooze/mute/unmute → 404 (controllers use `findForTeams`).
+- Bulk with empty selection → redirect with no error.
+- Bulk cross-tenant IDs → silently skipped by handler.
+- Snooze on already-snoozed → overwrites with new `snoozedUntil`.
+- Muting a domain-less alert → flash error + redirect to detail (no mute persisted).
+
+**Tests (~30 new tests across 5 files):**
+- `tests/Integration/Controller/AlertActionsTest.php` — ~24 methods covering all controllers + template assertions.
+- `tests/Integration/Query/GetAlertsSnoozeFilterTest.php` — snoozed filter branches, expired snooze treated as not-snoozed, count exclusions.
+- `tests/Unit/MessageHandler/SnoozeAlertHandlerTest.php` — handler called with correct DateTimeImmutable.
+- `tests/Unit/MessageHandler/MuteAlertTypeHandlerTest.php` — persist + flush called.
+- `tests/Unit/MessageHandler/BulkMarkAlertsReadHandlerTest.php` — skips null (cross-tenant) IDs.
+- Extend `tests/Unit/Services/AlertEngineTest.php` (or create) — when `isMuted=true`, no persist; when `monitoredDomain=null`, mute check skipped.
+
+**File map (28 create + 12 modify):**
+- **Create:** migration; entity (`MutedAlert`); repository (`MutedAlertRepository`); 6 messages + 6 handlers; query+result for muted alerts; 5 new controllers; 1 Stimulus controller; 5 test files.
+- **Modify:** `Alert` entity, `AlertEngine`, `GetAlerts`, `GetAlertDetail`, `AlertListResult`, `AlertDetailResult`, `ListAlertsController`, `ShowAlertDetailController`, `UserPreferencesController`, 3 templates.
+
+**Build phases:** 1) Schema + entities + migration. 2) Repository + AlertEngine mute check + AlertEngine test. 3) Commands + handlers + handler tests. 4) Query changes + result DTOs + query tests. 5) Controllers (5 new + 3 modify) + route confirmation. 6) Templates + Stimulus. 7) Integration tests + coverage gate; phpunit + phpstan + cs-fixer green; commit; push.
 
 ---
 

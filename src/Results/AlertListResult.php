@@ -14,13 +14,14 @@ final readonly class AlertListResult
         public string $message,
         public bool $isRead,
         public string $createdAt,
+        public ?string $snoozedUntil,
         public ?string $domainId,
         public ?string $domainName,
     ) {
     }
 
     /**
-     * @param array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null} $row
+     * @param array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, snoozed_until: string|null, domain_id: string|null, domain_name: string|null} $row
      */
     public static function fromDatabaseRow(array $row): self
     {
@@ -32,6 +33,7 @@ final readonly class AlertListResult
             message: $row['message'],
             isRead: (bool) $row['is_read'],
             createdAt: $row['created_at'],
+            snoozedUntil: $row['snoozed_until'],
             domainId: $row['domain_id'],
             domainName: $row['domain_name'],
         );

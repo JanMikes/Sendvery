@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Controller\Dashboard;
 
 use App\Entity\User;
+use App\Query\GetMutedAlerts;
+use App\Services\DashboardContext;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,6 +17,8 @@ final class UserPreferencesController extends AbstractController
 {
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
+        private readonly DashboardContext $dashboardContext,
+        private readonly GetMutedAlerts $getMutedAlerts,
     ) {
     }
 
@@ -31,12 +35,14 @@ final class UserPreferencesController extends AbstractController
 
             return $this->render('dashboard/preferences.html.twig', [
                 'user' => $user,
+                'mutedAlerts' => $this->getMutedAlerts->forTeams($this->dashboardContext->getTeamIdStrings()),
                 'success' => 'Preferences saved successfully.',
             ]);
         }
 
         return $this->render('dashboard/preferences.html.twig', [
             'user' => $user,
+            'mutedAlerts' => $this->getMutedAlerts->forTeams($this->dashboardContext->getTeamIdStrings()),
         ]);
     }
 }

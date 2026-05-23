@@ -18,13 +18,14 @@ final readonly class AlertDetailResult
         public array $data,
         public bool $isRead,
         public string $createdAt,
+        public ?string $snoozedUntil,
         public ?string $domainId,
         public ?string $domainName,
     ) {
     }
 
     /**
-     * @param array{alert_id: string, type: string, severity: string, title: string, message: string, data: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null} $row
+     * @param array{alert_id: string, type: string, severity: string, title: string, message: string, data: string, is_read: bool|string, created_at: string, snoozed_until: string|null, domain_id: string|null, domain_name: string|null} $row
      */
     public static function fromDatabaseRow(array $row): self
     {
@@ -37,6 +38,7 @@ final readonly class AlertDetailResult
             data: json_decode($row['data'], true, 512, JSON_THROW_ON_ERROR),
             isRead: (bool) $row['is_read'],
             createdAt: $row['created_at'],
+            snoozedUntil: $row['snoozed_until'],
             domainId: $row['domain_id'],
             domainName: $row['domain_name'],
         );

@@ -10,8 +10,8 @@
 {% block content %}
     <div class="max-w-3xl">
         {# Header #}
-        <div class="flex items-start justify-between mb-6">
-            <div>
+        <div class="flex items-start justify-between mb-6 gap-4">
+            <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-2">
                     <span class="badge {{ alert.severity == 'critical' ? 'badge-error' : (alert.severity == 'warning' ? 'badge-warning' : 'badge-info') }}">
                         {{ alert.severity|capitalize }}
@@ -20,11 +20,38 @@
                     {% if not alert.isRead %}
                         <span class="badge badge-primary badge-sm">Unread</span>
                     {% endif %}
+                    {% if alert.snoozedUntil %}
+                        <span class="badge badge-outline">Snoozed until {{ alert.snoozedUntil|date('M j, Y') }}</span>
+                    {% endif %}
                 </div>
                 <h1 class="text-xl font-bold">{{ alert.title }}</h1>
                 <p class="text-sm text-base-content/50 mt-1">{{ alert.createdAt|date('F j, Y \\a\\t H:i') }}</p>
             </div>
 
+            {# Header action row #}
+            <div class="flex flex-wrap items-center gap-2"
+                 {{ stimulus_controller('copy-link', { url: url('dashboard_alert_detail', { id: alert.alertId }) }) }}>
+                {# Copy permalink — clipboard API + brief inline confirmation. #}
+                <button type="button"
+                        class="btn btn-sm btn-ghost"
+                        data-action="click->copy-link#copy">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 015.656 5.656l-2.828 2.828a4 4 0 01-5.656-5.656m-2 5.656a4 4 0 01-5.656-5.656l2.828-2.828a4 4 0 015.656 5.656"></path></svg>
+                    <span data-copy-link-target="label" data-copy-link-default="Copy link">Copy link</span>
+                </button>
+            </div>
+        </div>
+
+        {# Flash messages #}
+        {% for type, messages in app.flashes %}
+            {% for message in messages %}
+                <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
+                    <span>{{ message }}</span>
+                </div>
+            {% endfor %}
+        {% endfor %}
+
+        {# Action toolbar — Mark read / Snooze / Mute. #}
+        <div class="flex flex-wrap gap-2 mb-6">
             {% if not alert.isRead %}
                 <form method="post" action="{{ path('dashboard_alert_mark_read', { id: alert.alertId }) }}">
                     <button type="submit" class="btn btn-sm btn-ghost">
@@ -32,6 +59,67 @@
                         Mark as read
                     </button>
                 </form>
+            {% endif %}
+
+            {% if alert.snoozedUntil %}
+                <form method="post" action="{{ path('dashboard_alert_unsnooze', { id: alert.alertId }) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('unsnooze_alert') }}">
+                    <button type="submit" class="btn btn-sm btn-ghost">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                        Unsnooze
+                    </button>
+                </form>
+            {% else %}
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-sm btn-ghost">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Snooze
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-48 p-2 shadow border border-base-200">
+                        <li>
+                            <form method="post" action="{{ path('dashboard_alert_snooze', { id: alert.alertId }) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('snooze_alert') }}">
+                                <input type="hidden" name="days" value="1">
+                                <button type="submit" class="text-left w-full">Snooze 1 day</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{{ path('dashboard_alert_snooze', { id: alert.alertId }) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('snooze_alert') }}">
+                                <input type="hidden" name="days" value="7">
+                                <button type="submit" class="text-left w-full">Snooze 7 days</button>
+                            </form>
+                        </li>
+                        <li>
+                            <form method="post" action="{{ path('dashboard_alert_snooze', { id: alert.alertId }) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('snooze_alert') }}">
+                                <input type="hidden" name="days" value="30">
+                                <button type="submit" class="text-left w-full">Snooze 30 days</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            {% endif %}
+
+            {# Mute is per-(domain, type) — only show for alerts that have a domain. #}
+            {% if alert.domainId %}
+                {% if existingMute %}
+                    <form method="post" action="{{ path('dashboard_alert_unmute', { id: existingMute.id.toString }) }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('unmute_alert') }}">
+                        <button type="submit" class="btn btn-sm btn-ghost">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                            Unmute this type
+                        </button>
+                    </form>
+                {% else %}
+                    <form method="post" action="{{ path('dashboard_alert_mute', { id: alert.alertId }) }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('mute_alert') }}">
+                        <button type="submit" class="btn btn-sm btn-ghost">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
+                            Mute this type for this domain
+                        </button>
+                    </form>
+                {% endif %}
             {% endif %}
         </div>
 
@@ -87,4 +175,5 @@
             </div>
         {% endif %}
     </div>
+
 {% endblock %}

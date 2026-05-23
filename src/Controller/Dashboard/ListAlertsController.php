@@ -28,6 +28,7 @@ final class ListAlertsController extends AbstractController
         $type = $request->query->get('type');
         $domainId = $request->query->get('domain');
         $readFilter = $request->query->get('read');
+        $snoozedFilter = $request->query->get('snoozed');
 
         $isRead = match ($readFilter) {
             'true' => true,
@@ -35,12 +36,15 @@ final class ListAlertsController extends AbstractController
             default => null,
         };
 
+        $onlySnoozed = '1' === $snoozedFilter;
+
         $alerts = $this->getAlerts->forTeams(
             teamIds: $teamIds,
             severity: is_string($severity) ? $severity : null,
             type: is_string($type) ? $type : null,
             domainId: is_string($domainId) ? $domainId : null,
             isRead: $isRead,
+            onlySnoozed: $onlySnoozed,
         );
 
         $unreadCount = $this->getAlerts->countUnreadForTeams($teamIds);
@@ -51,6 +55,7 @@ final class ListAlertsController extends AbstractController
             'currentSeverity' => $severity,
             'currentType' => $type,
             'currentRead' => $readFilter,
+            'currentSnoozed' => $onlySnoozed,
         ]);
     }
 }

@@ -16,15 +16,28 @@
         </div>
     </div>
 
+    {# Flash messages #}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
     {# Filters #}
     <div class="flex flex-wrap gap-2 mb-4">
         <a href="{{ path('dashboard_alerts') }}"
-           class="btn btn-sm {{ currentSeverity is null and currentType is null and currentRead is null ? 'btn-primary' : 'btn-ghost' }}">
+           class="btn btn-sm {{ currentSeverity is null and currentType is null and currentRead is null and not currentSnoozed ? 'btn-primary' : 'btn-ghost' }}">
             All
         </a>
         <a href="{{ path('dashboard_alerts', { read: 'false' }) }}"
            class="btn btn-sm {{ currentRead == 'false' ? 'btn-primary' : 'btn-ghost' }}">
             Unread
+        </a>
+        <a href="{{ path('dashboard_alerts', { snoozed: '1' }) }}"
+           class="btn btn-sm {{ currentSnoozed ? 'btn-primary' : 'btn-ghost' }}">
+            Snoozed
         </a>
         <div class="divider divider-horizontal mx-0"></div>
         <a href="{{ path('dashboard_alerts', { severity: 'critical' }) }}"
@@ -47,11 +60,40 @@
             message="No alerts to show. Alerts will appear here when important events are detected for your domains."
         />
     {% else %}
-        <div class="space-y-2">
-            {% for alert in alerts %}
-                <a href="{{ path('dashboard_alert_detail', { id: alert.alertId }) }}"
-                   class="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow {{ not alert.isRead ? 'border-l-4' : '' }} {{ alert.severity == 'critical' ? 'border-l-error' : (alert.severity == 'warning' ? 'border-l-warning' : 'border-l-info') }}">
-                    <div class="card-body p-4 flex-row items-center gap-4">
+        {# Bulk-action form wrapping the list. The Stimulus controller toggles
+           the toolbar visibility based on per-row checkbox state. #}
+        <form method="post"
+              action="{{ path('dashboard_alerts_bulk') }}"
+              {{ stimulus_controller('alert-selection') }}>
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('bulk_alert_action') }}">
+
+            {# Sticky bulk toolbar — hidden by default, revealed when ≥1 row checked. #}
+            <div data-alert-selection-target="toolbar"
+                 class="hidden sticky top-0 z-20 flex flex-wrap items-center gap-2 bg-base-100 border border-base-200 rounded-box shadow-sm px-3 py-2 mb-3">
+                <span class="text-sm font-medium" data-alert-selection-target="count">0 selected</span>
+                <div class="divider divider-horizontal mx-0"></div>
+                <button type="submit" name="action" value="mark_read" class="btn btn-sm btn-ghost">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Mark selected as read
+                </button>
+                <button type="submit" name="action" value="snooze_7d" class="btn btn-sm btn-ghost">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Snooze selected 7 days
+                </button>
+                <button type="button" class="btn btn-sm btn-ghost ml-auto" data-action="alert-selection#clearAll">Clear</button>
+            </div>
+
+            <div class="space-y-2">
+                {% for alert in alerts %}
+                    {# Stretched-link pattern (matches TASK-018): row is relative, anchor is absolute-inset. #}
+                    <div class="relative card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow flex-row items-center gap-3 p-4 {{ not alert.isRead ? 'border-l-4' : '' }} {{ alert.severity == 'critical' ? 'border-l-error' : (alert.severity == 'warning' ? 'border-l-warning' : 'border-l-info') }}">
+                        <input type="checkbox"
+                               name="alertIds[]"
+                               value="{{ alert.alertId }}"
+                               class="checkbox checkbox-sm relative z-10"
+                               data-action="change->alert-selection#updateCount"
+                               aria-label="Select alert {{ alert.title }}">
+
                         {# Severity icon #}
                         <div class="flex-shrink-0">
                             {% if alert.severity == 'critical' %}
@@ -69,14 +111,20 @@
                             {% endif %}
                         </div>
 
-                        {# Content #}
+                        {# Content — stretched-link wraps the card without breaking the checkbox. #}
                         <div class="flex-1 min-w-0">
+                            <a href="{{ path('dashboard_alert_detail', { id: alert.alertId }) }}"
+                               class="absolute inset-0 z-0"
+                               aria-label="Open alert {{ alert.title }}"></a>
                             <div class="flex items-center gap-2">
                                 <h3 class="text-sm font-semibold truncate {{ not alert.isRead ? 'text-base-content' : 'text-base-content/70' }}">
                                     {{ alert.title }}
                                 </h3>
                                 {% if not alert.isRead %}
                                     <span class="badge badge-xs badge-primary">New</span>
+                                {% endif %}
+                                {% if alert.snoozedUntil %}
+                                    <span class="badge badge-xs badge-outline">Snoozed</span>
                                 {% endif %}
                             </div>
                             <p class="text-xs text-base-content/50 mt-0.5 truncate">{{ alert.message }}</p>
@@ -90,8 +138,8 @@
                             <span class="text-xs text-base-content/40">{{ alert.createdAt|date('M j, H:i') }}</span>
                         </div>
                     </div>
-                </a>
-            {% endfor %}
-        </div>
+                {% endfor %}
+            </div>
+        </form>
     {% endif %}
 {% endblock %}

@@ -26,6 +26,7 @@ final readonly class GetAlerts
         ?string $type = null,
         ?string $domainId = null,
         ?bool $isRead = null,
+        bool $onlySnoozed = false,
         int $limit = 50,
     ): array {
         if ([] === $teamIds) {
@@ -40,6 +41,7 @@ final readonly class GetAlerts
                 a.message,
                 a.is_read,
                 a.created_at,
+                a.snoozed_until,
                 md.id AS domain_id,
                 md.domain AS domain_name
             FROM alert a
@@ -69,10 +71,20 @@ final readonly class GetAlerts
             $params['isRead'] = $isRead ? 'true' : 'false';
         }
 
+        if ($onlySnoozed) {
+            // Only currently-snoozed alerts. Expired snoozes are treated as
+            // un-snoozed, so they DON'T appear under this filter.
+            $sql .= ' AND a.snoozed_until IS NOT NULL AND a.snoozed_until > NOW()';
+        } else {
+            // Default list hides currently-snoozed alerts. Expired snoozes
+            // fall through and are visible again — no manual cleanup needed.
+            $sql .= ' AND (a.snoozed_until IS NULL OR a.snoozed_until <= NOW())';
+        }
+
         $sql .= ' ORDER BY a.created_at DESC LIMIT :limit';
         $params['limit'] = $limit;
 
-        /** @var list<array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, domain_id: string|null, domain_name: string|null}> $rows */
+        /** @var list<array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, snoozed_until: string|null, domain_id: string|null, domain_name: string|null}> $rows */
         $rows = $this->database->executeQuery($sql, $params, $types)->fetchAllAssociative();
 
         return array_map(AlertListResult::fromDatabaseRow(...), $rows);
@@ -88,7 +100,10 @@ final readonly class GetAlerts
         }
 
         return (int) $this->database->executeQuery(
-            'SELECT COUNT(*) FROM alert WHERE team_id IN (:teamIds) AND is_read = false',
+            'SELECT COUNT(*) FROM alert
+             WHERE team_id IN (:teamIds)
+             AND is_read = false
+             AND (snoozed_until IS NULL OR snoozed_until <= NOW())',
             ['teamIds' => $teamIds],
             ['teamIds' => ArrayParameterType::STRING],
         )->fetchOne();
@@ -104,7 +119,11 @@ final readonly class GetAlerts
         }
 
         return (int) $this->database->executeQuery(
-            'SELECT COUNT(*) FROM alert WHERE team_id IN (:teamIds) AND is_read = false AND severity = :severity',
+            'SELECT COUNT(*) FROM alert
+             WHERE team_id IN (:teamIds)
+             AND is_read = false
+             AND severity = :severity
+             AND (snoozed_until IS NULL OR snoozed_until <= NOW())',
             ['teamIds' => $teamIds, 'severity' => 'critical'],
             ['teamIds' => ArrayParameterType::STRING],
         )->fetchOne();

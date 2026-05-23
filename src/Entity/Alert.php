@@ -15,6 +15,7 @@ use Ramsey\Uuid\UuidInterface;
 #[ORM\Index(name: 'idx_alert_team', columns: ['team_id'])]
 #[ORM\Index(name: 'idx_alert_team_unread', columns: ['team_id', 'is_read'])]
 #[ORM\Index(name: 'idx_alert_created_at', columns: ['created_at'])]
+#[ORM\Index(name: 'idx_alert_team_unread_snoozed', columns: ['team_id', 'is_read', 'snoozed_until'])]
 final class Alert implements EntityWithEvents
 {
     use HasEvents;
@@ -53,6 +54,9 @@ final class Alert implements EntityWithEvents
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $snoozedUntil;
+
     /**
      * @param array<string, mixed> $data
      */
@@ -67,6 +71,7 @@ final class Alert implements EntityWithEvents
         array $data,
         \DateTimeImmutable $createdAt,
         bool $isRead = false,
+        ?\DateTimeImmutable $snoozedUntil = null,
     ) {
         $this->id = $id;
         $this->team = $team;
@@ -78,6 +83,7 @@ final class Alert implements EntityWithEvents
         $this->data = $data;
         $this->isRead = $isRead;
         $this->createdAt = $createdAt;
+        $this->snoozedUntil = $snoozedUntil;
 
         $this->recordThat(new AlertCreated(
             alertId: $this->id,
@@ -92,5 +98,20 @@ final class Alert implements EntityWithEvents
     public function markAsRead(): void
     {
         $this->isRead = true;
+    }
+
+    public function snoozeUntil(\DateTimeImmutable $snoozedUntil): void
+    {
+        $this->snoozedUntil = $snoozedUntil;
+    }
+
+    public function unsnooze(): void
+    {
+        $this->snoozedUntil = null;
+    }
+
+    public function isSnoozed(\DateTimeImmutable $now): bool
+    {
+        return null !== $this->snoozedUntil && $this->snoozedUntil > $now;
     }
 }

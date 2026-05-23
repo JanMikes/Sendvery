@@ -21,6 +21,7 @@ final class AlertListResultTest extends TestCase
             'message' => 'The SPF record was modified.',
             'is_read' => false,
             'created_at' => '2026-03-25 10:00:00',
+            'snoozed_until' => null,
             'domain_id' => '660e8400-e29b-41d4-a716-446655440000',
             'domain_name' => 'example.com',
         ]);
@@ -30,6 +31,7 @@ final class AlertListResultTest extends TestCase
         self::assertSame('warning', $result->severity);
         self::assertSame('SPF record changed', $result->title);
         self::assertFalse($result->isRead);
+        self::assertNull($result->snoozedUntil);
         self::assertSame('example.com', $result->domainName);
     }
 
@@ -44,6 +46,7 @@ final class AlertListResultTest extends TestCase
             'message' => 'Error message.',
             'is_read' => true,
             'created_at' => '2026-03-25 10:00:00',
+            'snoozed_until' => null,
             'domain_id' => null,
             'domain_name' => null,
         ]);
@@ -51,5 +54,24 @@ final class AlertListResultTest extends TestCase
         self::assertNull($result->domainId);
         self::assertNull($result->domainName);
         self::assertTrue($result->isRead);
+    }
+
+    #[Test]
+    public function preservesSnoozedUntilWhenSet(): void
+    {
+        $result = AlertListResult::fromDatabaseRow([
+            'alert_id' => '550e8400-e29b-41d4-a716-446655440000',
+            'type' => 'failure_spike',
+            'severity' => 'warning',
+            'title' => 'Spike',
+            'message' => 'msg',
+            'is_read' => false,
+            'created_at' => '2026-03-25 10:00:00',
+            'snoozed_until' => '2026-04-01 10:00:00',
+            'domain_id' => null,
+            'domain_name' => null,
+        ]);
+
+        self::assertSame('2026-04-01 10:00:00', $result->snoozedUntil);
     }
 }

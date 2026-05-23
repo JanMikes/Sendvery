@@ -6,7 +6,9 @@ namespace App\Controller\Dashboard;
 
 use App\Message\MarkAlertAsRead;
 use App\Query\GetAlertDetail;
+use App\Repository\MutedAlertRepository;
 use App\Services\DashboardContext;
+use App\Value\AlertType;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,6 +20,7 @@ final class ShowAlertDetailController extends AbstractController
     public function __construct(
         private readonly DashboardContext $dashboardContext,
         private readonly GetAlertDetail $getAlertDetail,
+        private readonly MutedAlertRepository $mutedAlertRepository,
         private readonly MessageBusInterface $commandBus,
     ) {
     }
@@ -37,8 +40,30 @@ final class ShowAlertDetailController extends AbstractController
             ));
         }
 
+        // Find any existing mute for the (team, domain, type) so the template
+        // can offer Unmute instead of Mute. Skipped for domain-less alerts
+        // since those can never be muted. The alert is already team-scoped via
+        // the query above, so any team the user belongs to that has a matching
+        // mute for this domain+type is the right one.
+        $existingMute = null;
+        if (null !== $alert->domainId) {
+            foreach ($this->dashboardContext->getTeamIdStrings() as $teamId) {
+                $candidate = $this->mutedAlertRepository->findOneForTeamDomainType(
+                    $teamId,
+                    $alert->domainId,
+                    AlertType::from($alert->type),
+                );
+                if (null !== $candidate) {
+                    $existingMute = $candidate;
+
+                    break;
+                }
+            }
+        }
+
         return $this->render('dashboard/alert_detail.html.twig', [
             'alert' => $alert,
+            'existingMute' => $existingMute,
         ]);
     }
 }

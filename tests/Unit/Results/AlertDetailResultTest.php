@@ -22,6 +22,7 @@ final class AlertDetailResultTest extends TestCase
             'data' => '{"current_fail_rate": 45.2, "average_fail_rate": 5.1}',
             'is_read' => false,
             'created_at' => '2026-03-25 10:00:00',
+            'snoozed_until' => null,
             'domain_id' => '660e8400-e29b-41d4-a716-446655440000',
             'domain_name' => 'example.com',
         ]);
@@ -30,5 +31,26 @@ final class AlertDetailResultTest extends TestCase
         self::assertSame('critical', $result->severity);
         self::assertSame(45.2, $result->data['current_fail_rate']);
         self::assertSame(5.1, $result->data['average_fail_rate']);
+        self::assertNull($result->snoozedUntil);
+    }
+
+    #[Test]
+    public function snoozedUntilFieldPreserved(): void
+    {
+        $result = AlertDetailResult::fromDatabaseRow([
+            'alert_id' => '550e8400-e29b-41d4-a716-446655440000',
+            'type' => 'failure_spike',
+            'severity' => 'critical',
+            'title' => 'Failure spike detected',
+            'message' => 'Spike details.',
+            'data' => '{}',
+            'is_read' => false,
+            'created_at' => '2026-03-25 10:00:00',
+            'snoozed_until' => '2026-04-01 10:00:00',
+            'domain_id' => null,
+            'domain_name' => null,
+        ]);
+
+        self::assertSame('2026-04-01 10:00:00', $result->snoozedUntil);
     }
 }
