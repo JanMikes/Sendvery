@@ -11,6 +11,15 @@
 {% endblock %}
 
 {% block content %}
+    {# Flash messages #}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
     {% if mailboxes is empty %}
         <twig:EmptyState
             title="No mailboxes connected"
@@ -30,6 +39,7 @@
                                 <th>Status</th>
                                 <th>Last Polled</th>
                                 <th>Last Error</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -48,6 +58,12 @@
                                     </td>
                                     <td>{{ mailbox.lastPolledAt ? mailbox.lastPolledAt|date('M j, H:i') : '—' }}</td>
                                     <td class="text-xs text-error max-w-xs truncate">{{ mailbox.lastError ?? '—' }}</td>
+                                    <td>
+                                        <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.id }) }}">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
+                                            <button type="submit" class="btn btn-ghost btn-xs">Re-test</button>
+                                        </form>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         </tbody>

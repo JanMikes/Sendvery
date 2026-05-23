@@ -9,11 +9,19 @@ use App\Message\ConnectMailbox;
 use App\Repository\MonitoredDomainRepository;
 use App\Repository\TeamRepository;
 use App\Services\CredentialEncryptor;
-use App\Services\Mail\MailClient;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
+/**
+ * Persists a new mailbox connection. The handler is intentionally a pure
+ * writer — it does NOT verify connectivity. Callers MUST run
+ * `MailboxConnectionTester::test()` first and only dispatch on success,
+ * otherwise we silently store broken rows that the next poll cron will
+ * have to flag as errored. The wizard at
+ * {@see \App\Controller\Dashboard\AddMailboxController} owns that
+ * contract.
+ */
 #[AsMessageHandler]
 final readonly class ConnectMailboxHandler
 {
@@ -22,7 +30,6 @@ final readonly class ConnectMailboxHandler
         private TeamRepository $teamRepository,
         private MonitoredDomainRepository $monitoredDomainRepository,
         private CredentialEncryptor $encryptor,
-        private MailClient $mailClient,
         private ClockInterface $clock,
     ) {
     }
@@ -49,13 +56,6 @@ final readonly class ConnectMailboxHandler
             createdAt: $this->clock->now(),
             monitoredDomain: $domain,
         );
-
-        // Test the connection before saving
-        $testResult = $this->mailClient->testConnection($connection);
-
-        if (!$testResult->success) {
-            $connection->markError($testResult->error ?? 'Connection test failed');
-        }
 
         $this->entityManager->persist($connection);
     }

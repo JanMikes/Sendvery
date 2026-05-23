@@ -6,6 +6,7 @@ namespace App\Services\Mail;
 
 use App\Entity\MailboxConnection;
 use App\Value\ConnectionTestResult;
+use App\Value\MailboxConnectionErrorCode;
 use App\Value\MailMessage;
 
 final class FakeMailClient implements MailClient
@@ -19,6 +20,8 @@ final class FakeMailClient implements MailClient
     private bool $shouldFail = false;
 
     private string $failureMessage = '';
+
+    private ?MailboxConnectionErrorCode $failureCode = null;
 
     /** @return iterable<MailMessage> */
     public function fetchDmarcReports(MailboxConnection $connection): iterable
@@ -42,6 +45,7 @@ final class FakeMailClient implements MailClient
                 success: false,
                 error: $this->failureMessage,
                 mailboxCount: 0,
+                errorCode: $this->failureCode,
             );
         }
 
@@ -57,10 +61,11 @@ final class FakeMailClient implements MailClient
         $this->messages[] = $message;
     }
 
-    public function simulateFailure(string $message = 'Connection failed'): void
+    public function simulateFailure(string $message = 'Connection failed', ?MailboxConnectionErrorCode $errorCode = null): void
     {
         $this->shouldFail = true;
         $this->failureMessage = $message;
+        $this->failureCode = $errorCode;
     }
 
     /** @return array<string> */
@@ -75,5 +80,6 @@ final class FakeMailClient implements MailClient
         $this->processedMessageIds = [];
         $this->shouldFail = false;
         $this->failureMessage = '';
+        $this->failureCode = null;
     }
 }

@@ -746,7 +746,8 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
 
 ## TASK-014: Mailbox setup is a credentials wall — add server presets, port auto-fill, and live "test connection" before save
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: onboarding
 - Why: `templates/dashboard/mailbox_add.html.twig` and the onboarding mailbox option throw the user at raw IMAP/POP3 host/port/encryption fields with no guidance. A non-technical Marketing-Maria persona will give up here. Worse, the form accepts the credentials, saves them encrypted, and only finds out it doesn't work via the next 15-min poll cron — so the user sees "Inactive / Error" minutes later with no clear reason on `dashboard_mailboxes`.
 - Acceptance:
@@ -757,6 +758,72 @@ The `dnsHealth is null` branch is unreachable in normal use (the `ShowDomainDeta
   - The `dashboard_mailboxes` list grows a "Re-test connection" inline action button on each row that runs the same check on demand.
   - 100% test coverage on the new sync test service (mocked IMAP transport) and the controller branches.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Key findings:**
+- `webklex/php-imap` v6.2 is the existing IMAP transport. `ClientManager::make()` accepts `"timeout" => 3` for connection timeout.
+- `ConnectionTestResult` already exists — just extend with optional `?MailboxConnectionErrorCode $errorCode`.
+- `FakeMailClient` already exists with `simulateFailure()` — covers the re-test endpoint via the existing `MailClient::testConnection(MailboxConnection)` seam.
+- `ConnectMailboxHandler` currently calls `testConnection()` AFTER persisting (anti-pattern — persists broken rows then marks them errored). The wizard's pre-submit test makes this redundant; **remove** the handler's test call. Document the inverted contract in the handler ("caller must test before dispatching").
+- A **new** interface `MailboxConnectionTester::test(MailboxConnectionAttempt)` is needed because the wizard tests BEFORE the entity exists (plaintext creds). Separate from the existing `MailClient::testConnection(MailboxConnection)` which decrypts a persisted entity.
+- No CSRF on the current add form — add token id `mailbox_add`.
+- `templates/learn/` directory doesn't exist yet — the Gmail/Outlook app-password banner uses `href="#"` placeholder.
+
+**Architecture:**
+- `src/Value/MailboxConnectionErrorCode.php` — enum with cases `AuthenticationFailed, ConnectionRefused, ConnectionTimeout, StarttlsNotSupported, InboxNotFound, Unknown` + `humanMessage(): string` method.
+- `src/Value/MailboxConnectionAttempt.php` (readonly final): `host, username, password: string`, `port: int`, `encryption: MailboxEncryption`, `type: MailboxType`.
+- `src/Value/MailboxProviderPreset.php` (readonly final class — not enum, can't carry typed props elegantly). Constructor: `key, label, host`, `port`, `encryption`, `requiresAppPassword`. Static `cases(): list<self>`, `find(string $key): ?self`, `presetsJson(): string`. Six cases:
+  - gmail (`imap.gmail.com:993 SSL, requiresAppPassword`)
+  - outlook (`outlook.office365.com:993 SSL, requiresAppPassword`)
+  - fastmail (`imap.fastmail.com:993 SSL`)
+  - yahoo (`imap.mail.yahoo.com:993 SSL`)
+  - seznam (`imap.seznam.cz:993 SSL`)
+  - custom (`'' / 993 / SSL, requiresAppPassword: false`)
+- Extend `src/Value/ConnectionTestResult.php` with `public readonly ?MailboxConnectionErrorCode $errorCode = null` (optional, default null = backward compat).
+- `src/Services/Mailbox/MailboxConnectionTester.php` interface — `test(MailboxConnectionAttempt $attempt): ConnectionTestResult`.
+- `src/Services/Mailbox/ImapMailboxConnectionTester.php` (readonly final, production impl) — instantiates `Webklex\PHPIMAP\ClientManager` inline with `"timeout" => 3`, connects, gets INBOX folder, status check, disconnects. Catches exceptions, classifies via private `classifyError(string $message): MailboxConnectionErrorCode` (case-insensitive substring match: `auth/login failed/credentials → AUTHENTICATION_FAILED`; `refused → CONNECTION_REFUSED`; `timeout/timed out → CONNECTION_TIMEOUT`; `starttls → STARTTLS_NOT_SUPPORTED`; `inbox/folder → INBOX_NOT_FOUND`; else `UNKNOWN`).
+- `src/Services/Mailbox/FakeMailboxConnectionTester.php` (test double) — `willSucceed()`, `willFail(MailboxConnectionErrorCode)`, also `wasInvoked(): bool` for "tester not called on validation failure" assertions.
+- Extend `src/Services/Mail/ImapMailClient::testConnection()` to use 3s timeout + return `errorCode`. Add same `classifyError()` helper. The re-test endpoint reuses this.
+- Modify `src/MessageHandler/ConnectMailboxHandler.php`: remove `MailClient` dependency + `testConnection()` call. Inline doc comment: "Caller must test the connection before dispatching — see AddMailboxController."
+
+**Controllers:**
+- Modify `src/Controller/Dashboard/AddMailboxController.php`: inject `MailboxConnectionTester`. CSRF validation (token id `mailbox_add`) first. Then `Validator` on `AddMailboxData`. Only if validation passes, build `MailboxConnectionAttempt` and run `tester->test()`. On failure: re-render form with `$connectionError = $result->errorCode->humanMessage()`. On success: dispatch `ConnectMailbox`, flash success, redirect to `dashboard_mailboxes`. Pass `$connectionError`, `$presets` (from `MailboxProviderPreset::cases()`), `$presetsJson` (from `presetsJson()`) to template.
+- New `src/Controller/Dashboard/RetestMailboxConnectionController.php` — `#[Route('/app/mailboxes/{id}/test', name: 'dashboard_mailbox_retest', methods: ['POST'])]`. CSRF token id `mailbox_retest`. Load `MailboxConnection` via repo, 404 on not-found, 404 on cross-tenant (`team->id->equals($teamId)`). `$result = $mailClient->testConnection($connection)`. Success: flash `success "Connection is working."` Failure: flash `error "Connection failed: {humanMessage}"` (and include raw `$result->error` substring for debugging). Redirect to `dashboard_mailboxes`.
+
+**Stimulus controller `assets/controllers/mailbox_preset_controller.js`** — identifier `mailbox-preset`. Values: `presets: Object` (JSON keyed by preset key). Targets: `select, host, port, encryption, banner`. Action: `change->mailbox-preset#presetChanged`. On `"custom"`: no field changes, hide banner. On a known preset: set host/port/encryption inputs, toggle banner via `hidden` attribute based on `requiresAppPassword`. Handle unknown keys gracefully (no-op).
+
+**Templates:**
+- Rewrite `templates/dashboard/mailbox_add.html.twig`: CSRF hidden input; preset `<select>` as FIRST field with `data-controller="mailbox-preset"` on the wrapping `<div>`, `data-mailbox-preset-presets-value="{{ presetsJson }}"`, `data-action="change->mailbox-preset#presetChanged"` on the select; yellow `<div role="alert" class="alert alert-warning" data-mailbox-preset-target="banner" hidden>` with the app-password explainer + `href="#"` placeholder; `{% if connectionError %}<div class="alert alert-error">{{ connectionError }}</div>{% endif %}` block; host/port/encryption fields wired as Stimulus targets.
+- Modify `templates/dashboard/mailboxes.html.twig`: add `<th>Actions</th>`; per-row `<form method="post" action="{{ path('dashboard_mailbox_retest', {id: mailbox.id}) }}">` with CSRF + `<button class="btn btn-ghost btn-xs">Re-test</button>`.
+
+**Service wiring in `config/services.php`:**
+- Production: alias `App\Services\Mailbox\MailboxConnectionTester::class → ImapMailboxConnectionTester::class`.
+- `when@test`: alias to `FakeMailboxConnectionTester`, make both `FakeMailboxConnectionTester` AND `ImapMailboxConnectionTester` public.
+
+**Tests:**
+- `tests/Unit/Value/MailboxConnectionErrorCodeTest.php` — 6 cases, `humanMessage()` non-empty + sensible.
+- `tests/Unit/Value/MailboxProviderPresetTest.php` — 7 cases: `cases()` count, gmail values, outlook `requiresAppPassword=true`, custom `host=''`, `find('gmail')` non-null, `find('unknown')` null, `presetsJson()` valid JSON with all keys.
+- `tests/Integration/Controller/MailboxWizardTest.php` — 12 cases: page renders / presets JSON in HTML / happy path (persists row + redirect + flash) / each error code (`AuthenticationFailed`, `ConnectionRefused`, `ConnectionTimeout`, `StarttlsNotSupported`, etc.) re-renders form inline / no DB row on test failure / validation error skips tester (asserts `wasInvoked()=false`) / no CSRF rejected / bad CSRF rejected / unauth redirects to login.
+- `tests/Integration/Controller/RetestMailboxConnectionTest.php` — 8 cases: success flash / failure flash / 404 unknown id / 404 cross-tenant / no CSRF rejected / bad CSRF rejected / GET → 405 / unauth redirects to login.
+
+**Critical details:**
+- Connection test runs ONLY AFTER form validation passes — blank fields shouldn't generate confusing network errors.
+- Error-message string-matching in `classifyError()` is case-insensitive substring (fragile but acceptable — Webklex wraps various underlying errors).
+- Webklex's `"timeout"` config is the TCP connection timeout (no separate read timeout). 3s covers our connectivity-check use case.
+- Re-test uses `MailClient::testConnection(MailboxConnection)` (existing seam, decrypts via `CredentialEncryptor`). No plaintext leaves function scope.
+- KB article link is `href="#"` placeholder — note in commit that the article stub is a separate task.
+- Removing `testConnection` from `ConnectMailboxHandler` means any future entry point dispatching `ConnectMailbox` must test first. Document inline.
+- The existing `DashboardPagesTest::addMailboxPageReturns200()` smoke test continues to pass (form still renders).
+- Search the test suite for any existing test that depended on the handler's post-persist `testConnection` call — fix those.
+
+**Build phases:**
+1. Value objects + their unit tests.
+2. Tester interface + IMAP impl + Fake + `ImapMailClient` extension + handler simplification + service wiring.
+3. Controllers (modify Add + new Retest).
+4. Templates (rewrite Add form, modify mailboxes list).
+5. Stimulus `mailbox_preset_controller.js`.
+6. Integration tests (Wizard + Retest). `phpunit` + `phpstan` + `cs-fixer` all green. Smoke: GET `/app/mailboxes/add`, confirm preset dropdown renders; POST with `Custom` + fake fail confirms inline error.
 
 ---
 

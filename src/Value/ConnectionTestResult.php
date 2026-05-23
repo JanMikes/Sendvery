@@ -10,6 +10,7 @@ final readonly class ConnectionTestResult
         public bool $success,
         public ?string $error,
         public int $mailboxCount,
+        public ?MailboxConnectionErrorCode $errorCode = null,
     ) {
     }
 }

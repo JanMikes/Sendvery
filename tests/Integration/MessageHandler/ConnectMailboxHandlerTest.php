@@ -108,45 +108,4 @@ final class ConnectMailboxHandlerTest extends IntegrationTestCase
         self::assertNotNull($connection->monitoredDomain);
         self::assertSame($domainId->toString(), $connection->monitoredDomain->id->toString());
     }
-
-    public function testSetsLastErrorOnConnectionFailure(): void
-    {
-        $em = $this->getService(EntityManagerInterface::class);
-        $handler = $this->getService(ConnectMailboxHandler::class);
-
-        $team = new Team(
-            id: Uuid::uuid7(),
-            name: 'Test',
-            slug: 'test-fail-'.Uuid::uuid7()->toString(),
-            createdAt: new \DateTimeImmutable(),
-        );
-        $em->persist($team);
-        $em->flush();
-        $em->clear();
-
-        // FakeMailClient is used in test env — simulate failure
-        $fakeClient = $this->getService(\App\Services\Mail\FakeMailClient::class);
-        $fakeClient->simulateFailure('Auth failed');
-
-        $connectionId = Uuid::uuid7();
-        $handler(new ConnectMailbox(
-            connectionId: $connectionId,
-            teamId: $team->id,
-            domainId: null,
-            type: MailboxType::ImapUser,
-            host: 'bad-host.example.com',
-            port: 993,
-            username: 'user',
-            password: 'pass',
-            encryption: MailboxEncryption::Ssl,
-        ));
-        $em->flush();
-        $em->clear();
-
-        $connection = $em->find(MailboxConnection::class, $connectionId);
-        self::assertNotNull($connection);
-        self::assertSame('Auth failed', $connection->lastError);
-
-        $fakeClient->reset();
-    }
 }

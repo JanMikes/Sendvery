@@ -6,8 +6,10 @@ namespace App\Services\Mail;
 
 use App\Entity\MailboxConnection;
 use App\Services\CredentialEncryptor;
+use App\Services\Mailbox\ImapMailboxConnectionTester;
 use App\Value\ConnectionTestResult;
 use App\Value\MailAttachment;
+use App\Value\MailboxConnectionErrorCode;
 use App\Value\MailMessage;
 use Webklex\PHPIMAP\ClientManager;
 use Webklex\PHPIMAP\Exceptions\ConnectionFailedException;
@@ -105,11 +107,23 @@ final readonly class ImapMailClient implements MailClient
     public function testConnection(MailboxConnection $connection): ConnectionTestResult
     {
         try {
-            $client = $this->createClient($connection);
+            $client = $this->createClient($connection, timeout: 3);
             $client->connect();
 
             $folder = $client->getFolderByName('INBOX') ?? $client->getFolderByPath('INBOX');
-            $status = $folder?->status();
+
+            if (null === $folder) {
+                $client->disconnect();
+
+                return new ConnectionTestResult(
+                    success: false,
+                    error: 'INBOX folder not found.',
+                    mailboxCount: 0,
+                    errorCode: MailboxConnectionErrorCode::InboxNotFound,
+                );
+            }
+
+            $status = $folder->status();
             $messageCount = $status['messages'] ?? 0;
 
             $client->disconnect();
@@ -124,24 +138,26 @@ final readonly class ImapMailClient implements MailClient
                 success: false,
                 error: $e->getMessage(),
                 mailboxCount: 0,
+                errorCode: ImapMailboxConnectionTester::classifyError($e->getMessage()),
             );
         } catch (\Throwable $e) {
             return new ConnectionTestResult(
                 success: false,
                 error: $e->getMessage(),
                 mailboxCount: 0,
+                errorCode: ImapMailboxConnectionTester::classifyError($e->getMessage()),
             );
         }
     }
 
-    private function createClient(MailboxConnection $connection): \Webklex\PHPIMAP\Client
+    private function createClient(MailboxConnection $connection, ?int $timeout = null): \Webklex\PHPIMAP\Client
     {
         $username = $this->encryptor->decrypt($connection->encryptedUsername);
         $password = $this->encryptor->decrypt($connection->encryptedPassword);
 
         $manager = new ClientManager();
 
-        return $manager->make([
+        $config = [
             'host' => $connection->host,
             'port' => $connection->port,
             'encryption' => $connection->encryption->value,
@@ -149,7 +165,13 @@ final readonly class ImapMailClient implements MailClient
             'username' => $username,
             'password' => $password,
             'protocol' => 'imap',
-        ]);
+        ];
+
+        if (null !== $timeout) {
+            $config['timeout'] = $timeout;
+        }
+
+        return $manager->make($config);
     }
 
     private function isDmarcReport(Message $message): bool

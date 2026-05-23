@@ -33,6 +33,9 @@ return App::config([
         'App\Services\Mail\MailClient' => [
             'alias' => 'App\Services\Mail\ImapMailClient',
         ],
+        'App\Services\Mailbox\MailboxConnectionTester' => [
+            'alias' => 'App\Services\Mailbox\ImapMailboxConnectionTester',
+        ],
         'App\Services\Reports\CentralInboxClient' => [
             'alias' => 'App\Services\Reports\ImapCentralInboxClient',
         ],
@@ -190,6 +193,19 @@ return App::config([
             ],
             'App\Services\Mail\MailClient' => [
                 'alias' => 'App\Services\Mail\FakeMailClient',
+                'public' => true,
+            ],
+            'App\Services\Mail\ImapMailClient' => [
+                'public' => true,
+            ],
+            'App\Services\Mailbox\FakeMailboxConnectionTester' => [
+                'public' => true,
+            ],
+            'App\Services\Mailbox\ImapMailboxConnectionTester' => [
+                'public' => true,
+            ],
+            'App\Services\Mailbox\MailboxConnectionTester' => [
+                'alias' => 'App\Services\Mailbox\FakeMailboxConnectionTester',
                 'public' => true,
             ],
             'App\Services\Reports\FakeCentralInboxClient' => [
