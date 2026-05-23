@@ -259,7 +259,9 @@ ORDER BY md.domain ASC
 
 ## TASK-004: Homepage "Trusted by the founder's own companies" logo bar is a conversion killer as written
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23 (commit `7882623`)
+- Variant: hybrid Option A — kept three founder-owned companies, reframed copy as "Already running on real production domains", linked each name to its site, dropped 40% opacity, added small honest footnote
 - Area: marketing
 - Why: The current logo strip in section 3 of the homepage labels itself literally as *"Trusted by the founder's own companies"* and then renders three text strings at 40% opacity (TheDevs.cz, SpeedPuzzling.com, FajneSklady.cz). The honesty is admirable but the framing tells a visitor "we have no real customers" which is the opposite of the trust signal the section is supposed to deliver. There are also no actual logo images — just opacity-40 text. Either commit to real visual logos OR replace the section with a more compelling trust signal until real customer logos exist.
 - Acceptance:
@@ -856,7 +858,8 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
 
 ## TASK-018: Mobile dashboard nav highlight is broken on long page titles + table rows use `onclick` instead of `<a>` (a11y & middle-click broken)
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: dashboard
 - Why: Two adjacent dashboard-quality cuts that show the app feels rushed: (1) Sidebar uses `current_route starts with 'dashboard_domain'` for the Domains item, which also matches `dashboard_domain_health` — but DNS Health is its own concept. More importantly, every table row that links to a detail page uses `<tr onclick="window.location='...'">` (see `overview.html.twig`, `_reports_table.html.twig`, `domain_detail.html.twig`). This breaks middle-click ("open in new tab"), keyboard navigation (rows are not focusable), screen readers, and right-click → copy link.
 - Acceptance:
@@ -866,6 +869,58 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
   - Mobile (<lg breakpoint): verify the sidebar overlay closes on link click (currently it does via the Stimulus controller, but worth a Cypress / Panther smoke).
   - Test plan note: include an axe-core accessibility scan baseline for `/app` and `/app/reports` in the PR.
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Findings from surface scan:**
+- Only 4 `<tr onclick>` instances in `templates/dashboard/**`: `_reports_table.html.twig:17`, `_domain_reports_table.html.twig:16`, `domain_detail.html.twig:149`, `overview.html.twig:250`. All structurally identical.
+- None of the rows contains inner buttons or secondary `<a>` tags — no nested-anchor or z-index conflict.
+- `_reports_table.html.twig` is wrapped in `<turbo-frame id="reports-table">` (TASK-016); `_domain_reports_table.html.twig` wrapped in `<turbo-frame id="domain-reports-table">`. Inline tables in `overview.html.twig` and `domain_detail.html.twig` are NOT inside any turbo-frame.
+- **Sidebar bug doesn't exist:** all 7 routes in the `dashboard_domain*` namespace are genuine domain-area sub-pages (`dashboard_domains`, `_domain_add`, `_domain_detail`, `_domain_health`, `_domain_reverify`, `_domain_reports`, `_domain_dns_history`). `dashboard_dns_health` (the in-app overview from TASK-001) has prefix `dashboard_dns_` — does NOT match `dashboard_domain`. Sidebar is correct. **No change to `layout.html.twig`.**
+- **Mobile sidebar overlay already works:** Stimulus controller at `assets/controllers/sidebar_controller.js` + Turbo Drive page morph reset CSS classes on navigation. No change.
+
+**Decision: stretched-link pattern (Option B).** Keep `<tr>` semantic, add `<tr class="relative">` + `<a class="absolute inset-0 z-10">` inside the first `<td>`. Preserves daisyUI table semantics (zebra-striping, hover); native middle-click / right-click / keyboard focus; no nested-anchor issues; no `display: contents` weirdness.
+
+**Pattern (copied verbatim into each of 4 files, with a leading template comment on first occurrence per file):**
+
+```twig
+{# Row-level navigation via stretched-link (a11y, middle-click, keyboard safe).
+   The <tr> is position:relative; the <a> is absolute inset-0 inside the first <td>. #}
+<tr class="hover:bg-base-200/50 cursor-pointer relative">
+    <td class="font-medium">
+        <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
+           class="absolute inset-0 z-10"
+           data-turbo-frame="_top"  {# only inside turbo-frames #}
+           aria-label="View report from {{ report.reporterOrg }}"></a>
+        {{ first-column-content }}
+    </td>
+    {# remaining <td>s unchanged #}
+</tr>
+```
+
+**Per-file disposition:**
+- `_reports_table.html.twig:17` — apply pattern WITH `data-turbo-frame="_top"` (frame escape needed). First column: `report.domainName`.
+- `_domain_reports_table.html.twig:16` — apply pattern WITH `data-turbo-frame="_top"`. First column: `report.reporterOrg`.
+- `domain_detail.html.twig:149` — apply pattern WITHOUT `data-turbo-frame`. First column: `report.reporterOrg`.
+- `overview.html.twig:250` — apply pattern WITHOUT `data-turbo-frame`. First column: `report.domainName`. aria-label includes both reporter and domain.
+
+**Files to create:** `tests/Integration/Controller/AccessibleRowNavigationTest.php` — 10 tests:
+1. `reportListRowHasAnchorNotOnclick` — `/app/reports`, `table tbody tr td a[href*="/app/reports/"]` count > 0; body lacks "onclick"
+2. `domainDetailRowHasAnchorNotOnclick` — `/app/domains/{id}`, same checks
+3. `overviewRowHasAnchorNotOnclick` — `/app`, same
+4. `domainReportsListRowHasAnchorNotOnclick` — `/app/domains/{id}/reports`, same
+5. `reportListRowAnchorHasAriaLabel` — `table tbody tr td a[aria-label]` count > 0
+6. `reportListRowAnchorHasTurboFrameTop` — `a[data-turbo-frame="_top"]` count > 0 (regression for frame escape)
+7. `domainReportsListRowAnchorHasTurboFrameTop` — same on per-domain reports
+8. `noOnclickInAnyDashboardPage` (global regression guard) — iterate over: `dashboard_overview`, `dashboard_domains`, `dashboard_reports`, `dashboard_alerts`, `dashboard_dns_health`, `dashboard_mailboxes`, `dashboard_billing`, `dashboard_preferences`, `team_settings`. For each: assert response body lacks `onclick=` substring.
+9. `sidebarDomainsHighlightedOnDomainSubpages` — for `dashboard_domain_detail`, `dashboard_domain_health`, `dashboard_domain_reports`: Domains nav anchor has `bg-primary` class.
+10. `sidebarDomainsNotHighlightedOnDnsHealthOverview` — on `/app/dns-health`: Domains nav anchor LACKS `bg-primary`; DNS Health nav anchor HAS `bg-primary`.
+
+**axe-core baseline:** SKIP — no Panther/Cypress infrastructure in the test suite. Stretched-link pattern addresses the concrete a11y failures (keyboard focus + screen-reader label) which are tested explicitly above. Document in commit message.
+
+**Critical detail on future-proofing:** if a future developer adds a `<button>` or secondary `<a>` inside one of these rows, that inner control's containing `<td>` (or the control itself) needs `class="relative z-20"` to win pointer events. Document in the template comment.
+
+**Build phases:** 1) 4 template edits. 2) Browser smoke (middle-click, right-click, Tab focus). 3) New test file (10 methods). 4) phpunit + phpstan + cs-fixer green. 5) Commit + push.
 
 ---
 

@@ -247,8 +247,13 @@
                             </thead>
                             <tbody>
                                 {% for report in recentReports %}
-                                    <tr class="hover:bg-base-200/50 cursor-pointer" onclick="window.location='{{ path('dashboard_report_detail', { id: report.reportId }) }}'">
-                                        <td class="font-medium">{{ report.domainName }}</td>
+                                    <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                                        <td class="font-medium">
+                                            <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
+                                               class="absolute inset-0 z-10"
+                                               aria-label="View report from {{ report.reporterOrg }} for {{ report.domainName }}"></a>
+                                            {{ report.domainName }}
+                                        </td>
                                         <td>{{ report.reporterOrg }}</td>
                                         <td>{{ report.dateRangeEnd|date('M j') }}</td>
                                         <td class="text-right">

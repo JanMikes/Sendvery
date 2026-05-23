@@ -13,9 +13,22 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {# Row-level navigation via stretched-link (a11y, middle-click, keyboard safe).
+                           The <tr> is position:relative; the <a> is absolute inset-0 inside the first <td>.
+                           If a future row adds a <button> or secondary <a>, give its containing <td>
+                           (or the control itself) class="relative z-20" so it wins pointer events.
+                           data-turbo-frame="_top" is required here because this table is wrapped in
+                           <turbo-frame id="reports-table"> — without it, the link would try to swap
+                           the report-detail page into this frame instead of loading as a full page. #}
                         {% for report in reports %}
-                            <tr class="hover:bg-base-200/50 cursor-pointer" onclick="window.location='{{ path('dashboard_report_detail', { id: report.reportId }) }}'">
-                                <td class="font-medium">{{ report.domainName }}</td>
+                            <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                                <td class="font-medium">
+                                    <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
+                                       class="absolute inset-0 z-10"
+                                       data-turbo-frame="_top"
+                                       aria-label="View report from {{ report.reporterOrg }}"></a>
+                                    {{ report.domainName }}
+                                </td>
                                 <td>{{ report.reporterOrg }}</td>
                                 <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                 <td class="text-right">{{ report.recordCount }}</td>
