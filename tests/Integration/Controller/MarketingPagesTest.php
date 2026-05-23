@@ -248,5 +248,8 @@ final class MarketingPagesTest extends WebTestCase
         yield 'learn-what-is-dmarc' => ['/learn/what-is-dmarc'];
         yield 'learn-spf-record-guide' => ['/learn/spf-record-guide'];
         yield 'learn-email-auth-explained' => ['/learn/email-authentication-explained'];
+        yield 'legal-privacy' => ['/legal/privacy'];
+        yield 'legal-security' => ['/legal/security'];
+        yield 'status' => ['/status'];
     }
 }

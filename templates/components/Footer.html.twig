@@ -1,7 +1,7 @@
 {# Footer with SEO internal links to all tool pages #}
 <footer class="bg-base-200 border-t border-base-300">
     <div class="container mx-auto py-16">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-10">
             {# Brand #}
             <div>
                 <a href="{{ path('home') }}" class="text-xl font-bold text-primary tracking-tight">Sendvery</a>
@@ -37,7 +37,18 @@
                     <li><a href="{{ path('knowledge_base_index') }}" class="link link-hover text-base-content/70">Knowledge Base</a></li>
                     <li><a href="{{ path('auth_login') }}" class="link link-hover text-base-content/70">Get Started</a></li>
                     <li><a href="{{ path('about_what_is_sendvery') }}" class="link link-hover text-base-content/70">What is Sendvery</a></li>
+                </ul>
+            </div>
+
+            {# Trust #}
+            <div>
+                <h3 class="font-semibold text-sm uppercase tracking-wider text-base-content/50 mb-4">Trust</h3>
+                <ul class="space-y-2 text-sm">
+                    <li><a href="{{ path('legal_privacy') }}" class="link link-hover text-base-content/70">Privacy Policy</a></li>
+                    <li><a href="{{ path('legal_security') }}" class="link link-hover text-base-content/70">Security</a></li>
+                    <li><a href="{{ path('status') }}" class="link link-hover text-base-content/70">Status</a></li>
                     <li><a href="{{ path('about_open_source') }}" class="link link-hover text-base-content/70">Open Source</a></li>
+                    <li><a href="{{ path('pricing') }}#faq" class="link link-hover text-base-content/70">Refund Policy</a></li>
                 </ul>
             </div>
 

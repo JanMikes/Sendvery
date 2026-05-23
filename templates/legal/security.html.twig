@@ -1,0 +1,44 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}Security Overview — Sendvery{% endblock %}
+{% block meta_description %}Sendvery security overview: magic-link authentication, libsodium encryption at rest, TLS 1.3 in transit, EU data residency, responsible disclosure at security@sendvery.com. Last updated 2026-05-23.{% endblock %}
+
+{% block content %}
+<twig:SectionContainer>
+    <div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-bold">Security Overview</h1>
+        <p class="text-sm text-base-content/50 mt-2 mb-8">Last updated: 2026-05-23</p>
+
+        <div class="prose prose-lg max-w-none text-base-content/80">
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Authentication</h2>
+            <p>Sendvery uses <strong>magic-link authentication only</strong>. We never store passwords — not as hashes, not in any form. When you sign in, we email you a short-lived single-use link. Clicking it establishes a session. No password to leak, no password to phish, no password reuse from other breached sites.</p>
+            <p>Sessions are server-side and bound to a session cookie marked <code>HttpOnly; Secure; SameSite=Lax</code>. You can sign out from any device at any time.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Encryption at rest</h2>
+            <p>Sensitive credentials (IMAP/POP3 passwords, OAuth2 refresh tokens) are encrypted at rest using <strong><a href="https://github.com/paragonie/halite" target="_blank" rel="noopener" class="link link-primary">paragonie/halite</a></strong>, which is an audited PHP library built on top of <strong>libsodium</strong>. The underlying primitive is <strong>XChaCha20-Poly1305</strong> authenticated encryption with a unique nonce per record.</p>
+            <p>The encryption key is loaded from an environment variable at boot. It is never stored in the database, never committed to source control, and is rotated independently of the application code. We do not use AES-256-GCM — when you read elsewhere that "data is AES-256-GCM encrypted", that claim was historically inaccurate and has been corrected.</p>
+            <p>The PostgreSQL database itself lives on encrypted block storage at the hosting provider level (LUKS on Hetzner). Backups are encrypted before they leave the host.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Encryption in transit</h2>
+            <p>All HTTP traffic is served over <strong>TLS 1.3</strong> with HSTS enabled. We do not accept plaintext HTTP. Outbound IMAP / POP3 connections are TLS-only — if your provider does not support TLS we will refuse to connect and surface a clear error rather than silently downgrade.</p>
+            <p>Stripe webhook calls are verified using Stripe's signing-secret HMAC; we reject any webhook whose signature does not match. Sentry error reports are sent over HTTPS to the Sentry EU endpoint where possible.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Data location</h2>
+            <p>Application data lives on <strong>Hetzner infrastructure in the European Union</strong>. The only data that leaves the EU is the anonymised DMARC summary sent to Anthropic when you have AI Insights enabled — and that summary contains no email addresses, no message contents, and no account identifiers. The full data-sharing scope is disclosed in our <a href="{{ path('legal_privacy') }}" class="link link-primary">Privacy Policy</a>.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Audit trail</h2>
+            <p>State changes inside the application emit domain events (the <code>EntityWithEvents</code> pattern). Events that touch billing or credentials are persisted alongside the entity write so that we have a tamper-evident chain. Stripe webhook payloads are stored verbatim for replay and reconciliation. Application logs are retained for 30 days.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Responsible disclosure</h2>
+            <p>If you believe you have found a security issue, please email <a href="mailto:security@sendvery.com" class="link link-primary">security@sendvery.com</a>. We aim to acknowledge reports within <strong>48 hours</strong> and to ship a fix for issues we classify as critical within <strong>14 days</strong>. We are happy to credit researchers publicly once a fix has shipped (or earlier with your consent).</p>
+            <p>Please do not run automated scanners against the hosted instance — they generate noise without finding anything we don't already catch in our own scans. Test against a self-hosted instance instead and share the reproduction steps with us.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Self-hosting</h2>
+            <p>Sendvery is open source under <strong>AGPL-3.0</strong>. If your organisation cannot share IMAP credentials with a third party, you can run the whole application on your own infrastructure for free, forever. The <a href="{{ path('about_open_source') }}" class="link link-primary">Open Source page</a> has the quickstart.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Certifications</h2>
+            <p>We are honest about where we are: Sendvery is <strong>pre-SOC2 and pre-ISO27001</strong>. Both are on the roadmap as customer demand justifies the audit cost. If your procurement process requires one of those certifications as a hard prerequisite today, the AGPL self-host path is the right answer until we ship them.</p>
+        </div>
+    </div>
+</twig:SectionContainer>
+{% endblock %}

@@ -434,7 +434,8 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
 
 ## TASK-009: No public trust pages (Privacy, Security, Status) — a real blocker for paid signup
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-23
 - Area: marketing
 - Why: Sendvery asks visitors to entrust it with IMAP credentials and email-authentication data. The marketing surface has **no** privacy policy, no security overview, no incident/uptime status page, no data-processing / sub-processor list, no GDPR statement. The footer (`templates/components/Footer.html.twig`) has only Free Tools / Product / Connect columns — no "Legal" or "Trust" column. For Personas 2 and 3 (Marketing Maria, Agency Alex) and any EU customer, this is a hard signup blocker — most procurement processes require at minimum a privacy-policy URL before signing up. The "all data encrypted at rest, IMAP credentials AES-256-GCM encrypted" claim in the homepage credibility section is great but unbacked by any policy page.
 - Acceptance:
@@ -447,6 +448,46 @@ When `ai_available` is false, all paid AI cells render `—` and a "coming soon"
   - The new routes are added to `SitemapController::ROUTES` at priority 0.6.
   - 100% test coverage on the new controllers (smoke test that each returns 200 and contains the page heading).
 - Notes:
+
+### Architect plan (2026-05-23)
+
+**Critical finding:** the actual encryption library is `paragonie/halite` (XChaCha20-Poly1305 via libsodium), **NOT AES-256-GCM** as the homepage credibility section currently claims. Security page must use the truthful description. The homepage's stale "AES-256-GCM" claim should also be corrected in the same PR for consistency.
+
+**Decision on URLs:** `/legal/privacy`, `/legal/security`, `/status` (status convention is top-level, not under /legal/). All three return `final class extends AbstractController` (no readonly — matches `WhatIsSendveryController`/`OpenSourceController` pattern). `StatusController` injects `#[Autowire('%kernel.project_dir%')] private readonly string $projectDir` for future `var/status.json` reading.
+
+**Files to create:**
+- `src/Controller/PrivacyPolicyController.php` (`#[Route('/legal/privacy', name: 'legal_privacy')]`)
+- `src/Controller/SecurityOverviewController.php` (`#[Route('/legal/security', name: 'legal_security')]`)
+- `src/Controller/StatusController.php` (`#[Route('/status', name: 'status')]`) with `loadStatusData(string $path): array` private method returning the file contents if readable + valid JSON, otherwise a hardcoded operational array. Status fallback shape: `['overall' => 'operational', 'updated_at' => null, 'components' => [Web application, Email ingestion workers, DMARC report parser, DNS health checker, AI Insights service — all 'operational']]`.
+- `templates/legal/privacy.html.twig`, `security.html.twig`, `status.html.twig` (all extend `marketing_layout.html.twig`, content wrapped in `<twig:SectionContainer><div class="max-w-3xl mx-auto">`).
+- `tests/Integration/Controller/TrustPagesTest.php` — 16 dedicated tests (3× return 200, 3× H1 text, 2× last-updated date, sub-processors list, GDPR rights mention, magic-link claim, halite claim regression guard, responsible disclosure email, status operational, web-application component name, footerContainsTrustLinks).
+
+**Files to modify:**
+- `templates/components/Footer.html.twig` — change grid from `lg:grid-cols-4` to `lg:grid-cols-2 xl:grid-cols-5` (or `lg:grid-cols-3 xl:grid-cols-5` if 2-col laptop looks sparse). Add new "Trust" column: Privacy / Security / Status / Open Source / Refund Policy (Refund Policy → `path('pricing') ~ '#faq'`). Remove "Open Source" from existing Product column to avoid duplication. Keep "Connect" as 5th column with just GitHub.
+- `src/Controller/SitemapController.php` — add three ROUTES entries: `['route' => 'legal_privacy', 'priority' => '0.6', 'changefreq' => 'monthly']`, same for `legal_security`, and `['route' => 'status', 'priority' => '0.6', 'changefreq' => 'weekly']` (weekly because status reflects current state).
+- `tests/Integration/Controller/MarketingPagesTest.php` — three new entries in `publicRoutes` provider.
+- `tests/Integration/Controller/SeoTest.php` — add three `assertStringContainsString` calls in `sitemapContainsAllPublicRoutes`.
+- `templates/homepage/index.html.twig` — replace the AES-256-GCM claim with the truthful libsodium/Halite/XChaCha20-Poly1305 description (architect noted as separate fix; orchestrator decided to bundle for consistency).
+
+**Privacy Policy content (architect drafted exact copy):** 7 sections — Last updated 2026-05-23, What we collect (bullets: account / Stripe-managed payments / DMARC reports / IMAP credentials / AI prompt data — anonymised / Sentry crash data), Why we collect it (no advertising, no sales), Data retention (per plan: Free 30d / Personal 1yr / Pro 2yr / Business unlimited), Sub-processors (responsive table — Stripe USA+EU, Anthropic USA "when AI Insights is enabled by user, anonymised DMARC summary data only", Sentry EU+USA, Hetzner EU/Germany), Your GDPR rights (6 rights + lodge complaint), Children (under 16, none knowingly), Contact (`privacy@sendvery.com` + Jan Mikeš OSVČ Czech Republic).
+
+**Security Overview content (architect drafted exact copy):** sections — Authentication (magic-link only, no password storage anywhere), Encryption at rest (paragonie/halite via libsodium, XChaCha20-Poly1305, key from env var never stored in DB/source/version history, unique nonce per credential), Encryption in transit (TLS 1.3, HSTS, IMAP/POP3 TLS-only), Data location (Hetzner EU, anonymised data to Anthropic US only when AI enabled — disclosed in Privacy Policy), Audit trail (EntityWithEvents pattern, Stripe webhooks persisted, 30-day log retention), Responsible disclosure (`security@sendvery.com`, 48h ack + 14-day fix target for critical, public credit), Self-hosting (AGPL-3.0, link to `/about/open-source` for orgs that can't share IMAP credentials), Certifications (honest: pre-SOC2/ISO27001, on roadmap, self-host if hard requirement).
+
+**Status page content:** H1 "Sendvery System Status", overall badge (`alert-success`/warning/error driven by `statusData.overall`), last-checked line, 5-component grid with coloured dot + name + status badge, subscribe-to-updates `status@sendvery.com` mailto.
+
+**Test list (TrustPagesTest, 16 methods):**
+`privacyPageReturns200`, `securityPageReturns200`, `statusPageReturns200`, `privacyPageContainsH1` ("Privacy Policy"), `securityPageContainsH1` ("Security Overview"), `statusPageContainsH1` ("Sendvery System Status"), `privacyPageContainsLastUpdated` ("2026-05-23"), `securityPageContainsLastUpdated`, `privacyPageContainsSubProcessors` (Stripe/Anthropic/Sentry/Hetzner), `privacyPageContainsGdprRights` ("right to access" + "privacy@sendvery.com"), `securityPageContainsMagicLinkClaim` ("magic-link" + "no password"), `securityPageContainsEncryptionClaim` ("halite"/"libsodium"/"XChaCha20" — regression guard against re-introducing AES-256-GCM), `securityPageContainsResponsibleDisclosure` ("security@sendvery.com"), `statusPageContainsOperationalStatus`, `statusPageContainsWebApplicationComponent`, `footerContainsTrustLinks` (GET `/`, assert Privacy / Security / Status text in footer).
+
+**Critical details:**
+- `prose prose-lg max-w-none text-base-content/80` per existing about-page pattern. If Tailwind typography plugin isn't enabled and `prose` doesn't render, fall back to `text-base-content/80 leading-relaxed space-y-4 [&_h2]:font-bold [&_h2]:text-base-content [&_h2]:mt-8`.
+- daisyUI v5 only; no `dark:` prefix.
+- Status JSON file at `var/status.json` (writable; volume-mounted in docker-compose) — controller v1 reads it if present, falls back to hardcoded operational. Future cron can write it.
+- Anthropic sub-processor row is described unconditionally (not gated on `ai_available` Twig global) — privacy policy describes max data sharing scope of the product, not current deployment config.
+- `Refund Policy` footer link goes to `/pricing#faq` (TASK-005's PricingFaq has the refund question).
+- "Hetzner infrastructure in the European Union" — no hard-coded "Falkenstein" (deployment detail).
+- No structured data on legal pages (BreadcrumbList low SEO value, omit for simplicity).
+
+**Build phases:** 1) 3 controllers; route registration verified. 2) 3 templates. 3) Footer restructure + homepage AES claim fix. 4) Sitemap entries. 5) Tests; phpunit + phpstan + cs-fixer green; commit; push.
 
 ---
 

@@ -279,7 +279,7 @@
             </span>
             <span class="badge badge-lg badge-outline gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                AES-256-GCM Encrypted
+                Encrypted at rest (libsodium)
             </span>
             <span class="badge badge-lg badge-outline gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"></path></svg>
@@ -291,7 +291,7 @@
             </span>
         </div>
         <p class="mt-6 text-base-content/50 text-sm">
-            All data encrypted at rest. IMAP credentials protected with AES-256-GCM. Your data stays yours.
+            All data encrypted at rest. IMAP credentials encrypted with XChaCha20-Poly1305 via libsodium. Your data stays yours.
         </p>
     </div>
 </twig:SectionContainer>
@@ -302,7 +302,7 @@
         <h2 class="text-2xl md:text-3xl font-bold">Frequently asked questions</h2>
     </div>
     <twig:FaqAccordion :items="[
-        {question: 'Is my data safe?', answer: 'Yes. All data is encrypted at rest. IMAP credentials are protected with AES-256-GCM encryption. We never store your email content — only DMARC report metadata. Self-hosters keep everything on their own infrastructure.'},
+        {question: 'Is my data safe?', answer: 'Yes. All data is encrypted at rest. IMAP credentials are encrypted with XChaCha20-Poly1305 via libsodium (the paragonie/halite library). We never store your email content — only DMARC report metadata. Self-hosters keep everything on their own infrastructure.'},
         {question: 'How does IMAP ingestion work?', answer: 'You point your DMARC aggregate reports to a mailbox (or use our receiving address). Sendvery connects via IMAP, downloads the report attachments (XML files), parses them, and stores the structured data. The raw emails are never stored.'},
         {question: 'Can I self-host Sendvery?', answer: 'Absolutely. Sendvery is open source under AGPL-3.0. Pull the Docker image, run it on your server, and you get all features with no limits. The hosted version simply saves you the infrastructure work.'},
         {question: 'What makes Sendvery different from MXToolbox?', answer: 'MXToolbox is a great diagnostic tool. Sendvery adds continuous monitoring — we watch your DNS records 24/7 and alert you the moment something changes. Plus DMARC report parsing, AI insights in plain English, and a modern interface.'},

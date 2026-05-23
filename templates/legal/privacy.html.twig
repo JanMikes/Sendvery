@@ -1,0 +1,71 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}Privacy Policy — Sendvery{% endblock %}
+{% block meta_description %}Sendvery privacy policy: what we collect, why, data retention, sub-processors (Stripe, Anthropic, Sentry, Hetzner), and your GDPR rights. Last updated 2026-05-23.{% endblock %}
+
+{% block content %}
+<twig:SectionContainer>
+    <div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-bold">Privacy Policy</h1>
+        <p class="text-sm text-base-content/50 mt-2 mb-8">Last updated: 2026-05-23</p>
+
+        <div class="prose prose-lg max-w-none text-base-content/80">
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">What we collect</h2>
+            <ul class="list-disc pl-6 space-y-2">
+                <li><strong>Account data:</strong> your email address (required for magic-link login), team name, and the timestamps of your sessions.</li>
+                <li><strong>Payment data:</strong> if you subscribe to a paid plan, Stripe collects and stores your billing details. Sendvery never sees your card number — we only store the Stripe customer / subscription identifiers, plan name, and renewal status.</li>
+                <li><strong>DMARC reports:</strong> aggregate XML reports sent to us by mailbox providers (Google, Microsoft, Yahoo, …) for the domains you choose to monitor. These reports contain sender IPs, alignment results, and per-source pass/fail counts — they do not contain message bodies or recipient addresses.</li>
+                <li><strong>IMAP / POP3 credentials:</strong> if you connect your own mailbox so we can fetch reports directly, your username and password (or OAuth2 refresh token) are stored encrypted at rest. We only use them to download messages from the report folder you configure.</li>
+                <li><strong>AI prompt data:</strong> when you enable the AI Insights add-on, we send an anonymised summary of your DMARC data (counts, percentages, top-N sending sources by FQDN where present) to Anthropic. We do not send email addresses, message contents, or your account identifiers.</li>
+                <li><strong>Sentry crash data:</strong> if the application errors, we capture the PHP stack trace, request path, and Sendvery user ID. We strip request bodies and form payloads so credentials and report contents never leave the application.</li>
+            </ul>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Why we collect it</h2>
+            <p>We collect the minimum data necessary to operate Sendvery: authenticate you, ingest the DMARC reports you ask us to monitor, bill paid plans, and fix bugs. We do not sell your data, we do not run advertising, and we do not share data with third parties beyond the sub-processors listed below.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Data retention</h2>
+            <ul class="list-disc pl-6 space-y-2">
+                <li><strong>Account data:</strong> retained while your account is active and for 30 days after you delete the account, so that an accidental deletion can be reversed.</li>
+                <li><strong>DMARC reports:</strong> retention is tied to your plan — Free 30 days, Personal 1 year, Pro 2 years, Business unlimited. When you downgrade, older reports are not deleted immediately; they become read-only and a contractual purge runs once your plan's retention window passes.</li>
+                <li><strong>Sentry crash data:</strong> retained for 30 days, then automatically purged by Sentry.</li>
+                <li><strong>Stripe payment data:</strong> retained by Stripe according to Stripe's own retention policy — we keep only the references (customer / subscription IDs) for as long as your account exists.</li>
+                <li><strong>Backups:</strong> daily encrypted database backups retained for 30 days, then rotated.</li>
+            </ul>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Sub-processors</h2>
+        </div>
+
+        <div class="overflow-x-auto mt-6">
+            <table class="table table-sm w-full">
+                <thead><tr><th>Name</th><th>Purpose</th><th>Data shared</th><th>Location</th></tr></thead>
+                <tbody>
+                    <tr><td>Stripe</td><td>Payment processing and subscription billing</td><td>Email address, billing address, subscription status</td><td>USA and EU (SCCs in place)</td></tr>
+                    <tr><td>Anthropic</td><td>AI-powered insights generation (when enabled by user)</td><td>Anonymised DMARC summary data — no email addresses or personal data</td><td>USA. Data is processed under Anthropic's API terms. Enabled only when AI Insights is active on your plan.</td></tr>
+                    <tr><td>Sentry</td><td>Error tracking and crash reporting</td><td>Error messages, PHP stack traces, request paths</td><td>EU and USA (Sentry EU endpoint used where possible)</td></tr>
+                    <tr><td>Hetzner</td><td>Infrastructure hosting</td><td>All application data stored on Hetzner servers</td><td>European Union (Germany)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="prose prose-lg max-w-none text-base-content/80 mt-6">
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Your GDPR rights</h2>
+            <p>If you are located in the European Union, you have the following rights under GDPR. To exercise any of them, contact <a href="mailto:privacy@sendvery.com" class="link link-primary">privacy@sendvery.com</a>:</p>
+            <ul class="list-disc pl-6 space-y-2">
+                <li><strong>Right to access</strong> — request a copy of every piece of personal data we hold about you.</li>
+                <li><strong>Right to rectification</strong> — correct anything inaccurate.</li>
+                <li><strong>Right to erasure</strong> — ask us to delete your account and the personal data tied to it (subject to the contractual retention window on DMARC reports while a paid plan is in force).</li>
+                <li><strong>Right to data portability</strong> — receive your data in a machine-readable format (JSON / CSV export).</li>
+                <li><strong>Right to object</strong> — object to any processing where the legal basis is our legitimate interest (we will stop unless we can demonstrate compelling grounds).</li>
+                <li><strong>Right to restrict processing</strong> — pause our use of your data while a dispute is being resolved.</li>
+                <li><strong>Right to lodge a complaint</strong> — file a complaint with your local data-protection authority. In the Czech Republic that is the Úřad pro ochranu osobních údajů (uoou.cz).</li>
+            </ul>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Children</h2>
+            <p>Sendvery is a B2B product. It is not directed at anyone under 16 and we do not knowingly collect data from children. If you believe a minor has created an account, please contact us so we can delete it.</p>
+
+            <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Contact</h2>
+            <p>Privacy questions: <a href="mailto:privacy@sendvery.com" class="link link-primary">privacy@sendvery.com</a>. Data controller: Jan Mikeš, OSVČ (self-employed), Czech Republic.</p>
+        </div>
+    </div>
+</twig:SectionContainer>
+{% endblock %}

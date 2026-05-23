@@ -1,0 +1,54 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}System Status — Sendvery{% endblock %}
+{% block meta_description %}Sendvery system status: current operational state of the web app, email ingestion workers, DMARC report parser, DNS health checker, and AI Insights service.{% endblock %}
+
+{% block content %}
+<twig:SectionContainer>
+    <div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-bold">Sendvery System Status</h1>
+        {% if statusData.updated_at %}
+            <p class="text-sm text-base-content/50 mt-2 mb-6">Last updated: {{ statusData.updated_at }}</p>
+        {% else %}
+            <p class="text-sm text-base-content/50 mt-2 mb-6">Live operational status.</p>
+        {% endif %}
+
+        <div role="alert" class="alert {{ statusData.overall == 'operational' ? 'alert-success' : statusData.overall == 'degraded' ? 'alert-warning' : 'alert-error' }}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {% if statusData.overall == 'operational' %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                {% elseif statusData.overall == 'degraded' %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+                {% else %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                {% endif %}
+            </svg>
+            <span class="font-semibold">
+                {% if statusData.overall == 'operational' %}All systems operational{% elseif statusData.overall == 'degraded' %}Partial degradation{% else %}Service disruption{% endif %}
+            </span>
+        </div>
+
+        <div class="card bg-base-100 border border-base-300 mt-8">
+            <div class="card-body p-0">
+                <ul class="divide-y divide-base-300">
+                    {% for component in statusData.components %}
+                        <li class="flex items-center justify-between gap-4 px-6 py-4">
+                            <div class="flex items-center gap-3">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full {{ component.status == 'operational' ? 'bg-success' : component.status == 'degraded' ? 'bg-warning' : 'bg-error' }}"></span>
+                                <span class="font-medium">{{ component.name }}</span>
+                            </div>
+                            <span class="badge badge-sm {{ component.status == 'operational' ? 'badge-success' : component.status == 'degraded' ? 'badge-warning' : 'badge-error' }}">
+                                {% if component.status == 'operational' %}Operational{% elseif component.status == 'degraded' %}Degraded{% else %}Outage{% endif %}
+                            </span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="mt-10 text-sm text-base-content/60">
+            <p>Want to be told when something breaks? Email <a href="mailto:status@sendvery.com?subject=Subscribe%20to%20status%20updates" class="link link-primary">status@sendvery.com</a> and we will add you to the incident notification list.</p>
+        </div>
+    </div>
+</twig:SectionContainer>
+{% endblock %}

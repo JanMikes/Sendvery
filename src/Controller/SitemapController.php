@@ -29,6 +29,9 @@ final class SitemapController extends AbstractController
         ['route' => 'pricing', 'priority' => '0.8', 'changefreq' => 'monthly'],
         ['route' => 'about_what_is_sendvery', 'priority' => '0.7', 'changefreq' => 'monthly'],
         ['route' => 'about_open_source', 'priority' => '0.7', 'changefreq' => 'monthly'],
+        ['route' => 'legal_privacy', 'priority' => '0.6', 'changefreq' => 'monthly'],
+        ['route' => 'legal_security', 'priority' => '0.6', 'changefreq' => 'monthly'],
+        ['route' => 'status', 'priority' => '0.6', 'changefreq' => 'weekly'],
     ];
 
     #[Route('/sitemap.xml', name: 'sitemap', defaults: ['_format' => 'xml'])]
