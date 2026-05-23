@@ -1531,3 +1531,57 @@ No task was blocked. Every architect → developer → reviewer cycle landed cle
 - **Stretched-link pattern (TASK-018)** is the canonical row-navigation idiom. Future tables MUST follow it — the `noOnclickInAnyDashboardPage` regression test will fail loudly if anyone reintroduces `<tr onclick>`.
 - **Bulk action pattern (TASK-015 + TASK-022)** is consistent: outer `<form data-controller="*-selection">`, per-row `name="ids[]"` checkboxes, sticky toolbar via Stimulus targets. The two `*_selection_controller.js` files are nearly identical and could be unified into a generic `bulk_selection_controller.js` taking the input name as a Stimulus value attribute. Refactor opportunity once a third instance lands.
 - **Halite vs AES-256-GCM correction (TASK-009)**: the actual encryption library is paragonie/halite (XChaCha20-Poly1305 via libsodium). The homepage previously claimed AES-256-GCM in three places — all fixed. New security copy must use the Halite description; `TrustPagesTest::testSecurityPageContainsEncryptionClaim` is the regression guard.
+
+---
+
+## RUN SUMMARY — 2026-05-23 second autonomous CX loop
+
+### Shipped (8 tasks, finishing the backlog)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 020 | Quarantine visibility | `820dc8d` | dashboard | New `/app/quarantine` route + reprocess + add-domain-and-release flow; sidebar entry with badge-warning count; team-scoped via monitored-domain ownership OR receiving mailbox connection (covers the UnknownDomain-via-own-mailbox case the architect originally missed) |
+| 021 | Setup checklist | `469037e` | onboarding | Persistent dismissible 3-step checklist above the Next Action card on `/app`; team-scoped `setup_checklist_dismissed_at` column; auto-resurface on DMARC regression via in-memory override (no extra DB writes on the DNS-check hot path) |
+| 011 | /open-source polish | `bb41766` | marketing | 7-section rewrite: hero with dual CTA, GitHub stats strip (cached JSON from new `sendvery:opensource:refresh-github-stats` cron), 60-second quickstart with copy-to-clipboard, comparison table, expanded Why-AGPL, repo tour. Gated "View on GitHub" via `SENDVERY_REPO_PUBLIC` env (disabled "Coming soon" button until flipped) |
+| 014 | Mailbox setup wizard | `f99a103` | onboarding | Provider preset dropdown (Gmail / Outlook / Fastmail / Yahoo / Seznam / Custom) + Gmail/Outlook app-password banner + synchronous `MailboxConnectionTester::test()` (3s timeout via Webklex) running BEFORE persist — inline classified error on failure, no row created. Per-row "Re-test" action on mailboxes list. `ConnectMailboxHandler` no longer double-tests (controller owns the gate). Tightened `auth` substring matcher (no more false positives on `OAUTH` / `AUTH=PLAIN`). Credentials never leak via re-test flash |
+| 008 | Per-page OG images | `e1a84e8` | marketing | New `/og/{type}/{slug}` route — PHP GD painter, 1200×630 PNG, immutable 30-day cache. Three card variants: tool (8 pages), kb (3 articles, now 7 after TASK-007), health (`/health/{hash}` shares). Inter Bold/Regular TTF committed (OFL-1.1). Logo PNG optional with wordmark text fallback so feature shipped without a design asset |
+| 010 | /what-is-sendvery polish | `95b6ef8` | marketing | Wall-of-text → 8-section product manifesto: hero with dual CTA, problem statement, daisyUI dashboard mock as product preview (no real screenshot needed), 3 persona cards (Developer / Small Business / Agency), 4-card comparison vs MXToolbox/dmarcian/PowerDMARC/Sendvery (Sendvery highlighted), "Built in the open" strip reading TASK-011's github_stats, founder blockquote, final CTA strip. 4 distinct CTAs total |
+| 006 | Tool soft-conversion | `1c577f2` | marketing | New Turbo-frame `<twig:MonitorEmailMeMicro />` under every tool result — single email field, creates `BetaSignup` with source tagging (`spf-result`, `dkim-result`, …) for per-tool conversion analytics. Existing `SendBetaConfirmationEmail` listener picks it up automatically. Migration moved BetaSignup unique constraint from `email` to `(email, source)` for multi-source captures. Idempotent on re-submit |
+| 007 | KB content depth | `82e19c5` | marketing | Knowledge base 3 → 7 articles: DKIM explainer, Gmail/Yahoo 2024 sender requirements, p=none→p=reject migration, MX records (~1700-1950 words each). KB index grid + article cross-link grid moved to auto-fill minmax columns so categories with any article count look balanced. Sitemap + OG-image generator pick up the new slugs automatically |
+
+**Suite at run end:** 1666 tests, 4448 assertions, all green. PHPStan clean. PHP-CS-Fixer clean. ~24 new test files + ~150 new test methods + ~6800 words of new KB copy across the run.
+
+### Backlog now empty
+
+All 22 tasks from the previous run's identification (TASK-001 through TASK-022) are shipped. No proposed or planned tasks remain. The orchestrator stopped here per the brief's stop-condition: "Backlog has zero `proposed` or `planned` tasks."
+
+### Blocked: 0
+
+Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds caught and fixed 8 real issues in this run:
+- TASK-020: `UnknownDomain` quarantine rows for unowned domains were invisible to all teams (architect plan flaw — needed mailbox-scoping branch in the WHERE).
+- TASK-020: `EM::clear()` inside the doctrine_transaction-wrapped reprocess handler could detach unrelated entities → captured envelope id as primitive string + detached only the receiving proxy.
+- TASK-021: Architect's note about CSRF field name `_token` was wrong — code correctly used `_csrf_token`; doc fixed for future reference.
+- TASK-014: `FakeMailClient::testConnection` didn't propagate `errorCode` → re-test classified-message branch was dead code → added optional `errorCode` to `simulateFailure()`.
+- TASK-014: `classifyError` matched bare `auth` substring → false positive on `OAUTH`, `AUTH=PLAIN` capability strings → tightened to `authentication / login failed / credentials / auth failed / invalid login`.
+- TASK-014: Re-test flash leaked raw `$result->error` which can contain bound usernames or credential fragments from IMAP server responses → dropped the raw detail, log-only.
+- TASK-008: `HealthOgImageContentResolver` made two sequential DB queries without logging the second's null-fallback → added LoggerInterface dependency with explicit warning on data-integrity escape.
+- TASK-008: `GdOgImagePainterTest` tearDown leaked nested dirs from the `createsTargetDirectoryIfMissing` test → switched to recursive cleanup via RecursiveIteratorIterator.
+
+### Deferred for follow-up (NOT in scope for this run)
+
+- **Real product screenshot for `/what-is-sendvery`**. Section 3 uses a daisyUI HTML mock with an "Illustrative" caption. Replace with a real dashboard screenshot when one is available — no code change needed beyond swapping the `<div>` mock for an `<img>`.
+- **Real founder photo on `/what-is-sendvery`**. Section 7 uses an initials avatar placeholder. Swap for a real photo whenever one exists.
+- **Real OG brand logo**. `GdOgImagePainter` falls back to a "Sendvery" wordmark text mark when `assets/images/og-logo.png` is absent. Drop a 240×60 transparent PNG there to upgrade every OG card to a real logo with zero code change.
+- **System cron for GitHub stats refresh**. The `sendvery:opensource:refresh-github-stats` command is shipped but the actual cron line lives in `~/www/spare.srv/deployment/crontab` (outside the repo). Add `0 */6 * * * sentry-cli monitors run sendvery-github-stats -- docker compose run --rm worker bin/console sendvery:opensource:refresh-github-stats` next deploy. Until then the stats strip on `/open-source` silently omits itself (by design — never renders fake numbers).
+- **KB article: app passwords for Gmail / Outlook**. Referenced as a placeholder `href="#"` in the TASK-014 mailbox-wizard's Gmail/Outlook app-password banner. Write the article when convenient and update the link.
+- **Bulk-selection Stimulus controller unification**. `alert_selection_controller.js` (TASK-015), `sender_selection_controller.js` (TASK-022) are nearly identical and now joined by patterns in TASK-020. Consider a generic `bulk_selection_controller.js` taking the input name as a Stimulus value attribute once a fourth instance lands.
+- **OG image layout-drift detection**. Reviewer asked for a SHA-256 pinned-output test; declined because GD/libgd minor version drift produces false positives. If layout regressions become a real problem, consider a visual-diff tool (e.g. screenshot comparison via percy/chromatic) rather than byte-equality.
+
+### Architectural notes added this run
+
+- **`SetupChecklistResolver` (TASK-021)** is a pure-computation service mirroring `NextActionResolver`. Both take pre-fetched inputs from the overview controller, no DB access. New dashboard widgets that synthesise multiple signals should follow this pattern — keeps unit tests cheap and the controller as the single composition point.
+- **`MailboxConnectionTester` interface (TASK-014)** is the seam for pre-persist connection tests with plaintext credentials. Separate from `MailClient::testConnection(MailboxConnection)` which decrypts a persisted entity. Future mailbox-style integrations (e.g. OAuth2 token tests, SMTP send tests) should split the same way.
+- **`OgImageRenderer::SCHEMA_VERSION` (TASK-008)** is the cache-invalidation switch. Bump from `'v1'` → `'v2'` whenever the painter's layout changes — every md5 cache key changes, forces regeneration on first request. Old files become orphaned in `var/og_cache/`; `rm -rf var/og_cache/` on deploy is acceptable since regeneration is fast and CDNs cache aggressively.
+- **`var/{github_stats,og_cache}/` cache-directory pattern (TASK-011 + TASK-008)** — Twig globals exposed via `GlobalsInterface` extensions read these on each request, with try/catch wrappers returning safe defaults for unauthenticated / pre-cron contexts. Mirror this pattern for any future on-disk read-mostly cache.
+- **`BetaSignup` source taxonomy (TASK-006)** — the unique constraint moved from `(email)` to `(email, source)`. Future capture forms (e.g. a "notify me when self-host is published" form) can land another `source` value without colliding with existing rows. Per-source analytics queries become trivial.
+- **KB index grid auto-fill pattern (TASK-007)** — `[grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr))]` handles any article count gracefully. Apply to any other "grid of cards where the row may have 1-many entries" surface.
