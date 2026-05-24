@@ -105,6 +105,14 @@ final class ShowDomainDetailController extends AbstractController
         // value the enum doesn't yet recognise (legacy rows, future spec
         // revisions). Null and unknown both collapse to `p=none` so the
         // advisor's empty-state branch handles the rest.
+        //
+        // TASK-099: the source-of-truth boolean for "is there a DMARC TXT
+        // record published?" is the raw column on MonitoredDomain, NOT this
+        // coerced fallback. Without it the DmarcPolicyExplainer would lie to
+        // first-touch users ("DMARC reports are being collected") for a
+        // domain that hasn't published any DMARC record at all — the
+        // explainer is hidden in the template when this is false.
+        $hasPublishedDmarcRecord = null !== $domain->dmarcPolicy;
         $currentPolicy = null === $domain->dmarcPolicy
             ? DmarcPolicy::None
             : (DmarcPolicy::tryFrom($domain->dmarcPolicy) ?? DmarcPolicy::None);
@@ -130,6 +138,7 @@ final class ShowDomainDetailController extends AbstractController
             'dnsHealth' => $dnsHealth,
             'dmarcPolicyAdvice' => $dmarcPolicyAdvice,
             'domainSetupStatus' => $domainSetupStatus,
+            'hasPublishedDmarcRecord' => $hasPublishedDmarcRecord,
         ]);
     }
 }

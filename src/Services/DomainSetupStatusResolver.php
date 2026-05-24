@@ -8,6 +8,7 @@ use App\Results\DnsHealthOverviewResult;
 use App\Results\DomainSetupStatus;
 use App\Results\ProtocolSetupStatus;
 use App\Value\DomainHealthFilter;
+use App\Value\DomainSetupDisplayMode;
 use App\Value\ProtocolState;
 
 /**
@@ -79,6 +80,13 @@ final readonly class DomainSetupStatusResolver
                 ),
             ];
 
+            // PanelOnly: the banner is hidden in this state — the old
+            // "DNS not configured yet" headline was a wrong-information bug
+            // (we hadn't actually checked yet) and the panel's info-blue
+            // "We haven't checked DNS yet" panel leads alone (TASK-097).
+            // The headline/CTA are still populated so the DTO stays
+            // sensible for snapshot tests and standalone uses, but no
+            // template reads them in this state.
             return new DomainSetupStatus(
                 severity: DomainHealthFilter::Unverified,
                 headline: 'DNS not configured yet — start with the SPF record',
@@ -86,6 +94,7 @@ final readonly class DomainSetupStatusResolver
                 ctaRoute: 'dashboard_domain_health',
                 ctaFragment: 'health-spf',
                 protocols: $protocols,
+                displayMode: DomainSetupDisplayMode::PanelOnly,
             );
         }
 
@@ -102,6 +111,9 @@ final readonly class DomainSetupStatusResolver
             && ProtocolState::Configured === $mx->state;
 
         if ($allConfigured) {
+            // BannerOnly: the one-line "Monitoring active" headline is
+            // enough — the redundant "DNS setup is complete" panel below it
+            // would just repeat the same news a second time (TASK-097).
             return new DomainSetupStatus(
                 severity: DomainHealthFilter::Healthy,
                 headline: 'Monitoring active — all four records are in place',
@@ -109,6 +121,7 @@ final readonly class DomainSetupStatusResolver
                 ctaRoute: null,
                 ctaFragment: null,
                 protocols: $protocols,
+                displayMode: DomainSetupDisplayMode::BannerOnly,
             );
         }
 
@@ -123,6 +136,7 @@ final readonly class DomainSetupStatusResolver
                 ctaRoute: 'dashboard_domain_health',
                 ctaFragment: 'health-dmarc',
                 protocols: $protocols,
+                displayMode: DomainSetupDisplayMode::BannerAndPanel,
             );
         }
 
@@ -153,6 +167,7 @@ final readonly class DomainSetupStatusResolver
             ctaRoute: 'dashboard_domain_health',
             ctaFragment: $ctaFragment,
             protocols: $protocols,
+            displayMode: DomainSetupDisplayMode::BannerAndPanel,
         );
     }
 

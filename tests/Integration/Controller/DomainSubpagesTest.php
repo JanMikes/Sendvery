@@ -746,6 +746,16 @@ final class DomainSubpagesTest extends WebTestCase
         $fixtures = TestFixtures::fromContainer(self::getContainer());
         $persona = $fixtures->onboardedOwner();
         assert(null !== $persona->domain);
+
+        // TASK-099: the explainer only renders when a DMARC TXT record is
+        // actually published (source-of-truth column on MonitoredDomain).
+        // Set p=none here to exercise the rendered path — for the "no record
+        // published" case see dmarcPolicyExplainerHidesWhenNoDmarcRecordPublished.
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::None;
+        $em->flush();
+
         $client->loginUser($persona->user);
 
         $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
@@ -896,6 +906,14 @@ final class DomainSubpagesTest extends WebTestCase
         $fixtures = TestFixtures::fromContainer(self::getContainer());
         $persona = $fixtures->onboardedOwner();
         assert(null !== $persona->domain);
+
+        // TASK-099: a published policy is the precondition for the explainer
+        // (and therefore for its migration-guide link) to render at all.
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::None;
+        $em->flush();
+
         $client->loginUser($persona->user);
 
         $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
@@ -931,6 +949,90 @@ final class DomainSubpagesTest extends WebTestCase
             $crawler->filter('[data-testid="dmarc-policy-migration-link"]'),
             'Migration-guide link must NOT render at p=reject (no next tier).',
         );
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerHidesWhenNoDmarcRecordPublished(): void
+    {
+        // TASK-099: a brand-new domain with no `_dmarc` TXT record published
+        // (source-of-truth: MonitoredDomain.dmarcPolicy === null) must NOT
+        // render the explainer. The controller still coerces a non-null
+        // DmarcPolicy::None fallback for other code paths, but the template
+        // gates the render on the actual published-record boolean — otherwise
+        // the explainer lies ("DMARC reports are being collected") for a
+        // user who hasn't published any record yet.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+        // Default-built domain has dmarcPolicy === null — exactly the
+        // condition under test.
+        self::assertNull($persona->domain->dmarcPolicy);
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(
+            0,
+            $crawler->filter('[data-testid="dmarc-policy-explainer"]'),
+            'Explainer must be hidden until the source-of-truth dmarc_policy column on MonitoredDomain is non-null.',
+        );
+        // Regression guard: also confirm the false-positive Monitor-only
+        // copy is gone from the page entirely.
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('Monitor-only mode', $body);
+        self::assertStringNotContainsString('DMARC reports are being collected', $body);
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerRendersAtQuarantine(): void
+    {
+        // TASK-099: quarantine policy → explainer renders the
+        // gradual-enforcement copy.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::Quarantine;
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        self::assertGreaterThan(0, $crawler->filter('[data-testid="dmarc-policy-explainer"]')->count());
+        $title = $crawler->filter('[data-testid="dmarc-policy-title"]')->text();
+        self::assertStringContainsString('p=quarantine', $title);
+        self::assertStringContainsString('Gradual enforcement', $title);
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerRendersAtReject(): void
+    {
+        // TASK-099: reject policy → explainer renders the full-enforcement
+        // copy.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::Reject;
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        self::assertGreaterThan(0, $crawler->filter('[data-testid="dmarc-policy-explainer"]')->count());
+        $title = $crawler->filter('[data-testid="dmarc-policy-title"]')->text();
+        self::assertStringContainsString('p=reject', $title);
+        self::assertStringContainsString('Full enforcement', $title);
     }
 
     /**

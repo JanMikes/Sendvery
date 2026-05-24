@@ -2676,7 +2676,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-061: Domains sidebar entry has no count badge for "unverified domains" — the canonical attention signal for the largest user surface
 
-- Status: planned
+- Status: done
 - Area: dashboard
 - Why: Attention-signals audit. The Domains sidebar entry (`templates/dashboard/layout.html.twig` lines 91-95) is the second most-trafficked dashboard route (after `/app`), and it has no attention badge. We already compute "domains in red" — `HealthSummaryResult::domainsAttentionCount` + `domainsUnverifiedCount` are surfaced on the overview hero (lines 38-45 of `overview.html.twig`) and link to `dashboard_domains?status=attention` / `?status=unverified` (the TASK-032 clickable-counts work). The data is right there; the sidebar just doesn't show it. Result: a user who scrolls past the overview hero or who lands on a non-overview page has no nav-level signal that "3 of your 8 domains are degrading." The whole point of a sidebar badge is that it survives across pages — the hero banner doesn't.
   Important: this is a SECONDARY badge that must not compete with TASK-060's Alerts badge. The rule needs to be "alerts is for ephemeral events that fired; domains is for the standing state of your fleet." To avoid two-badge fatigue: ONLY show the Domains badge when there's at least one **unverified** domain (the hardest-to-discover red state — the user added the domain but the DNS isn't right, and right now they have to navigate to `/app/domains?status=unverified` to find out). `Attention`-status domains (pass-rate dipping below 90%) are already covered by the Alerts badge via the `DmarcPassRateRegressed` alert type — don't double-signal.
@@ -3373,7 +3373,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-097: Domain detail page renders `DomainStatusBanner` and `DomainSetupStatus` back-to-back with overlapping / contradictory copy
 
-- Status: proposed
+- Status: done (bundled with TASK-099)
 - Area: dashboard
 - Why: TASK-067 (`DomainStatusBanner`) and TASK-080 (`DomainSetupStatus`) shipped independently and now stack at the top of `/app/domains/{id}`. They derive from the same `DomainSetupStatus` DTO but render two cards with overlapping verdicts in every state, and one state is outright contradictory:
   - **All-green case**: banner says *"Monitoring active — all four records are in place"*; the panel below it renders the all-green confirmation card saying *"DNS setup is complete — SPF, DKIM, DMARC and MX are all in place for this domain. Reports flow in automatically — nothing for you to do here."* Two cards, same headline, vertically adjacent — the user reads the same news twice and the page wastes ~120px before the actual content (stats + charts) begins.
@@ -3413,7 +3413,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-099: `DmarcPolicyExplainer` shows "p=none — Monitor-only mode — DMARC reports are being collected" for domains with NO DMARC record published — actively lying to first-time users
 
-- Status: proposed
+- Status: done (bundled with TASK-097)
 - Area: dashboard / guidance
 - Why: TASK-037 shipped `DmarcPolicyExplainer` on `/app/domains/{id}`, which classifies the current DMARC policy and explains what it means. The component is rendered unconditionally on the detail page. For a brand-new domain with no DMARC TXT record published, `MonitoredDomain.dmarcPolicy` is `null`; the `ShowDomainDetailController` falls back to `DmarcPolicy::None` (`domain_detail.html.twig` line 108-110 of the controller) and the explainer then renders:
   - Title: *"You're at p=none — Monitor-only mode"*

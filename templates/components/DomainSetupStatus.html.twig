@@ -5,6 +5,11 @@
    renderer with zero conditional logic beyond branch selection. #}
 {% props status, domainId %}
 
+{# TASK-097: `banner_only` (the all-green state) suppresses the panel — the
+   one-line "Monitoring active" banner above is enough; the all-green
+   confirmation card would just repeat the same news a second time. #}
+{% if status.displayMode.value != 'banner_only' %}
+
 {% set allConfigured = true %}
 {% set allUnknown = true %}
 {% set configuredCount = 0 %}
@@ -107,4 +112,6 @@
             </ul>
         </div>
     </div>
+{% endif %}
+
 {% endif %}

@@ -7,6 +7,7 @@ namespace App\Tests\Unit\Services;
 use App\Results\DnsHealthOverviewResult;
 use App\Services\DomainSetupStatusResolver;
 use App\Value\DomainHealthFilter;
+use App\Value\DomainSetupDisplayMode;
 use App\Value\ProtocolState;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -28,6 +29,9 @@ final class DomainSetupStatusResolverTest extends TestCase
         foreach ($status->protocols as $protocol) {
             self::assertSame(ProtocolState::Unknown, $protocol->state);
         }
+        // TASK-097: null DNS health is the "we haven't checked yet" pending
+        // state — banner hides, panel leads.
+        self::assertSame(DomainSetupDisplayMode::PanelOnly, $status->displayMode);
     }
 
     #[Test]
@@ -50,6 +54,9 @@ final class DomainSetupStatusResolverTest extends TestCase
         foreach ($status->protocols as $protocol) {
             self::assertSame(ProtocolState::Unknown, $protocol->state);
         }
+        // TASK-097: an all-null DTO is functionally the same as null input
+        // (DnsHealthOverviewResult::isUnchecked) — same PanelOnly mode.
+        self::assertSame(DomainSetupDisplayMode::PanelOnly, $status->displayMode);
     }
 
     #[Test]
@@ -73,6 +80,9 @@ final class DomainSetupStatusResolverTest extends TestCase
             self::assertSame(ProtocolState::Configured, $protocol->state);
             self::assertNull($protocol->nextStep);
         }
+        // TASK-097: all-green hides the redundant "DNS setup is complete"
+        // panel — the one-line banner is enough.
+        self::assertSame(DomainSetupDisplayMode::BannerOnly, $status->displayMode);
     }
 
     #[Test]
@@ -97,6 +107,9 @@ final class DomainSetupStatusResolverTest extends TestCase
         self::assertSame(ProtocolState::Configured, $byName['DKIM']->state);
         self::assertSame(ProtocolState::Missing, $byName['DMARC']->state);
         self::assertSame(ProtocolState::Configured, $byName['MX']->state);
+        // TASK-097: any state besides all-green or fully-unchecked renders
+        // both banner + panel together as a TL;DR + drill-down unit.
+        self::assertSame(DomainSetupDisplayMode::BannerAndPanel, $status->displayMode);
     }
 
     #[Test]
@@ -119,6 +132,7 @@ final class DomainSetupStatusResolverTest extends TestCase
         self::assertNotNull($byName['SPF']->nextStep);
         self::assertStringContainsString('v=spf1', $byName['SPF']->nextStep);
         self::assertSame('health-spf', $status->ctaFragment);
+        self::assertSame(DomainSetupDisplayMode::BannerAndPanel, $status->displayMode);
     }
 
     #[Test]
@@ -144,6 +158,9 @@ final class DomainSetupStatusResolverTest extends TestCase
         self::assertNotNull($byName['MX']->nextStep);
         // DMARC OK, so most-urgent failing is DKIM (SPF > DKIM > MX precedence).
         self::assertSame('health-dkim', $status->ctaFragment);
+        // TASK-097: MX scored < 80 (Invalid) is still a partial-setup state
+        // — it lands in BannerAndPanel just like any other Attention case.
+        self::assertSame(DomainSetupDisplayMode::BannerAndPanel, $status->displayMode);
     }
 
     #[Test]
@@ -167,6 +184,32 @@ final class DomainSetupStatusResolverTest extends TestCase
         self::assertSame(ProtocolState::Invalid, $byName['SPF']->state);
         self::assertSame(ProtocolState::Missing, $byName['DKIM']->state);
         self::assertSame('health-spf', $status->ctaFragment);
+        self::assertSame(DomainSetupDisplayMode::BannerAndPanel, $status->displayMode);
+    }
+
+    #[Test]
+    public function resolveMxScoredLowOthersOkLandsInBannerAndPanel(): void
+    {
+        // TASK-097 edge case: MX scored < 80 with all three TXT records
+        // verified is the smallest partial-setup case. The acceptance
+        // criteria call this out explicitly to make sure it doesn't
+        // accidentally fall into BannerOnly (which would hide the row
+        // explaining the failing MX) or PanelOnly (which would lose the
+        // TL;DR banner the partial state needs).
+        $resolver = new DomainSetupStatusResolver();
+
+        $status = $resolver->resolve($this->buildDnsHealth(
+            spfVerifiedAt: new \DateTimeImmutable(),
+            dkimVerifiedAt: new \DateTimeImmutable(),
+            dmarcVerifiedAt: new \DateTimeImmutable(),
+            latestMxScore: 40,
+        ));
+
+        self::assertSame(DomainHealthFilter::Attention, $status->severity);
+        self::assertStringContainsString('MX', $status->headline);
+        $byName = $this->indexByName($status->protocols);
+        self::assertSame(ProtocolState::Invalid, $byName['MX']->state);
+        self::assertSame(DomainSetupDisplayMode::BannerAndPanel, $status->displayMode);
     }
 
     /**

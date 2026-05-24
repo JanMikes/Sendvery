@@ -8,13 +8,25 @@
    when the caller renders the banner standalone (e.g. snapshot tests). #}
 {% props status, domainId = null %}
 
+{# TASK-097: `panel_only` (the unchecked-DNS pending state) suppresses the
+   banner entirely — the panel below leads. The old "DNS not configured yet"
+   headline was a wrong-information bug a first-time user hit in the first
+   5 minutes (we hadn't actually checked yet) and is no longer rendered
+   anywhere. #}
+{% if status.displayMode.value != 'panel_only' %}
+
 {% set tone = {
     'healthy':    {bar: 'bg-success', badge: 'bg-success/10 text-success', icon: 'check', btn: 'btn-success'},
     'attention':  {bar: 'bg-warning', badge: 'bg-warning/10 text-warning', icon: 'warn',  btn: 'btn-warning'},
     'unverified': {bar: 'bg-error',   badge: 'bg-error/10 text-error',     icon: 'warn',  btn: 'btn-error'},
 }[status.severity.value] %}
 
-<div class="rounded-2xl border border-base-200 bg-base-100 overflow-hidden mb-4 shadow-sm" data-testid="domain-status-banner">
+{# When both banner + panel render together (`banner_and_panel`), shrink the
+   banner's bottom margin so the TL;DR + drill-down checklist read as a unit
+   instead of two stacked cards. #}
+{% set spacing = status.displayMode.value == 'banner_and_panel' ? 'mb-2' : 'mb-4' %}
+
+<div class="rounded-2xl border border-base-200 bg-base-100 overflow-hidden {{ spacing }} shadow-sm" data-testid="domain-status-banner">
     <div class="h-1 {{ tone.bar }}"></div>
     <div class="p-4 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 {{ tone.badge }}">
@@ -37,3 +49,5 @@
         {% endif %}
     </div>
 </div>
+
+{% endif %}

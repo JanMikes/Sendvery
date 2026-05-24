@@ -61,9 +61,10 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
         self::assertStringContainsString('Monitoring active — all four records are in place', $body);
         self::assertStringContainsString('data-testid="domain-status-banner"', $body);
 
-        // Setup status — all-green card branch.
-        self::assertStringContainsString('data-testid="domain-setup-status-all-green"', $body);
-        self::assertStringContainsString('DNS setup is complete', $body);
+        // TASK-097: all-green hides the panel entirely — the redundant
+        // "DNS setup is complete" card would just repeat the banner.
+        self::assertStringNotContainsString('data-testid="domain-setup-status-all-green"', $body);
+        self::assertStringNotContainsString('DNS setup is complete', $body);
 
         // Regression guard: the legacy bare badge cluster is gone. The
         // pre-refactor markup rendered the literal `badge-ghost badge-sm">SPF`
@@ -144,15 +145,126 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $body = (string) $client->getResponse()->getContent();
 
-        // Banner — Unverified headline for null-DNS edge.
-        self::assertStringContainsString('data-testid="domain-status-banner"', $body);
-        self::assertStringContainsString('DNS not configured yet — start with the SPF record', $body);
+        // TASK-097: banner hides in the unchecked-DNS pending state — the
+        // old "DNS not configured yet" headline was a wrong-information bug
+        // (we hadn't actually checked yet) and the info-blue panel below
+        // leads alone.
+        self::assertStringNotContainsString('data-testid="domain-status-banner"', $body);
+        self::assertStringNotContainsString('DNS not configured yet — start with the SPF record', $body);
 
         // Pending card branch — re-check form posting to dashboard_domain_reverify.
         self::assertStringContainsString('data-testid="domain-setup-status-pending"', $body);
         self::assertStringContainsString("We haven't checked DNS yet", $body);
         self::assertMatchesRegularExpression(
             '~<form[^>]*action="/app/domains/[^"]+/reverify"~',
+            $body,
+        );
+    }
+
+    #[Test]
+    public function allGreenStateRendersBannerWithoutAllGreenPanel(): void
+    {
+        // TASK-097: in the all-green state the panel hides entirely — the
+        // one-line "Monitoring active" banner is enough, and rendering the
+        // "DNS setup is complete" panel below it would just repeat the
+        // same news a second time. Guards against re-introducing the
+        // duplicate-headline regression.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $verifiedAt = new \DateTimeImmutable();
+        $persona->domain->spfVerifiedAt = $verifiedAt;
+        $persona->domain->dkimVerifiedAt = $verifiedAt;
+        $persona->domain->dmarcVerifiedAt = $verifiedAt;
+
+        $em->persist(new DomainHealthSnapshot(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            grade: 'A',
+            score: 95,
+            spfScore: 100,
+            dkimScore: 100,
+            dmarcScore: 100,
+            mxScore: 95,
+            blacklistScore: 90,
+            checkedAt: new \DateTimeImmutable(),
+            recommendations: [],
+            shareHash: null,
+        ));
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        // Banner renders (the only card for this state).
+        self::assertStringContainsString('data-testid="domain-status-banner"', $body);
+        self::assertStringContainsString('Monitoring active — all four records are in place', $body);
+
+        // Panel — all three branches must be absent.
+        self::assertStringNotContainsString('data-testid="domain-setup-status-all-green"', $body);
+        self::assertStringNotContainsString('data-testid="domain-setup-status-checklist"', $body);
+        self::assertStringNotContainsString('data-testid="domain-setup-status-pending"', $body);
+        // No second "DNS setup is complete" duplicate headline.
+        self::assertStringNotContainsString('DNS setup is complete', $body);
+    }
+
+    #[Test]
+    public function partialSetupRendersBothBannerAndChecklistWithTightSpacing(): void
+    {
+        // TASK-097: in the partial-setup state both cards render together,
+        // with the banner's bottom margin tightened (mb-2) so they read as
+        // a single TL;DR → drill-down unit instead of two stacked cards.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $verifiedAt = new \DateTimeImmutable();
+        // DMARC + DKIM verified, SPF intentionally NOT verified.
+        $persona->domain->dkimVerifiedAt = $verifiedAt;
+        $persona->domain->dmarcVerifiedAt = $verifiedAt;
+
+        $em->persist(new DomainHealthSnapshot(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            grade: 'B',
+            score: 75,
+            spfScore: 30,
+            dkimScore: 100,
+            dmarcScore: 100,
+            mxScore: 95,
+            blacklistScore: 90,
+            checkedAt: new \DateTimeImmutable(),
+            recommendations: [],
+            shareHash: null,
+        ));
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        // Both cards render.
+        self::assertStringContainsString('data-testid="domain-status-banner"', $body);
+        self::assertStringContainsString('data-testid="domain-setup-status-checklist"', $body);
+
+        // Spacing: the banner wrapper uses mb-2 (not mb-4) when both
+        // banner + panel render together.
+        self::assertMatchesRegularExpression(
+            '~<div class="rounded-2xl[^"]*\bmb-2\b[^"]*"[^>]*data-testid="domain-status-banner"~',
             $body,
         );
     }
