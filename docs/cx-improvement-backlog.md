@@ -2285,7 +2285,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-036: Quarantine page has no filter chips — the three reasons that get reports parked are the obvious axis, and each badge should be clickable
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: Clickable-cards audit + IA review. `templates/dashboard/quarantine.html.twig` lists envelopes with a "Reason" column rendering one of three coloured badges: `Unknown domain` / `Unverified domain` / `Plan overage`. The badges are dead text. For a team with 50+ parked envelopes across two reasons (a typical state — Plan overage piles up monthly, Unknown domain piles up from typo / fake-sender traffic), the user has no way to isolate "show me only the plan-overage rows so I can decide whether to upgrade" or "show me only the unknown-domain rows so I can add domains in bulk". Quarantine is also the canonical "data we received but parked" surface — visibility into reason-mix is the first decision the user makes upon arriving.
 - Acceptance:

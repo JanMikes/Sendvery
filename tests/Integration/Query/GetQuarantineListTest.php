@@ -14,6 +14,7 @@ use App\Tests\IntegrationTestCase;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
 use App\Value\Reports\QuarantineReason;
+use App\Value\Reports\QuarantineReasonFilter;
 use App\Value\Reports\ReportSource;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
@@ -156,6 +157,105 @@ final class GetQuarantineListTest extends IntegrationTestCase
         );
 
         self::assertSame(0, $query->countForTeam($team->id->toString()));
+    }
+
+    public function testForTeamFiltersByReason(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetQuarantineList::class);
+
+        $team = $this->persistTeam($em);
+        $domainName = 'multi-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test';
+        $this->persistDomain($em, $team, $domainName);
+
+        $this->persistQuarantine($em, $domainName, QuarantineReason::UnverifiedDomain);
+        $this->persistQuarantine($em, $domainName, QuarantineReason::PlanOverage);
+        $this->persistQuarantine($em, $domainName, QuarantineReason::UnknownDomain);
+
+        self::assertCount(3, $query->forTeam($team->id->toString()));
+        self::assertCount(
+            1,
+            $query->forTeam($team->id->toString(), reasonFilter: QuarantineReasonFilter::PlanOverage),
+        );
+        self::assertCount(
+            1,
+            $query->forTeam($team->id->toString(), reasonFilter: QuarantineReasonFilter::UnknownDomain),
+        );
+        self::assertCount(
+            1,
+            $query->forTeam($team->id->toString(), reasonFilter: QuarantineReasonFilter::UnverifiedDomain),
+        );
+    }
+
+    public function testCountForTeamHonoursReasonFilter(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetQuarantineList::class);
+
+        $team = $this->persistTeam($em);
+        $domainName = 'count-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test';
+        $this->persistDomain($em, $team, $domainName);
+
+        $this->persistQuarantine($em, $domainName, QuarantineReason::PlanOverage);
+        $this->persistQuarantine($em, $domainName, QuarantineReason::PlanOverage);
+        $this->persistQuarantine($em, $domainName, QuarantineReason::UnverifiedDomain);
+
+        self::assertSame(3, $query->countForTeam($team->id->toString()));
+        self::assertSame(
+            2,
+            $query->countForTeam($team->id->toString(), QuarantineReasonFilter::PlanOverage),
+        );
+        self::assertSame(
+            1,
+            $query->countForTeam($team->id->toString(), QuarantineReasonFilter::UnverifiedDomain),
+        );
+        self::assertSame(
+            0,
+            $query->countForTeam($team->id->toString(), QuarantineReasonFilter::UnknownDomain),
+        );
+    }
+
+    public function testCountByReasonReturnsZeroForMissingReasons(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetQuarantineList::class);
+
+        $team = $this->persistTeam($em);
+        $domainName = 'cbr-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test';
+        $this->persistDomain($em, $team, $domainName);
+
+        $this->persistQuarantine($em, $domainName, QuarantineReason::PlanOverage);
+        $this->persistQuarantine($em, $domainName, QuarantineReason::PlanOverage);
+        $this->persistQuarantine($em, $domainName, QuarantineReason::UnknownDomain);
+
+        $counts = $query->countByReason($team->id->toString());
+
+        self::assertSame([
+            'unknown_domain' => 1,
+            'unverified_domain' => 0,
+            'plan_overage' => 2,
+        ], $counts);
+    }
+
+    public function testCountByReasonIsScopedToTeam(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetQuarantineList::class);
+
+        $myTeam = $this->persistTeam($em);
+        $foreignTeam = $this->persistTeam($em);
+
+        $foreignDomainName = 'fbn-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test';
+        $this->persistDomain($em, $foreignTeam, $foreignDomainName);
+        $this->persistQuarantine($em, $foreignDomainName, QuarantineReason::PlanOverage);
+
+        $counts = $query->countByReason($myTeam->id->toString());
+
+        self::assertSame([
+            'unknown_domain' => 0,
+            'unverified_domain' => 0,
+            'plan_overage' => 0,
+        ], $counts);
     }
 
     public function testForTeamPaginatesWithLimitAndOffset(): void

@@ -20,9 +20,67 @@
         {% endfor %}
     {% endfor %}
 
-    {% if items is empty and currentPage == 1 %}
-        {# Plain card empty state — we need a conditional link inside, which
-           the EmptyState component doesn't expose. #}
+    {# Filter chips — URL-driven via ?reason=. Mirrors the alerts / domains pattern.
+       Counts come from countByReason() in one SQL round-trip so chip labels stay
+       accurate under pagination (TASK-036). #}
+    <div class="flex flex-wrap gap-2 mb-4">
+        <a href="{{ path('dashboard_quarantine') }}"
+           class="btn btn-sm {{ activeFilter is null ? 'btn-primary' : 'btn-ghost' }}">
+            All ({{ totalCount }})
+        </a>
+        <a href="{{ path('dashboard_quarantine', { reason: 'unknown_domain' }) }}"
+           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'unknown_domain' ? 'btn-warning' : 'btn-ghost' }}">
+            Unknown domain ({{ reasonCounts.unknown_domain }})
+        </a>
+        <a href="{{ path('dashboard_quarantine', { reason: 'unverified_domain' }) }}"
+           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'unverified_domain' ? 'btn-warning' : 'btn-ghost' }}">
+            Unverified domain ({{ reasonCounts.unverified_domain }})
+        </a>
+        <a href="{{ path('dashboard_quarantine', { reason: 'plan_overage' }) }}"
+           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'plan_overage' ? 'btn-warning' : 'btn-ghost' }}">
+            Plan overage ({{ reasonCounts.plan_overage }})
+        </a>
+    </div>
+
+    {# Reason-specific inline help card. Sits above the table when a filter is
+       active so the upsell / tip is co-located with the rows it explains. #}
+    {% if activeFilter is not null and activeFilter.value == 'plan_overage' and items is not empty %}
+        <div class="alert bg-warning/10 border border-warning/30 mb-4">
+            <svg class="w-6 h-6 text-warning shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/>
+            </svg>
+            <div>
+                <p class="font-semibold">These reports were received after you hit this month's cap.</p>
+                <p class="text-sm text-base-content/70">Upgrade to unlock them — your existing parked reports auto-release on the next bill cycle of your new plan.</p>
+            </div>
+            <a href="{{ path('dashboard_billing') }}" class="btn btn-warning btn-sm">Upgrade</a>
+        </div>
+    {% elseif activeFilter is not null and activeFilter.value == 'unknown_domain' and items is not empty %}
+        <div class="alert bg-info/10 border border-info/30 mb-4">
+            <svg class="w-6 h-6 text-info shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                <p class="font-semibold">These reports were sent for domains you haven't added yet.</p>
+                <p class="text-sm text-base-content/70">Open any row and use "Add this domain" to start receiving reports — existing parked reports auto-release.</p>
+            </div>
+        </div>
+    {% elseif activeFilter is not null and activeFilter.value == 'unverified_domain' and items is not empty %}
+        <div class="alert bg-info/10 border border-info/30 mb-4">
+            <svg class="w-6 h-6 text-info shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+            <div>
+                <p class="font-semibold">These reports are for domains you've added but not yet verified.</p>
+                <p class="text-sm text-base-content/70">Complete DNS verification on the domain and these reports release automatically into the main report list.</p>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if totalCount == 0 %}
+        {# Team has nothing at all — keep the celebratory empty state. The
+           "View most recent report" CTA is only meaningful when at least one
+           parsed report exists, so it's conditional on mostRecentReportId. #}
         <div class="card bg-base-100 border border-base-200 shadow-sm">
             <div class="card-body p-8 text-center">
                 <div class="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mb-4 mx-auto text-success">
@@ -37,6 +95,21 @@
                         View most recent report
                     </a>
                 {% endif %}
+            </div>
+        </div>
+    {% elseif items is empty %}
+        {# Team has rows somewhere, but the active filter masked them all. The
+           "Clear filter" CTA is the recovery path — never CTA into the
+           onboarding/empty-state copy here. #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-8 text-center">
+                <h3 class="text-lg font-semibold mb-1">No reports match the current filter</h3>
+                <p class="text-sm text-base-content/60 max-w-md mx-auto">
+                    Try a different filter, or clear it to see every quarantined report.
+                </p>
+                <a href="{{ path('dashboard_quarantine') }}" class="btn btn-sm btn-primary mt-4">
+                    Clear filter
+                </a>
             </div>
         </div>
     {% else %}
@@ -54,7 +127,10 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {# Stretched-link row navigation per TASK-018. #}
+                            {# Stretched-link row navigation per TASK-018. The
+                               reason badge is anchored with `relative z-20` so
+                               it wins over the stretched-row anchor and filters
+                               instead of opening detail (TASK-036). #}
                             {% for item in items %}
                                 <tr class="hover:bg-base-200/50 cursor-pointer relative">
                                     <td class="whitespace-nowrap">
@@ -67,11 +143,17 @@
                                     <td class="text-sm text-base-content/70">{{ item.reporterEmail }}</td>
                                     <td>
                                         {% if item.reason == 'unknown_domain' %}
-                                            <span class="badge badge-sm badge-warning">Unknown domain</span>
+                                            <a href="{{ path('dashboard_quarantine', { reason: 'unknown_domain' }) }}"
+                                               class="relative z-20 badge badge-sm badge-warning"
+                                               aria-label="Filter by Unknown domain">Unknown domain</a>
                                         {% elseif item.reason == 'unverified_domain' %}
-                                            <span class="badge badge-sm badge-info">Unverified domain</span>
+                                            <a href="{{ path('dashboard_quarantine', { reason: 'unverified_domain' }) }}"
+                                               class="relative z-20 badge badge-sm badge-info"
+                                               aria-label="Filter by Unverified domain">Unverified domain</a>
                                         {% elseif item.reason == 'plan_overage' %}
-                                            <span class="badge badge-sm badge-error">Plan overage</span>
+                                            <a href="{{ path('dashboard_quarantine', { reason: 'plan_overage' }) }}"
+                                               class="relative z-20 badge badge-sm badge-error"
+                                               aria-label="Filter by Plan overage">Plan overage</a>
                                         {% else %}
                                             <span class="badge badge-sm badge-ghost">{{ item.reason }}</span>
                                         {% endif %}
@@ -85,15 +167,16 @@
                     </table>
                 </div>
 
-                {# Pagination #}
+                {# Pagination — preserve the active filter so paging through a
+                   reason-scoped view doesn't drop the filter on page 2+. #}
                 <div class="flex items-center justify-between mt-4">
                     <div class="text-xs text-base-content/50">Page {{ currentPage }}</div>
                     <div class="join">
                         {% if currentPage > 1 %}
-                            <a href="{{ path('dashboard_quarantine', { page: currentPage - 1 }) }}" class="join-item btn btn-sm btn-ghost">Previous</a>
+                            <a href="{{ path('dashboard_quarantine', { page: currentPage - 1, reason: activeFilter is not null ? activeFilter.value : null }) }}" class="join-item btn btn-sm btn-ghost">Previous</a>
                         {% endif %}
                         {% if hasNextPage %}
-                            <a href="{{ path('dashboard_quarantine', { page: currentPage + 1 }) }}" class="join-item btn btn-sm btn-ghost">Next</a>
+                            <a href="{{ path('dashboard_quarantine', { page: currentPage + 1, reason: activeFilter is not null ? activeFilter.value : null }) }}" class="join-item btn btn-sm btn-ghost">Next</a>
                         {% endif %}
                     </div>
                 </div>

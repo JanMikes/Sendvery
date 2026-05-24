@@ -6,6 +6,7 @@ namespace App\Query;
 
 use App\Results\QuarantineListResult;
 use App\Value\Reports\QuarantineReason;
+use App\Value\Reports\QuarantineReasonFilter;
 use Doctrine\DBAL\Connection;
 
 /**
@@ -40,11 +41,13 @@ final readonly class GetQuarantineList
     }
 
     /** @return list<QuarantineListResult> */
-    public function forTeam(string $teamId, int $limit = 50, int $offset = 0): array
-    {
-        /** @var list<array{quarantine_id: string, domain_name: string, reporter_email: string, reason: string, quarantined_at: string, expires_at: string, subject: string, size_bytes: int|string}> $rows */
-        $rows = $this->database->executeQuery(
-            'SELECT
+    public function forTeam(
+        string $teamId,
+        int $limit = 50,
+        int $offset = 0,
+        ?QuarantineReasonFilter $reasonFilter = null,
+    ): array {
+        $sql = 'SELECT
                 q.id AS quarantine_id,
                 q.domain_name,
                 q.reporter_email,
@@ -55,42 +58,95 @@ final readonly class GetQuarantineList
                 e.size_bytes
             FROM quarantined_dmarc_report q
             JOIN received_report_email e ON e.id = q.received_email_id
-            WHERE (
-                EXISTS (
-                    SELECT 1 FROM monitored_domain md
-                    WHERE LOWER(md.domain) = LOWER(q.domain_name)
-                    AND md.team_id = :teamId
-                )
-                OR (
-                    q.reason = :unknownDomainReason
-                    AND EXISTS (
-                        SELECT 1 FROM mailbox_connection mc
-                        WHERE mc.id = e.mailbox_connection_id
-                        AND mc.team_id = :teamId
-                    )
-                )
-            )
-            ORDER BY q.quarantined_at DESC
-            LIMIT :limit OFFSET :offset',
-            [
-                'teamId' => $teamId,
-                'unknownDomainReason' => QuarantineReason::UnknownDomain->value,
-                'limit' => $limit,
-                'offset' => $offset,
-            ],
-        )->fetchAllAssociative();
+            WHERE ('.$this->visibilitySql().')';
+
+        $params = [
+            'teamId' => $teamId,
+            'unknownDomainReason' => QuarantineReason::UnknownDomain->value,
+            'limit' => $limit,
+            'offset' => $offset,
+        ];
+
+        if (null !== $reasonFilter) {
+            $sql .= ' AND q.reason = :reasonFilter';
+            $params['reasonFilter'] = $reasonFilter->value;
+        }
+
+        $sql .= ' ORDER BY q.quarantined_at DESC LIMIT :limit OFFSET :offset';
+
+        /** @var list<array{quarantine_id: string, domain_name: string, reporter_email: string, reason: string, quarantined_at: string, expires_at: string, subject: string, size_bytes: int|string}> $rows */
+        $rows = $this->database->executeQuery($sql, $params)->fetchAllAssociative();
 
         return array_map(QuarantineListResult::fromDatabaseRow(...), $rows);
     }
 
-    public function countForTeam(string $teamId): int
+    public function countForTeam(string $teamId, ?QuarantineReasonFilter $reasonFilter = null): int
     {
-        return (int) $this->database->executeQuery(
-            'SELECT COUNT(*)
+        $sql = 'SELECT COUNT(*)
             FROM quarantined_dmarc_report q
             JOIN received_report_email e ON e.id = q.received_email_id
-            WHERE (
-                EXISTS (
+            WHERE ('.$this->visibilitySql().')';
+
+        $params = [
+            'teamId' => $teamId,
+            'unknownDomainReason' => QuarantineReason::UnknownDomain->value,
+        ];
+
+        if (null !== $reasonFilter) {
+            $sql .= ' AND q.reason = :reasonFilter';
+            $params['reasonFilter'] = $reasonFilter->value;
+        }
+
+        return (int) $this->database->executeQuery($sql, $params)->fetchOne();
+    }
+
+    /**
+     * Per-reason counts in one round-trip so the filter chips can show `(N)`
+     * labels without an N+1. Missing reasons are filled with `0` so callers
+     * can index by every {@see QuarantineReasonFilter} case unconditionally.
+     *
+     * @return array<value-of<QuarantineReasonFilter>, int>
+     */
+    public function countByReason(string $teamId): array
+    {
+        /** @var list<array{reason: string, total: int|string}> $rows */
+        $rows = $this->database->executeQuery(
+            'SELECT q.reason, COUNT(*) AS total
+            FROM quarantined_dmarc_report q
+            JOIN received_report_email e ON e.id = q.received_email_id
+            WHERE ('.$this->visibilitySql().')
+            GROUP BY q.reason',
+            [
+                'teamId' => $teamId,
+                'unknownDomainReason' => QuarantineReason::UnknownDomain->value,
+            ],
+        )->fetchAllAssociative();
+
+        $counts = [];
+        foreach (QuarantineReasonFilter::cases() as $filter) {
+            $counts[$filter->value] = 0;
+        }
+
+        foreach ($rows as $row) {
+            // The DB enum is constrained to the three filter cases, but guard
+            // against drift — if a new reason ships before the filter enum
+            // catches up we simply omit it from the chip counts rather than
+            // hard-crash this query.
+            if (array_key_exists($row['reason'], $counts)) {
+                $counts[$row['reason']] = (int) $row['total'];
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Shared `WHERE` body for the union-of-rules team-scoping. Extracted so
+     * `forTeam`, `countForTeam`, and `countByReason` cannot drift apart.
+     */
+    private function visibilitySql(): string
+    {
+        return 'EXISTS (
                     SELECT 1 FROM monitored_domain md
                     WHERE LOWER(md.domain) = LOWER(q.domain_name)
                     AND md.team_id = :teamId
@@ -102,12 +158,6 @@ final readonly class GetQuarantineList
                         WHERE mc.id = e.mailbox_connection_id
                         AND mc.team_id = :teamId
                     )
-                )
-            )',
-            [
-                'teamId' => $teamId,
-                'unknownDomainReason' => QuarantineReason::UnknownDomain->value,
-            ],
-        )->fetchOne();
+                )';
     }
 }

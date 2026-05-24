@@ -7,6 +7,7 @@ namespace App\Controller\Dashboard;
 use App\Query\GetAllReports;
 use App\Query\GetQuarantineList;
 use App\Services\DashboardContext;
+use App\Value\Reports\QuarantineReasonFilter;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,14 +31,23 @@ final class ListQuarantineController extends AbstractController
         $offset = ($page - 1) * self::PAGE_SIZE;
 
         $teamId = $this->dashboardContext->getTeamId();
+        $reasonFilter = QuarantineReasonFilter::tryFrom($request->query->getString('reason', ''));
+
         $items = $this->getQuarantineList->forTeam(
             $teamId->toString(),
             limit: self::PAGE_SIZE,
             offset: $offset,
+            reasonFilter: $reasonFilter,
         );
 
+        // `totalCount` (unfiltered) drives the three-way empty state — we
+        // need to distinguish "team has nothing at all" from "filter masked
+        // every row" so the empty-state copy + CTAs differ.
+        $totalCount = $this->getQuarantineList->countForTeam($teamId->toString());
+        $reasonCounts = $this->getQuarantineList->countByReason($teamId->toString());
+
         $mostRecentReportId = null;
-        if ([] === $items && 1 === $page) {
+        if (0 === $totalCount && 1 === $page) {
             // The "view most recent report" empty-state CTA only makes sense
             // when the user actually has a report to look at — otherwise it
             // links into a void.
@@ -55,6 +65,9 @@ final class ListQuarantineController extends AbstractController
             'currentPage' => $page,
             'hasNextPage' => self::PAGE_SIZE === count($items),
             'mostRecentReportId' => $mostRecentReportId,
+            'activeFilter' => $reasonFilter,
+            'totalCount' => $totalCount,
+            'reasonCounts' => $reasonCounts,
         ]);
     }
 }
