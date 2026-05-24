@@ -1801,7 +1801,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-026: Homepage section-header system — eyebrow + H2 + lede, replace the seven identical `text-2xl md:text-3xl font-bold` headings
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: Audit finding. The homepage uses the exact same `<h2 class="text-2xl md:text-3xl font-bold">` markup on **every** section header (How it works, Feature Highlights, Security Expertise, Domain Health Score Preview, Free forever if you self-host, Simple transparent pricing, Frequently asked questions, Built for developers, Start monitoring today). Visually identical headings on 9+ sections create a "scroll-by-flatness" rhythm — the page reads as a long list with no visual hierarchy distinguishing the hero from the support sections from the pre-CTA closer. Real product sites layer their section heads (small uppercase eyebrow + larger headline + optional lede paragraph) to give each section a distinct weight and to telegraph "this is a fresh idea, lean in."
 - Acceptance:
