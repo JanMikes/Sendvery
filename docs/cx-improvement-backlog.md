@@ -2628,7 +2628,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-060: Alerts sidebar entry has no count badge — unread/critical alerts are invisible until the user clicks through
 
-- Status: todo
+- Status: done
 - Area: dashboard
 - Why: Attention-signals-in-navigation audit, round 3. The sidebar has exactly one count badge today: the Quarantine entry at `templates/dashboard/layout.html.twig` line 115 (`{% if quarantine_count > 0 %}<span class="badge badge-xs badge-warning ml-auto">{{ quarantine_count }}</span>{% endif %}`), shipped in TASK-020. The Alerts entry (lines 118-122) — which sits directly below Quarantine in the same "Data" group (TASK-039) — has none. This is the single most-important navigation badge we DON'T have: an unread critical alert ("DMARC pass rate fell below 80% on acme.com") is exactly the "yes, look here" signal a returning user needs. The infrastructure is already in place: `GetAlerts::countUnreadForTeams()` and `countUnreadCriticalForTeams()` already exist (see `src/Query/GetAlerts.php` lines 96-130) — they're used today for the Overview "Unread Alerts" stat card. We just need to expose the count to the sidebar via a new Twig global, mirroring the `QuarantineCountExtension` pattern. The moment of confusion: a paying user opens the dashboard after a week, sees the same five-section sidebar with zero visual change, and has to actually click "Alerts" to discover the new critical drop. By then they've already missed the "Sendvery is watching for you" moment that justifies the subscription.
 - Acceptance:
@@ -2639,6 +2639,38 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
   - Integration test in `tests/Integration/Twig/AlertCountExtensionTest.php`: 5 `#[Test]` methods — no-user-no-counts, no-team-no-counts (pre-onboarding), team-with-zero-alerts, team-with-unread-non-critical, team-with-critical. Assert the rendered sidebar contains the right badge classes (`badge-warning` vs `badge-error`) and the right number, AND that the badge is ABSENT when both counts are 0.
   - 100% line coverage on the new extension.
 - Notes: Reuses TASK-020's exact extension + Twig global + sidebar-badge pattern. Total LOC delta: ~55 new (extension + service binding) + ~3 modified in `layout.html.twig` + ~80 lines of test. Estimated effort: 45-60 minutes. This is the highest-value single change in this run because it converts an entire navigation entry from "static label" into "live attention signal" for free.
+
+### Architect plan (2026-05-24)
+
+**Verified:** Both count methods exist on `GetAlerts` (`src/Query/GetAlerts.php:96-130`): `countUnreadForTeams(array $teamIds): int` and `countUnreadCriticalForTeams(array $teamIds): int`. Both exclude snoozed alerts. No query work needed.
+
+**Pattern to mirror:** `src/Twig/QuarantineCountExtension.php` — `final class extends AbstractExtension implements GlobalsInterface`. `getGlobals()` returns the count(s). Defensive `try/catch (\RuntimeException)` around `DashboardContext::getTeamId()` to fall back to 0 for unauthenticated/pre-onboarding states. No service YAML needed; Symfony autoconfiguration registers `GlobalsInterface` implementations automatically.
+
+**Badge color rule (two-tier, single number per tier):**
+- `critical_alert_count > 0` → `badge-error` (red), show critical count
+- else `unread_alert_count > 0` → `badge-warning` (yellow), show unread count
+- else hidden
+
+**Files to create:**
+- `src/Twig/AlertCountExtension.php` — `final class`, `declare(strict_types=1)`, constructor injects `Security`, `DashboardContext`, `GetAlerts`. `getGlobals(): array<string, int>` returns `['unread_alert_count' => resolveUnreadCount(), 'critical_alert_count' => resolveCriticalCount()]`. Each resolver: bail to 0 if `!Security::getUser() instanceof User`, `try/catch (\RuntimeException)` around `DashboardContext::getTeamId()` returning 0, otherwise call the matching `GetAlerts::count*ForTeams([$teamId->toString()])`.
+- `tests/Integration/Twig/AlertCountExtensionTest.php` — 5 `#[Test]` methods: no-user; no-team-membership; zero alerts; unread-non-critical (3 warning alerts → unread=3, critical=0); critical (2 warning + 1 critical → unread=3, critical=1). Test directly via `getService(AlertCountExtension::class)->getGlobals()`; no Twig render needed for the unit-level extension test. Helper `persistAlert(EntityManagerInterface, Team, AlertSeverity, bool $isRead, ?\DateTimeImmutable $snoozedUntil)`.
+
+**Files to modify:**
+- `templates/dashboard/layout.html.twig` lines 118-122 — inside the Alerts `<a>` tag, after the "Alerts" label text, append:
+  ```twig
+  {% if critical_alert_count > 0 %}
+      <span class="badge badge-xs badge-error ml-auto">{{ critical_alert_count > 99 ? '99+' : critical_alert_count }}</span>
+  {% elseif unread_alert_count > 0 %}
+      <span class="badge badge-xs badge-warning ml-auto">{{ unread_alert_count > 99 ? '99+' : unread_alert_count }}</span>
+  {% endif %}
+  ```
+  Matches the Quarantine pattern at line 115 byte-for-byte (`badge-xs ml-auto`).
+
+**99+ cap:** Applied in the Twig template, not the PHP extension. Extension returns raw int; template caps for display.
+
+**Convention checklist:** `final class` (NOT `readonly` — `AbstractExtension` subclasses can't be readonly), `strict_types=1`, namespace `App\Twig`, autoconfiguration handles registration (no YAML needed), test namespace `App\Tests\Integration\Twig` (directory must be created — none exist there yet), PHPStan-safe covariant return type `array<string, int>` on `getGlobals()`, `catch (\RuntimeException)` with no variable to match the established pattern.
+
+**No blockers.** Mechanical mirror of the Quarantine pattern with one additional Twig global + a two-branch template insertion.
 
 ---
 
@@ -2910,7 +2942,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-081: DNS History page is a vertical wall of cards with no date picker, no type filter, no "what is this page for" lede — the named pain page
 
-- Status: proposed
+- Status: planned
 - Area: dashboard
 - Why: Named pain from the human owner on `/app/domains/{id}/dns-history`: *"this is not really clear, there is missing date, might be small calendar or something, or might be collapsible; overall this whole page is not clear with clear intent and well designed"*. The current template (`templates/dashboard/domain_dns_history.html.twig`) renders an `<h1>DNS History</h1>` + the domain name (line 13-15) — and then a flat vertical list of up to 100 cards (`LIMIT 100` in `GetDomainDnsHistory::forDomain()`). A `<div class="divider">` shows the date heading between groups but there is (a) no filter UI to scope to a date range, (b) no filter UI to scope to a single record type (SPF / DKIM / DMARC / MX), (c) no lede that explains what a "DNS check" IS or why this page exists, (d) no visible "I'm scrolling past 60 checks — when does it stop?" affordance, (e) no calendar or sparkline-of-changes that would let the user spot the day the record actually changed. A first-time-this-week user reads "DNS History" and sees a screen of code blocks with timestamps — they don't know if this is an audit log, a change log, a diff viewer, or a debug dump. The page exists to answer "when did my DNS record change?" and "what did the change break?" but every visual element treats every check as equal weight, when in reality the user only cares about the rows where `has_changed=true`.
 - Acceptance:
@@ -3083,7 +3115,7 @@ A domain's ingestion path is determined exclusively by inspecting `received_repo
 
 ## TASK-091: `/app` "Next Step" card pushes "Connect a mailbox" without ever offering "Publish RUA pointing at Sendvery" as the recommended alternative
 
-- Status: proposed
+- Status: planned
 - Area: dashboard / guidance
 - Why: Confusion moment named explicitly by the PO. `NextActionResolver::resolve()` has a 5th-priority branch (`!hasMailbox && allDomainsWithoutReports`) that emits a `ConnectMailbox` next-action with copy *"Connect a dedicated IMAP mailbox to receive DMARC reports directly, in addition to Sendvery's central inbox."* That branch fires for the most common new-user state — domain added, DMARC verified, waiting-for-first-report — and pushes the user into the *fallback* path rather than confirming the *preferred* path (central inbox via RUA). Worse: the existing `WaitForReports` branch (priority 3) DOES say "DMARC is set up correctly … your first one should arrive within 48 hours" but never names the address (`reports@sendvery.com`) the records should point at, and doesn't tell the user *how to verify* their RUA actually points at us. The phrase "in addition to" actively contradicts the mutual-exclusivity rule TASK-090 is enforcing.
 - Acceptance:
