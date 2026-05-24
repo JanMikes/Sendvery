@@ -12,8 +12,10 @@ use App\Query\GetTopSendersForDomain;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
 use App\Services\DmarcPolicyAdvisor;
+use App\Services\Dns\RuaScenarioResolver;
 use App\Services\DomainSetupStatusResolver;
 use App\Value\DmarcPolicy;
+use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -30,6 +32,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly GetDnsHealthOverview $getDnsHealthOverview,
         private readonly DmarcPolicyAdvisor $dmarcPolicyAdvisor,
         private readonly DomainSetupStatusResolver $domainSetupStatusResolver,
+        private readonly RuaScenarioResolver $ruaScenarioResolver,
     ) {
     }
 
@@ -98,7 +101,8 @@ final class ShowDomainDetailController extends AbstractController
             : $this->quarantineRepository->countForDomain($domain->domainName);
 
         $dnsHealth = $this->getDnsHealthOverview->forDomain($id, $teamIds);
-        $domainSetupStatus = $this->domainSetupStatusResolver->resolve($dnsHealth);
+        $ruaScenario = $this->ruaScenarioResolver->resolveForDomainId(Uuid::fromString($id));
+        $domainSetupStatus = $this->domainSetupStatusResolver->resolve($dnsHealth, $ruaScenario);
 
         // The detail result carries `dmarc_policy` as a raw nullable string
         // straight from DBAL — `tryFrom` (not `from`) protects against a DB

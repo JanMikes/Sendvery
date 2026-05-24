@@ -125,7 +125,7 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
         // Checklist — partial-state branch with the SPF row in Missing state
         // and a Fix-this link pointing at the SPF anchor on the health page.
         self::assertStringContainsString('data-testid="domain-setup-status-checklist"', $body);
-        self::assertStringContainsString('of 4 checks passing', $body);
+        self::assertStringContainsString('of 5 checks passing', $body);
         self::assertMatchesRegularExpression('~href="/app/domains/[^"]+/health\#health-spf"~', $body);
     }
 

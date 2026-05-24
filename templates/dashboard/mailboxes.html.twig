@@ -47,7 +47,32 @@
                                     <tr {% if row.isMisconfigured %}data-testid="mixed-warning"{% endif %}>
                                         <td class="font-medium">{{ row.domainName }}</td>
                                         <td>
-                                            {% if row.path.value == 'dns' %}
+                                            {# TASK-100: scenario-aware badges take precedence over the
+                                               raw IngestionPath because the scenario answers "what does
+                                               DMARC actually route?" — a strictly better signal than the
+                                               envelope-history-only path classifier. Mixed always wins
+                                               so the duplicate-ingestion warning still surfaces. #}
+                                            {% if row.path.value == 'mixed' %}
+                                                <span class="badge badge-warning">Both — please pick one</span>
+                                                <div class="text-xs text-warning mt-1">
+                                                    Duplicate ingestion — choose DNS or mailbox per domain.
+                                                </div>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_sendvery' %}
+                                                <span class="badge badge-success">Ingesting via DNS (Sendvery)</span>
+                                                <div class="text-xs text-base-content/60 mt-1">
+                                                    RUA points at <span class="font-mono">{{ reportAddress }}</span>
+                                                </div>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_external' %}
+                                                <span class="badge badge-warning">Configured for external inbox</span>
+                                                <div class="text-xs text-base-content/70 mt-1">
+                                                    RUA points at <span class="font-mono">{{ row.ruaScenario.ruaEmail }}</span>
+                                                </div>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'no_record' %}
+                                                <span class="badge badge-error">DMARC missing</span>
+                                                <div class="text-xs text-error mt-1">
+                                                    No <code>_dmarc</code> TXT record found
+                                                </div>
+                                            {% elseif row.path.value == 'dns' %}
                                                 <span class="badge badge-primary">DNS (central inbox)</span>
                                                 <div class="text-xs text-base-content/60 mt-1">
                                                     via <span class="font-mono">{{ reportAddress }}</span>
@@ -65,11 +90,6 @@
                                                         {% endif %}
                                                     </div>
                                                 {% endif %}
-                                            {% elseif row.path.value == 'mixed' %}
-                                                <span class="badge badge-warning">Both — please pick one</span>
-                                                <div class="text-xs text-warning mt-1">
-                                                    Duplicate ingestion — choose DNS or mailbox per domain.
-                                                </div>
                                             {% else %}
                                                 <span class="badge badge-ghost">No reports yet</span>
                                             {% endif %}
@@ -78,12 +98,27 @@
                                             {{ row.lastReportAt ? row.lastReportAt|date('M j, H:i') : '—' }}
                                         </td>
                                         <td>
-                                            {% if row.path.value == 'none' %}
-                                                <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
-                                                   class="btn btn-ghost btn-xs">Publish RUA</a>
-                                            {% elseif row.path.value == 'mixed' %}
+                                            {# Scenario-driven action column. Mixed still wins. Then
+                                               scenario-aware copy for the three RUA cases; finally
+                                               fall through to the legacy path-based branches. #}
+                                            {% if row.path.value == 'mixed' %}
                                                 <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
                                                    class="btn btn-warning btn-xs">Decide</a>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'no_record' %}
+                                                <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
+                                                   class="btn btn-ghost btn-xs">Publish RUA</a>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_sendvery' %}
+                                                <span class="text-base-content/40">—</span>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_external' %}
+                                                <div class="flex flex-col gap-1">
+                                                    <a href="{{ path('dashboard_mailbox_add') }}"
+                                                       class="btn btn-primary btn-xs">Connect this inbox</a>
+                                                    <a class="link link-hover text-xs"
+                                                       href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc">Or repoint to Sendvery</a>
+                                                </div>
+                                            {% elseif row.path.value == 'none' %}
+                                                <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
+                                                   class="btn btn-ghost btn-xs">Publish RUA</a>
                                             {% else %}
                                                 <span class="text-base-content/40">—</span>
                                             {% endif %}

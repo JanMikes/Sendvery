@@ -9,7 +9,7 @@ use App\Value\DnsCheckType;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-final readonly class DnsCheckResultRepository
+readonly class DnsCheckResultRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,

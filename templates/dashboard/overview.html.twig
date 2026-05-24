@@ -140,10 +140,15 @@
                         <a href="{{ path(nextAction.secondaryCtaRoute) }}" class="link link-hover text-base-content/70">
                             {{ nextAction.secondaryCtaLabel }}
                         </a>
-                        <form method="post" action="{{ path('dashboard_ingestion_recommendation_dismiss') }}" class="inline">
-                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('ingestion_recommendation_dismiss') }}">
-                            <button type="submit" class="link link-hover text-base-content/50 text-xs">Dismiss</button>
-                        </form>
+                        {# Dismiss only fires for the generic DNS-first nudge — scenario-(c)
+                           ConnectExternalMailbox is driven by the live DMARC record and would
+                           re-emit on every render regardless of the dismissal flag. #}
+                        {% if nextAction.actionKey.value in ['publish_rua_record', 'connect_mailbox'] %}
+                            <form method="post" action="{{ path('dashboard_ingestion_recommendation_dismiss') }}" class="inline">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('ingestion_recommendation_dismiss') }}">
+                                <button type="submit" class="link link-hover text-base-content/50 text-xs">Dismiss</button>
+                            </form>
+                        {% endif %}
                     </div>
                 {% endif %}
             </div>

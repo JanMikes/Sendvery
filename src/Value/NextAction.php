@@ -18,4 +18,5 @@ enum NextAction: string
     case ConnectMailbox = 'connect_mailbox';
     case PublishRuaRecord = 'publish_rua_record';
     case AllHealthy = 'all_healthy';
+    case ConnectExternalMailbox = 'connect_external_mailbox';
 }

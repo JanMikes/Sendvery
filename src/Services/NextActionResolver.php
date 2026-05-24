@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Results\Dns\RuaScenarioResult;
 use App\Results\DomainIngestionMatrixResult;
 use App\Results\DomainOverviewResult;
 use App\Results\DomainVerificationStatusResult;
 use App\Results\NextActionResult;
+use App\Value\Dns\RuaScenario;
 use App\Value\DomainVerificationSeverity;
 use App\Value\IngestionPath;
 use App\Value\NextAction;
@@ -45,6 +47,7 @@ final readonly class NextActionResolver
         array $ingestionPaths,
         ?\DateTimeImmutable $ingestionRecommendationDismissedAt,
         \DateTimeImmutable $now,
+        ?RuaScenarioResult $headlineDomainRuaScenario = null,
     ): NextActionResult {
         if (0 === count($domains)) {
             return new NextActionResult(
@@ -120,6 +123,51 @@ final readonly class NextActionResolver
         }
 
         if (!$hasCentralInboxReports) {
+            // TASK-100 scenario (b): DMARC already points at Sendvery — DNS
+            // is doing the work. If no reports have landed yet that's a
+            // propagation-window issue, NOT a missing-CTA one, so skip the
+            // entire "publish RUA / connect a mailbox" branch and fall
+            // through to AllHealthy. The earlier WaitForReports branch
+            // covers the verified-DMARC-but-no-reports case for users in
+            // the settling window.
+            if (RuaScenario::PointsAtSendvery === $headlineDomainRuaScenario?->scenario) {
+                return new NextActionResult(
+                    actionKey: NextAction::AllHealthy,
+                    title: 'Everything looks good',
+                    description: 'All your domains are healthy and reports are flowing. Keep an eye on your alerts.',
+                    ctaLabel: 'View reports',
+                    ctaRoute: 'dashboard_reports',
+                    ctaRouteParams: [],
+                    severity: 'success',
+                );
+            }
+
+            // TASK-100 scenario (c): DMARC publishes rua= pointing at the
+            // team's own external inbox. Recommend connecting that inbox
+            // OR repointing the DMARC record to Sendvery — equivalent paths.
+            // Emitted unconditionally for this scenario (dismissal and the
+            // 7-day timer are about the generic "no reports yet" fallback,
+            // not about scenario-specific recommendations).
+            if (RuaScenario::PointsAtExternal === $headlineDomainRuaScenario?->scenario) {
+                $ruaEmail = $headlineDomainRuaScenario->ruaEmail ?? '';
+
+                return new NextActionResult(
+                    actionKey: NextAction::ConnectExternalMailbox,
+                    title: sprintf('Connect the inbox at %s', $ruaEmail),
+                    description: sprintf(
+                        'Your DMARC record sends reports to %s. Connect that inbox so Sendvery can poll it for DMARC reports — or update the DMARC record to point at %s instead.',
+                        $ruaEmail,
+                        $reportAddress,
+                    ),
+                    ctaLabel: 'Connect this inbox',
+                    ctaRoute: 'dashboard_mailbox_add',
+                    ctaRouteParams: [],
+                    severity: 'info',
+                    secondaryCtaLabel: 'Or repoint DMARC to Sendvery',
+                    secondaryCtaRoute: 'dashboard_dns_health',
+                );
+            }
+
             $sevenDaysPassed = null !== $earliestDomainAddedAt
                 && $now > $earliestDomainAddedAt->modify('+7 days');
             $dismissed = null !== $ingestionRecommendationDismissedAt;

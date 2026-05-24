@@ -3510,3 +3510,52 @@ Voluntary natural checkpoint after 11 ship cycles. Every named-pain task across 
 **11 commits to main: 06f4485 → 868472d.** 13 effective tasks shipped (TASK-042, 044, 060, 061, 066, 067, 080, 081, 082, 090, 091, 097, 099). Test suite grew from 1890 → 1977 (+87 tests, +385 assertions). 100% line coverage on every new file. Zero blocked tasks. Zero quality-gate skips. Zero force-pushes. Six reviewer-caught defects fixed before merge. One ops-investigation finding (TASK-042) was production-shipping-blocking and is now resolved.
 
 The owner's six explicit seed areas — ops investigation (urgent), clarity of intent, recommendations, visual status, attention signals, whole-card clickability — are all addressed. The remaining work is incremental polish a future autonomous run can pick up against this checkpoint.
+
+---
+
+## TASK-100: Use Sendvery's own DMARC parsing to drive scenario-aware ingestion recommendations across every "what should I do?" surface
+
+- Status: done
+- Area: dashboard / guidance / domains
+- Why: Sendvery already parses the literal `_dmarc.<domain>` TXT record on every DNS check (`DnsCheckResult.rawRecord` for `DnsCheckType::Dmarc`) — we know exactly what `rua=mailto:` destination is configured, if any. That single piece of information drives THREE completely different best-next-actions per domain, but today every recommendation surface treats the user as if they have nothing published. The current Next Step card (TASK-091) blindly says "Publish a DMARC RUA record" even when a record already exists pointing at the user's own email; the mailbox ingestion matrix (TASK-090) labels every fallback row "Connect a mailbox" without saying WHICH mailbox the user's own DMARC record is pointing at; the domain detail setup-status panel (TASK-080) reports DMARC as configured/missing but never surfaces the RUA destination as a separate concern. This is the single biggest "we already know this; just say it" gap in the product. Sendvery's DMARC parsing is the core differentiator — using it as the engine for recommendations turns generic advice into specific, scenario-aware guidance no other product surface can match.
+  
+  The three scenarios + their distinct UX flows:
+  
+  **(a) No DMARC record at all.** The user MUST publish one — this is a hard prerequisite for any kind of DMARC monitoring. Offer two paths in order of preference:
+  - **Preferred**: point `rua=mailto:reports@sendvery.com` so Sendvery's central inbox parses reports directly. Zero credentials shared, zero inbox setup, one DNS change.
+  - **Alternative**: point `rua=mailto:<user's-own-email>` and then connect that inbox to Sendvery via the existing mailbox flow. Useful if the user already has an aggregation inbox set up or doesn't want third-party addresses in DNS.
+  
+  Copy must convey that publishing the record itself is mandatory and the choice is only about WHERE the reports land — not whether to publish at all.
+  
+  **(b) DMARC published, RUA points at a Sendvery address.** All good — surface the resolved state as a green check ("Sendvery is parsing your reports directly — no mailbox connection needed"). Suppress every "Connect a mailbox" CTA for this domain across the entire dashboard. This is the happy path Sendvery wants every customer to land on.
+  
+  **(c) DMARC published, RUA points at a non-Sendvery email.** Two equivalent paths with clear tradeoffs:
+  - **Connect the inbox**: poll the user's own mailbox at `<rua_email>` for reports. Preferred if the user already has the inbox set up and doesn't want to touch DNS again. Risk: shared credentials, IMAP/OAuth ongoing maintenance.
+  - **Change the DMARC record**: replace the RUA target with `reports@sendvery.com`. Simpler ongoing — one DNS change, no credentials, no inbox polling cron. Risk: requires touching DNS again, may need coordination with whoever else reads the existing RUA inbox.
+  
+  Surface both with plain-language tradeoffs; do NOT push hard either way — the right choice is user-dependent.
+- Acceptance:
+  - **New parser**: `src/Services/Dns/DmarcRecordParser.php` (or extend an existing parser if one exists — grep `src/Services/Dns/` for `rua` first). Pure function: takes a raw `_dmarc` TXT value string, returns a `DmarcRecord` value object with `policy` (already parsed elsewhere), `ruaEmails: list<string>`, `rufEmails: list<string>`, `pct`, etc. Handles malformed records gracefully (returns null or an empty record value object — same behaviour the existing DMARC verifier uses).
+  - **New value object**: `src/Value/Dns/RuaScenario.php` — backed enum: `NoRecord = 'no_record'`, `PointsAtSendvery = 'points_at_sendvery'`, `PointsAtExternal = 'points_at_external'`.
+  - **New service**: `src/Services/Dns/RuaScenarioResolver.php` — `readonly final class`. Method `resolveForDomain(MonitoredDomain $domain): RuaScenarioResult` where `RuaScenarioResult` is a new readonly final DTO carrying `scenario: RuaScenario`, `?ruaEmail: string` (the literal address the record points at, when scenario is `PointsAtExternal`), and an `isSendveryAddress(string $email): bool` helper. "Sendvery address" detection: any address with the `@sendvery.com` domain OR matching the env-configured central inbox via `ReportAddressProvider`. Reads the latest `DnsCheckResult` of type `Dmarc` for the domain via `DnsCheckResultRepository::findLatestForDomainAndType()`, passes the raw record through `DmarcRecordParser`, classifies.
+  - **Three surfaces consume the scenario**:
+    1. `NextActionResolver` (TASK-091) — the `PublishRuaRecord` branch becomes scenario-aware. Scenario (a): unchanged copy. Scenario (b): NEVER fires this branch (the page falls through to `AllHealthy` or stays on whichever existing branch precedes). Scenario (c): fires a NEW `ConnectExternalMailbox` branch with copy "Your DMARC record sends reports to `{ruaEmail}`. Connect that mailbox so Sendvery can poll it — or update the DMARC record to point at `reports@sendvery.com` instead." Two CTAs with the tradeoffs above.
+    2. `DomainSetupStatusResolver` (TASK-080) — gains a fifth `ProtocolSetupStatus` row "RUA destination" alongside SPF/DKIM/DMARC/MX. Scenario (a): "Not configured — Sendvery isn't receiving reports yet" with deep-link to scenario-(a) copy. Scenario (b): "Pointing at Sendvery — reports flow in automatically." Scenario (c): "Pointing at `{ruaEmail}` — connect that mailbox or repoint to Sendvery."
+    3. `GetDomainIngestionMatrix` (TASK-090) — matrix Action column copy keyed off scenario. Scenario (a): "DMARC record missing — fix that first" + "View how" link. Scenario (b): green badge "Ingesting via DNS (Sendvery)". Scenario (c): "Configured for `{ruaEmail}` — connect mailbox" + a secondary "or repoint to Sendvery" link.
+  - **Onboarding ingestion step**: opens with a live DNS lookup of `_dmarc.<chosen-domain>`. Routes the user to whichever scenario flow applies. If scenario (b) (already pointing at Sendvery), skip the ingestion step entirely — they're done. The DOM-order regression test from TASK-096 still applies: DNS option must appear above mailbox option in every fallback flow.
+  - **No new entity columns, no new migrations.** All data is already on `DnsCheckResult.rawRecord`. The parser + resolver + scenario-aware branches are new code, no schema changes.
+  - **100% test coverage**:
+    - `DmarcRecordParser` unit tests: malformed record returns null, valid record extracts all fields, multiple `rua=mailto:` addresses correctly parsed, edge cases (whitespace, semicolons, missing tags).
+    - `RuaScenarioResolver` unit tests: each of the three scenarios + the edge case where `DnsCheckResult` is missing entirely (no check has run yet — treat as `NoRecord`).
+    - Sendvery-address detection unit tests: `reports@sendvery.com` → true, `john@sendvery.com` → true (sub-address — be conservative, treat any sendvery.com as us), `john@example.com` → false, malformed input → false.
+    - Integration tests on each of the three surfaces for each of the three scenarios (9 fixtures total).
+    - Regression: scenario (b) suppresses the "Connect a mailbox" CTA on `/app/mailboxes` matrix and on the `/app` Next Step card.
+  - **Mobile**: the Action column on the matrix gets wider on scenario (c) because of the inline `{ruaEmail}` — assert the row still wraps cleanly at 360px.
+- Notes:
+  - Composes with TASK-091 (extends, not duplicates), TASK-090 (refines matrix copy), and TASK-080 (adds a fifth protocol-row). Touches `domain_detail.html.twig`, `overview.html.twig`, and `mailboxes.html.twig` — overlaps with potential parallel work on TASK-098 (severity unification). Serialise the build phases.
+  - The "Sendvery address" detection should be conservative — match `@sendvery.com` domain entirely, not just one address. A future change to the central inbox address (e.g. `dmarc@sendvery.com`, `reports-v2@sendvery.com`) shouldn't silently flip every customer's scenario to (c).
+  - For scenario (c), surface BOTH paths with equal visual weight. Pushing too hard towards "repoint to Sendvery" feels like we're trying to capture their DNS config; pushing too hard towards "connect your inbox" loses the DNS-first product story (TASK-090's whole point). Let the user pick.
+  - Estimated effort: 2-3 hours (parser + resolver + 3 surface integrations + 9 integration tests).
+  - Composes with TASK-094 (Mailbox health advisor) — TASK-094 should only nudge "consider switching to DNS-based ingestion" when scenario is (c), not (b).
+  - Composes with TASK-096 (onboarding DNS-first reordering) — TASK-100's onboarding step IS the DNS-first reordering. Either bundle them or ship TASK-100 first and let TASK-096 fold into it.
+  - **Why this leads round 4**: it's a higher-leverage product recommendation than anything else in the deferred list because it uses Sendvery's own competence (DMARC parsing) to give the user information no other product surface can. Every "what should I do?" moment becomes specific — "based on YOUR DMARC record, here's the exact next step" — instead of generic. It's the canonical "where the system has an opinion, surface it" moment from the original brief. From a product-positioning angle, this is one of Sendvery's defining features applied as a recommendation engine.

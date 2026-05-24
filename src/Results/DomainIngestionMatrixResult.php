@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Results;
 
+use App\Results\Dns\RuaScenarioResult;
 use App\Value\IngestionPath;
 
 /**
@@ -18,6 +19,13 @@ use App\Value\IngestionPath;
  */
 final readonly class DomainIngestionMatrixResult
 {
+    /**
+     * `$ruaScenario` is attached after-the-fact by {@see \App\Services\IngestionPathResolver}
+     * — the SQL query doesn't return it, so `fromDatabaseRow` leaves it null
+     * and the resolver wraps each row with `withScenario(...)` before
+     * returning to callers. The default keeps existing `fromDatabaseRow`
+     * call sites working unchanged.
+     */
     public function __construct(
         public string $domainId,
         public string $domainName,
@@ -26,6 +34,7 @@ final readonly class DomainIngestionMatrixResult
         public ?string $mailboxId,
         public ?string $mailboxHost,
         public ?int $mailboxPort,
+        public ?RuaScenarioResult $ruaScenario = null,
     ) {
     }
 
@@ -50,6 +59,20 @@ final readonly class DomainIngestionMatrixResult
             mailboxId: $row['mailbox_id'],
             mailboxHost: $row['mailbox_host'],
             mailboxPort: null === $row['mailbox_port'] ? null : (int) $row['mailbox_port'],
+        );
+    }
+
+    public function withScenario(RuaScenarioResult $scenario): self
+    {
+        return new self(
+            domainId: $this->domainId,
+            domainName: $this->domainName,
+            path: $this->path,
+            lastReportAt: $this->lastReportAt,
+            mailboxId: $this->mailboxId,
+            mailboxHost: $this->mailboxHost,
+            mailboxPort: $this->mailboxPort,
+            ruaScenario: $scenario,
         );
     }
 

@@ -17,7 +17,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveNullDnsHealthMarksAllUnknownAndPointsAtSpf(): void
     {
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve(null);
 
@@ -25,7 +25,9 @@ final class DomainSetupStatusResolverTest extends TestCase
         self::assertSame('DNS not configured yet — start with the SPF record', $status->headline);
         self::assertSame('dashboard_domain_health', $status->ctaRoute);
         self::assertSame('health-spf', $status->ctaFragment);
-        self::assertCount(4, $status->protocols);
+        // TASK-100: 5 rows now — SPF/DKIM/DMARC/MX + new RUA destination row.
+        // All Unknown in the unchecked state.
+        self::assertCount(5, $status->protocols);
         foreach ($status->protocols as $protocol) {
             self::assertSame(ProtocolState::Unknown, $protocol->state);
         }
@@ -37,7 +39,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveAllFieldsNullDtoActsLikeNullInput(): void
     {
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve($this->buildDnsHealth(
             latestSpfScore: null,
@@ -50,7 +52,9 @@ final class DomainSetupStatusResolverTest extends TestCase
         self::assertSame('DNS not configured yet — start with the SPF record', $status->headline);
         self::assertSame('dashboard_domain_health', $status->ctaRoute);
         self::assertSame('health-spf', $status->ctaFragment);
-        self::assertCount(4, $status->protocols);
+        // TASK-100: 5 rows now — SPF/DKIM/DMARC/MX + new RUA destination row.
+        // All Unknown in the unchecked state.
+        self::assertCount(5, $status->protocols);
         foreach ($status->protocols as $protocol) {
             self::assertSame(ProtocolState::Unknown, $protocol->state);
         }
@@ -62,7 +66,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveAllFourConfiguredYieldsHealthyWithNoCta(): void
     {
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),
@@ -76,9 +80,13 @@ final class DomainSetupStatusResolverTest extends TestCase
         self::assertNull($status->ctaLabel);
         self::assertNull($status->ctaRoute);
         self::assertNull($status->ctaFragment);
-        foreach ($status->protocols as $protocol) {
-            self::assertSame(ProtocolState::Configured, $protocol->state);
-            self::assertNull($protocol->nextStep);
+        // TASK-100: the four core protocols are Configured. The 5th RUA row
+        // defaults to Unknown when no scenario is passed (legacy call sites);
+        // it's covered by DomainSetupStatusResolverRuaTest.
+        $byName = $this->indexByName($status->protocols);
+        foreach (['SPF', 'DKIM', 'DMARC', 'MX'] as $name) {
+            self::assertSame(ProtocolState::Configured, $byName[$name]->state);
+            self::assertNull($byName[$name]->nextStep);
         }
         // TASK-097: all-green hides the redundant "DNS setup is complete"
         // panel — the one-line banner is enough.
@@ -88,7 +96,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcMissingWithOthersOkYieldsUnverifiedAndPointsAtDmarc(): void
     {
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),
@@ -115,7 +123,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcOkSpfMissingYieldsAttentionWithSpfNextStep(): void
     {
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: null,
@@ -138,7 +146,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcOkDkimMissingMxFailingYieldsAttentionWithBothInHeadline(): void
     {
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),
@@ -166,7 +174,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcOkSpfInvalidDkimMissingPicksSpfAsMostUrgent(): void
     {
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: null,
@@ -196,7 +204,7 @@ final class DomainSetupStatusResolverTest extends TestCase
         // accidentally fall into BannerOnly (which would hide the row
         // explaining the failing MX) or PanelOnly (which would lose the
         // TL;DR banner the partial state needs).
-        $resolver = new DomainSetupStatusResolver();
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'));
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),

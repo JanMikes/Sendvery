@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Results\Dns\RuaScenarioResult;
 use App\Results\DnsHealthOverviewResult;
 use App\Results\DomainSetupStatus;
 use App\Results\ProtocolSetupStatus;
+use App\Value\Dns\RuaScenario;
 use App\Value\DomainHealthFilter;
 use App\Value\DomainSetupDisplayMode;
 use App\Value\ProtocolState;
@@ -32,7 +34,12 @@ final readonly class DomainSetupStatusResolver
      */
     private const int MX_CONFIGURED_MIN_SCORE = 80;
 
-    public function resolve(?DnsHealthOverviewResult $dnsHealth): DomainSetupStatus
+    public function __construct(
+        private ReportAddressProvider $reportAddressProvider,
+    ) {
+    }
+
+    public function resolve(?DnsHealthOverviewResult $dnsHealth, ?RuaScenarioResult $ruaScenario = null): DomainSetupStatus
     {
         // Two paths collapse to "no DNS check has run yet": (a) the query
         // returned null (cross-tenant guard), (b) the query returned a row
@@ -78,6 +85,7 @@ final readonly class DomainSetupStatusResolver
                     kbSlug: null,
                     healthAnchor: 'health-mx',
                 ),
+                $this->buildRuaDestination($ruaScenario, $dnsHealth),
             ];
 
             // PanelOnly: the banner is hidden in this state — the old
@@ -102,18 +110,31 @@ final readonly class DomainSetupStatusResolver
         $dkim = $this->buildDkim($dnsHealth);
         $dmarc = $this->buildDmarc($dnsHealth);
         $mx = $this->buildMx($dnsHealth);
+        $rua = $this->buildRuaDestination($ruaScenario, $dnsHealth);
 
-        $protocols = [$spf, $dkim, $dmarc, $mx];
+        $protocols = [$spf, $dkim, $dmarc, $mx, $rua];
 
+        // The 4-protocol "allConfigured" check intentionally excludes the RUA
+        // destination row — scenario (c) PointsAtExternal is a valid setup
+        // state (user owns an external inbox), not a broken one, so it
+        // shouldn't downgrade the SPF/DKIM/DMARC/MX healthy verdict.
         $allConfigured = ProtocolState::Configured === $spf->state
             && ProtocolState::Configured === $dkim->state
             && ProtocolState::Configured === $dmarc->state
             && ProtocolState::Configured === $mx->state;
 
         if ($allConfigured) {
-            // BannerOnly: the one-line "Monitoring active" headline is
-            // enough — the redundant "DNS setup is complete" panel below it
-            // would just repeat the same news a second time (TASK-097).
+            // TASK-100: when the RUA scenario is PointsAtExternal, render the
+            // panel even in the all-green case so the user actually sees the
+            // RUA decision row ("Decide: poll the inbox at <addr>, or
+            // replace the rua= target with mailto:reports@sendvery.com").
+            // Otherwise BannerOnly hides the panel and the user never sees
+            // the scenario-(c) recommendation. The headline copy is kept —
+            // the all-four are still in place; the panel does the explaining.
+            $displayMode = (RuaScenario::PointsAtExternal === $ruaScenario?->scenario)
+                ? DomainSetupDisplayMode::BannerAndPanel
+                : DomainSetupDisplayMode::BannerOnly;
+
             return new DomainSetupStatus(
                 severity: DomainHealthFilter::Healthy,
                 headline: 'Monitoring active — all four records are in place',
@@ -121,7 +142,7 @@ final readonly class DomainSetupStatusResolver
                 ctaRoute: null,
                 ctaFragment: null,
                 protocols: $protocols,
-                displayMode: DomainSetupDisplayMode::BannerOnly,
+                displayMode: $displayMode,
             );
         }
 
@@ -146,7 +167,7 @@ final readonly class DomainSetupStatusResolver
         $failingNames = array_values(array_map(
             static fn (ProtocolSetupStatus $p): string => $p->name,
             array_filter(
-                $protocols,
+                [$spf, $dkim, $dmarc, $mx],
                 static fn (ProtocolSetupStatus $p): bool => ProtocolState::Configured !== $p->state,
             ),
         ));
@@ -169,6 +190,67 @@ final readonly class DomainSetupStatusResolver
             protocols: $protocols,
             displayMode: DomainSetupDisplayMode::BannerAndPanel,
         );
+    }
+
+    /**
+     * Fifth checklist row (TASK-100): where DMARC RUA reports flow today.
+     * Distinct from the DMARC row above because that one only answers
+     * "is a DMARC record published?", not "is it routing reports somewhere
+     * we can ingest?". Three scenarios, plus a null/unchecked fallback so
+     * the row stays sensible before the first DNS check has run.
+     */
+    public function buildRuaDestination(?RuaScenarioResult $ruaScenario, ?DnsHealthOverviewResult $dnsHealth): ProtocolSetupStatus
+    {
+        // Before any DNS check has produced data we shouldn't claim anything
+        // about the RUA destination — keep the row Unknown, no nextStep, no
+        // KB slug. Treat a null DnsHealthOverviewResult the same way the
+        // four protocol rows above do (unchecked === pending).
+        if (null === $ruaScenario || null === $dnsHealth || $this->isUnchecked($dnsHealth)) {
+            return new ProtocolSetupStatus(
+                name: 'RUA destination',
+                state: ProtocolState::Unknown,
+                statusLine: 'No DNS check yet',
+                nextStep: null,
+                kbSlug: null,
+                healthAnchor: 'health-dmarc',
+            );
+        }
+
+        $reportAddress = $this->reportAddressProvider->get();
+
+        return match ($ruaScenario->scenario) {
+            RuaScenario::NoRecord => new ProtocolSetupStatus(
+                name: 'RUA destination',
+                state: ProtocolState::Missing,
+                statusLine: "Not configured — Sendvery isn't receiving reports yet",
+                nextStep: sprintf('Publish a `_dmarc` TXT record with `rua=mailto:%s`', $reportAddress),
+                kbSlug: 'dmarc-quick-start',
+                healthAnchor: 'health-dmarc',
+            ),
+            RuaScenario::PointsAtSendvery => new ProtocolSetupStatus(
+                name: 'RUA destination',
+                state: ProtocolState::Configured,
+                statusLine: 'Pointing at Sendvery — reports flow in automatically',
+                nextStep: null,
+                kbSlug: null,
+                healthAnchor: 'health-dmarc',
+            ),
+            RuaScenario::PointsAtExternal => new ProtocolSetupStatus(
+                name: 'RUA destination',
+                state: ProtocolState::Invalid,
+                statusLine: sprintf(
+                    'Pointing at %s — connect that inbox or repoint to Sendvery',
+                    $ruaScenario->ruaEmail ?? '',
+                ),
+                nextStep: sprintf(
+                    'Decide: poll the inbox at %s, or replace the rua= target with `mailto:%s`',
+                    $ruaScenario->ruaEmail ?? '',
+                    $reportAddress,
+                ),
+                kbSlug: null,
+                healthAnchor: 'health-dmarc',
+            ),
+        };
     }
 
     /**

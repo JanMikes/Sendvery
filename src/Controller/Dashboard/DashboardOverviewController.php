@@ -18,6 +18,7 @@ use App\Repository\QuarantinedDmarcReportRepository;
 use App\Repository\TeamRepository;
 use App\Results\MonthlyReportUsageResult;
 use App\Services\DashboardContext;
+use App\Services\Dns\RuaScenarioResolver;
 use App\Services\DomainVerificationEvaluator;
 use App\Services\HealthSummaryResolver;
 use App\Services\IngestionPathResolver;
@@ -27,6 +28,7 @@ use App\Services\SetupChecklistResolver;
 use App\Services\Stripe\PlanLimits;
 use App\Value\DomainHealthSort;
 use Psr\Clock\ClockInterface;
+use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -56,6 +58,7 @@ final class DashboardOverviewController extends AbstractController
         private readonly ClockInterface $clock,
         private readonly IngestionPathResolver $ingestionPathResolver,
         private readonly GetEarliestDomainAddedAt $getEarliestDomainAddedAt,
+        private readonly RuaScenarioResolver $ruaScenarioResolver,
     ) {
     }
 
@@ -164,6 +167,20 @@ final class DashboardOverviewController extends AbstractController
         $earliestDomainAddedAt = $this->getEarliestDomainAddedAt->forTeams($teamIds);
         $reportAddress = $this->reportAddressProvider->get();
 
+        // TASK-100: resolve the RUA scenario for the headline domain so the
+        // NextActionResolver can switch its recommendation based on whether
+        // DMARC already routes reports to Sendvery (scenario b), to an
+        // external inbox the user owns (scenario c), or nowhere (scenario a).
+        // `$verificationStatus` is the single-domain headline used elsewhere
+        // on this page, so resolving for its `domainId` keeps the surface
+        // consistent.
+        $headlineDomainRuaScenario = null;
+        if (null !== $verificationStatus) {
+            $headlineDomainRuaScenario = $this->ruaScenarioResolver->resolveForDomainId(
+                Uuid::fromString($verificationStatus->domainId),
+            );
+        }
+
         $nextAction = $this->nextActionResolver->resolve(
             domains: $domains,
             verificationStatus: $verificationStatus,
@@ -176,6 +193,7 @@ final class DashboardOverviewController extends AbstractController
             ingestionPaths: $ingestionPaths,
             ingestionRecommendationDismissedAt: $team->ingestionRecommendationDismissedAt,
             now: $this->clock->now(),
+            headlineDomainRuaScenario: $headlineDomainRuaScenario,
         );
 
         $healthSummary = $this->healthSummaryResolver->resolve(

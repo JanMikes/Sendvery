@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Services;
 
 use App\Query\GetDomainIngestionMatrix;
+use App\Results\Dns\RuaScenarioResult;
 use App\Results\DomainIngestionMatrixResult;
+use App\Services\Dns\RuaScenarioResolver;
 use App\Services\IngestionPathResolver;
+use App\Value\Dns\RuaScenario;
 use App\Value\IngestionPath;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Unit-level coverage for the thin wrapper service. We don't re-validate the
@@ -83,9 +87,42 @@ final class IngestionPathResolverTest extends TestCase
             ->with([])
             ->willReturn([]);
 
-        $resolver = new IngestionPathResolver($query);
+        $scenarioResolver = $this->createMock(RuaScenarioResolver::class);
+        $scenarioResolver->expects(self::never())->method('resolveForDomainId');
+
+        $resolver = new IngestionPathResolver($query, $scenarioResolver);
 
         self::assertSame([], $resolver->resolveForTeams([]));
+    }
+
+    #[Test]
+    public function attachesRuaScenarioToEachRow(): void
+    {
+        // TASK-100: the resolver enriches every matrix row with the RUA
+        // scenario for that domain. Mock the scenario resolver and assert
+        // the wrapped result carries the scenario through.
+        $result = $this->buildResult(IngestionPath::Dns);
+        $scenario = new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com');
+
+        $query = $this->createMock(GetDomainIngestionMatrix::class);
+        $query->expects(self::once())
+            ->method('forTeams')
+            ->with(['team-1'])
+            ->willReturn([$result]);
+
+        $scenarioResolver = $this->createMock(RuaScenarioResolver::class);
+        $scenarioResolver->expects(self::once())
+            ->method('resolveForDomainId')
+            ->willReturn($scenario);
+
+        $resolver = new IngestionPathResolver($query, $scenarioResolver);
+
+        $resolved = $resolver->resolveForTeams(['team-1']);
+
+        self::assertCount(1, $resolved);
+        self::assertNotNull($resolved[0]->ruaScenario);
+        self::assertSame(RuaScenario::PointsAtSendvery, $resolved[0]->ruaScenario->scenario);
+        self::assertSame('reports@sendvery.com', $resolved[0]->ruaScenario->ruaEmail);
     }
 
     private function buildResult(
@@ -94,7 +131,7 @@ final class IngestionPathResolverTest extends TestCase
         ?int $mailboxPort = null,
     ): DomainIngestionMatrixResult {
         return new DomainIngestionMatrixResult(
-            domainId: 'd-1',
+            domainId: Uuid::uuid7()->toString(),
             domainName: 'example.test',
             path: $path,
             lastReportAt: IngestionPath::None === $path ? null : new \DateTimeImmutable('2026-05-01 10:00:00'),
@@ -115,6 +152,12 @@ final class IngestionPathResolverTest extends TestCase
             ->with(['team-1'])
             ->willReturn($results);
 
-        return new IngestionPathResolver($query);
+        // Stub (no expectations) — the four classification tests don't
+        // care about scenarios, they only care about path classification.
+        $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
+        $scenarioResolver->method('resolveForDomainId')
+            ->willReturn(new RuaScenarioResult(RuaScenario::NoRecord, null));
+
+        return new IngestionPathResolver($query, $scenarioResolver);
     }
 }

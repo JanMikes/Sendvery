@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Integration\Controller;
 
 use App\Entity\DmarcReport;
+use App\Entity\DnsCheckResult;
 use App\Entity\MailboxConnection;
 use App\Entity\MonitoredDomain;
 use App\Entity\ReceivedReportEmail;
@@ -16,6 +17,7 @@ use App\Tests\TestSupport\FallbackCalloutStripping;
 use App\Tests\WebTestCase;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\DnsCheckType;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
 use App\Value\Reports\ReportSource;
@@ -60,18 +62,27 @@ final class ReportIngestionPageTest extends WebTestCase
         $em = $data['em'];
         $persona = $data['persona'];
 
-        // Domain A: DNS-only (already-attached `persona->domain`)
+        // Domain A: DNS-only (already-attached `persona->domain`).
+        // TASK-100: the matrix now reads the RUA scenario from the latest
+        // DnsCheckResult, so we seed one that PointsAtSendvery (this domain
+        // is delivering reports via the central inbox).
         assert(null !== $persona->domain);
         $envA = $this->persistEnvelope($em, ReportSource::CentralInbox, null, new \DateTimeImmutable('-1 day'));
         $this->persistReport($em, $persona->domain, $envA, new \DateTimeImmutable('-1 day'));
+        $this->persistDnsCheck($em, $persona->domain, 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
 
-        // Domain B: Mailbox-only
+        // Domain B: Mailbox-only with a DMARC record pointing at an
+        // external inbox the user owns — TASK-100 scenario (c). Renders the
+        // "Configured for external inbox" badge.
         $domainB = $this->persistDomain($em, $persona->team, 'b-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test');
         $mailbox = $this->persistMailbox($em, $persona->team);
         $envB = $this->persistEnvelope($em, ReportSource::ByoMailbox, $mailbox, new \DateTimeImmutable('-1 day'));
         $this->persistReport($em, $domainB, $envB, new \DateTimeImmutable('-1 day'));
+        $this->persistDnsCheck($em, $domainB, 'v=DMARC1; p=none; rua=mailto:dmarc@'.$domainB->domain);
 
-        // Domain C: No reports yet
+        // Domain C: No reports yet, no DMARC check — scenario resolver
+        // returns NoRecord, badge shows "DMARC missing", action shows
+        // "Publish RUA".
         $domainC = $this->persistDomain($em, $persona->team, 'c-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test');
 
         $data['client']->request('GET', '/app/mailboxes');
@@ -83,11 +94,13 @@ final class ReportIngestionPageTest extends WebTestCase
         self::assertStringContainsString($persona->domain->domain, $body);
         self::assertStringContainsString($domainB->domain, $body);
         self::assertStringContainsString($domainC->domain, $body);
-        // Path labels.
-        self::assertStringContainsString('DNS (central inbox)', $body);
-        self::assertStringContainsString('Mailbox', $body);
-        self::assertStringContainsString('No reports yet', $body);
-        // The "no reports yet" domain gets a "Publish RUA" CTA.
+        // TASK-100 scenario-aware badges: (a) PointsAtSendvery → green DNS
+        // ingesting badge, (c) PointsAtExternal → external-inbox warning,
+        // NoRecord → red "DMARC missing".
+        self::assertStringContainsString('Ingesting via DNS (Sendvery)', $body);
+        self::assertStringContainsString('Configured for external inbox', $body);
+        self::assertStringContainsString('DMARC missing', $body);
+        // The "no reports yet" domain still gets a "Publish RUA" CTA.
         self::assertStringContainsString('Publish RUA', $body);
     }
 
@@ -349,6 +362,31 @@ final class ReportIngestionPageTest extends WebTestCase
         $em->flush();
 
         return $envelope;
+    }
+
+    private function persistDnsCheck(
+        EntityManagerInterface $em,
+        MonitoredDomain $domain,
+        ?string $rawRecord,
+    ): DnsCheckResult {
+        $check = new DnsCheckResult(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            type: DnsCheckType::Dmarc,
+            checkedAt: new \DateTimeImmutable(),
+            rawRecord: $rawRecord,
+            isValid: null !== $rawRecord,
+            issues: [],
+            details: [],
+            previousRawRecord: null,
+            hasChanged: false,
+            isFirstCheck: true,
+        );
+        $check->popEvents();
+        $em->persist($check);
+        $em->flush();
+
+        return $check;
     }
 
     private function persistReport(
