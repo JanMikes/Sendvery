@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Message\CheckDomainDns;
+use App\Message\SnapshotDomainHealth;
 use Doctrine\DBAL\Connection;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -42,8 +43,12 @@ final class CheckAllDomainsDnsCommand extends Command
         }
 
         foreach ($domainIds as $domainId) {
+            $domainUuid = Uuid::fromString($domainId);
             $this->commandBus->dispatch(new CheckDomainDns(
-                domainId: Uuid::fromString($domainId),
+                domainId: $domainUuid,
+            ));
+            $this->commandBus->dispatch(new SnapshotDomainHealth(
+                domainId: $domainUuid,
             ));
         }
 

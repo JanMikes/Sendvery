@@ -423,7 +423,7 @@ Current entries (kept in sync with `crontab`):
 - `*/5 * * * *` — `sendvery:reports:poll-inbox` (central reports@sendvery.com inbox)
 - `15 4 * * *` — `sendvery:reports:purge` (drop parsed/ignored envelopes past SENDVERY_ENVELOPE_PURGE_AFTER_DAYS)
 - `30 4 * * *` — `sendvery:reports:quarantine:purge` (drop quarantined reports past their TTL)
-- `0 3 * * *` — `sendvery:dns:check-all` (DNS record + verification re-check)
+- `0 3 * * *` — `sendvery:dns:check-all` (DNS record + verification re-check; writes one domain_health_snapshot per domain per run)
 - `0 9 * * 1` — `sendvery:digest:send-all` (weekly digest)
 - `0 0 * * *` — `sendvery:usage:reset` (roll expired monthly plan-usage counters forward)
 - `45 4 * * *` — `sendvery:dmarc:purge` (per-team DMARC report retention purge from `PlanLimits::getRetentionDays`)

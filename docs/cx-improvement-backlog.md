@@ -2499,3 +2499,575 @@ These are human-touch items the human owner needs to handle before launch, not C
 **19 tasks shipped over two consecutive autonomous runs:** TASK-023 → TASK-041. 26+ commits to `main`. Suite grew from 1666 to 1890 tests (+224); ~1000 new assertions; ~3000+ lines of new test coverage; new Twig components, Twig globals, query classes, value enums, and one new dashboard route. 100% line coverage on every new file. Zero blocked tasks. Zero quality-gate skips.
 
 The owner's two explicit seed asks — "make the marketing site look professional" + "give the dashboard real IA around the four paths" — are both substantially complete. The remaining launch work is content swaps the human owner controls.
+
+---
+
+## OPS INVESTIGATION — 2026-05-24 third autonomous CX run (read-only diagnostic)
+
+Symptoms reported by product owner:
+- A. `/app/domains/{id}/health` shows "no health snapshots yet"
+- B. `/app/alerts` shows "no alerts to show"
+
+### Verified facts
+
+**Local DB state** (`docker compose exec database psql -U app -d sendvery`):
+
+| table | rows |
+|---|---|
+| `team` | 1 |
+| `monitored_domain` | 0 |
+| `dns_check_result` | 0 |
+| `dmarc_report` | 0 |
+| `domain_health_snapshot` | 0 |
+| `alert` | 0 |
+
+`docker compose exec app bin/console sendvery:dns:check-all` returns `[INFO] No monitored domains found.` — confirmed the cron is correctly wired and exits cleanly when there is nothing to check.
+
+**Production crontab** (`/Users/janmikes/www/spare.srv/deployment/crontab`, `## Sendvery` block): all 9 entries from CLAUDE.md "Crons" section are present, all wrapped in `sentry-cli monitors run`. Schedules and command names match `CLAUDE.md` exactly. Nothing missing on the ops side.
+
+**Alert architecture** (`src/MessageHandler/AlertOn*.php`, `src/Services/AlertEngine.php`): alerts are **event-driven**, not cron-driven. Handlers fire from `DmarcReportProcessed`, `DnsCheckCompleted`, `BlacklistCheckCompleted`. With zero domains and zero reports there is no event traffic, so symptom B is a pure-empty-state result of symptom A's root cause (no domains added in local dev).
+
+**Health-snapshot code path** (`grep -rln "new DomainHealthSnapshot" src/` → 0 hits): **the `DomainHealthSnapshot` entity is never instantiated anywhere in `src/`.** The table is read by `GetDomainHealthHistory`, `GetDnsHealthOverview`, `HealthScoreProvider` (API Platform), and the public share-link page; it is written by **nothing**. `CheckDomainDnsHandler` writes `dns_check_result` rows and updates `MonitoredDomain.{spf,dkim,dmarc}VerifiedAt`, but never composes the per-domain SPF/DKIM/DMARC/MX/blacklist sub-scores into a `DomainHealthSnapshot` row. This is a **production-affecting code gap, not an ops gap**: even after a paying customer adds a domain, ingests reports, and lets the `0 3 * * *` cron tick, their `/app/domains/{id}/health` page will remain "no health snapshots yet" forever.
+
+### Outcome classification
+
+Mixed (a) + (c):
+- Symptom A is **outcome (c)** — actual code gap. The snapshot generator does not exist.
+- Symptom B is **outcome (a)** — local-dev expectation gap. The alert pipeline works, but it needs at least one monitored domain, one ingested DMARC report (or one DNS-record change after a prior check), to produce visible output. There is no seed/fixture that bootstraps a "demo" dataset for local CX evaluation.
+
+Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up below). TASK-043 is the local-dev ergonomic fix.
+
+### Production heads-up for the human owner
+
+**TASK-042 is shipping-blocking for the "Domain Health" surface.** The page exists in the UI, the cron runs nightly, but no row will ever appear in the snapshot table. Any paying customer who clicks the Health tab today (in production) sees the same empty state the local-dev environment shows. This is the kind of defect that erodes trust in the product on first inspection. Treat it as P0 for the next development pass.
+
+---
+
+## TASK-042: `DomainHealthSnapshot` rows are never written — Health tab will be permanently empty in production
+
+- Status: done
+- Area: ops (root cause is application code; classified ops because it surfaced via runtime CX investigation)
+- Why: Paying customers visiting `/app/domains/{id}/health` see "No health snapshots yet" indefinitely. The nightly `0 3 * * * sendvery:dns:check-all` cron runs successfully — it dispatches `CheckDomainDns` commands, the handler writes `dns_check_result` rows and toggles `MonitoredDomain.*VerifiedAt`, but no code path ever instantiates `DomainHealthSnapshot`. The page, the share-link feature, the trend chart, the API Platform `HealthScoreResource` — all read from `domain_health_snapshot`, and nothing writes to it. This is the difference between "the feature is half-built" and "the feature visibly does nothing".
+- Acceptance:
+  - A new handler (e.g. `GenerateHealthSnapshotWhenDnsChecksComplete` or a periodic `SnapshotDomainHealth` command dispatched by `CheckAllDomainsDnsCommand` after the `CheckDomainDns` batch) composes the four DNS check results + a blacklist score (stubbed `100` is acceptable until blacklist checks land per the CLAUDE.md cron note "Blacklist checks: daily (later phase)") into a single `DomainHealthSnapshot` per domain per nightly run.
+  - The sub-scores (spfScore, dkimScore, dmarcScore, mxScore) MUST be derived from the just-persisted `DnsCheckResult` rows — not re-fetched live. Use the deterministic mapping: `isValid` true → 100, `isValid` false → 0 for v1; refine in a follow-up if needed.
+  - The composite `score` is the average of the five sub-scores. `grade` follows the existing convention used elsewhere in the codebase (A ≥ 90, B ≥ 80, C ≥ 70, D ≥ 60, F < 60 — confirm against `GetDnsHealthOverview` if a grade band already exists).
+  - `share_hash` is generated (32-char hex) so the public share-link feature works.
+  - `recommendations` JSON is populated with the actionable items the page already renders. If a generator helper doesn't exist yet, an empty array `[]` is acceptable in v1 so the snapshot rows start flowing.
+  - Test coverage: at least one functional test that runs `sendvery:dns:check-all` against a domain with stubbed `DnsMonitor` results and asserts a row appears in `domain_health_snapshot` with the expected score & grade. Plus a unit test on the score-composition logic.
+  - `docker compose exec app vendor/bin/phpunit && vendor/bin/phpstan && vendor/bin/php-cs-fixer fix --dry-run --diff` all green.
+- Notes:
+  - **Root-cause grep**: `grep -rln "new DomainHealthSnapshot" src/` returns 0 hits — the entity has a constructor but no caller. `grep -rln "domain_health_snapshot" src/` returns only readers: `src/Entity/DomainHealthSnapshot.php`, `src/State/HealthScoreProvider.php`, `src/Query/GetDomainReportData.php`, `src/Query/GetDnsHealthOverview.php`, `src/Query/GetDomainHealthHistory.php`. Migration `migrations/Version20260325800000.php` creates the table.
+  - The natural seam is to dispatch a new `SnapshotDomainHealth` command at the end of `CheckAllDomainsDnsCommand::execute()` AFTER the `CheckDomainDns` batch — or, more event-driven, listen for `DnsCheckCompleted` and debounce per-domain so all four DNS check types contribute to one snapshot. The first option is simpler and matches the existing imperative cron style; pick that for v1.
+  - `dns_check_result` already records per-type results with `isValid` and `checkedAt`. Repository: `App\Repository\DnsCheckResultRepository`. There is already a `findLatestForDomainAndType()` method used by the health page (`DashboardDomainHealthController:43`), so the snapshot generator can reuse it.
+  - The CLAUDE.md `## Crons` line for `sendvery:dns:check-all` accurately describes the **intent** ("DNS record + verification re-check") — the snapshot writing is the missing implementation, not a missing cron entry. No deployment-repo crontab change is needed for this fix; the existing `0 3 * * *` line will trigger snapshot generation once the application code populates it.
+  - Production heads-up: this is shipping-blocking for the "Domain Health" surface. Treat as P0 for the next development pass.
+
+### Architect plan (2026-05-24)
+
+**Trigger model — Option (a), confirmed safe.** `config/packages/messenger.php` has `'routing' => []`; every `commandBus->dispatch()` is handled synchronously by the `doctrine_transaction` middleware. The existing `foreach` in `CheckAllDomainsDnsCommand::execute()` blocks per-domain until `CheckDomainDnsHandler` completes and the 4 `DnsCheckResult` rows are flushed. Dispatching `SnapshotDomainHealth` immediately after `CheckDomainDns` in the same loop iteration is safe — the DNS rows exist before the snapshot handler starts. No event listening or debounce needed.
+
+**Grade bands — codebase convention differs from the Acceptance text above.** `src/Services/Dns/DomainHealthScorer.php:30-36` uses A≥90 / B≥75 / C≥55 / D≥35 / F<35 (weighted: DMARC 25%, SPF 20%, DKIM 20%, MX 15%, Blacklist 20%). The Acceptance text's "A≥90/B≥80/C≥70/D≥60" is wrong relative to the live code. **Implementer must use codebase bands.** Encapsulate in a new `HealthSnapshotComposer` service that applies `isValid→100 / false→0` per type through the existing weighted formula — no need to construct an `EmailAuthCheckResult` value object to route through `DomainHealthScorer::score()`.
+
+**Files to create:**
+- `src/Message/SnapshotDomainHealth.php` — `readonly final class` with single `public UuidInterface $domainId`
+- `src/Value/Dns/HealthSnapshotComposition.php` — `readonly final class` DTO: spfScore, dkimScore, dmarcScore, mxScore, blacklistScore, score (int), grade (string)
+- `src/Services/Dns/HealthSnapshotComposer.php` — `readonly final class`; `compose(?DnsCheckResult $spf, ?DnsCheckResult $dkim, ?DnsCheckResult $dmarc, ?DnsCheckResult $mx, int $blacklistScore = 100): HealthSnapshotComposition`; encapsulates the binary `isValid→100/false→0` per-type mapping, weighted total, band assignment
+- `src/MessageHandler/SnapshotDomainHealthHandler.php` — `#[AsMessageHandler]`, `readonly final class`; injects `EntityManagerInterface`, `MonitoredDomainRepository`, `DnsCheckResultRepository`, `HealthSnapshotComposer`, `IdentityProvider`, `ClockInterface`; `__invoke(SnapshotDomainHealth $message): void`; reads 4 latest `DnsCheckResult` rows, composes, persists `DomainHealthSnapshot`; no flush (middleware handles); `shareHash = bin2hex(random_bytes(16))`; `recommendations = []`
+- `tests/Unit/Services/Dns/HealthSnapshotComposerTest.php` — all-valid → 100/A; all-invalid + blacklist 100 → 20/F; null result treated as score=0; grade boundaries at 90/75/55/35/34; weighted formula spot-check
+- `tests/Integration/MessageHandler/SnapshotDomainHealthHandlerTest.php` — create domain + 4 `DnsCheckResult` rows (mix isValid); invoke handler; assert exactly 1 snapshot row with expected score, grade, 32-char hex shareHash, non-null checkedAt
+- `tests/Integration/Command/CheckAllDomainsDnsCommandSnapshotTest.php` — run command end-to-end with stubbed DNS; assert snapshot row count equals domain count; 0-domains → 0 snapshot rows
+
+**Files to modify:**
+- `src/Command/CheckAllDomainsDnsCommand.php` lines 44-48: add `$this->commandBus->dispatch(new SnapshotDomainHealth(Uuid::fromString($domainId)));` after the existing `CheckDomainDns` dispatch; add the `use App\Message\SnapshotDomainHealth;` import
+- `/Users/janmikes/www/dmarc/CLAUDE.md` "Crons" section, `sendvery:dns:check-all` bullet → `0 3 * * * — sendvery:dns:check-all (DNS record + verification re-check; writes one domain_health_snapshot per domain per run)` (TASK-044). Do NOT add a TASK-043 demo-seeder pointer in this PR; defer to TASK-043's own PR.
+
+**Migration:** none. `domain_health_snapshot` exists (`migrations/Version20260325800000.php`); columns match the entity constructor.
+
+**Affected routes/templates:** none. `DashboardDomainHealthController`, `GetDomainHealthHistory`, `GetDnsHealthOverview`, `HealthScoreProvider`, `GetDomainReportData` all already query `domain_health_snapshot` — rows flowing in auto-populates the page.
+
+**Idempotency note (flag for human):** handler appends a new snapshot on every run. Production cron runs once daily at 03:00 — no issue. Manual reruns or TASK-043's seeder will create multi-row days causing minor trend-chart noise. Acceptable v1 trade-off; a "one per UTC day" guard can be added in a follow-up.
+
+**Convention checklist:** `SnapshotDomainHealth` `readonly final class` matches `CheckDomainDns`/`AddDomain`. Handler `#[AsMessageHandler]` `readonly final` `__invoke()` only, no explicit flush — matches `CheckDomainDnsHandler`. Snapshot `id` via `IdentityProvider::nextIdentity()` (never direct `Uuid::uuid7()`). `ClockInterface` injected for `checkedAt` (deterministic via `MockClock`). `HealthSnapshotComposition` `readonly final class` with constructor promotion. `shareHash` via `bin2hex(random_bytes(16))` (no existing hash generator service in `src/Services/` to reuse).
+
+## TASK-043: Local dev shows empty Alerts + empty Recent Reports because there is no seed dataset — first-look CX of a fresh `make up` is broken
+
+- Status: proposed
+- Area: ops
+- Why: A fresh developer (or the product owner doing first-look CX review) runs `docker compose up`, logs in, and sees every dashboard surface empty: 0 domains, 0 reports, 0 mailboxes, 0 alerts, 0 snapshots. There is no Czech "demo data" path, so the only way to evaluate the dashboard's IA, charts, and empty-vs-populated states is to manually add a domain → forward DMARC reports to it → wait for the cron. This makes autonomous CX evaluation runs (like this one) repeatedly mis-diagnose normal empty states as bugs. Symptom B in this investigation was exactly that — the alerts pipeline is correct, there is just no data.
+- Acceptance:
+  - A `bin/console sendvery:demo:seed` command (or `make seed`) that, against the local `dev` environment only (refuses to run in `prod`), creates:
+    - 1 demo team owned by the current dev user (or auto-creates a dev user if none exists)
+    - 3 monitored domains in varying health states (one A-grade, one C-grade, one with a failing DNS record)
+    - 30 days of synthetic `dmarc_report` rows per domain with realistic pass/fail mixes so the trend charts have data
+    - 5 representative `alert` rows across the four `AlertType` cases (failure spike, new sender, DNS change, blacklisting recommendation)
+    - 1 `domain_health_snapshot` per domain per day for the trailing 30 days (so the trend chart on `/app/domains/{id}/health` renders)
+  - The command is idempotent: re-running it doesn't duplicate rows; instead it truncates the demo data first.
+  - Document the command in `README.md` (or `CLAUDE.md` under a new "Local dev bootstrap" section) so future developers and autonomous agents find it via `grep`.
+  - Test: a functional test that runs the command against the test DB and asserts the four expected row counts.
+- Notes:
+  - Investigation evidence: the local DB currently has 1 team and zero of everything else. Both reported symptoms collapse into "no data" once TASK-042 is also fixed.
+  - This is **not** a fixtures bundle suggestion — the test DB already uses Doctrine fixtures via the bootstrap path in `tests/bootstrap.php` (per `TestingDatabaseCaching.php` pattern). This is a separate demo-data seeder for the dev DB, runnable on demand.
+  - The seeder MUST NOT use `IdentityProvider::nextIdentity()` directly — go through the service so future test-mockability is preserved per the CLAUDE.md "Identity Provider" rule.
+  - Refuses-to-run-in-prod safety: check `$kernel->getEnvironment() === 'dev'` at command entry, return failure with a clear message otherwise. The CLAUDE.md "Never delete user data" memory makes this non-negotiable: a demo seeder that truncates anything in prod would be catastrophic.
+
+## TASK-044: CLAUDE.md "Crons" section silently overstates what `sendvery:dns:check-all` produces
+
+- Status: done (bundled with TASK-042)
+- Area: ops
+- Why: The current docstring "DNS record + verification re-check" reads as if the nightly job also refreshes the health-snapshot history. Autonomous agents reviewing the file (including this run) initially assumed snapshot writes were a side effect of `dns:check-all`. The investigation in TASK-042 disproved that — they're a missing feature. Until TASK-042 ships, the docs should not imply otherwise. After TASK-042 ships, the docs should call out the snapshot side-effect explicitly so the next reviewer (human or agent) knows where to look.
+- Acceptance:
+  - Update `CLAUDE.md` "Crons" section line for `sendvery:dns:check-all`:
+    - **Pre-TASK-042 wording** (interim, if TASK-044 lands first): `0 3 * * * — sendvery:dns:check-all (DNS record re-check only; does NOT yet write domain_health_snapshot — see TASK-042)`
+    - **Post-TASK-042 wording**: `0 3 * * * — sendvery:dns:check-all (DNS record + verification re-check; writes one domain_health_snapshot per domain per run)`
+  - One-line addition under "Crons" linking to the demo-seed command from TASK-043 so future developers don't repeat this run's mistake of treating empty local-dev surfaces as bugs.
+- Notes:
+  - This is a 10-minute docs-only fix; bundle it into the TASK-042 PR to keep the docs in sync with reality.
+
+---
+
+## TASK-060: Alerts sidebar entry has no count badge — unread/critical alerts are invisible until the user clicks through
+
+- Status: todo
+- Area: dashboard
+- Why: Attention-signals-in-navigation audit, round 3. The sidebar has exactly one count badge today: the Quarantine entry at `templates/dashboard/layout.html.twig` line 115 (`{% if quarantine_count > 0 %}<span class="badge badge-xs badge-warning ml-auto">{{ quarantine_count }}</span>{% endif %}`), shipped in TASK-020. The Alerts entry (lines 118-122) — which sits directly below Quarantine in the same "Data" group (TASK-039) — has none. This is the single most-important navigation badge we DON'T have: an unread critical alert ("DMARC pass rate fell below 80% on acme.com") is exactly the "yes, look here" signal a returning user needs. The infrastructure is already in place: `GetAlerts::countUnreadForTeams()` and `countUnreadCriticalForTeams()` already exist (see `src/Query/GetAlerts.php` lines 96-130) — they're used today for the Overview "Unread Alerts" stat card. We just need to expose the count to the sidebar via a new Twig global, mirroring the `QuarantineCountExtension` pattern. The moment of confusion: a paying user opens the dashboard after a week, sees the same five-section sidebar with zero visual change, and has to actually click "Alerts" to discover the new critical drop. By then they've already missed the "Sendvery is watching for you" moment that justifies the subscription.
+- Acceptance:
+  - New `src/Twig/AlertCountExtension.php` mirroring `QuarantineCountExtension` exactly: `final class … extends AbstractExtension implements GlobalsInterface`, injects `Security` + `DashboardContext` + `GetAlerts`, returns `unread_alert_count` (total unread) and `critical_alert_count` (severity=critical, unread, not snoozed) as two Twig globals. Same defensive `try/catch (\RuntimeException)` around `DashboardContext::getTeamId()` so unauth / pre-onboarding pages don't blow up.
+  - Both counts call the EXISTING `GetAlerts::countUnreadForTeams([$teamId])` / `countUnreadCriticalForTeams([$teamId])` methods — no new query work needed. The DashboardContext returns one team at a time, so wrap in single-element list.
+  - On `templates/dashboard/layout.html.twig` Alerts link (line 118-122), add the badge AFTER the "Alerts" label, mirroring the Quarantine pattern at line 115. Badge color rule: `badge-error` if `critical_alert_count > 0`, else `badge-warning` if `unread_alert_count > 0`, else hidden. Number shown is the relevant tier (`critical_alert_count` if any criticals, otherwise `unread_alert_count`). This way the badge always means "you have N things to look at" — and red specifically means "at least one is critical." Single signal, two tiers, no flooding.
+  - Cap displayed number at "99+" to keep the sidebar narrow (consistent with daisyUI badge conventions).
+  - Integration test in `tests/Integration/Twig/AlertCountExtensionTest.php`: 5 `#[Test]` methods — no-user-no-counts, no-team-no-counts (pre-onboarding), team-with-zero-alerts, team-with-unread-non-critical, team-with-critical. Assert the rendered sidebar contains the right badge classes (`badge-warning` vs `badge-error`) and the right number, AND that the badge is ABSENT when both counts are 0.
+  - 100% line coverage on the new extension.
+- Notes: Reuses TASK-020's exact extension + Twig global + sidebar-badge pattern. Total LOC delta: ~55 new (extension + service binding) + ~3 modified in `layout.html.twig` + ~80 lines of test. Estimated effort: 45-60 minutes. This is the highest-value single change in this run because it converts an entire navigation entry from "static label" into "live attention signal" for free.
+
+---
+
+## TASK-061: Domains sidebar entry has no count badge for "unverified domains" — the canonical attention signal for the largest user surface
+
+- Status: todo
+- Area: dashboard
+- Why: Attention-signals audit. The Domains sidebar entry (`templates/dashboard/layout.html.twig` lines 91-95) is the second most-trafficked dashboard route (after `/app`), and it has no attention badge. We already compute "domains in red" — `HealthSummaryResult::domainsAttentionCount` + `domainsUnverifiedCount` are surfaced on the overview hero (lines 38-45 of `overview.html.twig`) and link to `dashboard_domains?status=attention` / `?status=unverified` (the TASK-032 clickable-counts work). The data is right there; the sidebar just doesn't show it. Result: a user who scrolls past the overview hero or who lands on a non-overview page has no nav-level signal that "3 of your 8 domains are degrading." The whole point of a sidebar badge is that it survives across pages — the hero banner doesn't.
+  Important: this is a SECONDARY badge that must not compete with TASK-060's Alerts badge. The rule needs to be "alerts is for ephemeral events that fired; domains is for the standing state of your fleet." To avoid two-badge fatigue: ONLY show the Domains badge when there's at least one **unverified** domain (the hardest-to-discover red state — the user added the domain but the DNS isn't right, and right now they have to navigate to `/app/domains?status=unverified` to find out). `Attention`-status domains (pass-rate dipping below 90%) are already covered by the Alerts badge via the `DmarcPassRateRegressed` alert type — don't double-signal.
+- Acceptance:
+  - Add one Twig global `unverified_domain_count`. Source: a new lightweight `GetDashboardStats::countUnverifiedDomainsForTeam(string $teamId): int` method (preferred — single COUNT query). The sidebar renders on every page, so do NOT call the full `HealthSummaryResolver::resolve()` which does multiple joins; a dedicated COUNT is the right tradeoff. Definition of "unverified" must match the `DomainHealthFilter::Unverified` semantics used by TASK-032 so the badge count and the filter view agree.
+  - On the Domains sidebar entry (`layout.html.twig` lines 91-95), add a badge AFTER the "Domains" label: `{% if unverified_domain_count > 0 %}<span class="badge badge-xs badge-error ml-auto">{{ unverified_domain_count }}</span>{% endif %}`. Badge is `badge-error` (red) — unverified means "you took a setup action but it didn't land" which is the most-actionable state.
+  - The badge href is the existing Domains list (no separate filtered link from the sidebar — the user clicks the entry, lands on the list, and the TASK-032 filter chips at the top already let them filter to `unverified`). Keeping it un-deeplinked preserves the sidebar's "where you are right now" semantics.
+  - DELIBERATELY do NOT add a badge for `Attention`-status domains (pass-rate degraded). The same regression fires a `DmarcPassRateRegressed` alert which TASK-060's Alerts badge already counts — double-signalling the same event in two sidebar entries would defeat the "single badge = look here" principle. Record this decision in the Twig comment next to the badge so a future engineer doesn't "fix" the apparent omission.
+  - Integration test in `tests/Integration/Twig/DomainHealthCountExtensionTest.php`: assert badge absent when zero unverified, present + `badge-error` when ≥1 unverified, present + `badge-error` + capped at "99+" when ≥100 unverified.
+  - 100% line coverage on new code paths.
+- Notes: This is a THREE-badge cap across the whole sidebar (Quarantine + Alerts + Domains = three at the maximum, only when all three are non-zero). The OVERVIEW / INGESTION / SETTINGS sections stay quiet, as do "DNS Health" and "Mailboxes" — those are tools, not inboxes. Estimated effort: 30-45 minutes.
+
+---
+
+## TASK-062: `/app` hero has no global "things need your attention" opening line — the user has to assemble the picture from four banners and five stat cards
+
+- Status: todo
+- Area: dashboard
+- Why: Attention-signals audit, hero-level surface. `templates/dashboard/overview.html.twig` opens with `healthSummary` banner (a single one-line health headline), then a setup checklist (optional), then a verification banner (optional), then five stat cards. That's already a strong opening, but each of those tiles surfaces ONE dimension (domains-health / setup-progress / DNS-verification / unread-alerts) — the user has to mentally aggregate them into "do I need to do anything today?" The PO brief asked specifically: *"the `/app` hero could also surface 3 things need your attention as a global opening line."* The right architectural home is a single line UNDER the existing healthSummary banner — not a fourth banner, not a toast, not a modal — that reads: **"3 things need your attention today: 1 critical alert · 2 unverified domains · 4 reports waiting in quarantine."** Each item is a deep link to the relevant page. If there's nothing to attend to, the line is absent (no "All clear!" copy — that's what the existing healthSummary `success` headline already says). This converts the hero from "here are five numbers" into "here are the N actions you should take right now."
+  Architectural rationale for placement: the hero is the right home because (a) the user is already there as the first action of a session, (b) it's the most-visited route, (c) it's the only place we have the screen real estate for an inline list of actions WITHOUT competing with page-specific content. A toast would be dismissable and lose state; a fourth banner would visually flood; a per-page header line would be redundant with the sidebar badges (TASK-060/TASK-061). The hero is the single coherent home for an aggregated "your day in 3 lines" summary.
+- Acceptance:
+  - New `src/Services/AttentionSummaryResolver.php` (`readonly final class`) — pure aggregator service. Constructor injects `GetAlerts`, `GetQuarantineList`, and the unverified-domain-count source from TASK-061. Method `resolveForTeam(string $teamId): AttentionSummaryResult` returns a `readonly final class` DTO with: `int $criticalAlertCount`, `int $unverifiedDomainCount`, `int $quarantineCount`, `int $totalCount` (sum), and `array<AttentionItem> $items` where `AttentionItem` is `readonly final class { string $label, string $route, array $routeParams, string $colorClass }` for template rendering.
+  - Order of items in the list is fixed by severity (highest first): critical alerts → unverified domains → quarantine pile-up. Each item only appears when its count is ≥1.
+  - On `templates/dashboard/overview.html.twig`, insert a new `<twig:AttentionSummaryLine :summary="attentionSummary" />` component BETWEEN the existing healthSummary banner (around line 51) and the setup checklist (line 54). Component renders `null` (no markup) when `summary.totalCount == 0`. Otherwise renders a compact inline line: an info-icon dot + headline "**N things need your attention today:**" + comma/middot-separated list of clickable item phrases. Visual treatment: smaller and quieter than the healthSummary banner (no full card border) — it's a SUPPLEMENTARY summary, not a replacement.
+  - Each phrase is an `<a>` with `colorClass` (`text-error` for criticals, `text-warning` for quarantine/unverified) + `hover:underline` and a path() to the relevant page with the right filter pre-applied (alerts → `dashboard_alerts?severity=critical&isRead=0`, unverified → `dashboard_domains?status=unverified`, quarantine → `dashboard_quarantine`).
+  - When `totalCount == 0`, render NOTHING — the existing healthSummary headline (success/warning/error) already carries the high-level mood, and a second "Nothing to attend to" line would feel chatty. The DashboardOverviewController dispatches the resolver and passes `attentionSummary` to the template.
+  - 100% test coverage on the resolver (5 branches: zero / only-criticals / only-unverified / only-quarantine / all-three) + integration test asserting the rendered overview HTML contains the right number of `<a>` items in the right order with the right hrefs, AND that the line is ABSENT for an all-zero team.
+- Notes: Builds on the same three count sources as TASK-060 + TASK-061 (alert counts + unverified-domain count + quarantine count) — if TASK-063 ships first, the resolver can read those Twig globals directly without re-querying, which makes the resolver almost trivial. Estimated effort: 60-90 minutes (new service + new component + new result DTO + tests). Largest task in this run; substantial because the result DTO needs to handle empty / partial / full cases and the test matrix is real.
+
+---
+
+## TASK-063: Unify the three new sidebar count globals behind a single `NavCountsExtension` to avoid four round-trips per page render
+
+- Status: todo
+- Area: dashboard
+- Why: Performance + maintainability fresh-eyes catch on TASK-060 + TASK-061. If each of `QuarantineCountExtension` (existing), `AlertCountExtension` (TASK-060), and `DomainHealthCountExtension` (TASK-061) is a separate Twig extension, then EVERY authenticated page render issues FOUR small `SELECT COUNT(*)` queries through the layout. Each one is fast (indexed), but four sequential round-trips on every page load is wasteful and grows linearly each time we add a new badge. The right architecture is a single `NavCountsExtension implements GlobalsInterface` that resolves all badge counts once per request and exposes them as discrete Twig globals (`unread_alert_count`, `critical_alert_count`, `quarantine_count`, `unverified_domain_count`). This keeps the templates' API identical (each badge still reads its own well-named global) while collapsing the security/team-resolve overhead.
+  This task should land LAST in the round — after TASK-060 + TASK-061 have proven the badges work in isolation and have their own tests. The refactor is small, but the dependency order matters.
+- Acceptance:
+  - New `src/Twig/NavCountsExtension.php` extending `AbstractExtension implements GlobalsInterface`. Constructor injects `Security`, `DashboardContext`, and the three query classes (`GetAlerts`, `GetQuarantineList`, and the unverified-domain-count source). Method `getGlobals()` resolves the active team once, then issues the four COUNT queries, returns an associative array with all four keys.
+  - DELETE `src/Twig/QuarantineCountExtension.php` (its Twig global `quarantine_count` is now provided by `NavCountsExtension` — same name, same int value, so no template changes). Same for `AlertCountExtension` and `DomainHealthCountExtension` if TASK-060/061 created them as separate classes — fold both into `NavCountsExtension`.
+  - All four queries are guarded by the same `Security::getUser() instanceof User` + `try/catch (\RuntimeException)` around `DashboardContext::getTeamId()` (same defensive pattern as the current QuarantineCountExtension). If the guard fails (unauth or pre-onboarding), ALL four globals return 0.
+  - DO NOT introduce DBAL async or `RUN_IN_PARALLEL` complexity; the four COUNTs are tiny and serial is fine. The win is "one extension, one team-resolve, one security check" — not concurrency.
+  - Existing tests for `QuarantineCountExtension` (and the new TASK-060/061 tests) move to a single `tests/Integration/Twig/NavCountsExtensionTest.php` that covers all four counts together. The test surface shrinks; coverage stays at 100%.
+  - Regression test: render any authenticated dashboard page (e.g. `dashboard_overview`) and assert via a query counter (or a `kernel.event_subscriber` test helper) that EXACTLY ONE call is made to `getTeamId()` per request — i.e. the four counts share the same team-resolve.
+- Notes: This task is the cleanup step. Without it, the badge work in TASK-060 + TASK-061 lands as three independent extensions that each re-resolve the team and each re-check the security context — a linter / fresh-eyes review would flag the duplication. Estimated effort: 45-60 minutes (consolidation + test merge + regression assertion). Land after TASK-060 + TASK-061; the merge is mechanical once both are in.
+
+---
+
+## TASK-064: Add a `<twig:NavBadge />` component so future sidebar badges share one consistent visual contract
+
+- Status: todo
+- Area: dashboard
+- Why: Visual-consistency fresh-eyes catch. After TASK-060 + TASK-061 ship, the sidebar will have three inline `<span class="badge badge-xs badge-{warning|error} ml-auto">{{ count }}</span>` snippets — one per Quarantine/Alerts/Domains. Each is hand-rolled. The next time we add a badge (say, "Pending invites" on a Team Settings sub-entry), the engineer has to copy-paste-and-tweak the three existing instances — which is exactly the pattern that produced the `bulk_selection_controller.js` triplication called out in the TASK-020/022 follow-ups. Extracting `<twig:NavBadge count="alertsCount" color="error" />` now (while three call-sites exist) is the cheap moment; doing it later (when six exist) is the expensive moment.
+- Acceptance:
+  - New `templates/components/NavBadge.html.twig` anonymous component with two props: `count: int` (required) and `color: string` (one of `warning|error|info`, default `warning`). Renders nothing when `count <= 0`. Otherwise renders `<span class="badge badge-xs badge-{{ color }} ml-auto">{{ count > 99 ? '99+' : count }}</span>`. The 99+ cap is centralised here instead of repeated at each call site.
+  - Optional third prop `label: string` for an `aria-label` on the badge (e.g. "3 critical unread alerts") to keep screen-reader output meaningful — the visible count alone reads as "3" which has no context.
+  - Refactor the three call sites in `templates/dashboard/layout.html.twig` (Quarantine line 115, Alerts after TASK-060, Domains after TASK-061) to use `<twig:NavBadge count="{{ quarantine_count }}" color="warning" label="{{ quarantine_count }} reports waiting in quarantine" />` etc. The rendered HTML must be IDENTICAL to the pre-refactor output (asserted by snapshot test) so the component is a pure extraction.
+  - 100% coverage on the component (3 branches: count=0 hidden, count=N visible, count=100 shows "99+").
+  - One regression test: render `layout.html.twig` with all three badge counts set to a known value and assert each badge appears exactly once with the right color class and the right aria-label.
+- Notes: This task lands AFTER TASK-060 + TASK-061 (they introduce the call sites; this consolidates them). Net LOC: ~+25 lines for the component + ~-15 lines from the layout (three inline spans → three component calls). Cleaner DX, identical visual output, no regression risk. Estimated effort: 30-40 minutes.
+
+---
+
+## TASK-065: Marketing-site `Nav.html.twig` — record the decision to NOT mirror sidebar attention badges on the public Dashboard CTA
+
+- Status: todo
+- Area: marketing
+- Why: Fresh-eyes consistency check. The marketing-site top nav (`templates/components/Nav.html.twig`) for AUTHENTICATED users currently shows a single "Dashboard" CTA button (line 49) — no badge. A naive copy-paste of the sidebar work in TASK-060/061 onto the marketing nav would put a red "3" on the Dashboard button for logged-in users browsing public marketing pages (Pricing, Learn, etc.). This would feel intrusive in a context where the user is researching or sharing the marketing site, not working, AND it would betray the user's session state to over-the-shoulder onlookers (low-grade info disclosure). The right decision is "no badges on the marketing nav for logged-in users" — but it should be a DELIBERATE decision recorded in code, not a "we forgot."
+- Acceptance:
+  - Add a Twig comment block at the top of `templates/components/Nav.html.twig` (right after the existing `NOTE: we deliberately do NOT put daisyUI's .navbar class…` block, lines 1-8) explaining: *"We deliberately do NOT mirror the sidebar attention badges (TASK-060/TASK-061) on the marketing-site Dashboard CTA. The marketing nav is rendered on public pages (Pricing, Learn, Tools); putting a red count on the Dashboard button while the user is researching/sharing those pages would feel intrusive and would betray the user's session state to over-the-shoulder onlookers."*
+  - Add a short matching note to CLAUDE.md under the existing frontend section (or a new "Marketing nav: no attention badges" subsection) so future PR reviewers see the rule before they propose duplicating sidebar badges to the top nav.
+  - No code change beyond the comment + the CLAUDE.md note. This task exists to record the architectural decision and prevent the regression. Estimated effort: 15 minutes.
+- Notes: Tiniest task in the run. Land it ANY time relative to TASK-060/061 — it's purely documentary. The reason it's in the backlog at all is that without it, an over-zealous "consistency" PR three months from now will absolutely propose adding the sidebar badges to the marketing top nav, and the only defence will be "trust me, we discussed it" — which is no defence.
+  - No code change, no test change, no migration.
+
+---
+
+## TASK-066: Domain list cards have NO leading severity indicator — paying customers can't telegraph "fine vs needs attention vs broken" before reading any number
+
+- Status: proposed
+- Area: dashboard
+- Why: Named pain from the human owner: on `/app/domains`, "i want directly to be clear that there is some next step required or is not healthy like icon with warning/danger or something". Right now `templates/components/DomainCard.html.twig` shows the domain name (plain text), the pass-rate number (colored, top-right), and a couple of meta lines. The only color cue is the pass-rate number itself — the eye has to read the digit to know whether the card is healthy. Compare to the alerts list (`templates/dashboard/alerts.html.twig` lines 89-112) which already uses the canonical idiom: a colored left border (`border-l-4 border-l-error|warning|info`) PLUS a leading 32px rounded-full circle with a severity SVG icon. The DomainCard should adopt the same idiom so a user scanning 20 cards can spot the one red card in the grid in <500ms without parsing numbers. The taxonomy already exists: `DomainHealthFilter::Healthy|Attention|Unverified` from TASK-032 is the canonical severity vocabulary and is already wired into `GetDomainOverview` for the filter chips. The missing piece is a `severity()` accessor on `DomainOverviewResult` so the same enum drives the per-card icon.
+- Acceptance:
+  - Add `DomainOverviewResult::severity(): DomainHealthFilter` deriving from `dmarcVerifiedAt`/`passRate` using the same rules the query branches encode: `dmarcVerifiedAt === null` → `Unverified`, `passRate >= 90` → `Healthy`, else `Attention`. Single source of truth — `GetDomainOverview` keeps its existing SQL filters; the new method is the read-side mirror so the template can render without re-deriving rules. Add the `dmarcVerifiedAt` column to the query SELECT and result DTO (currently absent from `Results/DomainOverviewResult.php` and the SELECT in `Query/GetDomainOverview.php`).
+  - In `templates/components/DomainCard.html.twig`, prepend a leading 40px rounded-full severity glyph slot before the name/pass-rate row. Use the same SVG shapes the alerts list uses today (check-circle for Healthy, exclamation-triangle for Attention, exclamation-circle for Unverified) and the same `bg-{tone}/10 text-{tone}` token pairs (`success`, `warning`, `error`). Card root also gains `border-l-4 border-l-{tone}` matching the severity. NO inline CSS; daisyUI v5 tokens only; no `dark:` prefix.
+  - Card stays as ONE anchor (existing stretched-link). No new interactive children added — keeps the existing TASK-018 z-index contract.
+  - Snapshot test: build a 3-domain fixture (healthy / attention / unverified) and assert each `card` HTML contains the right left-border class AND the right SVG `<path d>` attribute. A guard test asserts every rendered card has EXACTLY ONE severity glyph (no template path renders zero, none renders two).
+  - Regression: `DomainHealthFilter` enum unchanged; the existing filter chips on `/app/domains` and the banner counts on `/app` continue to render unchanged.
+- Notes: Moment of confusion this resolves: "I look at my domain list and have to read every pass-rate digit to find the one I should care about." Largest UX win for the single-most-used dashboard surface. Total LOC: ~30 lines in DomainCard + ~5 lines on DomainOverviewResult (+ method) + ~3 lines added to the SELECT + ~80 lines of new tests. The icon SVGs are already in the codebase; lift the exact paths from `templates/dashboard/alerts.html.twig` lines 101 (critical/error), 105 (warning), 109 (info — substitute check-circle for the Healthy variant).
+
+---
+
+## TASK-067: Domain detail page has no one-line status summary at the top — DMARC/SPF/DKIM/MX badge cluster doesn't answer "is this domain set up correctly or not?"
+
+- Status: proposed
+- Area: dashboard
+- Why: Named pain from the human owner: on `/app/domains/{id}` we need "a clear status banner at the top ('Setup complete — monitoring active' vs 'Action needed — DMARC record missing') that summarises the whole page in one line". Post-TASK-041 the domain detail header now shows: domain name, `p=none/quarantine/reject` policy badge, Verified/Unverified badge, then a row of SPF/DKIM/DMARC/MX badges (each green or red individually). That cluster requires the user to mentally aggregate 4-6 signals to answer the basic question "is this fine?". The `/app` overview already does exactly this — see `templates/dashboard/overview.html.twig` lines 14-52 (the `summaryTone` banner with `bar`/`badge`/`icon` map). Reuse that same idiom on the per-domain detail page, sourced from the same `DomainHealthFilter` severity the domain card now uses (TASK-066).
+- Acceptance:
+  - Add `GetDomainDetail::healthSummary()` returning a small `DomainHealthSummaryResult` DTO with `severity: DomainHealthFilter`, `headline: string`, `subline: string`. Headline copy is the load-bearing user-facing line — three branches: Healthy: "Monitoring active — {domainName} is healthy"; Attention: "Action needed — {primary issue}" where `primary issue` is the highest-severity failing signal (DMARC unverified > SPF failing > DKIM failing > MX low-score > pass rate <90%); Unverified: "Setup incomplete — DMARC TXT record not yet detected". Resolution rule lives in a new `DomainHealthSummaryResolver` service so the headline is unit-testable in isolation from the controller.
+  - In `templates/dashboard/domain_detail.html.twig`, insert the banner BETWEEN the page header (lines 11-49, kept) and the `<twig:DomainWorkspaceTabs>` strip (line 55). The banner reuses the exact same shape as `overview.html.twig` lines 14-52: rounded-2xl card with a 1px top color bar + 40px circle icon + headline + optional right-side action button. When `severity === Attention|Unverified` the right-side rail renders a single CTA button that deep-links to the most relevant fix: DMARC unverified → `dashboard_domain_health#health-dmarc`; SPF failing → `dashboard_domain_health#health-spf`; DKIM failing → `dashboard_domain_health#health-dkim`; pass-rate low → `dashboard_sender_inventory` (find the unauthorized sender).
+  - The existing quarantine-pending warning card (lines 57-78) stays — it's a different signal (parked reports awaiting verification). The new banner sits ABOVE it so the page reads top-down: "are we set up correctly" → "are there parked reports" → "metrics" → "charts".
+  - Test: build three controller-integration fixtures (healthy / attention / unverified) and assert each renders the expected headline substring + correct tone-bar color class. Resolver unit test asserts the highest-severity issue wins the headline.
+- Notes: Moment of confusion this resolves: "I land on my domain page and have to scan 8 different colored badges to know if I'm done setting up or not." The headline becomes the one-line answer. Pairs with the marketing promise on the homepage (`templates/homepage/index.html.twig` lines 169-172 — the four DNS badges) — the dashboard now delivers the same one-glance reading the homepage mock promised. Total LOC: ~60 lines of resolver + DTO, ~40 lines of template, ~120 lines of tests.
+
+---
+
+## TASK-068: Mailbox list rows have no leading severity glyph — error rows look identical to active rows at a glance
+
+- Status: proposed
+- Area: dashboard
+- Why: On `/app/mailboxes` the table has a "Status" column (third from left) that renders `<twig:StatusBadge status="active|error|inactive" />` — a small inline badge with the right color. But scanning a 10-row table the eye lands on the leftmost column (Host) first; the status badge sits inside cell 3 and competes with the type, last-polled, activity, last-error columns. A mailbox that's been erroring for 6 hours looks visually indistinguishable from an active one at first glance. Compare to the alerts list (already correct): leading severity icon + colored left border telegraphs the row health before the user reads any column. Apply the same idiom here.
+- Acceptance:
+  - Prepend a NEW leftmost cell (40px wide, header `<th><span class="sr-only">Status</span></th>`) to every row in `templates/dashboard/mailboxes.html.twig`. The cell renders a 24px rounded-full icon: Active+no-error → green check; lastError set → red exclamation-circle; inactive → ghost/grey dot. SVG paths lifted from the alerts list pattern. Existing Status column stays as the textual badge — the leading glyph is the scannable cue, the text badge is the precise label.
+  - Row root (`<tr>`) gains `border-l-4 border-l-{success|error|base-300}` so even a 1px-tall row at the edge of vision telegraphs state. NO `dark:` prefix, no custom CSS outside daisyUI v5 tokens.
+  - The existing Re-test button retains `relative z-20` so the stretched-link contract holds.
+  - Tests: build a 3-mailbox fixture (active / errored / inactive) and snapshot-assert each row's left border class + the icon SVG `<path d>`. Guard test: every rendered `<tr class*='border-l-'>` matches exactly one of the three expected classes (no row falls through to a default).
+- Notes: Moment of confusion this resolves: "Which of my 6 mailboxes is broken? I have to read the Status column on every row." Total LOC: ~25 lines of template + ~60 lines of tests. Pairs with TASK-066 — same idiom, same severity tokens, applied to a list of a different entity.
+
+---
+
+## TASK-069: Reports table rows have no leading severity glyph — every row looks identical until the user reads the pass-rate column
+
+- Status: proposed
+- Area: dashboard
+- Why: `/app/reports` (and the per-domain reports table on `domain_detail`) renders a list of DMARC reports with a pass-rate number in the rightmost cell (`templates/dashboard/_reports_table.html.twig` line 36 and `templates/dashboard/domain_detail.html.twig` line 261). The pass-rate number is colored (`text-success`/`text-warning`/`text-error`) but the row itself is visually identical regardless of report health. A page of 25 reports requires reading 25 numbers to find the failing ones. The TASK-040 "show only failing" toggle helps but is opt-in — by default the table is a wall of identical rows. Prepend a leading severity glyph so a failing report jumps off the page.
+- Acceptance:
+  - Update `templates/dashboard/_reports_table.html.twig`: prepend a 32px-wide leading cell to every row with a rounded-full icon — `passRate >= 90` green check, `>= 70` amber warning, `< 70` red exclamation-circle (matches the existing pass-rate text-color thresholds — single source of truth). SVG paths lifted from the alerts list / TASK-066 family.
+  - Apply the SAME change to `templates/dashboard/domain_detail.html.twig` "Recent Reports" table (lines 240-269) — same SVG, same threshold rule, so the user sees the same idiom on the per-domain reports table AND the global reports list.
+  - The leading cell has `<th><span class="sr-only">Health</span></th>` so the column is screen-reader-labelled but visually empty.
+  - The threshold rule lives in a single Twig macro `templates/components/_severity_glyph.html.twig` shared by both templates so the next pass-rate-driven surface (sender table, blacklist providers table) can reuse it without re-deriving the rule.
+  - Tests: parameterised test with three reports (95% / 75% / 30%) asserts each row has the right icon SVG `<path d>` substring. Guard test: every report row has EXACTLY ONE severity glyph regardless of pass-rate edge cases (exactly 70.0%, exactly 90.0%, NULL pass-rate, etc.).
+- Notes: Moment of confusion this resolves: "Which of these 25 reports are the failing ones?" Today the answer is "read every number". After: the eye lands on the red glyphs. Total LOC: ~50 lines including the shared macro + ~80 lines of tests. The macro is the seed for future re-use.
+
+---
+
+## TASK-070: Alert list rows have a severity icon AND a colored left border — but the row background is still white. A single critical alert in a long unread list still doesn't visually punch through
+
+- Status: proposed
+- Area: dashboard
+- Why: `/app/alerts` is the closest existing implementation of the "icon + color before numbers" idiom — `templates/dashboard/alerts.html.twig` lines 89-112 already renders a 32px severity icon AND a colored left border on each card. BUT the card body itself is the same `bg-base-100` regardless of severity, and the only weight difference between unread and read is bold/grey title text + a tiny "New" badge. A user scrolling 30 alerts looking for the one critical-unread row has to scan icons one by one. Two small additions match what most production alert UIs do: tinted background (`bg-error/5` for unread critical, `bg-warning/5` for unread warning, `bg-info/5` for unread info) AND a leading 8px unread dot in the title row. Result: the row becomes a multi-channel signal (icon + left border + tinted background + leading dot) without any new clickable surface.
+- Acceptance:
+  - In `templates/dashboard/alerts.html.twig` line 89, when `not alert.isRead`, add `bg-{tone}/5` to the card root where `tone = critical→error, warning→warning, info→info`. Read alerts keep `bg-base-100`. Critical unread alerts in particular now have a faint red wash that's unmistakable from 3m.
+  - Add a leading 8px rounded-full dot in the severity color INSIDE the title row (`<h3>` line) when `not alert.isRead`. Replaces the redundant secondary "New" `badge-xs badge-primary` at line 124 (the dot + tinted bg + bold title is enough; the badge is duplicate signal and crowds the title row).
+  - The colored left border (`border-l-4 border-l-{tone}`) stays. The 32px severity icon stays. NO new interactive elements — pure visual changes. The bulk-action checkbox keeps its `relative z-10`.
+  - Snapshot test: build 6 alerts (3 severities × read/unread) and assert each card's background class + leading-dot presence. Regression test: the old `badge-xs badge-primary` "New" badge no longer renders (replaced by the dot).
+- Notes: Moment of confusion this resolves: "I have 40 unread alerts. Which one is the critical-unread one?" Today: scan 40 left-edge icons. After: the red-tinted unread row leaps out at peripheral vision. Total LOC: ~12 lines template change + ~70 lines of tests. The smallest task in this batch; useful as a warm-up. Note: this is purely visual on the LIST page itself — TASK-060 (guidance agent) covers the sidebar count-badge entry point; the two are complementary, not overlapping.
+
+---
+
+## TASK-071: Quarantine list rows show a "reason" badge mid-row — but no leading severity glyph; plan-overage rows (paid issue) look identical to unknown-domain rows (config issue)
+
+- Status: proposed
+- Area: dashboard
+- Why: `/app/quarantine` (post-TASK-036) has reason filter chips at the top and renders a row per quarantined envelope. Each row carries a reason badge mid-row (`unknown_domain`/`unverified_domain`/`plan_overage`) but the row itself is visually undifferentiated by reason. Three reasons map to three very different next-actions for the user: `plan_overage` = "upgrade your plan" (revenue moment, should look red/urgent), `unverified_domain` = "finish DNS verification" (in-progress, should look amber), `unknown_domain` = "add this domain" (informational, should look blue/info). Today they all look the same — a user with 200 quarantined envelopes can't visually triage which group is biggest at a glance. Apply the same leading-glyph + tinted-background pattern from TASK-068/TASK-070 so the three reason classes self-separate visually in the list.
+- Acceptance:
+  - Map `QuarantineReason` → severity tone: `plan_overage` → `error`, `unverified_domain` → `warning`, `unknown_domain` → `info`. Lives as a `QuarantineReason::severityTone(): string` method on the enum so the template doesn't repeat the rule.
+  - In `templates/dashboard/quarantine.html.twig` (the row list section below the filter chips), prepend a 32px rounded-full leading icon column to each row (existing reason badge stays mid-row — that's the precise label; the leading glyph is the scannable cue). SVGs: error → exclamation-circle, warning → exclamation-triangle, info → info-circle. Row root gains `border-l-4 border-l-{tone}`.
+  - The leading icon links to the filter for THAT reason (clicking the red icon on a plan_overage row applies `?reason=plan_overage` to the page) — so the icon doubles as a "show me only this kind" affordance. This is consistent with TASK-036's clickable reason badges. `relative z-20` on the leading-icon anchor so it wins clicks over the stretched-link row anchor.
+  - Tests: build a 3-envelope fixture (one per reason) and assert each row's left border class + icon SVG + filter-link href. The `QuarantineReason::severityTone()` method gets its own unit test.
+- Notes: Moment of confusion this resolves: "I have 200 quarantined reports. How many are the upgrade-money kind vs the just-add-the-domain kind?" Today: read the reason badge on every row. After: the page self-segments into three visually-distinct row groups. Total LOC: ~35 lines (enum method + template + tests on enum + integration test on template).
+
+---
+
+## TASK-080: Domain detail page never answers "is this domain set up correctly?" — replace badge soup with a 3-state setup-status panel
+
+- Status: proposed
+- Area: dashboard
+- Why: Named pain from the human owner on `/app/domains/{id}`: *"it is unclear there is something not ok and I need to do something, I want as well to know the DNS monitoring is correct and passing and what is and what is not set"*. The current header (`templates/dashboard/domain_detail.html.twig` lines 11-49) shows the domain name, a `p=…` policy badge, a `Verified` / `Unverified` chip, and a row of four tiny SPF / DKIM / DMARC / MX badges colored green or red — but it never tells the user IN WORDS whether the domain is fully set up or what's missing. A first-time-this-week user sees four colored chips and has to decode: "the DMARC badge is green — does that mean reports are flowing? Or that the TXT record exists? What about the unverified chip — is that different from DKIM?" The page leads with stat cards (Total Messages / Pass Rate / Unique Senders / Reports) which only make sense AFTER setup is correct. The quarantine-pile banner only renders when `quarantineCount > 0` and only addresses the DMARC-not-published case. Until DNS monitoring is plain-English, the most important question the page should answer ("are we collecting data correctly?") lives entirely in the user's head. The four badges already encode every piece of state needed — the gap is presentational, not data. (TASK-067 in this same run proposes a one-line health summary up top; this task proposes the EXPANDED setup-status panel that makes the verdict actionable per-protocol. They compose: TASK-067 is the headline, TASK-080 is the body.)
+- Acceptance:
+  - New `<twig:DomainSetupStatus :domain :dnsHealth />` Twig component rendered IMMEDIATELY under `<twig:DomainWorkspaceTabs active="overview" />` (between the tabs and the existing quarantine banner / stat cards). Component shows ONE of three states based on `dnsHealth`:
+    1. **All green** (`isSpfVerified() && isDkimVerified() && isDmarcVerified() && latestMxScore >= 80`): single-row success card with a check icon, headline `"{{ domain.domainName }} is fully set up"`, and one-line lede `"SPF, DKIM, DMARC and MX are all healthy. Reports flow in automatically — nothing for you to do."`. Uses the same `border-success/30 bg-success/5` shell as the existing quarantine banner so it doesn't visually fight.
+    2. **Partial / has issues** (any check missing or score < 80): "X of 4 checks passing" headline + a 4-item vertical checklist with one line per protocol (SPF / DKIM / DMARC / MX), each showing a `check` or `x` icon, a one-sentence status (`"DMARC TXT record published"`, `"DKIM record not detected — add a TXT record at the selector your sender uses"`, etc.), and a per-row "Fix this →" link to the `/app/domains/{id}/health#health-spf` anchor.
+    3. **No DNS data yet** (`dnsHealth is null`): info card with headline `"We haven't checked DNS yet"` + lede `"Your first DNS check usually runs within 5 minutes of adding a domain. Re-check now to skip the wait."` + a "Re-check now" form button reusing the existing `dashboard_domain_reverify` route.
+  - Remove the row of four bare SPF/DKIM/DMARC/MX badges at lines 24-47 of `domain_detail.html.twig` — the new component replaces their entire job and the visual duplication is the bug the human named.
+  - The existing `Verified` / `Unverified` chip at lines 18-22 stays on the header (it answers a different question: "has this team ownership-verified the domain?"). Add a tooltip `title="Ownership-verified means we confirmed your team controls this domain. Distinct from DNS-record health below."` to disambiguate from DNS health.
+  - The `<twig:DmarcPolicyExplainer>` (TASK-037, lines ~94-96) stays exactly where it is — it answers "is my POLICY at the right tier?", which is a separate question from "is my SETUP correct?". Order top-to-bottom: tabs → DomainSetupStatus (new, answers "is setup done?") → quarantine banner (existing, conditional) → stat cards → DmarcPolicyExplainer (existing, "is my policy at the right tier?") → charts.
+  - Functional test: render `/app/domains/{id}` for a fixture with all four checks green and assert the response body contains the literal `"is fully set up"`. Render for a fixture missing DKIM and assert the body contains `"3 of 4 checks passing"` AND a `"Fix this"` link whose href ends with `#health-dkim`. Render for a fixture with `dnsHealth is null` and assert the body contains `"We haven't checked DNS yet"` AND a form `action` pointing at `dashboard_domain_reverify`.
+- Notes: The page literally never says the word "setup" today, despite being the page where users come to check on setup. Highest-impact clarity gap in the dashboard. Suggested implementation effort: 1.5-2 hours (one new component + status-message helper on `DnsHealthOverviewResult` + 3 functional tests + template surgery on `domain_detail.html.twig`). If TASK-067 lands first, lift its one-line summary verbatim and stack this component directly below it.
+
+---
+
+## TASK-081: DNS History page is a vertical wall of cards with no date picker, no type filter, no "what is this page for" lede — the named pain page
+
+- Status: proposed
+- Area: dashboard
+- Why: Named pain from the human owner on `/app/domains/{id}/dns-history`: *"this is not really clear, there is missing date, might be small calendar or something, or might be collapsible; overall this whole page is not clear with clear intent and well designed"*. The current template (`templates/dashboard/domain_dns_history.html.twig`) renders an `<h1>DNS History</h1>` + the domain name (line 13-15) — and then a flat vertical list of up to 100 cards (`LIMIT 100` in `GetDomainDnsHistory::forDomain()`). A `<div class="divider">` shows the date heading between groups but there is (a) no filter UI to scope to a date range, (b) no filter UI to scope to a single record type (SPF / DKIM / DMARC / MX), (c) no lede that explains what a "DNS check" IS or why this page exists, (d) no visible "I'm scrolling past 60 checks — when does it stop?" affordance, (e) no calendar or sparkline-of-changes that would let the user spot the day the record actually changed. A first-time-this-week user reads "DNS History" and sees a screen of code blocks with timestamps — they don't know if this is an audit log, a change log, a diff viewer, or a debug dump. The page exists to answer "when did my DNS record change?" and "what did the change break?" but every visual element treats every check as equal weight, when in reality the user only cares about the rows where `has_changed=true`.
+- Acceptance:
+  - Add a one-sentence lede directly under the `<h1>` (lines 13-16 of `domain_dns_history.html.twig`): *"Every DNS check we've run for {{ domain.domainName }}. We re-check SPF, DKIM, DMARC and MX once a day — and any time you click 'Re-check now'. Rows highlighted in yellow show a change from the previous check."* (lede uses `text-base-content/65 text-base mt-2 max-w-2xl` per the SectionHeader rhythm note from TASK-026).
+  - Add a filter chip row (mirroring the established `dashboard_alerts` / `dashboard_quarantine` / `dashboard_domains` pattern) directly under the lede with THREE groups stacked:
+    1. Type chips: `All / SPF / DKIM / DMARC / MX` driven by `?type=` URL param. Active chip uses the per-type color (`btn-primary` / `btn-secondary` / `btn-accent` / `btn-warning`).
+    2. Date-range chips: `Last 7 days / Last 30 days / Last 90 days / All` driven by `?range=` URL param (default `30d`).
+    3. A single toggle chip `"Show only changes (N)"` driven by `?changes_only=1`, where `(N)` is the count of `has_changed=true` rows in the active type/range filter. This is the most important affordance — the user almost always wants this view.
+  - `GetDomainDnsHistory::forDomain()` gains optional `?DnsCheckType $type = null`, `?\DateInterval $since = null`, `bool $changesOnly = false` parameters. The default `?range=30d` makes the page render ~30 rows instead of ~120 (assuming 4 types per day) which fixes the wall-of-cards length.
+  - Replace the existing `<div class="divider">date</div>` + per-card rendering with a **per-day expander pattern**: each calendar day is a `<details>` element titled `Friday, May 23, 2026 — 4 checks, 1 change` (with the change count badge-styled when > 0). Open by default for: (a) the current day, (b) any day that contains a `has_changed=true` row in the active filter, (c) the first 3 days. All other days collapsed. This addresses the "might be collapsible" half of the human's request directly.
+  - When the user picks a single type chip (e.g. `?type=dmarc`), open ALL day-expanders by default (the user is reading a single thread).
+  - Empty state when filters mask everything: a card centered with `"No DNS checks match the current filter"` + a `Clear filters` button (matches the established pattern in `domains.html.twig` lines 35-40).
+  - Functional test: render `/app/domains/{id}/dns-history` with no params and assert the body contains the lede string `"Every DNS check we've run"` AND a chip `"All"` AND chips for `7 days / 30 days / 90 days` AND a `"Show only changes"` toggle chip. Render with `?changes_only=1` and assert only `has_changed=true` rows appear. Render with `?type=spf` and assert no DKIM/DMARC/MX type badges appear in the result rows.
+- Notes: This single page is the most-quoted PO pain in the brief. The fix is pattern-matching to the existing filter-chip + per-day-expander idiom — no new component category needed. The "small calendar" the human floated would also work, but the per-day-expander solves the same scanning problem at one-third the implementation cost and matches existing patterns. Suggested implementation effort: 2-3 hours (query params + template restructure + 3-4 tests).
+
+---
+
+## TASK-082: Cross-page page-title gap — overview, domains, reports, mailboxes, DNS-health, domain-reports, billing have NO visible `<h1>` at all
+
+- Status: proposed
+- Area: dashboard
+- Why: First-impression UX gap that affects 7 of the 13 authenticated pages. Today the layout (`templates/dashboard/layout.html.twig`) renders only a sticky breadcrumb row (`Dashboard › Domains › acme.io`) — there is no `<h1>` slot in the layout. Each page is expected to render its own `<h1>` inside the content block. `grep -L 'h1 ' templates/dashboard/*.html.twig` shows **7 top-level pages have no `<h1>` at all**: `overview.html.twig`, `domains.html.twig`, `reports.html.twig`, `mailboxes.html.twig`, `dns_health_overview.html.twig`, `domain_reports.html.twig`, `billing.html.twig`. The user lands on `/app/domains` and sees: tiny breadcrumb at top → a chip row → a card grid. The single most prominent text on the page is the domain name on the first card, not "Domains". For a first-time-this-week user this is the equivalent of opening a folder whose name is hidden — they have to look up at the browser tab title (or scan the sidebar highlight) to confirm where they are. Pages WITH an `<h1>` (`alerts.html.twig`, `quarantine.html.twig`, `domain_detail.html.twig`, `domain_health.html.twig`, etc.) feel objectively more finished — a consistency gap shipping has revealed.
+- Acceptance:
+  - Add a `{% block page_heading %}` slot to `templates/dashboard/layout.html.twig` that renders `<h1 class="text-2xl font-bold tracking-tight">…</h1>` + optional one-line lede `<p class="text-sm text-base-content/60 mt-1">…</p>` immediately below the sticky breadcrumb header bar, inside the `<main>` element (above the existing `{% block content %}`). The block has a sensible default that pulls from `{% block page_title %}` so pages that already render their own `<h1>` can opt out by leaving the new block empty.
+  - For each of the 7 pages missing `<h1>` today, override `{% block page_heading %}` with a title and a one-sentence "what this page is for" lede:
+    - `overview.html.twig`: `Dashboard` + `"Your team's email health at a glance — start with the next action below."`
+    - `domains.html.twig`: `Domains` + `"Every domain your team is monitoring. Tap a card to see DNS health, recent reports and the sender breakdown."`
+    - `reports.html.twig`: `Reports` + `"Every parsed DMARC report across your domains. Filter by date, domain, reporter, or pass-rate to find what you need."`
+    - `mailboxes.html.twig`: `Mailboxes` + `"The inboxes Sendvery polls for DMARC reports. We check each one every 5 minutes."`
+    - `dns_health_overview.html.twig`: `DNS Health` + `"SPF / DKIM / DMARC / MX status across all your domains. Click a card to see the per-record findings."`
+    - `domain_reports.html.twig`: `Reports — {{ domain.domainName }}` + `"Every DMARC report we've received for this domain."`
+    - `billing.html.twig`: `Billing` + `"Your team's plan, usage this month, and Stripe invoice history."`
+  - Snapshot test: render each of the 7 routes above and assert the response body contains exactly ONE `<h1>` element AND its text content matches the documented page name. Add to an existing `DashboardPageHeadingsTest` (create if absent).
+  - Visual consistency: pages that already render their own `<h1>` (alerts, quarantine, domain_detail, domain_health, etc.) should be migrated to the new block to remove the duplication; verify the markup doesn't render two `<h1>` elements on any page.
+- Notes: This is a 1-PR consistency lift. Each page-header pair is one short sentence — total copy budget is ~60 words across 7 pages. The lede is *not* expected to be exhaustive marketing copy; it's a 3-second orientation. Suggested implementation effort: 1-1.5 hours (layout block + 7 template overrides + 1 snapshot test + cleanup of duplicated `<h1>` markup on pages that already had one).
+
+---
+
+## TASK-083: DNS Health overview page jumps straight into the card grid with no headline counts — "are my domains DNS-healthy in aggregate?" is unanswerable from this page
+
+- Status: proposed
+- Area: dashboard
+- Why: First-impression clarity gap on `/app/dns-health`. The current template (`templates/dashboard/dns_health_overview.html.twig`) is a 60-line file that renders an empty-state OR an unbordered card grid. There is no page heading (covered by TASK-082), no lede, AND no summary stat row. The user lands here from the sidebar "DNS Health" link and the first thing they see is N grade-letter cards with no aggregate framing. The dashboard overview (`/app`) DOES have a summary banner ("3 healthy · 1 needs attention · 1 unverified") — but the dedicated DNS Health page that should EXPAND on those numbers has *fewer* aggregate signals than the overview. The single question this page exists to answer at a glance — "out of my N domains, how many have SPF/DKIM/DMARC/MX all green?" — requires the user to mentally scan and count colored chips across every card. With 5+ domains this is hostile. A first-time-this-week user opens this page expecting an at-a-glance dashboard and gets a card list.
+- Acceptance:
+  - Above the card grid in `dns_health_overview.html.twig` (between the page heading from TASK-082 and the grid at line 15), add a four-card summary stat row reusing `<twig:StatCard>`:
+    - `Domains monitored` — `{{ domains|length }}` (default variant, neutral icon).
+    - `Fully healthy` — count of domains where `isSpfVerified && isDkimVerified && isDmarcVerified && latestMxScore >= 80`. Variant `success` when count > 0. Wrap in `<a href="?status=healthy">` (mirrors TASK-032's filter-chip pattern).
+    - `Need attention` — count of domains where `hasSnapshot()` is true but at least one check is failing. Variant `warning` when count > 0. Wrap in `<a href="?status=attention">`.
+    - `Awaiting first check` — count of domains where `!hasSnapshot()`. Variant `info`. Wrap in `<a href="?status=unchecked">`.
+  - Add a corresponding `?status=` filter chip row directly below the stat cards (matches `dashboard_domains` exactly), so each summary card is BOTH a count and a click-through to the filtered grid.
+  - `DnsHealthOverviewController` reads the `?status=` param and filters `$domains` accordingly (compute server-side from existing fields — no new SQL, no new query class). Empty-state for "no matches": *"No domains match the current filter — clear it to see every domain."*
+  - Functional test: render `/app/dns-health` with 4 fixture domains (2 healthy, 1 needs attention, 1 unverified) and assert: the response contains literal `"2"` in the Fully-healthy stat card; clicking `?status=healthy` shows only the 2 healthy domains; clicking `?status=attention` shows only the 1; clicking `?status=unchecked` shows only the 1.
+- Notes: Re-uses the established filter-chip pattern (TASK-032, TASK-036) and `StatCard` component — no new components. Establishes parity with `/app/domains` which already has identical chips for the same axis. Suggested implementation effort: 1-1.5 hours (controller filter + template summary row + 1 functional test).
+
+---
+
+## TASK-084: Domain workspace tabs render six tabs with NO indication of which surfaces have new data or unread content — the only visual differentiation is the active state
+
+- Status: proposed
+- Area: dashboard
+- Why: First-impression IA gap. The `<twig:DomainWorkspaceTabs>` component (`templates/components/DomainWorkspaceTabs.html.twig`) renders six tabs — Overview / Reports / Senders / DNS / Blacklist / History — with identical visual weight. Once a user lands on a domain workspace, they have NO signal that tells them "there's new stuff in the Reports tab since you last looked" OR "you have 3 unauthorized senders waiting for triage in the Senders tab" OR "the Blacklist tab has an IP listed today". The tabs are pure navigation, not status. A first-time-this-week user has to click each tab to find out what changed — six round-trips. The dashboard pattern in other apps (GitHub Issues count, Linear unread, etc.) is well-established: route-scoped count badges on tabs. This becomes the in-tab equivalent of the unread alert count in the sidebar (the broader sidebar-badge effort is happening on TASK-060/TASK-061; this task is the per-domain-workspace counterpart — together they form one consistent badge language across the app).
+- Acceptance:
+  - `<twig:DomainWorkspaceTabs>` gains an optional `tabCounts` prop (`array<string, ?int>` keyed by tab key — `'reports'`, `'senders'`, `'dns'`, `'blacklist'`, `'history'`). When a key has a non-null and non-zero count, render an inline `badge badge-xs badge-warning` after the tab label: `Reports <span>3</span>`. Re-use the `<twig:NavBadge />` component if TASK-064 lands first.
+  - New `<twig:DomainWorkspaceTabs>` count rules (all server-side, single query each, return null if the data isn't relevant):
+    - `reports` — count of reports for THIS domain received in the last 24h. Surfaces new activity since yesterday.
+    - `senders` — count of `unauthorized` senders for THIS domain (`senderIsAuthorized = false`). Surfaces unresolved triage.
+    - `dns` — `1` if the latest snapshot has any failing check (SPF/DKIM/DMARC/MX score < 80), else `null`. Surfaces "something is broken right now".
+    - `blacklist` — count of IPs currently listed on any DNSBL for THIS domain. Surfaces active blacklisting.
+    - `history` — `1` if there was a `has_changed=true` DNS check in the last 7 days, else `null`. Surfaces "DNS changed recently — look here".
+    - `overview` — always `null` (no badge — the overview is the catch-all).
+  - New `GetDomainWorkspaceTabCounts` query (DBAL Connection) returns a single readonly `DomainWorkspaceTabCounts` DTO from one SQL round-trip (multiple subselects in one query). Call it once at the top of every controller that renders a domain workspace page (6 controllers: `ShowDomainDetailController`, `ListDomainReportsController`, `DashboardDomainHealthController`, `DomainDnsHistoryController`, `SenderInventoryController`, `BlacklistStatusController`) — pass the resulting `tabCounts` array into the template, which forwards it into `<twig:DomainWorkspaceTabs :tabCounts="tabCounts">`.
+  - Functional test: render `/app/domains/{id}` for a fixture domain with 3 unauthorized senders, 2 reports received in the last 24h, an all-failing DNS snapshot, and an IP listed on Spamhaus. Assert the rendered `[role=tablist]` contains badges `"2"` next to Reports, `"3"` next to Senders, no number badge next to DNS (visual indicator only), `"1"` next to Blacklist, and no badge next to History. Render for a fully-clean fixture and assert NO badges appear.
+- Notes: The single most-likely UX criticism after the 6-tab strip lands is "I have to click each tab to know what's new". This task closes that loop. Suggested implementation effort: 2-3 hours (1 new query + 1 new DTO + 6 controller wires + component prop + 2 functional tests). All count subqueries are team-scoped via the existing per-controller pattern.
+
+---
+
+## TASK-085: Alerts page header says "Alerts" with no lede — first-time users don't know what an alert IS, what triggers one, or how it differs from a quarantined report
+
+- Status: proposed
+- Area: dashboard
+- Why: First-impression clarity gap. `/app/alerts` (`templates/dashboard/alerts.html.twig`) renders `<h1>Alerts</h1>` + an optional unread count. The next visible element is a row of filter chips, then the alert list. There is NO lede explaining what an alert is, what generates one, or how alerts differ from the adjacent `Quarantine` sidebar item (which IS explained on `/app/quarantine` with a one-sentence lede — see `quarantine.html.twig` lines 9-11). A first-time-this-week user opening `/app/alerts` sees `Alerts (2 unread)` and a list of titles like `"DKIM key rotation detected on acme.io"` and `"Sender authorization rate dropped 15%"` — and has to infer the alert system's existence, rules, and lifecycle from the items themselves. The `Quarantine` page sets a clear bar for this category (one short paragraph below the page title): we should match it here.
+- Acceptance:
+  - Add a one-sentence lede directly under the `<h1>` (between lines 11-17 of `alerts.html.twig`): *"Things Sendvery noticed and thought you'd want to know about — DNS changes, pass-rate drops, new unauthorized senders, blacklist hits. Mute the type if it's noisy for your setup."*
+  - Style: `class="text-sm text-base-content/60 mt-1 max-w-2xl"` to match the `Quarantine` page lede (`quarantine.html.twig` line 9-11).
+  - Add the analogous one-sentence lede to `/app/alerts/{id}` (`alert_detail.html.twig`) so the lede stays in scope when the user drills in. Same copy.
+  - Functional test: render `/app/alerts` and assert the body contains literal `"Things Sendvery noticed"`. Render `/app/alerts/{id}` for any seeded alert and assert the same.
+- Notes: 4-line template change + 1 functional test. Cheapest task in this batch; pairs naturally with TASK-082 if both ship in the same PR. Suggested implementation effort: 20-30 minutes.
+
+---
+
+## TASK-086: Mailbox detail stat cards use fixed variants — a silent mailbox shows ALL-GREEN cards (Reports parsed: 0 is styled `success`), which is actively misleading
+
+- Status: proposed
+- Area: dashboard
+- Why: First-impression clarity gap on `/app/mailboxes/{id}` (`templates/dashboard/mailbox_detail.html.twig` lines 78-97). The three stat cards show `Envelopes pulled (30d)` / `Reports parsed` / `Envelopes quarantined` with hard-coded variants that don't reflect the value. The `Reports parsed` card is variant `success` even when the value is `0` — green styling on zero implies "good", but zero parsed reports IS the bad state this page exists to detect. The `Envelopes quarantined` card is variant `warning` even when the value is `0` — yellow on zero implies "things are weird", when zero quarantined is actually the celebratory state. The result: a mailbox that's silently broken (no envelopes flowing, no reports parsed, zero quarantined) shows as GREEN-GREEN-GREEN because the variants are static. The operator can't tell at a glance "is this mailbox doing its job?" — the only ground truth is reading the raw number against an unstated benchmark.
+- Acceptance:
+  - Replace the static `variant="success"` / `variant="warning"` props on the three stat cards (lines 78-97 of `mailbox_detail.html.twig`) with value-reactive variants:
+    - `Envelopes pulled (30d)`: variant `default` when > 0, `warning` when 0 AND `mailbox.lastError is null` (mailbox is healthy but no mail — possibly a misconfigured rua), `error` when 0 AND `mailbox.lastError is not null`.
+    - `Reports parsed`: variant `success` when > 0, `warning` when 0 (no reports parsed in 30 days is the failure mode this page exists to detect — not a celebration).
+    - `Envelopes quarantined`: variant `success` when 0, `warning` when > 0 (zero quarantined is the good state).
+  - Replace the operational lede on line 31 (`"Sendvery polls this mailbox every 5 minutes."`) with an orientation lede that explains the page's purpose: *"How this inbox is doing as a source of DMARC reports. We poll every 5 minutes, parse what's clearly a DMARC report, and park anything ambiguous in Quarantine for you to review."*. The polling cadence detail moves down into the "Connection details" card (line 40-70) as a `<dd>` row labelled `Polling interval` → `every 5 minutes` for the operators who actually need it.
+  - Add a one-line subtitle directly under each stat-card value (extend `<twig:StatCard>` with an optional `subtitle` prop if not present) so the number is self-explanatory:
+    - Envelopes: `"From this mailbox, last 30 days"`.
+    - Reports parsed: `"Recognised as DMARC reports"`.
+    - Envelopes quarantined: `"Held — couldn't be auto-routed"`.
+  - Functional test: render `/app/mailboxes/{id}` for fixture A (healthy: 100 envelopes, 90 parsed, 10 quarantined) and assert all three cards render with the documented variants. Render for fixture B (silent: 0 envelopes, no error) and assert envelopes is `warning` not `default`. Render for fixture C (parser broken: 100 envelopes, 0 parsed, 100 quarantined) and assert reports-parsed is `warning` and quarantined is `warning`.
+- Notes: The variant flip on `Reports parsed` is the most important behavioural change — today a silent mailbox shows ALL-GREEN cards which is actively misleading. Suggested implementation effort: 1 hour (template logic + `StatCard` subtitle prop if needed + 3 functional tests).
+
+---
+
+## TASK-090: `/app/mailboxes` treats DNS-based ingestion and mailbox-based ingestion as equivalent — must surface DNS-as-primary, mailbox-as-fallback, and the mutual-exclusivity rule
+
+- Status: proposed
+- Area: dashboard / ingestion / guidance
+- Why: Confusion moment named explicitly by the PO ("we encourage users to use DNS instead of connecting mailboxes"). The page header today is just "Mailboxes" with a table of `MailboxConnection` rows; the `EmptyState` (lines 16-22 of `templates/dashboard/mailboxes.html.twig`) literally says *"Connect a mailbox to automatically receive and parse DMARC reports."* as if that were the only path. In reality Sendvery's preferred ingestion path is "publish `rua=mailto:reports@sendvery.com` in DNS and let mail providers deliver reports to our central inbox" (`DmarcReportRouter` + `ReportAddressProvider`); the per-user IMAP/POP3 `MailboxConnection` is the *fallback* for customers who can't change DNS or want a private copy. A new user landing on `/app/mailboxes` reads it as "I MUST connect a mailbox" — exact opposite of the product preference. Worse: the page never says "these two paths are mutually exclusive per domain" — a user could connect a mailbox AND publish RUA pointing at us and double-ingest the same reports.
+- Acceptance:
+  - Rename the page heading from "Mailboxes" to **"Report ingestion"**. Subhead: *"Where DMARC reports arrive from email providers."*
+  - At the top of the page (above any table), render a new `<twig:IngestionRoutesCallout>` panel with two side-by-side cards:
+    1. **Recommended — DNS-based ingestion.** *"Publish `rua=mailto:{{ reportAddress }}` in your domain's DMARC TXT record. Providers (Gmail, Outlook, Yahoo) deliver reports to Sendvery's central inbox; nothing to configure here."* CTA: "View DMARC setup → " linking to `dashboard_dns_health` (or per-domain `dashboard_domain_health` when only one verified domain exists). Visual treatment: `border-primary/30 bg-primary/5`, "Recommended" eyebrow badge.
+    2. **Fallback — Connect a mailbox.** *"Already receiving DMARC reports at a private inbox (e.g. you can't change DNS, or you want a local copy)? Connect that mailbox and Sendvery polls it every 5 minutes."* CTA: "Connect a mailbox" → `dashboard_mailbox_add`. Visual treatment: `border-base-200 bg-base-100`, no recommended badge.
+  - Below the callout, render a **Per-domain ingestion matrix** table (always rendered when the team has ≥1 monitored domain — never empty-stated when only the mailboxes table would have been empty). Columns: `Domain · Active ingestion path · Last report received · Action`. The "Active ingestion path" cell is computed by a new `IngestionPathResolver` service:
+    - If the latest 5 ingested `received_report_email` envelopes for this domain came from the central inbox (envelope's `mailbox_connection_id IS NULL`): badge **DNS (central inbox)** in `badge-primary`, secondary line "via `{{ reportAddress }}`".
+    - If the latest 5 envelopes came from a `MailboxConnection` row owned by this team: badge **Mailbox** in `badge-ghost`, secondary line "via `{{ mailbox.host }}:{{ mailbox.port }}`" with link to that mailbox detail page.
+    - If a mix appears in the last 5 envelopes (real ambiguity, i.e. RUA + mailbox both ingesting the same domain): badge **Both — please pick one** in `badge-warning` with an inline help link ("Why this is a problem →" opening a new KB stub `ingestion-paths-mutual-exclusivity`).
+    - If zero envelopes ever: badge **No reports yet** in `badge-ghost`.
+  - The matrix's "Action" cell shows the next step for that domain's current state: if `No reports yet` AND DMARC record published without `rua=` pointing at Sendvery → "Publish RUA" (link to the per-domain health page `#health-dmarc` anchor); if `Both` → "Decide" (link to KB stub); else "—".
+  - Hard rule (regression test): nowhere on this page may we render copy that implies "use both at once is fine". Existing copy in the `EmptyState` and the table header must be revised so the words "Connect a mailbox" never appear *without* the qualifier "if you can't change DNS" or equivalent. An integration test scans the rendered DOM for that invariant.
+  - The existing mailboxes table moves below the matrix under a "Connected mailboxes" sub-heading and is hidden entirely when there are zero connected mailboxes (the callout's right card is the only mailbox-related affordance in that case).
+  - 100% test coverage on `IngestionPathResolver` (five branches: central / mailbox / mixed / none / mailbox-with-NULL-mailbox-id edge case) and a snapshot test on the rendered page asserting the callout's two cards, the matrix, and the absence of any non-qualified "connect a mailbox" copy.
+- Notes:
+  - New KB article `ingestion-paths-mutual-exclusivity` is a stub for this run — single H1 + 2 paragraphs covering the rule. A full article is a separate proposal.
+  - The matrix uses `received_report_email.mailbox_connection_id IS NULL` as the central-inbox marker — verify this field exists / add it to the entity if missing. The `PollReportsInbox` central poller doesn't currently stamp a mailbox FK on its envelopes; that's the load-bearing data point for this whole task. If the field is missing, the migration to add it is in-scope.
+
+---
+
+## TASK-091: `/app` "Next Step" card pushes "Connect a mailbox" without ever offering "Publish RUA pointing at Sendvery" as the recommended alternative
+
+- Status: proposed
+- Area: dashboard / guidance
+- Why: Confusion moment named explicitly by the PO. `NextActionResolver::resolve()` has a 5th-priority branch (`!hasMailbox && allDomainsWithoutReports`) that emits a `ConnectMailbox` next-action with copy *"Connect a dedicated IMAP mailbox to receive DMARC reports directly, in addition to Sendvery's central inbox."* That branch fires for the most common new-user state — domain added, DMARC verified, waiting-for-first-report — and pushes the user into the *fallback* path rather than confirming the *preferred* path (central inbox via RUA). Worse: the existing `WaitForReports` branch (priority 3) DOES say "DMARC is set up correctly … your first one should arrive within 48 hours" but never names the address (`reports@sendvery.com`) the records should point at, and doesn't tell the user *how to verify* their RUA actually points at us. The phrase "in addition to" actively contradicts the mutual-exclusivity rule TASK-090 is enforcing.
+- Acceptance:
+  - Replace the single `ConnectMailbox` branch with a new `PublishRuaRecord` branch that fires first when `!hasMailbox && allDomainsWithoutReports` AND at least one domain has a DMARC record published but `rua=mailto:{{ reportAddress }}` is not among its RUA targets (data source: `MonitoredDomain.dmarcRuaAddresses` populated by `DnsMonitor`, or a fresh re-check). Title: *"Point your DMARC reports at Sendvery"*. Description: *"You have DMARC published on {{ domainName }}, but the `rua=` tag doesn't include `{{ reportAddress }}` yet. Add it and Gmail/Outlook start delivering reports within 24 hours — no mailbox connection needed."* CTA: "Show me how" → `dashboard_domain_health` with `#health-dmarc` anchor (TASK-034 already wires that landing target).
+  - Keep `ConnectMailbox` as a true fallback, only fired when: (a) the team has explicitly dismissed `PublishRuaRecord` (new dismissal stored on `Team` via `team.ingestion_recommendation_dismissed_at`) OR (b) at least one domain has `rua=mailto:{{ reportAddress }}` published *and still* no reports after 7 days (i.e. RUA route is broken/blocked for them; mailbox becomes the genuine fallback). Revised copy on the fallback: *"Reports aren't reaching Sendvery via DNS — connect a mailbox where they already arrive (e.g. `dmarc@yourcompany.com`) and we'll poll it every 5 minutes."* — names mailbox as the explicit alternative, not "in addition to".
+  - Update the existing `WaitForReports` branch description to include the report address: *"DMARC is published. Email providers send aggregate reports to `{{ reportAddress }}` daily — your first one should arrive within 48 hours."* (currently doesn't name the address).
+  - Add a small secondary text-link under the Next Step card body (below the primary CTA button) when either of the two new ingestion-related branches is active: *"Prefer to connect a mailbox instead? (fallback)"* — opens `dashboard_mailbox_add`. This is the only place in the dashboard's primary "what should I do?" surface where the mailbox path is suggested for a new user, and it's always framed as the fallback.
+  - 100% test coverage on the new `PublishRuaRecord` branch (eligible vs not), the dismissal flow, and the 7-day grace period that promotes `ConnectMailbox` from "never recommended" to "real fallback". Existing `NextActionResolver` tests get the new scenarios.
+- Notes:
+  - Touches `NextActionResolver`, the controller assembling its inputs (to pass in per-domain RUA status), and adds a small `IngestionRecommendationDismisser` controller for the dismissal POST. The dismissal field is one new nullable timestamp column on `team`.
+  - Pairs with TASK-090: same mental model, same KB article, but TASK-091 owns the `/app` "Next Step" surface; TASK-090 owns the `/app/mailboxes` surface. Together they enforce the DNS-first hierarchy at both entry points.
+
+---
+
+## TASK-092: Sender Inventory has no "you should authorize or revoke this sender" recommendation — high-volume unauthorized senders are silently listed
+
+- Status: proposed
+- Area: domains / guidance
+- Why: Apply the TASK-037 reference pattern (eligibility logic + plain-English next-step + KB link) to the Sender Inventory page. `templates/dashboard/sender_inventory.html.twig` today renders a table of senders with Authorize/Revoke buttons but never *recommends* an action. A sender that has sent ≥50 messages in the last 30 days and is still marked Unknown is exactly the moment to nudge: "We've seen Mailchimp send 1,247 messages as `acme.io` in the last 30 days — is that you? Authorize it to stop these alerts; revoke it if it's spoofing." Without this nudge, a small business gets the inventory grid, doesn't know what to do with it, and the feature value evaporates.
+- Acceptance:
+  - New `src/Services/SenderAuthorizationAdvisor.php` pure-computation service (mirrors `DmarcPolicyAdvisor` shape). Input: `SenderInventoryResult` row + 30-day message count + 30-day DKIM pass rate. Output: `SenderAdvisorResult` DTO with `senderId`, `severity` (`recommend_authorize` | `recommend_revoke` | `monitor` | `none`), `reasonText`, `primaryActionLabel`.
+  - Eligibility rules (pure logic, no DB, deterministic — same shape as `DmarcPolicyAdvisorResult::forDomain`):
+    - **recommend_authorize**: `!isAuthorized` AND `totalMessages30d >= 50` AND `passRate30d >= 90%` AND `organization is not null` (we know who it is). Reason: *"{{ org }} has sent {{ count }} messages as {{ domain }} in the last 30 days with {{ passRate }}% DMARC pass. Looks legitimate — authorize to stop being alerted."*
+    - **recommend_revoke**: `!isAuthorized` AND `totalMessages30d >= 20` AND `passRate30d < 50%` AND `organization is null`. Reason: *"Unknown sender at {{ ip }} has sent {{ count }} failing messages as {{ domain }} — likely spoofing. Mark as revoked to make this visible in your alerts."*
+    - **monitor**: `!isAuthorized` AND between thresholds — *"Watching {{ org or ip }} — not enough volume yet to recommend authorize or revoke."*
+    - **none**: authorized, or `< 5` messages in window. No row callout rendered.
+  - New `<twig:SenderActionCallout>` component renders a compact inline detail row beneath the matching sender table row (similar to daisyUI `tbody` expanded-detail pattern) when the advisor returns `recommend_authorize` or `recommend_revoke`. Shows the reason text, the primary action button (wired via existing `dashboard_sender_authorize` / `dashboard_sender_revoke` POST endpoints), and a "Read more" link to a new KB article `authorizing-senders-explained` (stub for this run, single H1 + 2 paragraphs).
+  - Sort order changes: rows with `recommend_authorize` and `recommend_revoke` bubble to the top of the table within the active filter, so the "what should I do?" rows are above the noise.
+  - New stat row above the table: *"X senders need a decision"* — count of `recommend_authorize` + `recommend_revoke` rows. Stat is clickable, filters to `?recommendation=needs_decision`.
+  - 100% test coverage on `SenderAuthorizationAdvisor` (all four branches + edge cases at every threshold boundary) and a snapshot test on the rendered inline callout for both `recommend_authorize` and `recommend_revoke`.
+- Notes: 30-day message count + pass-rate-by-window is not yet on `SenderInventoryResult` (it carries lifetime `totalMessages` + `passRate`). Add a new `SenderActivity30Day` shape backed by a single batched query keyed by sender id, then merge into the row at controller render time. Mirrors the `MailboxActivitySummary` batched-load pattern from TASK-035.
+
+---
+
+## TASK-093: Reports list never surfaces "your pass rate dropped this week — here's the sender behind it" — the recommendation is the table row that's already there, but unframed
+
+- Status: proposed
+- Area: reports / guidance
+- Why: Apply the recommendation pattern to the most-watched health number. The Reports list page (`dashboard_reports`) shows individual report rows with their pass rate, but never says "your team-wide 7-day pass rate is 73% — down from your 30-day baseline of 91%, and 84% of the failures come from `mailchimp.com`". That insight requires zero new data — `dmarc_record` has source IP + pass/fail per report, and `known_sender` has the org. Without surfacing this, the user sees a wall of report rows with no narrative; with it, they get the single most actionable email-deliverability sentence the product can produce.
+- Acceptance:
+  - New `src/Services/PassRateRegressionAdvisor.php` pure-computation service. Input: 7-day team pass-rate aggregate, 30-day baseline, and the top sender contributing to the 7d failure volume (with org/IP/message count). Output: `PassRateRegressionResult` DTO with `currentRate7d`, `baselineRate30d`, `delta`, `severity` (`regression` | `improvement` | `stable`), `topFailingSender` (nullable), `recommendationText`.
+  - Eligibility: emit `regression` only when `delta <= -10 percentage points` AND `baselineRate30d >= 70%` (avoid noisy alerts on already-broken setups) AND we have ≥ 20 reports in the 7-day window (avoid small-sample noise).
+  - New `<twig:PassRateRegressionBanner>` component renders at the top of `templates/dashboard/reports.html.twig` ONLY when severity is `regression`. Visual: `bg-warning/10 border-warning/30` callout with: 1-line headline ("Pass rate dropped from {{ baseline }}% to {{ current }}% this week"), one-line cause sentence ("{{ percentFromTopSender }}% of the failures came from {{ topSender.org or topSender.ip }}"), and two action links: *"Investigate this sender →"* (links to `dashboard_sender_inventory` with `#sender-{id}` anchor — TASK-038 already wired the deep-link target) and *"Filter reports to failing only →"* (links to `dashboard_reports?pass_rate=low`).
+  - When severity is `improvement` (mirror eligibility — `delta >= +10pp` from a `baseline < 90%`), render a quiet success variant: *"Pass rate improved from X% to Y% this week — nice."*. No CTAs; celebrate-and-move-on.
+  - When severity is `stable`, render nothing (do NOT add visual noise to a healthy state).
+  - Hard rule: this banner shows pass-rate stats from existing data — it does NOT propose any change to ingestion paths. It must NEVER suggest "connect a mailbox" or "switch to DNS"; those decisions belong on `/app/mailboxes` per TASK-090.
+  - 100% test coverage on `PassRateRegressionAdvisor` (all three severities + edge cases: zero baseline data, fewer than 20 reports, exactly-10pp boundary), plus an integration test that the banner only renders when severity is `regression` or `improvement`.
+- Notes: The "top failing sender" query reuses the `GetTopSendersForDomain` shape but at team scope — likely a new `GetTopFailingSenderForTeam` query (single ROW return). Window cutoffs go through `ClockInterface` so tests are deterministic. No new tables, no migrations.
+
+---
+
+## TASK-094: Mailbox detail page renders no recommendation when a mailbox has been silent for 7+ days — the user sees stale stats with no explanation
+
+- Status: proposed
+- Area: dashboard / guidance
+- Why: TASK-035 shipped the per-mailbox detail page with `envelopes30d` / `reportsParsed` / `envelopesQuarantined` stats and a `lastPolledAt` row. What's missing: the page never *interprets* those numbers. A mailbox that polled successfully today but has pulled zero envelopes in 7+ days is broken in a way a user must be told about — the IMAP credentials work but mail providers aren't delivering to that address (often because the user's DMARC RUA no longer points there). Today the user sees "0 envelopes (30d)" with no explanation and no next step. Same TASK-037 advisor-card pattern; different surface.
+- Acceptance:
+  - New `src/Services/MailboxHealthAdvisor.php` pure-computation service. Input: `MailboxDetailResult` (has `lastPolledAt`, `lastError`, `envelopes30d`, `envelopesQuarantined`, `isActive`) + mailbox `createdAt`. Output: `MailboxHealthAdvisorResult` DTO with `severity` (`broken_credentials` | `silent_for_too_long` | `quarantine_dominant` | `healthy`), `reasonText`, `primaryActionLabel`, `primaryActionRoute`.
+  - Eligibility rules:
+    - **broken_credentials**: `lastError is not null` AND `lastPolledAt within last 24 hours`. Reason: *"Sendvery couldn't log into this mailbox at {{ lastPolledAt }}: {{ lastError }}. Re-test the connection or update credentials."* Action: "Re-test connection" (POST to existing `dashboard_mailbox_retest`).
+    - **silent_for_too_long**: `lastError is null` AND `isActive` AND `envelopes30d === 0` AND `createdAt > 7 days ago` (i.e. we've been polling for at least a week and nothing arrived). Reason: *"Sendvery has polled this mailbox for the last 7+ days without finding any new DMARC reports. The credentials work but no reports are arriving — usually because the domain's `rua=` tag doesn't point at this inbox. Check DNS, or switch to DNS-based ingestion via `{{ reportAddress }}`."* Actions: primary "Check DNS" (link to `dashboard_dns_health`), secondary link "Use DNS-based ingestion instead →" (link to `dashboard_mailboxes` — TASK-090's callout is the landing).
+    - **quarantine_dominant**: `envelopesQuarantined > envelopes30d * 0.5` AND `envelopes30d >= 10`. Reason: *"More than half of the envelopes this mailbox pulled in the last 30 days landed in quarantine. Usually means receivers are sending reports for domains you haven't added yet, or domains that aren't verified."* Action: "Open quarantine for this mailbox" (already wired — `dashboard_quarantine?mailbox={{id}}`).
+    - **healthy**: none of the above — render no callout.
+  - New `<twig:MailboxHealthAdvisorCard>` component renders above the connection-details card on `templates/dashboard/mailbox_detail.html.twig` for any non-healthy severity. Same visual rhythm as `<twig:DmarcPolicyExplainer>`: card with current state, plain-English reason, primary CTA button, optional secondary link.
+  - Hard rule: when the recommendation references DNS-based ingestion as a remedy (silent_for_too_long branch), the copy must frame it as the *recommended alternative*, not "another option" — preserves the mutual-exclusivity hierarchy from TASK-090/091.
+  - 100% test coverage on `MailboxHealthAdvisor` (all four branches + three edge cases: just-created mailbox with `lastPolledAt is null` and `createdAt < 7 days ago`, zero-envelope mailbox polled for < 7 days, mailbox with `lastError` but `lastPolledAt` was 3 days ago — that last case should still flag broken_credentials but be visually softer than the within-24h case).
+- Notes: `MailboxConnection.createdAt` already exists; just feed it into `MailboxDetailResult`. Reuses the same component shape as `DmarcPolicyExplainer` for visual consistency across all advisor-driven cards (DMARC policy, sender authorization, mailbox health all share the same card rhythm).
+
+---
+
+## TASK-095: DNS Health page labels missing/broken records as "Fail" but never tells the user the literal record to publish — the recommendation is the cure, and we're hiding it
+
+- Status: proposed
+- Area: dashboard / guidance
+- Why: The DNS Health page (`dashboard_domain_health`) renders five category scores (SPF/DKIM/DMARC/MX/Blacklist) as numbers + progress bars. When DMARC is missing, the page conditionally renders a `<twig:DnsRecordInstruction>` block (the existing pattern from the public DMARC checker), but ONLY for DMARC — when SPF is missing, when DKIM has no key, or when SPF lookup count is over 10, the user gets a low score and a red bar and no concrete record-level guidance. The recommendation pattern *exists in the codebase* (`DnsRecordInstruction.html.twig`); it's just under-applied. This is the cheapest "make value visible" win in the dashboard — the data is already on the page, only the framing is missing.
+- Acceptance:
+  - New `src/Services/Dns/DnsRecordRecommender.php` pure-computation service. Returns, per category, an optional `DnsRecordRecommendation` shape: `category` (`spf` | `dkim` | `dmarc` | `mx`), `severity` (`missing` | `broken` | `suboptimal`), `recordType` (TXT/MX/CNAME), `recordHost` (e.g. `_dmarc.example.com`), `recommendedValue` (the literal string to publish, or null when it's a "how-to" rather than a "publish-this" recommendation), `whatText`, `whyText`.
+  - Eligibility per category (deterministic, pure computation):
+    - **DMARC missing**: existing `DmarcRuaInstruction::build()` already provides this — wire it into the new recommendation shape for symmetry across categories.
+    - **SPF missing**: recommend a minimal opening-position SPF: `v=spf1 -all` with whyText *"You have no SPF record. Even a strict reject-all baseline tells receivers 'nothing should send as me' — better than silence. Adjust once you know your real senders."*
+    - **SPF over 10 lookups**: severity = `suboptimal`, `recommendedValue` = `null`, `whatText` = a how-to ("Remove unused includes — your current record has {{ count }} lookups, max is 10. Common candidates: `_spf.{{ provider }}` if you've migrated away from {{ provider }}."). Renders as text-only guidance, no copyable record.
+    - **DKIM no key found**: `recommendedValue` = `null`, `whatText` = "Generate a DKIM key in your sending platform (Gmail Workspace, Microsoft 365, Mailchimp, etc.) and publish the TXT record they give you at the selector they specify. Common selectors: `google`, `selector1`, `mxvault`." Renders as text guidance + KB link to `what-is-dkim`.
+    - **MX missing**: out of scope of email-receiving — recommend nothing, just keep the existing score.
+  - On `templates/dashboard/domain_health.html.twig`, render `<twig:DnsRecordInstruction>` (when `recommendedValue is not null`) OR a new lightweight `<twig:DnsRecordHowTo>` text-only card (when `recommendedValue is null`) below each category that has a recommendation. The DMARC block already does this — just generalize the pattern across categories.
+  - 100% test coverage on the new `DnsRecordRecommender` service (all five branches above) and a snapshot test that renders `domain_health.html.twig` with a deliberately-broken `EmailAuthCheckResult` and asserts the recommendation card appears below the matching category.
+- Notes: This task is purely additive — no existing behaviour changes, no existing tests break. The opening-position SPF recommendation (`v=spf1 -all`) is intentionally strict; an alternative is `v=spf1 ?all` (neutral) but strict is the better default for a domain that has no SPF yet (nothing legitimate breaks because there's nothing legitimate sending). Document the choice in the service.
+
+---
+
+## TASK-096: Onboarding ingestion step gives equal weight to mailbox vs DNS — first-touch experience teaches the wrong mental model
+
+- Status: proposed
+- Area: onboarding / guidance
+- Why: `templates/onboarding/ingestion.html.twig` is the moment a brand-new user picks their ingestion path BEFORE they ever see `/app/mailboxes`. If the onboarding flow gives equal weight to both options (or worse, presents mailbox-connection first because the controller historically lived there), every fix on `/app/mailboxes` (TASK-090) is undermined by the first-touch experience that taught the wrong mental model. Without auditing this page, the recommendation hierarchy gets re-broken at the source.
+- Acceptance:
+  - Audit `templates/onboarding/ingestion.html.twig` + its controller and revise so the page presents:
+    1. The **DNS-based path** is the default / first / recommended option. Single primary CTA ("I'll publish a DMARC record"). The DNS instructions (`<twig:DnsRecordInstruction>` with the team's `reports@sendvery.com` address) render inline so the user can copy the record without leaving the page.
+    2. The **mailbox path** is presented as a secondary, smaller option ("I'd rather connect a mailbox") below the DNS section, visually de-emphasized (smaller heading, `btn-ghost` instead of `btn-primary`). Same KB link as TASK-090's callout.
+  - The onboarding controller MUST allow proceeding via either path. Choosing "I'll publish a DMARC record" marks the onboarding ingestion-step complete and lands the user on `/app` (where TASK-091's `PublishRuaRecord` / `WaitForReports` next-step takes over).
+  - Hard rule (regression test): the rendered HTML must place the DNS-based-path heading text strictly above the mailbox-path heading text in DOM order — locks the visual hierarchy at CI time so a future refactor can't silently flip the order.
+  - 100% test coverage on the onboarding controller's two completion branches; snapshot test on the rendered page asserts the heading order + the absence of any copy that implies "you need to do both".
+- Notes: Pairs with TASK-090/091 to close the loop end-to-end. Skipping this leaves a "first impression" gap where the user is taught the wrong model on day 1, then has to unlearn it from the dashboard callouts on day 2. Low-risk task — most likely just a re-order + copy revisions + visual de-emphasis on existing markup.
+
+---
