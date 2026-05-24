@@ -1833,7 +1833,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-028: Homepage de-duplicate the two near-identical feature grids ("Feature Highlights" vs "Security Expertise")
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: Audit finding. Sections 6 ("Everything you need for email authentication") and 7 ("Your email security, explained") are both 4-card grids using inline-SVG-icon-plus-title-plus-paragraph cards. Section 6 uses `<twig:FeatureCard>`, section 7 uses `<twig:ToolCard>`, but the visitor scrolling past sees two consecutive "grid of four feature cards" sections that feel like leftover drafts of the same idea. Worse, section 7's cards all link to public tool pages, which makes section 7 functionally identical in intent to the footer Tools column — three places (nav dropdown, footer column, section 7) pushing the same destination. Either the second grid is a redundant restatement of capabilities, or it's a tool-discovery surface — pick one and let it be that.
 - Acceptance:

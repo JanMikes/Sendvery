@@ -177,39 +177,38 @@
     </div>
 </twig:SectionContainer>
 
-{# === 7. Security Expertise Section === #}
+{# === 7. Risks in Your DNS — denser text grid, no cards/icons/tool links.
+       Reframed (TASK-028) from a second four-card grid into concrete failure
+       scenarios. The four tool destinations the old section linked to are
+       reachable via the nav Tools dropdown + footer Free Tools column. #}
 <twig:SectionContainer bgClass="bg-base-200/50">
     <div class="max-w-4xl mx-auto">
         <twig:SectionHeader
             eyebrow="Risks in your DNS"
-            title="Your email security, explained"
-            lede="These are the risks hiding in your DNS right now."
+            title="What Sendvery catches that nobody else does"
+            lede="The silent failure modes that break email authentication weeks before anyone notices."
         />
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <twig:ToolCard
-                title="SPF Record Checker"
-                description="Is your SPF record over the 10-lookup limit? Did you leave old includes from services you no longer use?"
-                href="{{ path('tools_spf_checker') }}"
-                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>'
-            />
-            <twig:ToolCard
-                title="DKIM Key Checker"
-                description="Stale 1024-bit keys? Selectors broken after DNS migration? Third-party services publishing weak keys?"
-                href="{{ path('tools_dkim_checker') }}"
-                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>'
-            />
-            <twig:ToolCard
-                title="DMARC Policy Analyzer"
-                description='Still on p=none? Your DMARC says "watch but don&apos;t block." Attackers can send as your domain right now.'
-                href="{{ path('tools_dmarc_checker') }}"
-                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>'
-            />
-            <twig:ToolCard
-                title="Domain Health Score"
-                description="Every check shows 'mostly okay.' But combined, your domain scores a D. Find out your real grade."
-                href="{{ path('tools_domain_health') }}"
-                icon='<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path></svg>'
-            />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">DKIM</div>
+                <h3 class="font-semibold text-base-content mb-1">Key expired after a DNS migration</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">Your provider rotated DKIM keys but the new selector never landed in DNS. Every transactional email has been silently failing authentication for weeks — Sendvery flags it on the next report.</p>
+            </div>
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">SPF</div>
+                <h3 class="font-semibold text-base-content mb-1">Record crept over the 10-lookup limit</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">Each new sender adds an include directive. Once you cross 10 DNS lookups, the entire SPF record is treated as permerror — receivers reject mail without telling you.</p>
+            </div>
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">Alignment</div>
+                <h3 class="font-semibold text-base-content mb-1">Marketing tool added to SPF without DKIM</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">SPF passes (the IP is authorised) but DKIM is missing (the sender doesn't sign on your behalf). DMARC alignment fails. Mail lands in spam from a "trusted" sender.</p>
+            </div>
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">Subdomain</div>
+                <h3 class="font-semibold text-base-content mb-1">Subdomain inherits weaker policy than apex</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">Your apex domain is on <code class="font-mono text-xs">p=reject</code>, but `mail.yourdomain.com` has no DMARC record — it inherits the apex's <code class="font-mono text-xs">sp=</code> tag (or `p=none` if absent), opening a spoofing window.</p>
+            </div>
         </div>
     </div>
 </twig:SectionContainer>
