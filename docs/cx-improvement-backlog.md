@@ -2676,7 +2676,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-061: Domains sidebar entry has no count badge for "unverified domains" — the canonical attention signal for the largest user surface
 
-- Status: todo
+- Status: planned
 - Area: dashboard
 - Why: Attention-signals audit. The Domains sidebar entry (`templates/dashboard/layout.html.twig` lines 91-95) is the second most-trafficked dashboard route (after `/app`), and it has no attention badge. We already compute "domains in red" — `HealthSummaryResult::domainsAttentionCount` + `domainsUnverifiedCount` are surfaced on the overview hero (lines 38-45 of `overview.html.twig`) and link to `dashboard_domains?status=attention` / `?status=unverified` (the TASK-032 clickable-counts work). The data is right there; the sidebar just doesn't show it. Result: a user who scrolls past the overview hero or who lands on a non-overview page has no nav-level signal that "3 of your 8 domains are degrading." The whole point of a sidebar badge is that it survives across pages — the hero banner doesn't.
   Important: this is a SECONDARY badge that must not compete with TASK-060's Alerts badge. The rule needs to be "alerts is for ephemeral events that fired; domains is for the standing state of your fleet." To avoid two-badge fatigue: ONLY show the Domains badge when there's at least one **unverified** domain (the hardest-to-discover red state — the user added the domain but the DNS isn't right, and right now they have to navigate to `/app/domains?status=unverified` to find out). `Attention`-status domains (pass-rate dipping below 90%) are already covered by the Alerts badge via the `DmarcPassRateRegressed` alert type — don't double-signal.
@@ -2688,6 +2688,28 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
   - Integration test in `tests/Integration/Twig/DomainHealthCountExtensionTest.php`: assert badge absent when zero unverified, present + `badge-error` when ≥1 unverified, present + `badge-error` + capped at "99+" when ≥100 unverified.
   - 100% line coverage on new code paths.
 - Notes: This is a THREE-badge cap across the whole sidebar (Quarantine + Alerts + Domains = three at the maximum, only when all three are non-zero). The OVERVIEW / INGESTION / SETTINGS sections stay quiet, as do "DNS Health" and "Mailboxes" — those are tools, not inboxes. Estimated effort: 30-45 minutes.
+
+### Architect plan (2026-05-24)
+
+**Verified**: No pre-existing unverified-count helper. `GetDomainOverview::countForTeams()` counts ALL domains. `dmarc_verified_at` column confirmed via `GetDomainOverview::forTeams()` Unverified branch + `DomainProvider::SELECT_COLUMNS`.
+
+**Files to create:**
+- `src/Twig/DomainHealthCountExtension.php` — `final class extends AbstractExtension implements GlobalsInterface`; constructor injects `Security`, `DashboardContext`, `GetDomainOverview`; `getGlobals(): array<string, int>` returns `['unverified_domain_count' => $this->resolveCount()]`. `resolveCount()` mirrors `AlertCountExtension::resolveUnreadCount()` guard pattern (`!Security::getUser() instanceof User` → 0; `try/catch (\RuntimeException)` around `DashboardContext::getTeamId()` → 0).
+- `tests/Integration/Twig/DomainHealthCountExtensionTest.php` — 5 tests: no-user; no-team-membership; zero unverified; one unverified; ten unverified. Mirrors `AlertCountExtensionTest` shape.
+
+**Files to modify:**
+- `src/Query/GetDomainOverview.php` — add `countUnverifiedForTeams(array $teamIds): int` after the existing `countForTeams` method. SQL: `SELECT COUNT(*) FROM monitored_domain WHERE team_id IN (:teamIds) AND dmarc_verified_at IS NULL`. Early-return 0 on empty `$teamIds`. Use `ArrayParameterType::STRING` per existing pattern.
+- `templates/dashboard/layout.html.twig` (~line 94, after the "Domains" label, before `</a>`): insert the badge block with an inline Twig comment explaining the deliberate Attention-status exclusion:
+  ```twig
+  {# badge-error = unverified only. Attention-status domains are NOT counted here
+     — DmarcPassRateRegressed alerts already drive the Alerts badge (TASK-060).
+     Double-signalling defeats the "single badge = look here" principle. #}
+  {% if unverified_domain_count > 0 %}<span class="badge badge-xs badge-error ml-auto">{{ unverified_domain_count > 99 ? '99+' : unverified_domain_count }}</span>{% endif %}
+  ```
+
+**No-double-signalling proof**: `AlertCountExtension` reads `alert` table (filter `is_read = false`); this extension reads `monitored_domain` (filter `dmarc_verified_at IS NULL`). Orthogonal sources, orthogonal predicates — no overlap possible. The `DmarcPassRateRegressed` alert that fires for pass-rate degradation lands in the Alerts table and surfaces via the TASK-060 badge; the Domains badge stays focused on unverified-only.
+
+**Convention checklist**: `final class` (NOT readonly — `AbstractExtension` can't be readonly), `strict_types=1`, namespace `App\Twig`, autoconfiguration registers it (no service YAML), `array<string, int>` return type on `getGlobals()`, `catch (\RuntimeException)` with no variable to match the established pattern, "99+" cap in template not PHP.
 
 ---
 
@@ -2995,7 +3017,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-082: Cross-page page-title gap — overview, domains, reports, mailboxes, DNS-health, domain-reports, billing have NO visible `<h1>` at all
 
-- Status: proposed
+- Status: planned
 - Area: dashboard
 - Why: First-impression UX gap that affects 7 of the 13 authenticated pages. Today the layout (`templates/dashboard/layout.html.twig`) renders only a sticky breadcrumb row (`Dashboard › Domains › acme.io`) — there is no `<h1>` slot in the layout. Each page is expected to render its own `<h1>` inside the content block. `grep -L 'h1 ' templates/dashboard/*.html.twig` shows **7 top-level pages have no `<h1>` at all**: `overview.html.twig`, `domains.html.twig`, `reports.html.twig`, `mailboxes.html.twig`, `dns_health_overview.html.twig`, `domain_reports.html.twig`, `billing.html.twig`. The user lands on `/app/domains` and sees: tiny breadcrumb at top → a chip row → a card grid. The single most prominent text on the page is the domain name on the first card, not "Domains". For a first-time-this-week user this is the equivalent of opening a folder whose name is hidden — they have to look up at the browser tab title (or scan the sidebar highlight) to confirm where they are. Pages WITH an `<h1>` (`alerts.html.twig`, `quarantine.html.twig`, `domain_detail.html.twig`, `domain_health.html.twig`, etc.) feel objectively more finished — a consistency gap shipping has revealed.
 - Acceptance:
@@ -3011,6 +3033,52 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
   - Snapshot test: render each of the 7 routes above and assert the response body contains exactly ONE `<h1>` element AND its text content matches the documented page name. Add to an existing `DashboardPageHeadingsTest` (create if absent).
   - Visual consistency: pages that already render their own `<h1>` (alerts, quarantine, domain_detail, domain_health, etc.) should be migrated to the new block to remove the duplication; verify the markup doesn't render two `<h1>` elements on any page.
 - Notes: This is a 1-PR consistency lift. Each page-header pair is one short sentence — total copy budget is ~60 words across 7 pages. The lede is *not* expected to be exhaustive marketing copy; it's a 3-second orientation. Suggested implementation effort: 1-1.5 hours (layout block + 7 template overrides + 1 snapshot test + cleanup of duplicated `<h1>` markup on pages that already had one).
+
+### Architect plan (2026-05-24)
+
+**Audit (post-TASK-081 + TASK-090)**: 6 pages still lack an `<h1>` (mailboxes shipped via TASK-090; dns-history via TASK-081). Pages to add H1: `overview`, `domains`, `reports`, `dns_health_overview`, `domain_reports`, `billing`.
+
+**Layout block**: insert `{% block page_heading %}{% endblock %}` INSIDE `<main>` and ABOVE `{% block content %}` in `templates/dashboard/layout.html.twig` (~line 200). Empty default — pages that already own their H1 inline render unchanged until migrated.
+
+**H1 + lede copy table:**
+| Template | H1 | Lede |
+|---|---|---|
+| `overview.html.twig` | Dashboard | Your team's email health at a glance — start with the next action below. |
+| `domains.html.twig` | Domains | Every domain your team is monitoring. Tap a card to see DNS health, recent reports and the sender breakdown. |
+| `reports.html.twig` | DMARC Reports | Every parsed DMARC report across your domains. Filter by date, domain, reporter, or pass-rate to find what you need. |
+| `dns_health_overview.html.twig` | DNS Health | SPF, DKIM, DMARC and MX records for every monitored domain in one view. |
+| `domain_reports.html.twig` | Reports — {{ domain.domainName }} | Every DMARC report we've received for this domain. |
+| `billing.html.twig` | Billing | Your subscription, invoices, and plan limits. |
+
+**Canonical markup** (from `quarantine.html.twig:7-12`):
+```twig
+{% block page_heading %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">{{ heading }}</h1>
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">{{ lede }}</p>
+    </div>
+{% endblock %}
+```
+
+**No mobile-nav conflict**: layout's sticky top bar contains only breadcrumbs + hamburger — no existing mobile-only H1.
+
+**No DomainWorkspaceTabs conflict**: `domain_reports.html.twig` keeps `<twig:DomainWorkspaceTabs>` inside its content block; the new `page_heading` block renders ABOVE content per layout structure, producing the correct order (H1 → tabs → filter bar → table).
+
+**Inline-H1 migration scope (same PR)**: move existing inline H1+lede markup into `{% block page_heading %}` for `alerts`, `quarantine`, `domain_detail`, `domain_health`, `blacklist_status`, `sender_inventory`, `report_detail`, `quarantine_detail`, `mailbox_detail`, `domain_dns_history`, `mailboxes`. This guarantees ONE canonical H1 location and unblocks the "no double H1" regression net. `mailboxes.html.twig` uses `<header class="mb-6">` (not bare div) — minor normalisation, no copy change.
+
+**Tests** (new `tests/Integration/Controller/DashboardPageHeadingsTest.php`):
+- 6 per-page tests asserting `assertSelectorTextContains('h1', '<expected text>')`.
+- One sweep test that loops every dashboard route and parses with DOMXPath asserting `count(//h1) == 1` — fails CI if any page double-renders OR a future PR forgets to override the block.
+- For `domain_reports`, assert the H1 contains the seeded domain name.
+
+**Build sequence**:
+1. Add empty block to `layout.html.twig`.
+2. Add overrides to the 6 missing-H1 templates.
+3. Migrate the 11 inline-H1 templates into the new block.
+4. Write `DashboardPageHeadingsTest`.
+5. `phpunit` + `phpstan` + `php-cs-fixer --dry-run`.
+
+**Convention checklist**: no `dark:`, daisyUI v5 tokens only (`text-base-content/60`), no new PHP files / migrations / services. Total LOC: ~12 in layout/page overrides + ~120 in test file.
 
 ---
 
@@ -3300,5 +3368,64 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
   - Hard rule (regression test): the rendered HTML must place the DNS-based-path heading text strictly above the mailbox-path heading text in DOM order — locks the visual hierarchy at CI time so a future refactor can't silently flip the order.
   - 100% test coverage on the onboarding controller's two completion branches; snapshot test on the rendered page asserts the heading order + the absence of any copy that implies "you need to do both".
 - Notes: Pairs with TASK-090/091 to close the loop end-to-end. Skipping this leaves a "first impression" gap where the user is taught the wrong model on day 1, then has to unlearn it from the dashboard callouts on day 2. Low-risk task — most likely just a re-order + copy revisions + visual de-emphasis on existing markup.
+
+---
+
+## TASK-097: Domain detail page renders `DomainStatusBanner` and `DomainSetupStatus` back-to-back with overlapping / contradictory copy
+
+- Status: proposed
+- Area: dashboard
+- Why: TASK-067 (`DomainStatusBanner`) and TASK-080 (`DomainSetupStatus`) shipped independently and now stack at the top of `/app/domains/{id}`. They derive from the same `DomainSetupStatus` DTO but render two cards with overlapping verdicts in every state, and one state is outright contradictory:
+  - **All-green case**: banner says *"Monitoring active — all four records are in place"*; the panel below it renders the all-green confirmation card saying *"DNS setup is complete — SPF, DKIM, DMARC and MX are all in place for this domain. Reports flow in automatically — nothing for you to do here."* Two cards, same headline, vertically adjacent — the user reads the same news twice and the page wastes ~120px before the actual content (stats + charts) begins.
+  - **Pending case (fresh domain, no DNS check run yet)**: banner says *"DNS not configured yet — start with the SPF record"* with an Unverified red color bar and a "Set up SPF" CTA. The panel immediately below says *"We haven't checked DNS yet — Your first DNS check usually runs within 5 minutes of adding a domain. Re-check now to skip the wait."* with an info-blue color and a "Re-check now" CTA. **These contradict**: the banner asserts a verdict ("not configured"), the panel asserts we don't yet know ("haven't checked"). Both render simultaneously for the ~5 minutes between adding a domain and the first DNS cron tick. The user can't tell whether DNS is actually missing or just unverified — a confusing first-touch on the second-most-visited authenticated page.
+  - **Partial-setup case**: banner says *"Action needed — DKIM, MX"* and links to the most-urgent fix; the panel below renders the 4-row checklist with the same DKIM and MX rows flagged red and per-row "Fix this →" links. The banner is a TL;DR of the panel — but they sit four pixels apart with no visual hierarchy telling the user which to act on first.
+- Acceptance:
+  - Decide on a single source of truth per page state. Recommended resolution (locks the visual rhythm without dropping any information):
+    1. **All-green state**: render the banner ONLY. The `DomainSetupStatus` component returns nothing for this state (early-return). The banner's one-line "Monitoring active" is enough; the redundant confirmation card disappears.
+    2. **Pending state (no DNS check yet)**: render the panel ONLY (info-blue "We haven't checked DNS yet" with the Re-check button). The banner is skipped — there's no verdict to lead with. The `DomainStatusBanner` component returns nothing when `status.protocols` are all `ProtocolState::Unknown`.
+    3. **Partial-setup state**: keep BOTH the banner (TL;DR + most-urgent CTA) AND the panel (full per-protocol checklist). The visual rhythm is intentional: scan-friendly headline → drill-down detail. Tighten the spacing between them (`mb-2` on the banner instead of `mb-4`) so they read as a unit, not two cards.
+  - The decision lives on `DomainSetupStatus` (the DTO) as a new computed `displayMode` property (`'banner_only' | 'panel_only' | 'banner_and_panel'`) so both components stay props-only renderers. The resolver owns the mode logic; the templates branch on `status.displayMode`.
+  - The `DomainStatusBanner` headline for the pending state ("DNS not configured yet — start with the SPF record") is removed entirely — that verdict was wrong (we hadn't checked yet) and is no longer rendered anywhere.
+  - 100% test coverage on the new `displayMode` field across all three states + the all-Unknown case + the edge case where MX scored < 80 but other protocols are configured (currently lands in partial-setup mode — verify it stays there).
+  - Snapshot test on `domain_detail.html.twig` for each of the three states confirming the banner+panel render exactly once each in the expected combination, with no duplicate "DNS setup is complete" / "all four records are in place" headlines.
+- Notes: This is the most important regression caught by the round-3 self-review. The contradictory pending-state output (banner says "not configured", panel says "haven't checked") is a measurable wrong-information bug a first-time user hits in their first 5 minutes. Touches `DomainSetupStatusResolver`, `DomainSetupStatus` DTO, `DomainStatusBanner.html.twig`, `DomainSetupStatus.html.twig`, and `domain_detail.html.twig`. Pairs with TASK-082 (per-page H1 consistency) if both ship in the same round.
+
+---
+
+## TASK-098: `DomainCard` severity glyph (list) and `DomainStatusBanner` severity (detail) classify the same domain from different inputs — green-on-list, yellow-on-detail divergence
+
+- Status: proposed
+- Area: dashboard
+- Why: TASK-066 shipped a leading severity glyph on the domain list cards driven by `DomainHealthFilter::fromOverview()` — a two-input classifier (DMARC verified + 30-day pass rate). TASK-067 shipped a status banner on the per-domain detail page driven by `DomainSetupStatusResolver` — a four-input classifier (SPF + DKIM + DMARC + MX protocol states). Both surfaces answer the question *"is this domain set up correctly?"* but read different signals, so they disagree on common shapes:
+  - **DMARC verified + SPF missing + 95% pass rate**: list card renders green (Healthy — DMARC verified + pass rate ≥ 90); detail banner renders yellow (Attention — *"Action needed — SPF"*). User clicks a green card and lands on a yellow page.
+  - **DMARC verified + all DNS configured + 65% pass rate**: list card renders yellow (Attention — pass rate < 90); detail banner renders green (Monitoring active — all four records in place). User clicks a yellow card and lands on a green page.
+  - The user has no way to predict which severity logic is in play — the same word ("Healthy" / "Attention" / "Unverified") means different things on different surfaces.
+- Acceptance:
+  - Unify the two surfaces behind a single severity calculator. Recommended resolution:
+    - Extend `DomainHealthFilter::fromOverview()` to also consume the per-domain DNS-health snapshot (or move the calculation entirely into a new `DomainHealthClassifier` service that accepts both a `DomainOverviewResult` AND an optional `DnsHealthOverviewResult`). The combined rule: a domain is **Healthy** only when DMARC is verified AND all 4 DNS protocols are configured AND pass rate ≥ 90; **Attention** when verified but any protocol is missing/invalid OR pass rate < 90; **Unverified** when DMARC is not verified.
+    - The list-page severity query (`GetDomainOverview`) currently doesn't carry DNS-health data — add a LEFT JOIN LATERAL onto `domain_health_snapshot` (matching the pattern already in `GetDnsHealthOverview::forTeams`) so the list page gets the same per-domain protocol states the detail page does. Performance: one extra LATERAL join, indexed on `(monitored_domain_id, checked_at DESC)` — negligible at expected domain counts.
+    - Both the `DomainCard` glyph (TASK-066 output) and the `DomainStatusBanner` headline (TASK-067 output) read from the unified classifier. The same domain renders the same color + the same one-line verdict on both surfaces.
+  - The `HealthSummary` banner on `/app` (which today uses `pass_rate < 90` to count "needs attention") also moves to the unified classifier so the three surfaces (`/app` summary, `/app/domains` cards, `/app/domains/{id}` banner) all agree.
+  - 100% test coverage on the unified classifier + a regression test that asserts: for any combination of DMARC verification × pass rate × per-protocol states, the list-page severity matches the detail-page severity for the same domain.
+- Notes: This is the second-most-important finding — it's a silent contradiction the user can't reason about. Cheaper than TASK-097 to ship (mostly a refactor consolidating two calculators into one) but higher long-term value because it removes a class of "is this domain healthy?" confusion across the whole product. Does NOT touch `NextActionResolver` (TASK-091) — the Next Step's severity priority is intentionally separate (it answers "what should I do?", not "how healthy is this domain?"), and conflating them re-creates the divergence problem at a different layer.
+
+---
+
+## TASK-099: `DmarcPolicyExplainer` shows "p=none — Monitor-only mode — DMARC reports are being collected" for domains with NO DMARC record published — actively lying to first-time users
+
+- Status: proposed
+- Area: dashboard / guidance
+- Why: TASK-037 shipped `DmarcPolicyExplainer` on `/app/domains/{id}`, which classifies the current DMARC policy and explains what it means. The component is rendered unconditionally on the detail page. For a brand-new domain with no DMARC TXT record published, `MonitoredDomain.dmarcPolicy` is `null`; the `ShowDomainDetailController` falls back to `DmarcPolicy::None` (`domain_detail.html.twig` line 108-110 of the controller) and the explainer then renders:
+  - Title: *"You're at p=none — Monitor-only mode"*
+  - Body: *"DMARC reports are being collected, but no enforcement is in place. Anyone can spoof your domain right now — Sendvery is watching, but receivers (Gmail, Outlook) aren't blocking yet."*
+  - A three-tier progress dot saying the user is at tier 1 of 3 (`p=none → p=quarantine → p=reject`).
+  
+  This is a factual lie for a domain with no DMARC record: **DMARC reports are NOT being collected**, because there's no DMARC record telling receivers to send any. The user reads "we're watching" and assumes the system is functional — when in reality nothing is happening until they publish the record (the `DomainStatusBanner` two cards above correctly says "Setup incomplete — DMARC record not yet published"). Two cards on the same page, contradicting each other.
+- Acceptance:
+  - The `DmarcPolicyExplainer` component returns nothing (early-return in the template) when the domain has no published DMARC record (`domain.dmarcPolicy is null` from the source-of-truth column on `MonitoredDomain`, NOT the controller's `DmarcPolicy::None` fallback).
+  - The controller's existing fallback to `DmarcPolicy::None` stays (other code paths still need a non-null value), but the template gets a new prop `hasPublishedRecord: bool` that's `false` when the source column is null. The component's first conditional is `{% if not hasPublishedRecord %}{# nothing — DomainSetupStatus already covers this #}{% else %}…existing render…{% endif %}`.
+  - Alternative considered + rejected: render a distinct "no DMARC record" branch of the explainer ("Publish a DMARC record to start collecting reports — until then there's no policy to explain"). Rejected because `DomainSetupStatus` (TASK-080) already covers this in the per-protocol checklist with a "Fix this →" deep-link, and `DomainStatusBanner` (TASK-067) covers it in the one-line verdict. Adding a third "publish DMARC first" card on the same page would re-introduce the duplication TASK-097 is trying to fix.
+  - 100% test coverage: the explainer renders for `p=none` WITH a published record (real `_dmarc.example.com` TXT containing `v=DMARC1; p=none`); renders for `p=quarantine` and `p=reject`; does NOT render when `domain.dmarcPolicy is null`. Snapshot test on `domain_detail.html.twig` for the no-DMARC-record case asserts the `data-testid="dmarc-policy-explainer"` element is absent.
+- Notes: Small, surgical fix — one prop on one component, one conditional, one controller change to pass the source-of-truth boolean. The lie is small in isolation but compounds with TASK-097's banner/panel contradiction to make the first-time domain-detail experience feel poorly thought through. Worth shipping in the same round as TASK-097 since both touch `domain_detail.html.twig` and are about removing duplicated / contradictory copy from the page.
 
 ---

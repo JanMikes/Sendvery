@@ -92,6 +92,10 @@
                class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route starts with 'dashboard_domain' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
                 Domains
+                {# badge-error = unverified only. Attention-status domains are NOT counted here
+                   — DmarcPassRateRegressed alerts already drive the Alerts badge (TASK-060).
+                   Double-signalling defeats the "single badge = look here" principle. #}
+                {% if unverified_domain_count > 0 %}<span class="badge badge-xs badge-error ml-auto">{{ unverified_domain_count > 99 ? '99+' : unverified_domain_count }}</span>{% endif %}
             </a>
 
             <a href="{{ path('dashboard_dns_health') }}"

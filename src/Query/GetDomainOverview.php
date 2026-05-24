@@ -130,4 +130,28 @@ final readonly class GetDomainOverview
             ],
         )->fetchOne();
     }
+
+    /**
+     * Count of domains that have not yet passed DMARC verification —
+     * dmarc_verified_at IS NULL. Matches DomainHealthFilter::Unverified semantics.
+     * Used by DomainHealthCountExtension to drive the sidebar badge.
+     *
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function countUnverifiedForTeams(array $teamIds): int
+    {
+        if ([] === $teamIds) {
+            return 0;
+        }
+
+        return (int) $this->database->executeQuery(
+            'SELECT COUNT(*) FROM monitored_domain WHERE team_id IN (:teamIds) AND dmarc_verified_at IS NULL',
+            [
+                'teamIds' => $teamIds,
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
+            ],
+        )->fetchOne();
+    }
 }
