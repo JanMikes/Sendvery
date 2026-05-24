@@ -1861,7 +1861,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-030: Brand mark — add a small Sendvery logo SVG to the nav and footer alongside the wordmark
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: Audit finding. Both the nav (`templates/components/Nav.html.twig`) and the footer (`templates/components/Footer.html.twig`) brand row render only the text wordmark "Sendvery" in primary colour. No symbol, no mark, no icon. This is fine for a wireframe but unusual for a paying-product marketing site — visitors associate brand legitimacy with a small mark next to the wordmark (envelope-with-checkmark, shield, signal-bars, etc.). The OG image generator (TASK-008) already has a `og-logo.png` fallback path that ships as text — meaning the brand mark exists nowhere as an asset, only as a TODO. This task lands a single SVG mark and wires it into the two primary brand surfaces.
 - Acceptance:
