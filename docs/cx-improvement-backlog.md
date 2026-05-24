@@ -3319,7 +3319,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-094: Mailbox detail page renders no recommendation when a mailbox has been silent for 7+ days — the user sees stale stats with no explanation
 
-- Status: proposed
+- Status: done
 - Area: dashboard / guidance
 - Why: TASK-035 shipped the per-mailbox detail page with `envelopes30d` / `reportsParsed` / `envelopesQuarantined` stats and a `lastPolledAt` row. What's missing: the page never *interprets* those numbers. A mailbox that polled successfully today but has pulled zero envelopes in 7+ days is broken in a way a user must be told about — the IMAP credentials work but mail providers aren't delivering to that address (often because the user's DMARC RUA no longer points there). Today the user sees "0 envelopes (30d)" with no explanation and no next step. Same TASK-037 advisor-card pattern; different surface.
 - Acceptance:

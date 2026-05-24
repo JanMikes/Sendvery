@@ -38,6 +38,11 @@
         {% endfor %}
     {% endfor %}
 
+    {# Health advisor card (TASK-094) — renders only when the advisor returns
+       a non-healthy verdict. Sits above the connection-details card so the
+       operator sees the interpretation before the raw stats. #}
+    <twig:MailboxHealthAdvisorCard :advice="advisorResult" />
+
     {# Connection details #}
     <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
         <div class="card-body p-4">

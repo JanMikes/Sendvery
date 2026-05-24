@@ -1,0 +1,111 @@
+{# Per-mailbox health advisory card (TASK-094). Renders above the
+   connection-details block on `/app/mailboxes/{id}` when the advisor returns
+   a non-null result. The single `advice` prop is a {@see \App\Results\MailboxHealthAdvisorResult}
+   or null — passing null renders nothing so the controller can pipe the
+   advisor output through unconditionally without an `{% if %}` wrapper at
+   the call site.
+
+   Severity drives every visual signal: border + tint colour, icon glyph, and
+   the headline copy. Reason text + CTAs come straight from the result DTO.
+
+   Props:
+     - advice (?MailboxHealthAdvisorResult)
+#}
+{% props advice = null %}
+
+{% if advice is not null %}
+    {% set severityValue = advice.severity.value %}
+
+    {% set toneByCard = {
+        'broken_credentials': 'border-error/30 bg-error/5',
+        'silent_for_too_long': 'border-warning/30 bg-warning/5',
+        'quarantine_dominant': 'border-warning/30 bg-warning/5',
+    } %}
+
+    {% set toneByIconBg = {
+        'broken_credentials': 'bg-error/10',
+        'silent_for_too_long': 'bg-warning/10',
+        'quarantine_dominant': 'bg-warning/10',
+    } %}
+
+    {% set toneByIconText = {
+        'broken_credentials': 'text-error',
+        'silent_for_too_long': 'text-warning',
+        'quarantine_dominant': 'text-warning',
+    } %}
+
+    {% set headlineBySeverity = {
+        'broken_credentials': "Sendvery can't log in",
+        'silent_for_too_long': 'No new reports arriving',
+        'quarantine_dominant': 'Most envelopes landing in quarantine',
+    } %}
+
+    {% set ctaToneBySeverity = {
+        'broken_credentials': 'btn-error',
+        'silent_for_too_long': 'btn-warning',
+        'quarantine_dominant': 'btn-warning',
+    } %}
+
+    <div class="card border {{ toneByCard[severityValue] }} shadow-sm mb-6"
+         data-testid="mailbox-health-advisor"
+         data-severity="{{ severityValue }}">
+        <div class="card-body p-5">
+            <div class="flex items-start gap-4">
+                <div class="w-9 h-9 rounded-full {{ toneByIconBg[severityValue] }} flex items-center justify-center shrink-0">
+                    {% if severityValue == 'broken_credentials' %}
+                        {# Exclamation-circle — matches templates/dashboard/alerts.html.twig:101 #}
+                        <svg class="w-5 h-5 {{ toneByIconText[severityValue] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    {% else %}
+                        {# Info-circle — matches templates/dashboard/alerts.html.twig:109 #}
+                        <svg class="w-5 h-5 {{ toneByIconText[severityValue] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    {% endif %}
+                </div>
+
+                <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold text-base sm:text-lg leading-snug" data-testid="mailbox-health-advisor-headline">
+                        {{ headlineBySeverity[severityValue] }}
+                    </h3>
+
+                    <p class="text-sm text-base-content/70 mt-2 leading-relaxed max-w-3xl"
+                       data-testid="mailbox-health-advisor-reason">
+                        {{ advice.reasonText }}
+                    </p>
+
+                    <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+                        {% if advice.primaryActionRoute == 'dashboard_mailbox_retest' %}
+                            {# This route only accepts POST (CSRF-guarded), so render it as a form
+                               instead of a link — mirrors the existing re-test button in the page
+                               heading so re-test is always a real submission, never a GET. #}
+                            <form method="post" action="{{ path(advice.primaryActionRoute, advice.primaryActionRouteParams) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
+                                <button type="submit"
+                                        class="btn btn-sm {{ ctaToneBySeverity[severityValue] }}"
+                                        data-testid="mailbox-health-advisor-primary-cta">
+                                    {{ advice.primaryActionLabel }}
+                                </button>
+                            </form>
+                        {% else %}
+                            <a href="{{ path(advice.primaryActionRoute, advice.primaryActionRouteParams) }}"
+                               class="btn btn-sm {{ ctaToneBySeverity[severityValue] }}"
+                               data-testid="mailbox-health-advisor-primary-cta">
+                                {{ advice.primaryActionLabel }}
+                            </a>
+                        {% endif %}
+
+                        {% if advice.secondaryActionLabel is not null and advice.secondaryActionRoute is not null %}
+                            <a href="{{ path(advice.secondaryActionRoute, advice.secondaryActionRouteParams) }}"
+                               class="link link-hover text-sm text-base-content/70"
+                               data-testid="mailbox-health-advisor-secondary-link">
+                                {{ advice.secondaryActionLabel }} →
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
