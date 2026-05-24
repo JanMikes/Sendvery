@@ -1894,7 +1894,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-032: "Healthy domain" counts on the overview banner aren't clickable — the named example from the PO brief
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: PO brief names this explicitly: *"1 domain needs attention" should drop the user on the offending domain (or a filtered list)*. Today the health-summary banner on `templates/dashboard/overview.html.twig` (lines 29-50) renders three inline counts — "N healthy", "N need attention", "N unverified" — as plain `<span>` text. The user reads "1 needs attention" and has to scroll down past the next-action card, past the setup checklist, past the stat cards, past the trend chart, past the alerts list, to find the Domain Health card at the bottom, then scan five domain rows to find the one with a yellow pass-rate. Every count on this banner must be a one-click jump to the exact filtered subset.
 - Acceptance:
@@ -1905,6 +1905,92 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
   - Stat cards on `overview.html.twig` lines 186-228 also become clickable to their corresponding filtered lists (per audit): Monitored Domains → `/app/domains`, Reports → `/app/reports`, DMARC Pass Rate → `/app/reports?pass_rate=low` (reuses TASK-016's filter), Total Messages → `/app/reports` (no good destination, leave unlinked — document why), Unread Alerts (already linked), Reports this month (already linked).
   - 100% test coverage on the new query filter branches + the integration assertions that each banner count is wrapped in an `<a>` with the right href.
 - Notes:
+  **Architect plan (locked in, 2026-05-24)**
+
+  **Confirmed from code reading:**
+  - Banner count spans on `templates/dashboard/overview.html.twig` lines 32-35, 38-41, 44-47 — all `<span class="inline-flex items-center gap-1">`, all guarded by `{% if healthSummary.domainsXCount > 0 %}`. Inner dot-indicator `<span>` and count text stay unchanged.
+  - Stat cards on `overview.html.twig`: line 186 "Monitored Domains" (unlinked), line 192 "Reports (30 days)" (unlinked), line 198 "DMARC Pass Rate" (unlinked), line 204 "Total Messages" (unlinked), line 210 "Unread Alerts" — already wrapped `<a href="{{ path('dashboard_alerts') }}" class="block">`, line 219 "Reports this month" — already wrapped `<a href="{{ path('dashboard_billing') }}" class="block">`. Established stat-card link pattern: wrap entire `<twig:StatCard>` in `<a class="block">`. NO `href` prop on the component.
+  - `ReportsFilter` (`src/Value/ReportsFilter.php` lines 65-68) already supports `?pass_rate=low` via `passRateBand` → `passRateMax = 69.99`. No follow-up dependency for the DMARC Pass Rate stat card link.
+  - `GetDomainOverview::forTeams()` produces `pass_rate` as `COALESCE(SUM(…)::float / NULLIF(SUM(rec.count), 0) * 100, 0)` — never NULL. PostgreSQL 16 supports SELECT-alias reference in HAVING for non-aggregate expressions.
+  - `md.dmarc_verified_at` is a non-aggregate GROUP BY-eligible column on `monitored_domain` (confirmed in `MonitoredDomain` entity line 47). Usable in WHERE and HAVING.
+  - `DomainHealthFilter` enum does NOT exist — create it.
+  - `ListDomainsController` is at `src/Controller/Dashboard/ListDomainsController.php` (NOT `App/...`). Has no `Request` parameter today.
+  - `PersonaBuilder::build()` creates a domain with `dmarcVerifiedAt = null`. Test setup must manually set + flush `dmarcVerifiedAt` to test the verified branches.
+  - Filter chip pattern to mirror: `templates/dashboard/alerts.html.twig` lines 28-55 — `<div class="flex flex-wrap gap-2 mb-4">` with `<a class="btn btn-sm {{ active ? 'btn-primary' : 'btn-ghost' }}">` chips.
+
+  **Files to create**
+
+  1. `src/Value/DomainHealthFilter.php` — backed string enum:
+     ```php
+     enum DomainHealthFilter: string
+     {
+         case Healthy = 'healthy';
+         case Attention = 'attention';
+         case Unverified = 'unverified';
+     }
+     ```
+     Enums are implicitly final; no `readonly final class` modifier applies.
+
+  2. `tests/Unit/Value/DomainHealthFilterTest.php` — trivial enum coverage: `tryFrom('healthy')` / `tryFrom('attention')` / `tryFrom('unverified')` return the right case; `tryFrom('garbage')` returns null; each case carries its expected `->value`.
+
+  3. `tests/Integration/Controller/DomainsFilterTest.php` — 8 `#[Test]` methods. Helper builds three personas/domains:
+     - healthy: `dmarcVerifiedAt` set, one DMARC report with 10/10 pass → `pass_rate = 100`
+     - attention: `dmarcVerifiedAt` set, one DMARC report with 3/10 pass → `pass_rate = 30`
+     - unverified: `dmarcVerifiedAt = null`, no reports
+
+     Tests: `domainListWithoutFilterShowsAllDomains`, `domainListFiltersByHealthyStatus`, `domainListFiltersByAttentionStatus`, `domainListFiltersByUnverifiedStatus`, `domainListEmptyWithActiveFilterShowsClearFilterLink`, `domainListEmptyWithoutFilterShowsAddDomainCta`, `invalidStatusQueryParamFallsBackToNoFilter`, `filterChipsRenderedOnDomainsPage`.
+
+  4. `tests/Integration/Controller/DashboardOverviewLinksTest.php` — 9 `#[Test]` methods with the healthy + attention + unverified seed. Tests: each of the three banner counts is an `<a href="/app/domains?status=...">`; each clickable stat card has the right href (Monitored Domains → `/app/domains`, Reports → `/app/reports`, DMARC Pass Rate → `/app/reports?pass_rate=low`); Total Messages is NOT linked (assert no `<a>` ancestor on that card); Unread Alerts + Reports-this-month regression-guard the existing links.
+
+  **Files to modify**
+
+  5. `src/Query/GetDomainOverview.php`:
+     - Add `countForTeams(array $teamIds): int` — lightweight unfiltered `SELECT COUNT(*) FROM monitored_domain WHERE team_id IN (:teamIds)`. Returns 0 when `$teamIds` empty. Powers the "zero domains total vs zero matching" branch.
+     - Add `?DomainHealthFilter $statusFilter = null` to `forTeams()`. Build conditional WHERE/HAVING clauses:
+       - null → no clause additions
+       - `Unverified` → `WHERE … AND md.dmarc_verified_at IS NULL`, no HAVING
+       - `Healthy` → no extra WHERE, `HAVING pass_rate >= 90`
+       - `Attention` → `WHERE … AND md.dmarc_verified_at IS NOT NULL`, `HAVING pass_rate < 90`
+     - SQL inject order: `WHERE md.team_id IN (:teamIds){$whereClause} GROUP BY ... {$havingClause} ORDER BY ...`.
+     - Document the edge case in a SQL comment: a domain with `dmarcVerifiedAt` set and zero reports gets `pass_rate = 0` (COALESCE fallback) → falls into Attention. Correct: a verified domain receiving zero authenticated messages is actionable.
+
+  6. `src/Controller/Dashboard/ListDomainsController.php`:
+     - Add `Request $request` to `__invoke()`.
+     - `$statusFilter = DomainHealthFilter::tryFrom($request->query->getString('status', ''))`.
+     - `$totalDomainCount = $this->getDomainOverview->countForTeams($teamIdStrings)`.
+     - `$domains = $this->getDomainOverview->forTeams($teamIdStrings, $statusFilter)`.
+     - Pass `activeFilter`, `totalDomainCount` to template.
+
+  7. `templates/dashboard/domains.html.twig`:
+     - Insert filter chip row at top of `{% block content %}` (4 chips: All, Healthy, Need attention, Unverified). Mirror `alerts.html.twig` lines 28-55. Active chip gets `btn-primary` / `btn-warning` / `btn-error` per filter; inactive chips `btn-ghost`.
+     - Replace single empty-state with three-way branch:
+       - `{% if totalDomainCount == 0 %}` → `<twig:EmptyState>` with "No domains yet" + "Add your first domain" CTA → `dashboard_domain_add` route.
+       - `{% elseif domains is empty %}` → `<twig:EmptyState>` with "No domains match the current filter" + "Clear filter" CTA → `dashboard_domains` (no params).
+       - `{% else %}` → existing domain grid.
+
+  8. `templates/dashboard/overview.html.twig`:
+     - Lines 32-35, 38-41, 44-47: replace outer `<span class="inline-flex items-center gap-1">` with `<a href="{{ path('dashboard_domains', {status: 'healthy|attention|unverified'}) }}" class="inline-flex items-center gap-1 hover:underline">`. Inner dot indicator + count text unchanged.
+     - Line 186 Monitored Domains: wrap in `<a href="{{ path('dashboard_domains') }}" class="block">`.
+     - Line 192 Reports (30 days): wrap in `<a href="{{ path('dashboard_reports') }}" class="block">`.
+     - Line 198 DMARC Pass Rate: wrap in `<a href="{{ path('dashboard_reports', {pass_rate: 'low'}) }}" class="block">`. Add `{# pass_rate=low — actionable subset, live from ReportsFilter (TASK-016). #}` comment above.
+     - Line 204 Total Messages: leave unwrapped. Add comment: `{# Total Messages is intentionally unlinked — sum of dmarc_record.count rows aggregated across reports; no per-message drill-down view exists. Revisit if one's added. #}`
+     - Lines 210, 219: unchanged (already correctly linked).
+
+  **Edge cases (decided)**
+
+  - Verified-but-zero-reports domain → Attention (intentional, actionable).
+  - Pagination: not implemented on domains list today. When added, filter must roundtrip via `toQueryParams()` pattern from `ReportsFilter`. No action this PR.
+  - `?status=garbage` → `tryFrom()` returns null → no filtering applied. Covered by test.
+
+  **Non-goals**
+
+  - No changes to `<twig:StatCard>` component.
+  - No new stat card links beyond the four named above.
+  - No changes to Unread Alerts / Reports this month cards (already correctly linked).
+  - No `BlacklistStatusController` / `SenderInventoryController` work — TASK-031 owns that.
+  - No pagination work on domains list — separate concern.
+
+  **Build sequence**: create `DomainHealthFilter` → add `countForTeams()` + filter param to `GetDomainOverview` → modify `ListDomainsController` (Request, parse, pass) → update `domains.html.twig` (chips + 3-way empty state) → update `overview.html.twig` (banner anchors + 4 stat-card wraps + 2 explanatory comments) → unit test for enum → integration test for filter behaviour → integration test for overview links → phpunit + phpstan + cs-fixer (with `--allow-risky=yes`).
 
 ---
 

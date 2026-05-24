@@ -6,7 +6,9 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetDomainOverview;
 use App\Services\DashboardContext;
+use App\Value\DomainHealthFilter;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -19,9 +21,12 @@ final class ListDomainsController extends AbstractController
     }
 
     #[Route('/app/domains', name: 'dashboard_domains')]
-    public function __invoke(): Response
+    public function __invoke(Request $request): Response
     {
-        $domains = $this->getDomainOverview->forTeams($this->dashboardContext->getTeamIdStrings());
+        $teamIdStrings = $this->dashboardContext->getTeamIdStrings();
+        $statusFilter = DomainHealthFilter::tryFrom($request->query->getString('status', ''));
+        $domains = $this->getDomainOverview->forTeams($teamIdStrings, $statusFilter);
+        $totalDomainCount = $this->getDomainOverview->countForTeams($teamIdStrings);
 
         return $this->render('dashboard/domains.html.twig', [
             'domains' => $domains,
@@ -29,6 +34,8 @@ final class ListDomainsController extends AbstractController
             // more than one team — single-team users would just see a noisy
             // column repeating the same name on every row.
             'showTeamColumn' => count($this->dashboardContext->getTeamIds()) > 1,
+            'activeFilter' => $statusFilter,
+            'totalDomainCount' => $totalDomainCount,
         ]);
     }
 }

@@ -11,12 +11,39 @@
 {% endblock %}
 
 {% block content %}
-    {% if domains is empty %}
+    {# Filter chips — URL-driven state via ?status=. Mirrors alerts.html.twig pattern. #}
+    <div class="flex flex-wrap gap-2 mb-4">
+        <a href="{{ path('dashboard_domains') }}"
+           class="btn btn-sm {{ activeFilter is null ? 'btn-primary' : 'btn-ghost' }}">
+            All
+        </a>
+        <a href="{{ path('dashboard_domains', { status: 'healthy' }) }}"
+           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'healthy' ? 'btn-primary' : 'btn-ghost' }}">
+            Healthy
+        </a>
+        <a href="{{ path('dashboard_domains', { status: 'attention' }) }}"
+           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'attention' ? 'btn-warning' : 'btn-ghost' }}">
+            Need attention
+        </a>
+        <a href="{{ path('dashboard_domains', { status: 'unverified' }) }}"
+           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'unverified' ? 'btn-error' : 'btn-ghost' }}">
+            Unverified
+        </a>
+    </div>
+
+    {% if totalDomainCount == 0 %}
         <twig:EmptyState
             title="No domains yet"
             message="Add your first domain to start monitoring its DMARC reports and email authentication health."
             actionUrl="{{ path('dashboard_domain_add') }}"
             actionLabel="Add your first domain"
+        />
+    {% elseif domains is empty %}
+        <twig:EmptyState
+            title="No domains match the current filter"
+            message="Try a different filter, or clear it to see every domain on your team."
+            actionUrl="{{ path('dashboard_domains') }}"
+            actionLabel="Clear filter"
         />
     {% else %}
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
