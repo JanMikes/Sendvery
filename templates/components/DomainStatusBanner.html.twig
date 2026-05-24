@@ -1,0 +1,39 @@
+{# One-line domain setup banner (TASK-067). Mirrors the overview banner shape
+   from overview.html.twig:14-52 verbatim — coloured top bar + circle icon +
+   headline + optional right-rail CTA. All copy + tone live on the
+   DomainSetupStatus DTO; this template is a props-only renderer.
+
+   `domainId` is required to build the CTA href (every CTA route in this
+   surface is parameterised by the domain), but is allowed to default away
+   when the caller renders the banner standalone (e.g. snapshot tests). #}
+{% props status, domainId = null %}
+
+{% set tone = {
+    'healthy':    {bar: 'bg-success', badge: 'bg-success/10 text-success', icon: 'check', btn: 'btn-success'},
+    'attention':  {bar: 'bg-warning', badge: 'bg-warning/10 text-warning', icon: 'warn',  btn: 'btn-warning'},
+    'unverified': {bar: 'bg-error',   badge: 'bg-error/10 text-error',     icon: 'warn',  btn: 'btn-error'},
+}[status.severity.value] %}
+
+<div class="rounded-2xl border border-base-200 bg-base-100 overflow-hidden mb-4 shadow-sm" data-testid="domain-status-banner">
+    <div class="h-1 {{ tone.bar }}"></div>
+    <div class="p-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 {{ tone.badge }}">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                {% if tone.icon == 'check' %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                {% else %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/>
+                {% endif %}
+            </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+            <div class="text-base font-semibold text-base-content">{{ status.headline }}</div>
+        </div>
+        {% if status.ctaLabel is not null and status.ctaRoute is not null and status.ctaFragment is not null and domainId is not null %}
+            <a href="{{ path(status.ctaRoute, {id: domainId}) }}#{{ status.ctaFragment }}"
+               class="btn btn-sm {{ tone.btn }} shrink-0">
+                {{ status.ctaLabel }}
+            </a>
+        {% endif %}
+    </div>
+</div>

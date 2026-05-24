@@ -21,38 +21,25 @@
                     <span class="badge badge-sm badge-ghost">Unverified</span>
                 {% endif %}
             </div>
-            <div class="flex items-center gap-2 mt-2 flex-wrap">
-                {% if dnsHealth is null %}
-                    <span class="badge badge-ghost badge-sm">SPF</span>
-                    <span class="badge badge-ghost badge-sm">DKIM</span>
-                    <span class="badge badge-ghost badge-sm">DMARC</span>
-                    <span class="badge badge-ghost badge-sm">MX</span>
-                {% else %}
-                    <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-spf"
-                       class="badge badge-sm {{ dnsHealth.isSpfVerified() ? 'badge-success' : 'badge-error' }}">SPF</a>
-                    <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-dkim"
-                       class="badge badge-sm {{ dnsHealth.isDkimVerified() ? 'badge-success' : 'badge-error' }}">DKIM</a>
-                    <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-dmarc"
-                       class="badge badge-sm {{ dnsHealth.isDmarcVerified() ? 'badge-success' : 'badge-error' }}">DMARC</a>
-                    {% if dnsHealth.latestMxScore is null %}
-                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-ghost">MX</a>
-                    {% elseif dnsHealth.latestMxScore >= 80 %}
-                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-success">MX</a>
-                    {% elseif dnsHealth.latestMxScore >= 50 %}
-                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-warning">MX</a>
-                    {% else %}
-                        <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}#health-mx" class="badge badge-sm badge-error">MX</a>
-                    {% endif %}
-                {% endif %}
-            </div>
         </div>
     </div>
+
+    {# One-line status banner (TASK-067) — the headline answer to "is this
+       domain set up correctly?". Sits above the workspace tabs so it leads
+       the page the same way the overview health banner leads /app. #}
+    <twig:DomainStatusBanner :status="domainSetupStatus" :domainId="domain.domainId" />
 
     {# Sibling navigation: the legacy five-button header that used to sit here
        was removed (TASK-041) — DomainWorkspaceTabs (TASK-031) is now the sole
        cross-surface affordance for the domain workspace. Two stacked nav rows
        on the most-visited authenticated page read as unfinished. #}
     <twig:DomainWorkspaceTabs :domain="domain" active="overview" />
+
+    {# Per-protocol setup checklist (TASK-080) — the actionable body under the
+       banner. Renders one of three states: all-green confirmation, partial
+       checklist with Fix-this deep-links, or "no DNS check yet" with a
+       re-check button. #}
+    <twig:DomainSetupStatus :status="domainSetupStatus" :domainId="domain.domainId" />
 
     {% if quarantineCount > 0 %}
         <div class="rounded-2xl border border-warning/30 bg-warning/5 p-5 mb-6">

@@ -2770,7 +2770,7 @@ A new domain with `dmarcVerifiedAt=null` AND zero reports maps to `Unverified` (
 
 ## TASK-067: Domain detail page has no one-line status summary at the top — DMARC/SPF/DKIM/MX badge cluster doesn't answer "is this domain set up correctly or not?"
 
-- Status: planned (bundled with TASK-080)
+- Status: done (bundled with TASK-080)
 - Area: dashboard
 - Why: Named pain from the human owner: on `/app/domains/{id}` we need "a clear status banner at the top ('Setup complete — monitoring active' vs 'Action needed — DMARC record missing') that summarises the whole page in one line". Post-TASK-041 the domain detail header now shows: domain name, `p=none/quarantine/reject` policy badge, Verified/Unverified badge, then a row of SPF/DKIM/DMARC/MX badges (each green or red individually). That cluster requires the user to mentally aggregate 4-6 signals to answer the basic question "is this fine?". The `/app` overview already does exactly this — see `templates/dashboard/overview.html.twig` lines 14-52 (the `summaryTone` banner with `bar`/`badge`/`icon` map). Reuse that same idiom on the per-domain detail page, sourced from the same `DomainHealthFilter` severity the domain card now uses (TASK-066).
 - Acceptance:
@@ -2892,7 +2892,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-080: Domain detail page never answers "is this domain set up correctly?" — replace badge soup with a 3-state setup-status panel
 
-- Status: planned (bundled with TASK-067)
+- Status: done (bundled with TASK-067)
 - Area: dashboard
 - Why: Named pain from the human owner on `/app/domains/{id}`: *"it is unclear there is something not ok and I need to do something, I want as well to know the DNS monitoring is correct and passing and what is and what is not set"*. The current header (`templates/dashboard/domain_detail.html.twig` lines 11-49) shows the domain name, a `p=…` policy badge, a `Verified` / `Unverified` chip, and a row of four tiny SPF / DKIM / DMARC / MX badges colored green or red — but it never tells the user IN WORDS whether the domain is fully set up or what's missing. A first-time-this-week user sees four colored chips and has to decode: "the DMARC badge is green — does that mean reports are flowing? Or that the TXT record exists? What about the unverified chip — is that different from DKIM?" The page leads with stat cards (Total Messages / Pass Rate / Unique Senders / Reports) which only make sense AFTER setup is correct. The quarantine-pile banner only renders when `quarantineCount > 0` and only addresses the DMARC-not-published case. Until DNS monitoring is plain-English, the most important question the page should answer ("are we collecting data correctly?") lives entirely in the user's head. The four badges already encode every piece of state needed — the gap is presentational, not data. (TASK-067 in this same run proposes a one-line health summary up top; this task proposes the EXPANDED setup-status panel that makes the verdict actionable per-protocol. They compose: TASK-067 is the headline, TASK-080 is the body.)
 - Acceptance:
