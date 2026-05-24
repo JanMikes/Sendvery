@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Services;
 
 use App\Results\Dns\RuaScenarioResult;
 use App\Results\DnsHealthOverviewResult;
+use App\Services\DomainHealthClassifier;
 use App\Services\DomainSetupStatusResolver;
 use App\Services\ReportAddressProvider;
 use App\Value\Dns\RuaScenario;
@@ -133,7 +134,10 @@ final class DomainSetupStatusResolverRuaTest extends TestCase
 
     private function resolver(): DomainSetupStatusResolver
     {
-        return new DomainSetupStatusResolver(new ReportAddressProvider('reports@sendvery.com'));
+        return new DomainSetupStatusResolver(
+            new ReportAddressProvider('reports@sendvery.com'),
+            new DomainHealthClassifier(),
+        );
     }
 
     private function healthyDns(): DnsHealthOverviewResult

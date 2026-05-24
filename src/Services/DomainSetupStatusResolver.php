@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Results\Dns\RuaScenarioResult;
 use App\Results\DnsHealthOverviewResult;
+use App\Results\DomainOverviewResult;
 use App\Results\DomainSetupStatus;
 use App\Results\ProtocolSetupStatus;
 use App\Value\Dns\RuaScenario;
@@ -36,11 +37,26 @@ final readonly class DomainSetupStatusResolver
 
     public function __construct(
         private ReportAddressProvider $reportAddressProvider,
+        private DomainHealthClassifier $domainHealthClassifier,
     ) {
     }
 
-    public function resolve(?DnsHealthOverviewResult $dnsHealth, ?RuaScenarioResult $ruaScenario = null): DomainSetupStatus
-    {
+    /**
+     * `$overview` is optional for backwards compatibility — when omitted, the
+     * resolver still derives severity from the per-protocol checklist alone
+     * (the pre-TASK-098 behaviour). When provided, severity comes from the
+     * unified {@see DomainHealthClassifier} so the banner agrees with the
+     * `/app/domains` list card + the `/app` HealthSummary count for the same
+     * domain. The per-protocol checklist rows + headline copy are unchanged
+     * regardless — they answer a different question ("which record is
+     * missing?") than severity ("is the domain healthy?") and have to keep
+     * speaking to the SPF/DKIM/DMARC/MX inputs directly.
+     */
+    public function resolve(
+        ?DnsHealthOverviewResult $dnsHealth,
+        ?RuaScenarioResult $ruaScenario = null,
+        ?DomainOverviewResult $overview = null,
+    ): DomainSetupStatus {
         // Two paths collapse to "no DNS check has run yet": (a) the query
         // returned null (cross-tenant guard), (b) the query returned a row
         // but the DNS cron hasn't recorded a verification timestamp OR a
@@ -96,7 +112,7 @@ final readonly class DomainSetupStatusResolver
             // sensible for snapshot tests and standalone uses, but no
             // template reads them in this state.
             return new DomainSetupStatus(
-                severity: DomainHealthFilter::Unverified,
+                severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Unverified),
                 headline: 'DNS not configured yet — start with the SPF record',
                 ctaLabel: 'Set up SPF',
                 ctaRoute: 'dashboard_domain_health',
@@ -136,7 +152,7 @@ final readonly class DomainSetupStatusResolver
                 : DomainSetupDisplayMode::BannerOnly;
 
             return new DomainSetupStatus(
-                severity: DomainHealthFilter::Healthy,
+                severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Healthy),
                 headline: 'Monitoring active — all four records are in place',
                 ctaLabel: null,
                 ctaRoute: null,
@@ -151,7 +167,7 @@ final readonly class DomainSetupStatusResolver
         // anything else's state.
         if (ProtocolState::Configured !== $dmarc->state) {
             return new DomainSetupStatus(
-                severity: DomainHealthFilter::Unverified,
+                severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Unverified),
                 headline: 'Setup incomplete — DMARC record not yet published',
                 ctaLabel: 'Set up DMARC',
                 ctaRoute: 'dashboard_domain_health',
@@ -182,7 +198,7 @@ final readonly class DomainSetupStatusResolver
         };
 
         return new DomainSetupStatus(
-            severity: DomainHealthFilter::Attention,
+            severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Attention),
             headline: sprintf('Action needed — %s', implode(', ', $failingNames)),
             ctaLabel: 'Fix DNS records',
             ctaRoute: 'dashboard_domain_health',
@@ -190,6 +206,25 @@ final readonly class DomainSetupStatusResolver
             protocols: $protocols,
             displayMode: DomainSetupDisplayMode::BannerAndPanel,
         );
+    }
+
+    /**
+     * Severity selector: prefer the unified classifier when an overview is
+     * provided so the detail-page banner agrees with the list-page glyph + the
+     * `/app` HealthSummary count for the same domain. Falls back to the
+     * per-protocol-derived default for legacy call sites (tests, snapshot
+     * fixtures) that haven't migrated yet.
+     */
+    private function resolveSeverity(
+        ?DomainOverviewResult $overview,
+        ?DnsHealthOverviewResult $dnsHealth,
+        DomainHealthFilter $fallback,
+    ): DomainHealthFilter {
+        if (null === $overview) {
+            return $fallback;
+        }
+
+        return $this->domainHealthClassifier->classify($overview, $dnsHealth);
     }
 
     /**

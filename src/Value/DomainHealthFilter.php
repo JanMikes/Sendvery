@@ -4,31 +4,21 @@ declare(strict_types=1);
 
 namespace App\Value;
 
-use App\Results\DomainOverviewResult;
-
+/**
+ * Three-state verdict for "is this domain set up correctly?" — drives the
+ * severity glyph + tone on the `/app/domains` cards, the headline severity
+ * on the `/app/domains/{id}` banner, and the bucket counts on the `/app`
+ * HealthSummary card.
+ *
+ * Classification logic lives in {@see \App\Services\DomainHealthClassifier}
+ * (TASK-098). The enum itself is intentionally a plain enum — keeping
+ * classification out of value-objects lets every surface depend on the same
+ * service and avoids re-creating the green-on-list / yellow-on-detail
+ * divergence the original `fromOverview()` static caused.
+ */
 enum DomainHealthFilter: string
 {
     case Healthy = 'healthy';
     case Attention = 'attention';
     case Unverified = 'unverified';
-
-    /**
-     * Classification rule mirrored from the conditional WHERE/HAVING fragments
-     * in GetDomainOverview::forTeams() — single source of truth for the
-     * read-side severity glyph on DomainCard. A verified domain with zero
-     * reports lands on Attention (pass_rate = 0 < 90), matching the query's
-     * filter semantics; a brand-new unverified domain stays Unverified.
-     */
-    public static function fromOverview(DomainOverviewResult $result): self
-    {
-        if (null === $result->dmarcVerifiedAt) {
-            return self::Unverified;
-        }
-
-        if ($result->passRate >= 90.0) {
-            return self::Healthy;
-        }
-
-        return self::Attention;
-    }
 }

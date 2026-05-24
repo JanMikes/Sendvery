@@ -7,16 +7,30 @@ namespace App\Services;
 use App\Results\DomainOverviewResult;
 use App\Results\DomainVerificationStatusResult;
 use App\Results\HealthSummaryResult;
+use App\Value\DomainHealthFilter;
 use App\Value\DomainVerificationSeverity;
 
 /**
  * Aggregates per-domain pass-rate and DMARC verification state into a single
  * "are we healthy?" headline for the dashboard overview banner. Pure
  * computation: the caller pre-fetches data, this just classifies.
+ *
+ * TASK-098: counts now come from {@see DomainHealthClassifier} so the
+ * "X domains need attention" line agrees with the per-card glyphs on the
+ * `/app/domains` list and the per-domain banner on `/app/domains/{id}` for
+ * the same set of domains. Previously this resolver counted "pass rate < 90"
+ * directly, which could over-count (e.g. a verified domain with 99% pass but
+ * a missing SPF record was Healthy here but Attention on the list/detail) or
+ * under-count (e.g. an unverified domain with 99% pass was Unverified here
+ * but Attention on the list when the list filter was Attention). The
+ * classifier collapses the three surfaces onto one rule.
  */
 final readonly class HealthSummaryResolver
 {
-    private const float HEALTHY_PASS_RATE_THRESHOLD = 90.0;
+    public function __construct(
+        private DomainHealthClassifier $domainHealthClassifier,
+    ) {
+    }
 
     /**
      * @param array<DomainOverviewResult> $domains
@@ -28,23 +42,33 @@ final readonly class HealthSummaryResolver
     ): HealthSummaryResult {
         $total = count($domains);
 
-        // Per-domain unverified count for multi-domain teams is a v2 enhancement
-        // once GetDnsHealthOverview-style data lands on this surface. For now we
-        // surface the headline domain's verification state only.
-        $unverified = (
+        // Classify each domain via the same service the list cards + detail
+        // banner use. `classifyOverview` reads the joined-in DNS-snapshot
+        // fields directly off the overview row — no extra query per domain.
+        $healthy = 0;
+        $attention = 0;
+        $unverifiedFromDomains = 0;
+        foreach ($domains as $domain) {
+            $severity = $this->domainHealthClassifier->classifyOverview($domain);
+            match ($severity) {
+                DomainHealthFilter::Healthy => $healthy++,
+                DomainHealthFilter::Attention => $attention++,
+                DomainHealthFilter::Unverified => $unverifiedFromDomains++,
+            };
+        }
+
+        // Headline-domain verification fallback: when the `$domains` list is
+        // empty (LIMIT pruning, partial fetch) but the team has at least one
+        // unverified headline domain, surface that as the unverified count
+        // anyway so the empty-domains branch doesn't silently render "all
+        // healthy". This preserves the pre-TASK-098 single-domain headline
+        // behaviour for callers that don't pass the full domains array.
+        $unverifiedFallback = (
             DomainVerificationSeverity::Critical === $verificationSeverity
             && null !== $verificationStatus
             && null === $verificationStatus->dmarcVerifiedAt
         ) ? 1 : 0;
-
-        $attention = count(array_filter(
-            $domains,
-            static fn (DomainOverviewResult $domain): bool => $domain->passRate < self::HEALTHY_PASS_RATE_THRESHOLD,
-        ));
-
-        // Guard against double-counting: a domain might be both unverified and
-        // below 90%. We don't want to claim "negative healthy" — clamp at 0.
-        $healthy = max(0, $total - $attention - $unverified);
+        $unverified = max($unverifiedFromDomains, $unverifiedFallback);
 
         if (0 === $total) {
             return new HealthSummaryResult(

@@ -7,6 +7,7 @@ namespace App\Tests\Integration\Controller;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DnsCheckResult;
+use App\Entity\DomainHealthSnapshot;
 use App\Entity\MonitoredDomain;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
@@ -58,19 +59,27 @@ final class DashboardOverviewLinksTest extends WebTestCase
             ->withoutDomain()
             ->build();
 
-        // Healthy: verified + 100% pass. Oldest created_at.
+        // Healthy: verified + 100% pass. Oldest created_at. TASK-098: also
+        // mark SPF/DKIM verified and seed a DNS snapshot with a passing MX
+        // score — the unified DomainHealthClassifier needs all four protocol
+        // signals present to declare Healthy. Without these, the domain would
+        // fall back to Attention (verified but missing DNS data) and the
+        // healthy anchor would never render.
         $healthyDomain = new MonitoredDomain(
             id: Uuid::uuid7(),
             team: $persona->team,
             domain: 'healthy-'.$suffix.'.example',
             createdAt: new \DateTimeImmutable('-30 days'),
             dmarcPolicy: DmarcPolicy::Reject,
+            spfVerifiedAt: new \DateTimeImmutable('-10 days'),
+            dkimVerifiedAt: new \DateTimeImmutable('-10 days'),
             dmarcVerifiedAt: new \DateTimeImmutable('-10 days'),
             firstReportAt: new \DateTimeImmutable('-9 days'),
         );
         $healthyDomain->popEvents();
         $em->persist($healthyDomain);
         $this->persistReport($em, $healthyDomain, pass: 10, fail: 0);
+        $this->persistHealthSnapshot($em, $healthyDomain);
 
         // Attention: verified + 30% pass. Middle created_at.
         $attentionDomain = new MonitoredDomain(
@@ -122,6 +131,27 @@ final class DashboardOverviewLinksTest extends WebTestCase
         $client->loginUser($persona->user);
 
         return $client;
+    }
+
+    /**
+     * Seeds a DNS-snapshot row so the TASK-098 `DomainHealthClassifier` can
+     * see all four protocol scores (>= 80 for MX) — required for the domain
+     * to land in the Healthy bucket of the unified counter.
+     */
+    private function persistHealthSnapshot(EntityManagerInterface $em, MonitoredDomain $domain): void
+    {
+        $em->persist(new DomainHealthSnapshot(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            grade: 'A',
+            score: 95,
+            spfScore: 100,
+            dkimScore: 100,
+            dmarcScore: 100,
+            mxScore: 95,
+            blacklistScore: 100,
+            checkedAt: new \DateTimeImmutable('-1 hour'),
+        ));
     }
 
     private function persistReport(EntityManagerInterface $em, MonitoredDomain $domain, int $pass, int $fail): void

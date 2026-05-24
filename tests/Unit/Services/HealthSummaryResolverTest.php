@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Services;
 
 use App\Results\DomainOverviewResult;
 use App\Results\DomainVerificationStatusResult;
+use App\Services\DomainHealthClassifier;
 use App\Services\HealthSummaryResolver;
 use App\Value\DomainVerificationSeverity;
 use PHPUnit\Framework\Attributes\Test;
@@ -13,10 +14,15 @@ use PHPUnit\Framework\TestCase;
 
 final class HealthSummaryResolverTest extends TestCase
 {
+    private function resolver(): HealthSummaryResolver
+    {
+        return new HealthSummaryResolver(new DomainHealthClassifier());
+    }
+
     #[Test]
     public function resolveSetupNotFinishedWhenNoDomains(): void
     {
-        $resolver = new HealthSummaryResolver();
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(domains: [], verificationStatus: null, verificationSeverity: null);
 
@@ -31,7 +37,7 @@ final class HealthSummaryResolverTest extends TestCase
     #[Test]
     public function resolveSetupNotFinishedWhenDomainUnverified(): void
     {
-        $resolver = new HealthSummaryResolver();
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(
             domains: [$this->buildDomain(passRate: 0.0)],
@@ -46,12 +52,12 @@ final class HealthSummaryResolverTest extends TestCase
     }
 
     #[Test]
-    public function resolveAllHealthyWhenSingleDomainAbove90(): void
+    public function resolveAllHealthyWhenSingleDomainAbove90AndAllProtocolsConfigured(): void
     {
-        $resolver = new HealthSummaryResolver();
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(
-            domains: [$this->buildDomain(passRate: 95.0)],
+            domains: [$this->healthyDomain(passRate: 95.0)],
             verificationStatus: $this->buildStatus(dmarcVerifiedAt: new \DateTimeImmutable('-10 days')),
             verificationSeverity: DomainVerificationSeverity::Ok,
         );
@@ -63,15 +69,15 @@ final class HealthSummaryResolverTest extends TestCase
     }
 
     #[Test]
-    public function resolveAllHealthyWhenMultipleDomainsAllAbove90(): void
+    public function resolveAllHealthyWhenMultipleDomainsAllAbove90AndAllProtocolsConfigured(): void
     {
-        $resolver = new HealthSummaryResolver();
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(
             domains: [
-                $this->buildDomain(passRate: 99.0),
-                $this->buildDomain(passRate: 92.5),
-                $this->buildDomain(passRate: 100.0),
+                $this->healthyDomain(passRate: 99.0),
+                $this->healthyDomain(passRate: 92.5),
+                $this->healthyDomain(passRate: 100.0),
             ],
             verificationStatus: null,
             verificationSeverity: null,
@@ -87,10 +93,10 @@ final class HealthSummaryResolverTest extends TestCase
     #[Test]
     public function resolveOneNeedsAttentionWhenPassRateBelow90(): void
     {
-        $resolver = new HealthSummaryResolver();
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(
-            domains: [$this->buildDomain(passRate: 80.0)],
+            domains: [$this->healthyDomain(passRate: 80.0)],
             verificationStatus: $this->buildStatus(dmarcVerifiedAt: new \DateTimeImmutable('-10 days')),
             verificationSeverity: DomainVerificationSeverity::Ok,
         );
@@ -104,12 +110,12 @@ final class HealthSummaryResolverTest extends TestCase
     #[Test]
     public function resolveTwoNeedAttentionPlural(): void
     {
-        $resolver = new HealthSummaryResolver();
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(
             domains: [
-                $this->buildDomain(passRate: 70.0),
-                $this->buildDomain(passRate: 50.0),
+                $this->healthyDomain(passRate: 70.0),
+                $this->healthyDomain(passRate: 50.0),
             ],
             verificationStatus: null,
             verificationSeverity: null,
@@ -123,13 +129,13 @@ final class HealthSummaryResolverTest extends TestCase
     #[Test]
     public function resolveCountsAreCorrect(): void
     {
-        $resolver = new HealthSummaryResolver();
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(
             domains: [
-                $this->buildDomain(passRate: 95.0),
-                $this->buildDomain(passRate: 98.0),
-                $this->buildDomain(passRate: 60.0),
+                $this->healthyDomain(passRate: 95.0),
+                $this->healthyDomain(passRate: 98.0),
+                $this->healthyDomain(passRate: 60.0),
             ],
             verificationStatus: null,
             verificationSeverity: null,
@@ -144,14 +150,14 @@ final class HealthSummaryResolverTest extends TestCase
     #[Test]
     public function resolveUnverifiedCountOne(): void
     {
-        // Two-domain team where neither is in the "<90% pass rate" attention bucket,
-        // but one is still unverified. We can't say "all healthy" — fall through to
-        // the catch-all "Setup not finished" tone.
-        $resolver = new HealthSummaryResolver();
+        // Two-domain team: one verified+all-configured+99% (Healthy), one
+        // unverified (Unverified). Headline lands in "Setup not finished"
+        // because at least one domain isn't yet verified.
+        $resolver = $this->resolver();
 
         $result = $resolver->resolve(
             domains: [
-                $this->buildDomain(passRate: 100.0),
+                $this->healthyDomain(passRate: 100.0),
                 $this->buildDomain(passRate: 99.0),
             ],
             verificationStatus: $this->buildStatus(dmarcVerifiedAt: null),
@@ -160,14 +166,37 @@ final class HealthSummaryResolverTest extends TestCase
 
         self::assertSame(1, $result->domainsUnverifiedCount);
         self::assertSame(0, $result->domainsAttentionCount);
+        self::assertSame(1, $result->domainsHealthyCount);
         self::assertSame('error', $result->severity);
         self::assertSame('Setup not finished', $result->headline);
+    }
+
+    #[Test]
+    public function resolveCountsVerifiedDomainMissingDnsSnapshotAsAttentionNotHealthy(): void
+    {
+        // TASK-098 unification: a verified domain with a high pass rate but
+        // NO joined-in DNS snapshot (latest*Score = null) is NOT Healthy —
+        // we don't have enough data to claim "all good". It now lands in
+        // Attention, matching what the `/app/domains` list card glyph + the
+        // `/app/domains/{id}` banner would show for the same domain.
+        $resolver = $this->resolver();
+
+        $result = $resolver->resolve(
+            domains: [$this->buildDomain(passRate: 100.0, dmarcVerifiedAt: '2024-03-15 10:00:00')],
+            verificationStatus: null,
+            verificationSeverity: null,
+        );
+
+        self::assertSame(1, $result->domainsAttentionCount);
+        self::assertSame(0, $result->domainsHealthyCount);
+        self::assertSame('1 domain needs attention', $result->headline);
     }
 
     private function buildDomain(
         string $domainId = 'domain-id',
         string $domainName = 'example.com',
         float $passRate = 100.0,
+        ?string $dmarcVerifiedAt = null,
     ): DomainOverviewResult {
         return new DomainOverviewResult(
             domainId: $domainId,
@@ -177,7 +206,34 @@ final class HealthSummaryResolverTest extends TestCase
             passRate: $passRate,
             teamId: 'team-id',
             teamName: 'Team',
-            dmarcVerifiedAt: null,
+            dmarcVerifiedAt: $dmarcVerifiedAt,
+        );
+    }
+
+    /**
+     * Verified domain with all 4 DNS protocols configured — the only shape
+     * that can land in Healthy under the TASK-098 unified rule.
+     */
+    private function healthyDomain(
+        string $domainId = 'domain-id',
+        string $domainName = 'example.com',
+        float $passRate = 100.0,
+    ): DomainOverviewResult {
+        return new DomainOverviewResult(
+            domainId: $domainId.'-'.$passRate,
+            domainName: $domainName,
+            totalReports: 5,
+            latestReportDate: '2024-04-02 00:00:00',
+            passRate: $passRate,
+            teamId: 'team-id',
+            teamName: 'Team',
+            dmarcVerifiedAt: '2024-03-15 10:00:00',
+            spfVerifiedAt: '2024-03-15 10:00:00',
+            dkimVerifiedAt: '2024-03-15 10:00:00',
+            latestSpfScore: 100,
+            latestDkimScore: 100,
+            latestDmarcScore: 100,
+            latestMxScore: 95,
         );
     }
 

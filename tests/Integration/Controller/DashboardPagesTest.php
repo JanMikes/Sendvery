@@ -8,6 +8,7 @@ use App\Entity\Alert;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DnsCheckResult;
+use App\Entity\DomainHealthSnapshot;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
 use App\Value\AlertSeverity;
@@ -742,9 +743,29 @@ final class DashboardPagesTest extends WebTestCase
             ->withDomain('healthy-'.substr(uniqid('', true), -6).'.example')
             ->build();
         assert(null !== $persona->domain);
+        // TASK-098: SPF/DKIM/DMARC verified + DNS snapshot with passing MX
+        // score so the unified DomainHealthClassifier can declare Healthy.
+        // Without all four protocol signals the domain lands in Attention
+        // ("All domains healthy" never renders) — the new rule is stricter
+        // than the legacy pass-rate-only check.
+        $persona->domain->spfVerifiedAt = new \DateTimeImmutable('-10 days');
+        $persona->domain->dkimVerifiedAt = new \DateTimeImmutable('-10 days');
         $persona->domain->dmarcVerifiedAt = new \DateTimeImmutable('-10 days');
         $persona->domain->firstReportAt = new \DateTimeImmutable('-9 days');
         $persona->domain->dmarcPolicy = DmarcPolicy::Reject;
+
+        $em->persist(new DomainHealthSnapshot(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            grade: 'A',
+            score: 95,
+            spfScore: 100,
+            dkimScore: 100,
+            dmarcScore: 100,
+            mxScore: 95,
+            blacklistScore: 100,
+            checkedAt: new \DateTimeImmutable('-1 hour'),
+        ));
 
         $em->persist(new DnsCheckResult(
             id: Uuid::uuid7(),

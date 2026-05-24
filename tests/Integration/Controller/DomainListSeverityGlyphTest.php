@@ -6,6 +6,7 @@ namespace App\Tests\Integration\Controller;
 
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
+use App\Entity\DomainHealthSnapshot;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
 use App\Value\AuthResult;
@@ -20,7 +21,8 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 /**
  * Integration coverage for TASK-066: every DomainCard rendered on /app/domains
  * carries a leading severity glyph + matching left-border tone. Three seeded
- * domains exercise the three branches of DomainHealthFilter::fromOverview().
+ * domains exercise the three branches of the unified DomainHealthClassifier
+ * (TASK-098).
  */
 final class DomainListSeverityGlyphTest extends WebTestCase
 {
@@ -45,6 +47,12 @@ final class DomainListSeverityGlyphTest extends WebTestCase
         $unverifiedDomain = $persona->domain;
 
         $healthyDomain = $fixtures->addExtraDomain($persona->team, 'healthy-'.$suffix);
+        // TASK-098: Healthy now requires all four protocol signals — SPF/DKIM/
+        // DMARC verified + a DNS snapshot with MX score >= 80. Without these
+        // the domain lands in Attention and the success-tone glyph never
+        // renders.
+        $healthyDomain->spfVerifiedAt = new \DateTimeImmutable('-7 days');
+        $healthyDomain->dkimVerifiedAt = new \DateTimeImmutable('-7 days');
         $healthyDomain->dmarcVerifiedAt = new \DateTimeImmutable('-7 days');
 
         $attentionDomain = $fixtures->addExtraDomain($persona->team, 'attention-'.$suffix);
@@ -52,6 +60,18 @@ final class DomainListSeverityGlyphTest extends WebTestCase
 
         $this->persistReport($em, $healthyDomain, pass: 10, fail: 0);
         $this->persistReport($em, $attentionDomain, pass: 3, fail: 7);
+        $em->persist(new DomainHealthSnapshot(
+            id: Uuid::uuid7(),
+            monitoredDomain: $healthyDomain,
+            grade: 'A',
+            score: 95,
+            spfScore: 100,
+            dkimScore: 100,
+            dmarcScore: 100,
+            mxScore: 95,
+            blacklistScore: 100,
+            checkedAt: new \DateTimeImmutable('-1 hour'),
+        ));
 
         $em->flush();
         $client->loginUser($persona->user);

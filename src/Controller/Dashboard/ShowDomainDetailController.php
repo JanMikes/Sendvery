@@ -7,6 +7,7 @@ namespace App\Controller\Dashboard;
 use App\Query\GetAllReports;
 use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainDetail;
+use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetTopSendersForDomain;
 use App\Repository\QuarantinedDmarcReportRepository;
@@ -33,6 +34,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly DmarcPolicyAdvisor $dmarcPolicyAdvisor,
         private readonly DomainSetupStatusResolver $domainSetupStatusResolver,
         private readonly RuaScenarioResolver $ruaScenarioResolver,
+        private readonly GetDomainOverview $getDomainOverview,
     ) {
     }
 
@@ -102,7 +104,16 @@ final class ShowDomainDetailController extends AbstractController
 
         $dnsHealth = $this->getDnsHealthOverview->forDomain($id, $teamIds);
         $ruaScenario = $this->ruaScenarioResolver->resolveForDomainId(Uuid::fromString($id));
-        $domainSetupStatus = $this->domainSetupStatusResolver->resolve($dnsHealth, $ruaScenario);
+        // TASK-098: pass the overview row so the resolver derives banner
+        // severity via the unified DomainHealthClassifier. Without this, the
+        // banner reads only per-protocol state and can render green for a
+        // verified domain that has all four records but a 65% pass rate —
+        // while the `/app/domains` list card (which DOES read pass rate)
+        // renders yellow for the same domain. `forDomain` is the single-row
+        // variant of the list query, so the classifier sees the same shape
+        // it does on the list page.
+        $domainOverview = $this->getDomainOverview->forDomain($id, $teamIds);
+        $domainSetupStatus = $this->domainSetupStatusResolver->resolve($dnsHealth, $ruaScenario, $domainOverview);
 
         // The detail result carries `dmarc_policy` as a raw nullable string
         // straight from DBAL — `tryFrom` (not `from`) protects against a DB

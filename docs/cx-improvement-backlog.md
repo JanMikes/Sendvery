@@ -3394,7 +3394,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-098: `DomainCard` severity glyph (list) and `DomainStatusBanner` severity (detail) classify the same domain from different inputs — green-on-list, yellow-on-detail divergence
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: TASK-066 shipped a leading severity glyph on the domain list cards driven by `DomainHealthFilter::fromOverview()` — a two-input classifier (DMARC verified + 30-day pass rate). TASK-067 shipped a status banner on the per-domain detail page driven by `DomainSetupStatusResolver` — a four-input classifier (SPF + DKIM + DMARC + MX protocol states). Both surfaces answer the question *"is this domain set up correctly?"* but read different signals, so they disagree on common shapes:
   - **DMARC verified + SPF missing + 95% pass rate**: list card renders green (Healthy — DMARC verified + pass rate ≥ 90); detail banner renders yellow (Attention — *"Action needed — SPF"*). User clicks a green card and lands on a yellow page.

@@ -37,6 +37,14 @@ final readonly class GetDomainOverview
         //   - Healthy      → no extra WHERE,                                 HAVING pass_rate >= 90
         //   - Attention    → WHERE dmarc_verified_at IS NOT NULL,            HAVING pass_rate < 90
         // A verified domain with zero reports gets pass_rate = 0 (COALESCE fallback) → Attention. Intentional.
+        //
+        // NOTE: the Healthy/Attention SQL filters here are looser than the
+        // TASK-098 in-app `DomainHealthClassifier` verdict (which ALSO requires
+        // all 4 DNS protocols configured before declaring Healthy). Tightening
+        // the SQL filter to match would require pushing the per-protocol score
+        // thresholds into SQL and is a v2 refinement — the immediate goal is
+        // the on-page glyph + banner agreeing for ANY single domain you click,
+        // not bit-for-bit parity between the filter dropdown and the glyph.
         $whereClause = '';
         $havingClause = '';
         if (DomainHealthFilter::Unverified === $statusFilter) {
@@ -72,28 +80,11 @@ final readonly class GetDomainOverview
             null => 'md.domain ASC',
         };
 
-        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null}> $data */
+        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null}> $data */
         $data = $this->database->executeQuery(
-            'SELECT
-                md.id AS domain_id,
-                md.domain AS domain_name,
-                md.dmarc_verified_at AS dmarc_verified_at,
-                t.id::text AS team_id,
-                t.name AS team_name,
-                COUNT(dr.id) AS total_reports,
-                MAX(dr.date_range_end) AS latest_report_date,
-                COALESCE(
-                    SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
-                    / NULLIF(SUM(rec.count), 0)
-                    * 100,
-                    0
-                ) AS pass_rate
-            FROM monitored_domain md
-            JOIN team t ON t.id = md.team_id
-            LEFT JOIN dmarc_report dr ON dr.monitored_domain_id = md.id
-            LEFT JOIN dmarc_record rec ON rec.dmarc_report_id = dr.id
+            $this->buildBaseSelect().'
             WHERE md.team_id IN (:teamIds)'.$whereClause.'
-            GROUP BY md.id, md.domain, md.dmarc_verified_at, t.id, t.name'.$havingClause.'
+            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score'.$havingClause.'
             ORDER BY '.$orderClause,
             [
                 'teamIds' => $teamIds,
@@ -105,6 +96,43 @@ final readonly class GetDomainOverview
         )->fetchAllAssociative();
 
         return array_map(DomainOverviewResult::fromDatabaseRow(...), $data);
+    }
+
+    /**
+     * Single-domain variant of {@see forTeams()} that returns the same DTO
+     * shape (severity inputs included) for one domain — needed by the per-
+     * domain detail page so the same `DomainHealthClassifier` that drives the
+     * list-card glyph also drives the detail-page banner severity, without
+     * needing a second query against `monitored_domain`.
+     *
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function forDomain(string $domainId, array $teamIds): ?DomainOverviewResult
+    {
+        if ([] === $teamIds) {
+            return null;
+        }
+
+        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null}|false $row */
+        $row = $this->database->executeQuery(
+            $this->buildBaseSelect().'
+            WHERE md.id = :domainId AND md.team_id IN (:teamIds)
+            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score',
+            [
+                'domainId' => $domainId,
+                'teamIds' => $teamIds,
+                'pass' => 'pass',
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
+            ],
+        )->fetchAssociative();
+
+        if (false === $row) {
+            return null;
+        }
+
+        return DomainOverviewResult::fromDatabaseRow($row);
     }
 
     /**
@@ -153,5 +181,49 @@ final readonly class GetDomainOverview
                 'teamIds' => ArrayParameterType::STRING,
             ],
         )->fetchOne();
+    }
+
+    /**
+     * Shared SELECT + LATERAL JOIN body used by both {@see forTeams()} and
+     * {@see forDomain()}. Keeping the projection identical means the two
+     * callers always feed the classifier the same shape.
+     *
+     * The `LEFT JOIN LATERAL` mirrors {@see GetDnsHealthOverview::forTeams()} —
+     * one extra index-backed lookup per domain (covered by
+     * `idx_health_snapshot_domain_date`), bounded at LIMIT 1.
+     */
+    private function buildBaseSelect(): string
+    {
+        return 'SELECT
+                md.id AS domain_id,
+                md.domain AS domain_name,
+                md.dmarc_verified_at AS dmarc_verified_at,
+                md.spf_verified_at AS spf_verified_at,
+                md.dkim_verified_at AS dkim_verified_at,
+                t.id::text AS team_id,
+                t.name AS team_name,
+                COUNT(dr.id) AS total_reports,
+                MAX(dr.date_range_end) AS latest_report_date,
+                COALESCE(
+                    SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
+                    / NULLIF(SUM(rec.count), 0)
+                    * 100,
+                    0
+                ) AS pass_rate,
+                dhs.spf_score   AS latest_spf_score,
+                dhs.dkim_score  AS latest_dkim_score,
+                dhs.dmarc_score AS latest_dmarc_score,
+                dhs.mx_score    AS latest_mx_score
+            FROM monitored_domain md
+            JOIN team t ON t.id = md.team_id
+            LEFT JOIN dmarc_report dr ON dr.monitored_domain_id = md.id
+            LEFT JOIN dmarc_record rec ON rec.dmarc_report_id = dr.id
+            LEFT JOIN LATERAL (
+                SELECT spf_score, dkim_score, dmarc_score, mx_score
+                FROM domain_health_snapshot
+                WHERE monitored_domain_id = md.id
+                ORDER BY checked_at DESC
+                LIMIT 1
+            ) dhs ON true';
     }
 }
