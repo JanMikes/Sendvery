@@ -2359,7 +2359,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-040: Recent-Reports / Domain-Health cards on `/app` show numbers but no in-card filters — "View all" is the only escape hatch
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: Clickable-cards + IA audit. `templates/dashboard/overview.html.twig` lines 268-348 render two side-by-side cards: "Recent Reports" (5 latest, table) and "Domain Health" (top 5 domains, list). Both cards' header has a single "View all" link, and the rows inside are clickable to the report/domain detail page. What's missing: there are no per-card filter chips to narrow the view in-place, AND the column headers (Pass Rate, Reports count) aren't sortable. A user scanning these cards has no way to answer "which domains are failing most?" — they have to click "View all" → land on the full domains list → and only then get sorting via the columns.
 - Acceptance:

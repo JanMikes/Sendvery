@@ -274,16 +274,36 @@
     {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {# Recent reports #}
+        {# Recent reports — TASK-040: in-card date-range dropdown + failing-only chip. #}
         <div class="card bg-base-100 border border-base-200 shadow-sm">
             <div class="card-body p-4">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-semibold">Recent Reports</h3>
-                    <a href="{{ path('dashboard_reports') }}" class="text-xs text-primary hover:underline">View all</a>
+                    <div class="flex items-center gap-3">
+                        {% set rangeLabels = { '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days' } %}
+                        <details class="dropdown dropdown-end">
+                            <summary class="btn btn-ghost btn-xs gap-1" aria-label="Change date range">
+                                {{ rangeLabels[recentReportsRange] }}
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </summary>
+                            <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-200 shadow-lg z-50 w-48 p-1 mt-1">
+                                {% for value, label in rangeLabels %}
+                                    {% set rangeParams = { recent_reports_range: value } %}
+                                    {% if recentReportsFailing %}{% set rangeParams = rangeParams|merge({ recent_reports_failing: 1 }) %}{% endif %}
+                                    {% if domainHealthSort.value != 'worst' %}{% set rangeParams = rangeParams|merge({ domain_health_sort: domainHealthSort.value }) %}{% endif %}
+                                    <li>
+                                        <a href="{{ path('dashboard_overview', rangeParams) }}"
+                                           class="{{ value == recentReportsRange ? 'menu-active' : '' }}">{{ label }}</a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                        <a href="{{ path('dashboard_reports') }}" class="text-xs text-primary hover:underline">View all</a>
+                    </div>
                 </div>
 
                 {% if recentReports is empty %}
-                    <p class="text-sm text-base-content/50 py-4 text-center">No reports yet.</p>
+                    <p class="text-sm text-base-content/50 py-4 text-center">No reports in this window.</p>
                 {% else %}
                     <div class="overflow-x-auto">
                         <table class="table table-sm">
@@ -317,15 +337,53 @@
                         </table>
                     </div>
                 {% endif %}
+
+                {# Failing-only chip — sits below the table so it's an *escape* from
+                   the broad view, not a filter someone scans past on the way in. #}
+                <div class="mt-3 pt-3 border-t border-base-200">
+                    {% set failingParams = { recent_reports_range: recentReportsRange } %}
+                    {% if not recentReportsFailing %}{% set failingParams = failingParams|merge({ recent_reports_failing: 1 }) %}{% endif %}
+                    {% if domainHealthSort.value != 'worst' %}{% set failingParams = failingParams|merge({ domain_health_sort: domainHealthSort.value }) %}{% endif %}
+                    <a href="{{ path('dashboard_overview', failingParams) }}"
+                       class="btn btn-xs gap-1 {{ recentReportsFailing ? 'btn-warning' : 'btn-ghost' }}">
+                        {% if recentReportsFailing %}
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            Showing failing only — clear
+                        {% else %}
+                            Show only failing (&lt; 70% pass)
+                        {% endif %}
+                    </a>
+                </div>
             </div>
         </div>
 
-        {# Domain health #}
+        {# Domain health — TASK-040: in-card sort toggle + per-row 30-day sparkline. #}
         <div class="card bg-base-100 border border-base-200 shadow-sm">
             <div class="card-body p-4">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-semibold">Domain Health</h3>
-                    <a href="{{ path('dashboard_domains') }}" class="text-xs text-primary hover:underline">View all</a>
+                    <div class="flex items-center gap-3">
+                        {% set sortLabels = { 'worst': 'Worst first', 'best': 'Best first', 'most': 'Most reports' } %}
+                        <details class="dropdown dropdown-end">
+                            <summary class="btn btn-ghost btn-xs gap-1" aria-label="Change sort order">
+                                {{ sortLabels[domainHealthSort.value] }}
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </summary>
+                            <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-200 shadow-lg z-50 w-48 p-1 mt-1">
+                                {% for value, label in sortLabels %}
+                                    {% set sortParams = {} %}
+                                    {% if value != 'worst' %}{% set sortParams = sortParams|merge({ domain_health_sort: value }) %}{% endif %}
+                                    {% if recentReportsRange != '7d' %}{% set sortParams = sortParams|merge({ recent_reports_range: recentReportsRange }) %}{% endif %}
+                                    {% if recentReportsFailing %}{% set sortParams = sortParams|merge({ recent_reports_failing: 1 }) %}{% endif %}
+                                    <li>
+                                        <a href="{{ path('dashboard_overview', sortParams) }}"
+                                           class="{{ value == domainHealthSort.value ? 'menu-active' : '' }}">{{ label }}</a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                        <a href="{{ path('dashboard_domains') }}" class="text-xs text-primary hover:underline">View all</a>
+                    </div>
                 </div>
 
                 {% if domains is empty %}
@@ -338,15 +396,21 @@
                 {% else %}
                     <div class="space-y-3">
                         {% for domain in domains[:5] %}
+                            {% set passRateTone = domain.passRate >= 90 ? 'text-success' : (domain.passRate >= 70 ? 'text-warning' : 'text-error') %}
                             <a href="{{ path('dashboard_domain_detail', { id: domain.domainId }) }}"
-                               class="flex items-center justify-between p-3 rounded-btn hover:bg-base-200/50 transition-colors">
-                                <div>
+                               class="flex items-center justify-between p-3 rounded-btn hover:bg-base-200/50 transition-colors gap-3">
+                                <div class="min-w-0 flex-1">
                                     <span class="font-medium text-sm">{{ domain.domainName }}</span>
                                     <span class="text-xs text-base-content/50 ml-2">{{ domain.totalReports }} reports</span>
                                 </div>
-                                <span class="text-sm font-semibold {{ domain.passRate >= 90 ? 'text-success' : (domain.passRate >= 70 ? 'text-warning' : 'text-error') }}">
-                                    {{ domain.passRate|number_format(1) }}%
-                                </span>
+                                <div class="flex items-center gap-3 shrink-0">
+                                    <span class="{{ passRateTone }}" aria-label="30-day pass-rate trend">
+                                        <twig:DomainPassRateSparkline :points="domainPassRateTrends[domain.domainId]|default([])"/>
+                                    </span>
+                                    <span class="text-sm font-semibold {{ passRateTone }}">
+                                        {{ domain.passRate|number_format(1) }}%
+                                    </span>
+                                </div>
                             </a>
                         {% endfor %}
                     </div>

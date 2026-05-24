@@ -6,6 +6,7 @@ namespace App\Query;
 
 use App\Results\DomainOverviewResult;
 use App\Value\DomainHealthFilter;
+use App\Value\DomainHealthSort;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
@@ -21,8 +22,11 @@ final readonly class GetDomainOverview
      *
      * @return array<DomainOverviewResult>
      */
-    public function forTeams(array $teamIds, ?DomainHealthFilter $statusFilter = null): array
-    {
+    public function forTeams(
+        array $teamIds,
+        ?DomainHealthFilter $statusFilter = null,
+        ?DomainHealthSort $sort = null,
+    ): array {
         if ([] === $teamIds) {
             return [];
         }
@@ -43,6 +47,30 @@ final readonly class GetDomainOverview
             $whereClause = ' AND md.dmarc_verified_at IS NOT NULL';
             $havingClause = ' HAVING COALESCE(SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100, 0) < 90';
         }
+
+        // ORDER BY axis driven by the TASK-040 ?domain_health_sort= param:
+        //   - null  (default) → alphabetical domain name (legacy behaviour, kept
+        //                       for callers that don't opt into the new axis,
+        //                       e.g. the full /app/domains list page).
+        //   - Worst → boolean "has any records" sentinel sorts zero-record
+        //             domains *after* genuinely failing ones, then pass_rate
+        //             ASC, ties broken by report count.
+        //   - Best  → pass_rate DESC. Zero-record domains intentionally pinned
+        //             to the BOTTOM via NULLIF + NULLS LAST — under a naive
+        //             DESC alone they'd float to the top (PostgreSQL NULLS
+        //             default to FIRST under DESC). Using NULLIF/NULLS LAST
+        //             keeps the semantics explicit even if a future refactor
+        //             drops the COALESCE around $passRateExpr.
+        //   - Most  → total_reports DESC then pass_rate ASC (ties → surface
+        //             the worst high-volume domain first).
+        $passRateExpr = 'COALESCE(SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100, 0)';
+        $passRateNullableExpr = 'SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100';
+        $orderClause = match ($sort) {
+            DomainHealthSort::Worst => 'NULLIF(SUM(rec.count), 0) IS NULL, '.$passRateExpr.' ASC, COUNT(dr.id) DESC',
+            DomainHealthSort::Best => $passRateNullableExpr.' DESC NULLS LAST, COUNT(dr.id) DESC',
+            DomainHealthSort::Most => 'COUNT(dr.id) DESC, '.$passRateExpr.' ASC',
+            null => 'md.domain ASC',
+        };
 
         /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string}> $data */
         $data = $this->database->executeQuery(
@@ -65,7 +93,7 @@ final readonly class GetDomainOverview
             LEFT JOIN dmarc_record rec ON rec.dmarc_report_id = dr.id
             WHERE md.team_id IN (:teamIds)'.$whereClause.'
             GROUP BY md.id, md.domain, t.id, t.name'.$havingClause.'
-            ORDER BY md.domain ASC',
+            ORDER BY '.$orderClause,
             [
                 'teamIds' => $teamIds,
                 'pass' => 'pass',

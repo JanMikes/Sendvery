@@ -23,7 +23,10 @@ use App\Services\NextActionResolver;
 use App\Services\ReportAddressProvider;
 use App\Services\SetupChecklistResolver;
 use App\Services\Stripe\PlanLimits;
+use App\Value\DomainHealthSort;
+use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -48,18 +51,50 @@ final class DashboardOverviewController extends AbstractController
         private readonly PlanLimits $planLimits,
         private readonly SetupChecklistResolver $setupChecklistResolver,
         private readonly TeamRepository $teamRepository,
+        private readonly ClockInterface $clock,
     ) {
     }
 
     #[Route('/app', name: 'dashboard_overview')]
-    public function __invoke(): Response
+    public function __invoke(Request $request): Response
     {
         $teamIds = $this->dashboardContext->getTeamIdStrings();
 
+        // TASK-040: in-card filter URL state. Each accessor pins to a safe
+        // default when the param is missing or unrecognised, so the page
+        // always renders with sensible content even on garbage input.
+        $recentReportsRange = $this->parseRecentReportsRange($request);
+        $recentReportsFailing = $this->parseRecentReportsFailing($request);
+        $domainHealthSort = $this->parseDomainHealthSort($request);
+
+        // ?recent_reports_range= folds onto ReportsFilter::dateFrom — we
+        // compute the cutoff once here so the same value drives the query
+        // AND the dropdown's "active" highlight in the template.
+        $rangeDays = (int) substr($recentReportsRange, 0, -1);
+        $recentReportsDateFrom = $this->clock->now()->modify(sprintf('-%d days', $rangeDays));
+
         $stats = $this->getDashboardStats->forTeams($teamIds);
-        $domains = $this->getDomainOverview->forTeams($teamIds);
-        $recentReports = $this->getAllReports->forTeams($teamIds, limit: 10);
+        $domains = $this->getDomainOverview->forTeams($teamIds, sort: $domainHealthSort);
+        $recentReports = $this->getAllReports->forTeams(
+            teamIds: $teamIds,
+            limit: 10,
+            passRateBand: $recentReportsFailing ? 'low' : null,
+            dateFrom: $recentReportsDateFrom,
+        );
         $trendData = $this->getDomainPassRateTrend->forTeams($teamIds, days: 30);
+
+        // Per-domain 30-day sparkline data for the Domain Health card. We only
+        // need it for the 5 domains the template renders, so trim before the
+        // query to avoid pulling ~30 rows per unrendered domain on accounts
+        // with lots of monitored domains.
+        $domainSparklineIds = array_values(array_map(
+            static fn ($d) => $d->domainId,
+            array_slice($domains, 0, 5),
+        ));
+        // `forDomains` short-circuits to `[]` when either input is empty, so
+        // we don't need a defensive guard here — the query is safe to call
+        // with an empty list and the overview always passes the team scope.
+        $domainPassRateTrends = $this->getDomainPassRateTrend->forDomains($domainSparklineIds, $teamIds, days: 30);
 
         $trendChartConfig = [
             'chart' => [
@@ -194,6 +229,43 @@ final class DashboardOverviewController extends AbstractController
             'overviewReportUsage' => $overviewReportUsage,
             'showReportUsageCard' => $showReportUsageCard,
             'setupChecklist' => $setupChecklist,
+            'recentReportsRange' => $recentReportsRange,
+            'recentReportsFailing' => $recentReportsFailing,
+            'domainHealthSort' => $domainHealthSort,
+            'domainPassRateTrends' => $domainPassRateTrends,
         ]);
+    }
+
+    /**
+     * @return '7d'|'30d'|'90d'
+     */
+    private function parseRecentReportsRange(Request $request): string
+    {
+        $raw = $request->query->get('recent_reports_range');
+        if (in_array($raw, ['7d', '30d', '90d'], true)) {
+            return $raw;
+        }
+
+        return '7d';
+    }
+
+    private function parseRecentReportsFailing(Request $request): bool
+    {
+        return '1' === $request->query->get('recent_reports_failing');
+    }
+
+    /**
+     * Defaults to Worst — the card's whole purpose is surfacing problems.
+     * Garbage / missing → Worst (not null), so the controller and the
+     * dropdown's "active" highlight stay in lockstep.
+     */
+    private function parseDomainHealthSort(Request $request): DomainHealthSort
+    {
+        $raw = $request->query->get('domain_health_sort');
+        if (!is_string($raw)) {
+            return DomainHealthSort::Worst;
+        }
+
+        return DomainHealthSort::tryFrom($raw) ?? DomainHealthSort::Worst;
     }
 }

@@ -1,0 +1,44 @@
+{# TASK-040: tiny 30-day pass-rate sparkline next to each Domain Health row.
+   Pure inline SVG with `currentColor` so it inherits the surrounding
+   text-success / text-warning / text-error tint set by the row's pass-rate
+   class — no JS, no chart library.
+
+   `points` is a list of pass-rates (0-100, oldest → newest). Two or more
+   points render as a polyline; one point degrades to a single dot; an empty
+   list renders an "—" placeholder so layout stays stable across all rows. #}
+{% props points = [], width = 80, height = 20 %}
+
+{% set count = points|length %}
+{% if count >= 2 %}
+    {# Map each [index, pass_rate] pair onto the viewBox. Y is inverted —
+       pass_rate=100 → top of the box (y=padding), pass_rate=0 → bottom. #}
+    {% set padding = 1 %}
+    {% set drawWidth = width - (padding * 2) %}
+    {% set drawHeight = height - (padding * 2) %}
+    {% set stepX = drawWidth / (count - 1) %}
+    {% set coords = [] %}
+    {% for value in points %}
+        {% set clamped = value < 0 ? 0 : (value > 100 ? 100 : value) %}
+        {% set x = padding + (loop.index0 * stepX) %}
+        {% set y = padding + drawHeight - ((clamped / 100) * drawHeight) %}
+        {% set coords = coords|merge([x|number_format(2, '.', '') ~ ',' ~ y|number_format(2, '.', '')]) %}
+    {% endfor %}
+    <svg viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}"
+         class="inline-block align-middle" aria-hidden="true" role="img">
+        <polyline points="{{ coords|join(' ') }}"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"/>
+    </svg>
+{% elseif count == 1 %}
+    {# Single-data-point domain — show a centred dot so the eye doesn't read
+       it as missing. #}
+    <svg viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}"
+         class="inline-block align-middle" aria-hidden="true" role="img">
+        <circle cx="{{ width / 2 }}" cy="{{ height / 2 }}" r="1.5" fill="currentColor"/>
+    </svg>
+{% else %}
+    <span class="inline-block align-middle text-base-content/30" style="width: {{ width }}px;" aria-hidden="true">—</span>
+{% endif %}
