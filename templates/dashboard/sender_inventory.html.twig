@@ -7,14 +7,16 @@
     <li>Senders</li>
 {% endblock %}
 
-{% block content %}
+{% block page_heading %}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
             <h1 class="text-2xl font-bold">Sender Inventory</h1>
             <p class="text-sm text-base-content/60 mt-1">All services and IPs sending email as {{ domain.domainName }}</p>
         </div>
     </div>
+{% endblock %}
 
+{% block content %}
     <twig:DomainWorkspaceTabs :domain="domain" active="senders" />
 
     {# Filter tabs #}

@@ -7,7 +7,7 @@
     <li>Health</li>
 {% endblock %}
 
-{% block content %}
+{% block page_heading %}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
             <h1 class="text-2xl font-bold">Domain Health</h1>
@@ -24,7 +24,9 @@
             {% endif %}
         </div>
     </div>
+{% endblock %}
 
+{% block content %}
     <twig:DomainWorkspaceTabs :domain="domain" active="dns" />
 
     {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}

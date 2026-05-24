@@ -201,6 +201,7 @@
 
         {# Page content #}
         <main class="flex-1 p-4 lg:p-6">
+            {% block page_heading %}{% endblock %}
             {% block content %}{% endblock %}
         </main>
     </div>

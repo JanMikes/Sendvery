@@ -3,13 +3,16 @@
 {% block page_title %}Quarantine{% endblock %}
 {% block breadcrumbs %}<li>Quarantine</li>{% endblock %}
 
-{% block content %}
+{% block page_heading %}
     <div class="mb-6">
         <h1 class="text-2xl font-bold">Quarantine</h1>
-        <p class="text-sm text-base-content/60 mt-1">
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">
             DMARC reports we received but couldn't immediately route to your dashboard — typically because the domain isn't verified yet, the report is for a domain we don't recognise, or you've hit this month's plan cap.
         </p>
     </div>
+{% endblock %}
+
+{% block content %}
 
     {# Flash messages #}
     {% for type, messages in app.flashes %}

@@ -3,6 +3,13 @@
 {% block page_title %}Reports{% endblock %}
 {% block breadcrumbs %}<li>Reports</li>{% endblock %}
 
+{% block page_heading %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">DMARC Reports</h1>
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">Every parsed DMARC report across your domains. Filter by date, domain, reporter, or pass-rate to find what you need.</p>
+    </div>
+{% endblock %}
+
 {% block content %}
     <twig:ReportsFilterBar
         filter="{{ filter }}"

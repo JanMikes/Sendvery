@@ -6,7 +6,7 @@
     <li>Alerts</li>
 {% endblock %}
 
-{% block content %}
+{% block page_heading %}
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold">Alerts</h1>
@@ -15,7 +15,9 @@
             {% endif %}
         </div>
     </div>
+{% endblock %}
 
+{% block content %}
     {# Flash messages #}
     {% for type, messages in app.flashes %}
         {% for message in messages %}

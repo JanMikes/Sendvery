@@ -8,14 +8,16 @@
     <li>DNS History</li>
 {% endblock %}
 
-{% block content %}
+{% block page_heading %}
     <div class="mb-6">
         <h1 class="text-2xl font-bold">DNS History</h1>
-        <p class="text-base-content/65 text-base mt-2 max-w-2xl">
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">
             Every DNS check we've run for {{ domain.domainName }}. We re-check SPF, DKIM, DMARC and MX once a day — and any time you click "Re-check now". Rows highlighted in yellow show a change from the previous check.
         </p>
     </div>
+{% endblock %}
 
+{% block content %}
     <twig:DomainWorkspaceTabs :domain="domain" active="history" />
 
     {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}

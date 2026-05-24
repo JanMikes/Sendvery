@@ -6,6 +6,13 @@
     <li>Reports</li>
 {% endblock %}
 
+{% block page_heading %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">Reports — {{ domain.domainName }}</h1>
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">Every DMARC report we've received for this domain.</p>
+    </div>
+{% endblock %}
+
 {% block content %}
     <twig:DomainWorkspaceTabs :domain="domain" active="reports" />
 

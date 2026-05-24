@@ -3,6 +3,15 @@
 {% block page_title %}Report ingestion{% endblock %}
 {% block breadcrumbs %}<li>Report ingestion</li>{% endblock %}
 
+{% block page_heading %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">Report ingestion</h1>
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">
+            Where DMARC reports arrive from email providers.
+        </p>
+    </div>
+{% endblock %}
+
 {% block content %}
     {# Flash messages #}
     {% for type, messages in app.flashes %}
@@ -12,13 +21,6 @@
             </div>
         {% endfor %}
     {% endfor %}
-
-    <header class="mb-6">
-        <h1 class="text-2xl font-bold">Report ingestion</h1>
-        <p class="text-sm text-base-content/60 mt-1">
-            Where DMARC reports arrive from email providers.
-        </p>
-    </header>
 
     <twig:IngestionRoutesCallout
         reportAddress="{{ reportAddress }}"

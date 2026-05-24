@@ -3,6 +3,13 @@
 {% block page_title %}Domains{% endblock %}
 {% block breadcrumbs %}<li>Domains</li>{% endblock %}
 
+{% block page_heading %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">Domains</h1>
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">Every domain your team is monitoring. Tap a card to see DNS health, recent reports and the sender breakdown.</p>
+    </div>
+{% endblock %}
+
 {% block content %}
     {# Filter chips — URL-driven state via ?status=. Mirrors alerts.html.twig pattern. #}
     <div class="flex flex-wrap gap-2 mb-4">

@@ -3017,7 +3017,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-082: Cross-page page-title gap — overview, domains, reports, mailboxes, DNS-health, domain-reports, billing have NO visible `<h1>` at all
 
-- Status: planned
+- Status: done
 - Area: dashboard
 - Why: First-impression UX gap that affects 7 of the 13 authenticated pages. Today the layout (`templates/dashboard/layout.html.twig`) renders only a sticky breadcrumb row (`Dashboard › Domains › acme.io`) — there is no `<h1>` slot in the layout. Each page is expected to render its own `<h1>` inside the content block. `grep -L 'h1 ' templates/dashboard/*.html.twig` shows **7 top-level pages have no `<h1>` at all**: `overview.html.twig`, `domains.html.twig`, `reports.html.twig`, `mailboxes.html.twig`, `dns_health_overview.html.twig`, `domain_reports.html.twig`, `billing.html.twig`. The user lands on `/app/domains` and sees: tiny breadcrumb at top → a chip row → a card grid. The single most prominent text on the page is the domain name on the first card, not "Domains". For a first-time-this-week user this is the equivalent of opening a folder whose name is hidden — they have to look up at the browser tab title (or scan the sidebar highlight) to confirm where they are. Pages WITH an `<h1>` (`alerts.html.twig`, `quarantine.html.twig`, `domain_detail.html.twig`, `domain_health.html.twig`, etc.) feel objectively more finished — a consistency gap shipping has revealed.
 - Acceptance:

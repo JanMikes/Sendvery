@@ -6,7 +6,7 @@
     <li>{{ report.externalReportId|length > 30 ? report.externalReportId[:30] ~ '...' : report.externalReportId }}</li>
 {% endblock %}
 
-{% block content %}
+{% block page_heading %}
     {# Report header #}
     <div class="mb-6">
         <h1 class="text-2xl font-bold">Report from {{ report.reporterOrg }}</h1>
@@ -16,7 +16,9 @@
             External ID: <span class="font-mono text-xs">{{ report.externalReportId }}</span>
         </p>
     </div>
+{% endblock %}
 
+{% block content %}
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {# Report metadata #}
         <div class="card bg-base-100 border border-base-200 shadow-sm lg:col-span-2">

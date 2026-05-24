@@ -3,6 +3,13 @@
 {% block page_title %}DNS Health{% endblock %}
 {% block breadcrumbs %}<li>DNS Health</li>{% endblock %}
 
+{% block page_heading %}
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">DNS Health</h1>
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">SPF, DKIM, DMARC and MX records for every monitored domain in one view.</p>
+    </div>
+{% endblock %}
+
 {% block content %}
     {% if domains is empty %}
         <twig:EmptyState
