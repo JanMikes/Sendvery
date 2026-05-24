@@ -174,7 +174,7 @@
                 </div>
 
                 <div class="flex items-center gap-2">
-                    {% block header_actions %}{% endblock %}
+                    {% block header_actions %}{% if app.user %}<twig:GlobalAddDropdown />{% endif %}{% endblock %}
                     {% if app.user %}
                         <span class="text-sm text-base-content/50 hidden sm:inline">{{ app.user.email }}</span>
                         <a href="{{ path('auth_logout') }}" class="btn btn-ghost btn-sm">

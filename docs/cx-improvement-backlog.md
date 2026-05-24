@@ -2125,7 +2125,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-033: No global "Add" affordance — adding a domain / mailbox / teammate from anywhere needs three clicks across three pages
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: PO brief named ADD as one of the four user paths and asked: *"clear and always reachable?"*. Today: to add a domain from `/app/reports` the user must (1) navigate to Domains, (2) wait for the list to load, (3) click "Add domain". To invite a teammate from `/app/alerts` they must (1) find "Team" in the sidebar Settings section, (2) navigate, (3) scroll to the invite form. To connect a mailbox from `/app/billing` they must (1) navigate to Mailboxes, (2) click "Add mailbox". The "Add" affordance only exists as a page-specific header action on each list page. For a multi-domain team the most-used action — Add domain — should be one click from anywhere.
 - Acceptance:
@@ -2136,6 +2136,118 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
   - Integration test: GET each of `/app`, `/app/reports`, `/app/alerts`, `/app/billing`, `/app/team`, `/app/quarantine` and assert the response body contains a link to each of `dashboard_domain_add`, `dashboard_mailbox_add`, and `team_settings`. This regression-guards the always-reachable invariant.
   - 100% test coverage on the plan-limit gating branches (each combination of can-add / can't-add).
 - Notes:
+  **Architect plan (locked in, 2026-05-24)**
+
+  **Confirmed:**
+  - Layout block insertion site: `templates/dashboard/layout.html.twig` line 177 — `{% block header_actions %}{% endblock %}` (empty default).
+  - Three per-page overrides at `domains.html.twig` / `mailboxes.html.twig` / `dns_health_overview.html.twig` lines 6-11 — each replaces the layout default with a single "Add X" link, no `{{ parent() }}`.
+  - Routes: `dashboard_domain_add` (`/app/domains/add`), `dashboard_mailbox_add` (`/app/mailboxes/add`), `team_settings` (`/app/team` — there is NO `#invite` anchor; the page scrolls to the invite form).
+  - `PlanEnforcement` has `canAddDomain`, `canAddTeamMember`, `getDomainCount`, `getTeamMemberCount`. **NO `canAddMailbox`** — mailbox count isn't plan-gated anywhere; mailbox menu item is always enabled.
+  - Admin gate: `TeamVoter::MANAGE_MEMBERS` (Owner + Admin roles only). `TeamMembership->role` gives the value; check via `in_array(role, [TeamRole::Owner, TeamRole::Admin])`.
+  - **Pending invitations count toward seat cap.** `TeamSettingsController` uses `memberCount + pendingCount` as effective count. The dropdown must do the same — inject `TeamInvitationRepository` and compute pending count.
+  - Twig extension precedent: `QuarantineCountExtension` — `implements GlobalsInterface`, try/catch wrap with safe-default fallback for unauthenticated / pre-onboarding states.
+  - daisyUI v5 dropdown: use `<details class="dropdown dropdown-end">` + `<summary class="btn ...">` (modern v5 pattern) — different from the team-switcher's older `label`+`tabindex` pattern in the sidebar; the new top-bar dropdown uses the canonical v5 `details/summary` shape.
+
+  **Critical decisions:**
+  1. **Drop the three per-page header_actions overrides entirely.** Per-page "Add X" buttons would compete visually with the global dropdown for the same surface. Each list page already has an in-content empty-state CTA for contextual prominence. The global dropdown is the sole top-bar affordance everywhere.
+  2. **Mailbox item: always enabled** (no plan limit exists).
+  3. **"Invite teammate" hidden (not disabled) for non-admin/owner roles.** A Member or Viewer cannot invite even with seats available; showing a disabled item with an Upgrade link is misleading.
+  4. **`canInvite = isTeamManager && (memberCount + pendingCount) < maxMembers`** — both the role AND the seat cap (including pending invites) must permit it.
+  5. **`<details>/<summary>` dropdown** (not `label`/`tabindex`).
+  6. `domainsListShowsAddButton` test in `DashboardPagesTest` (line 156-162) still passes — the layout-default dropdown renders `a[href="/app/domains/add"]`, so removing the per-page override doesn't break it.
+
+  **Files to create**
+
+  1. `src/Results/GlobalAddLimits.php` — `readonly final class` DTO:
+     ```php
+     public bool $canAddDomain,
+     public int $domainCount,
+     public int $maxDomains,
+     public bool $canAddMailbox,            // always true
+     public bool $isTeamManager,            // Owner or Admin
+     public bool $canAddTeamMember,         // plan-seat (including pending) gate
+     public int $effectiveMemberCount,      // members + pending invites
+     public int $maxMembers,
+     ```
+     Static `null(): self` factory returning all-permissive zero values for unauthenticated/onboarding fallback.
+     Add display methods: `domainLimitDisplay(): string` — returns `'∞'` when `$maxDomains === PHP_INT_MAX`, else `(string) $maxDomains`. Same for `memberLimitDisplay()`. Keeps Twig clean.
+     Derived getter (or property) `canInvite: bool = $isTeamManager && $canAddTeamMember`.
+
+  2. `src/Twig/GlobalAddDropdownExtension.php` — `final class … extends AbstractExtension implements GlobalsInterface`. Constructor injects `Security`, `DashboardContext`, `PlanEnforcement`, `PlanLimits`, `GetTeamPlan`, `TeamInvitationRepository`. `getGlobals()` calls `resolveForActiveTeam()`:
+     - Guard on `Security::getUser() instanceof User`. Otherwise return `GlobalAddLimits::null()`.
+     - Wrap rest in `try { ... } catch (\RuntimeException) { return GlobalAddLimits::null(); }` to handle no-membership / pre-onboarding states.
+     - Get active membership via `DashboardContext::getActiveMembership()`. Read `team.id` + `role`.
+     - `$plan = $this->getTeamPlan->forTeam($teamId)`.
+     - `$canAddDomain = $this->planEnforcement->canAddDomain($teamId, $plan)`; `$domainCount = ...->getDomainCount(...)`; `$maxDomains = $this->planLimits->getMaxDomains($plan)`.
+     - `$memberCount = ...->getTeamMemberCount($teamId); $pendingCount = count($invitationRepo->findPendingForTeam($teamId)); $effectiveMemberCount = $memberCount + $pendingCount; $maxMembers = $planLimits->getMaxTeamMembers($plan); $canAddTeamMember = $effectiveMemberCount < $maxMembers;`
+     - `$isTeamManager = in_array($membership->role, [TeamRole::Owner, TeamRole::Admin], true)`.
+     - Return `new GlobalAddLimits(...)`.
+     - Returns `['global_add_limits' => $limits]`.
+
+  3. `templates/components/GlobalAddDropdown.html.twig` — anonymous component (no `{% props %}` needed; reads `global_add_limits` global). Structure:
+     ```twig
+     <details class="dropdown dropdown-end">
+         <summary class="btn btn-primary btn-sm gap-1" aria-label="Add">
+             <svg ...><!-- + icon, w-4 h-4 --></svg>
+             <span class="hidden lg:inline">Add</span>
+         </summary>
+         <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-200 shadow-lg z-50 w-56 p-1 mt-1">
+             {# Domain item #}
+             <li>
+                 {% if global_add_limits.canAddDomain %}
+                     <a href="{{ path('dashboard_domain_add') }}" class="flex flex-col items-start gap-0.5">
+                         <span>Add domain</span>
+                         <span class="text-xs text-base-content/50">{{ global_add_limits.domainCount }}/{{ global_add_limits.domainLimitDisplay() }} used</span>
+                     </a>
+                 {% else %}
+                     <span class="cursor-not-allowed opacity-60 flex flex-col items-start gap-0.5">
+                         <span>Add domain</span>
+                         <span class="text-xs text-warning">Limit reached — <a href="{{ path('dashboard_billing') }}" class="underline">upgrade</a></span>
+                     </span>
+                 {% endif %}
+             </li>
+             {# Mailbox item (always enabled) #}
+             <li><a href="{{ path('dashboard_mailbox_add') }}">Connect mailbox</a></li>
+             {# Teammate item (hidden for non-managers) #}
+             {% if global_add_limits.isTeamManager %}
+                 <li>
+                     {% if global_add_limits.canAddTeamMember %}
+                         <a href="{{ path('team_settings') }}" class="flex flex-col items-start gap-0.5">
+                             <span>Invite teammate</span>
+                             <span class="text-xs text-base-content/50">{{ global_add_limits.effectiveMemberCount }}/{{ global_add_limits.memberLimitDisplay() }} seats</span>
+                         </a>
+                     {% else %}
+                         <span class="cursor-not-allowed opacity-60 flex flex-col items-start gap-0.5">
+                             <span>Invite teammate</span>
+                             <span class="text-xs text-warning">Limit reached — <a href="{{ path('dashboard_billing') }}" class="underline">upgrade</a></span>
+                         </span>
+                     {% endif %}
+                 </li>
+             {% endif %}
+         </ul>
+     </details>
+     ```
+     The button uses `btn-sm` for tight top-bar height. `<span class="hidden lg:inline">` hides the "Add" label on mobile so the trigger collapses to icon-only. `dropdown-end` aligns menu to right edge to prevent off-screen clipping on mobile.
+
+  4. `tests/Integration/Controller/GlobalAddDropdownTest.php` — 8 `#[Test]` methods:
+     - `dropdownRendersOnEveryDashboardPage` (data-provider with 6 URLs)
+     - `addDomainItemEnabledUnderLimit`
+     - `addDomainItemDisabledAtLimit`
+     - `addMailboxItemAlwaysEnabled`
+     - `inviteTeammateItemHiddenForMemberRole` (login as Member-role user)
+     - `inviteTeammateItemEnabledForAdminUnderLimit`
+     - `inviteTeammateItemDisabledForAdminAtMemberCap` (members + pending = max)
+     - `dropdownAbsentForUnauthenticatedRequest` (302 redirect, no errors)
+
+  **Files to modify**
+
+  5. `templates/dashboard/layout.html.twig` line 177 — replace `{% block header_actions %}{% endblock %}` with `{% block header_actions %}<twig:GlobalAddDropdown />{% endblock %}`.
+
+  6-8. Delete lines 6-11 from `templates/dashboard/domains.html.twig`, `templates/dashboard/mailboxes.html.twig`, `templates/dashboard/dns_health_overview.html.twig` (entire `{% block header_actions %}...{% endblock %}` override).
+
+  **Non-goals**: no fourth menu item, no user-email dropdown changes, no route changes, no `PlanEnforcement` refactor, no FAB on mobile. Just one new extension + DTO + component + layout-default wiring.
+
+  **Build sequence**: DTO → Extension → Component → Layout default → Remove 3 page overrides → Tests → Quality gates.
 
 ---
 

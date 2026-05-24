@@ -1,0 +1,44 @@
+<details class="dropdown dropdown-end">
+    <summary class="btn btn-primary btn-sm gap-1" aria-label="Add">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+        <span class="hidden lg:inline">Add</span>
+    </summary>
+    <ul class="dropdown-content menu bg-base-100 rounded-box border border-base-200 shadow-lg z-50 w-56 p-1 mt-1">
+        {# Domain item — plan-limit gated. #}
+        <li>
+            {% if global_add_limits.canAddDomain %}
+                <a href="{{ path('dashboard_domain_add') }}" class="flex flex-col items-start gap-0.5">
+                    <span>Add domain</span>
+                    <span class="text-xs text-base-content/50">{{ global_add_limits.domainCount }}/{{ global_add_limits.domainLimitDisplay() }} used</span>
+                </a>
+            {% else %}
+                <span class="cursor-not-allowed opacity-60 flex flex-col items-start gap-0.5">
+                    <span>Add domain</span>
+                    <span class="text-xs text-warning">Limit reached — <a href="{{ path('dashboard_billing') }}" class="underline">upgrade</a></span>
+                </span>
+            {% endif %}
+        </li>
+
+        {# Mailbox item — no plan limit; always enabled. #}
+        <li>
+            <a href="{{ path('dashboard_mailbox_add') }}">Connect mailbox</a>
+        </li>
+
+        {# Teammate item — hidden for non-managers; disabled at seat cap. #}
+        {% if global_add_limits.isTeamManager %}
+            <li>
+                {% if global_add_limits.canAddTeamMember %}
+                    <a href="{{ path('team_settings') }}" class="flex flex-col items-start gap-0.5">
+                        <span>Invite teammate</span>
+                        <span class="text-xs text-base-content/50">{{ global_add_limits.effectiveMemberCount }}/{{ global_add_limits.memberLimitDisplay() }} seats</span>
+                    </a>
+                {% else %}
+                    <span class="cursor-not-allowed opacity-60 flex flex-col items-start gap-0.5">
+                        <span>Invite teammate</span>
+                        <span class="text-xs text-warning">Limit reached — <a href="{{ path('dashboard_billing') }}" class="underline">upgrade</a></span>
+                    </span>
+                {% endif %}
+            </li>
+        {% endif %}
+    </ul>
+</details>
