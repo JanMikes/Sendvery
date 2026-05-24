@@ -1,3 +1,4 @@
+{% import 'components/_severity_glyph.html.twig' as severity %}
 <turbo-frame id="reports-table">
     <div class="card bg-base-100 border border-base-200 shadow-sm">
         <div class="card-body p-4">
@@ -5,6 +6,11 @@
                 <table class="table table-sm">
                     <thead>
                         <tr>
+                            {# 32px-wide leading severity glyph (TASK-069). sr-only
+                               header so the column is screen-reader-labelled but
+                               visually anonymous — the glyph is the cue, the
+                               Pass Rate column on the right is the precise label. #}
+                            <th class="w-8"><span class="sr-only">Health</span></th>
                             <th>Domain</th>
                             <th>Reporter</th>
                             <th>Date Range</th>
@@ -19,9 +25,15 @@
                            (or the control itself) class="relative z-20" so it wins pointer events.
                            data-turbo-frame="_top" is required here because this table is wrapped in
                            <turbo-frame id="reports-table"> — without it, the link would try to swap
-                           the report-detail page into this frame instead of loading as a full page. #}
+                           the report-detail page into this frame instead of loading as a full page.
+                           Leading severity glyph + `border-l-{tone}` per TASK-069: a single failing
+                           report jumps off the page instead of forcing the user to read every number. #}
                         {% for report in reports %}
-                            <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                            {% set reportTone = severity.pass_rate_tone(report.passRate)|trim %}
+                            <tr class="hover:bg-base-200/50 cursor-pointer relative border-l-4 border-l-{{ reportTone }}">
+                                <td class="w-8">
+                                    {{ severity.glyph(reportTone, 'sm') }}
+                                </td>
                                 <td class="font-medium">
                                     <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
                                        class="absolute inset-0 z-10"
@@ -33,7 +45,7 @@
                                 <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                 <td class="text-right">{{ report.recordCount }}</td>
                                 <td class="text-right">
-                                    <span class="{{ report.passRate >= 90 ? 'text-success' : (report.passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                    <span class="text-{{ reportTone }}">
                                         {{ report.passRate|number_format(1) }}%
                                     </span>
                                 </td>

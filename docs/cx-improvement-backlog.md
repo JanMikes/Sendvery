@@ -2889,7 +2889,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-068: Mailbox list rows have no leading severity glyph — error rows look identical to active rows at a glance
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: On `/app/mailboxes` the table has a "Status" column (third from left) that renders `<twig:StatusBadge status="active|error|inactive" />` — a small inline badge with the right color. But scanning a 10-row table the eye lands on the leftmost column (Host) first; the status badge sits inside cell 3 and competes with the type, last-polled, activity, last-error columns. A mailbox that's been erroring for 6 hours looks visually indistinguishable from an active one at first glance. Compare to the alerts list (already correct): leading severity icon + colored left border telegraphs the row health before the user reads any column. Apply the same idiom here.
 - Acceptance:
@@ -2903,7 +2903,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-069: Reports table rows have no leading severity glyph — every row looks identical until the user reads the pass-rate column
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: `/app/reports` (and the per-domain reports table on `domain_detail`) renders a list of DMARC reports with a pass-rate number in the rightmost cell (`templates/dashboard/_reports_table.html.twig` line 36 and `templates/dashboard/domain_detail.html.twig` line 261). The pass-rate number is colored (`text-success`/`text-warning`/`text-error`) but the row itself is visually identical regardless of report health. A page of 25 reports requires reading 25 numbers to find the failing ones. The TASK-040 "show only failing" toggle helps but is opt-in — by default the table is a wall of identical rows. Prepend a leading severity glyph so a failing report jumps off the page.
 - Acceptance:
@@ -2918,7 +2918,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-070: Alert list rows have a severity icon AND a colored left border — but the row background is still white. A single critical alert in a long unread list still doesn't visually punch through
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: `/app/alerts` is the closest existing implementation of the "icon + color before numbers" idiom — `templates/dashboard/alerts.html.twig` lines 89-112 already renders a 32px severity icon AND a colored left border on each card. BUT the card body itself is the same `bg-base-100` regardless of severity, and the only weight difference between unread and read is bold/grey title text + a tiny "New" badge. A user scrolling 30 alerts looking for the one critical-unread row has to scan icons one by one. Two small additions match what most production alert UIs do: tinted background (`bg-error/5` for unread critical, `bg-warning/5` for unread warning, `bg-info/5` for unread info) AND a leading 8px unread dot in the title row. Result: the row becomes a multi-channel signal (icon + left border + tinted background + leading dot) without any new clickable surface.
 - Acceptance:
@@ -2932,7 +2932,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-071: Quarantine list rows show a "reason" badge mid-row — but no leading severity glyph; plan-overage rows (paid issue) look identical to unknown-domain rows (config issue)
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: `/app/quarantine` (post-TASK-036) has reason filter chips at the top and renders a row per quarantined envelope. Each row carries a reason badge mid-row (`unknown_domain`/`unverified_domain`/`plan_overage`) but the row itself is visually undifferentiated by reason. Three reasons map to three very different next-actions for the user: `plan_overage` = "upgrade your plan" (revenue moment, should look red/urgent), `unverified_domain` = "finish DNS verification" (in-progress, should look amber), `unknown_domain` = "add this domain" (informational, should look blue/info). Today they all look the same — a user with 200 quarantined envelopes can't visually triage which group is biggest at a glance. Apply the same leading-glyph + tinted-background pattern from TASK-068/TASK-070 so the three reason classes self-separate visually in the list.
 - Acceptance:

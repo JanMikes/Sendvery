@@ -13,6 +13,7 @@
 {% endblock %}
 
 {% block content %}
+    {% import 'components/_severity_glyph.html.twig' as severity %}
 
     {# Flash messages #}
     {% for type, messages in app.flashes %}
@@ -126,6 +127,12 @@
                     <table class="table table-sm">
                         <thead>
                             <tr>
+                                {# 32px-wide leading severity glyph column (TASK-071) — the
+                                   three reasons map to very different next-actions, so
+                                   the leading glyph self-segments the page into three
+                                   visually-distinct row groups. sr-only header so the
+                                   column is screen-reader-labelled but visually anonymous. #}
+                                <th class="w-8"><span class="sr-only">Severity</span></th>
                                 <th>Received</th>
                                 <th>Domain</th>
                                 <th>Reporter</th>
@@ -137,9 +144,32 @@
                             {# Stretched-link row navigation per TASK-018. The
                                reason badge is anchored with `relative z-20` so
                                it wins over the stretched-row anchor and filters
-                               instead of opening detail (TASK-036). #}
+                               instead of opening detail (TASK-036). The leading
+                               glyph icon (TASK-071) ALSO links to the same
+                               reason filter with `relative z-20` for the same
+                               reason — clicking the red icon on a plan_overage
+                               row applies `?reason=plan_overage` to the page. #}
                             {% for item in items %}
-                                <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                                {# `severityTone()` lives on the QuarantineReason enum so
+                                   the rule is the single source of truth (TASK-071).
+                                   tryFrom() is defensive against legacy/future string
+                                   values that haven't reached the enum yet — those fall
+                                   through to the neutral ghost glyph + ghost badge below. #}
+                                {% set itemReason = enum('App\\Value\\Reports\\QuarantineReason').tryFrom(item.reason) %}
+                                {% set itemTone = itemReason ? itemReason.severityTone() : 'base-300' %}
+                                {% set itemSeverity = itemReason ? itemReason.severityTone() : 'neutral' %}
+                                <tr class="hover:bg-base-200/50 cursor-pointer relative border-l-4 border-l-{{ itemTone }}">
+                                    <td class="w-8">
+                                        {% if itemReason %}
+                                            <a href="{{ path('dashboard_quarantine', { reason: itemReason.value }) }}"
+                                               class="relative z-20 inline-flex"
+                                               aria-label="Filter by reason {{ itemReason.value }}">
+                                                {{ severity.glyph(itemSeverity, 'sm') }}
+                                            </a>
+                                        {% else %}
+                                            {{ severity.glyph(itemSeverity, 'sm') }}
+                                        {% endif %}
+                                    </td>
                                     <td class="whitespace-nowrap">
                                         <a href="{{ path('dashboard_quarantine_detail', { id: item.quarantineId }) }}"
                                            class="absolute inset-0 z-10"

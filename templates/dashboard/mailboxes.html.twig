@@ -13,6 +13,8 @@
 {% endblock %}
 
 {% block content %}
+    {% import 'components/_severity_glyph.html.twig' as severity %}
+
     {# Flash messages #}
     {% for type, messages in app.flashes %}
         {% for message in messages %}
@@ -142,6 +144,11 @@
                         <table class="table table-sm">
                             <thead>
                                 <tr>
+                                    {# 40px-wide leading severity glyph column (TASK-068). The
+                                       column header is sr-only because the glyph is a scannable
+                                       cue — the textual Status badge a few columns over is the
+                                       precise label. #}
+                                    <th class="w-10"><span class="sr-only">Status</span></th>
                                     <th>Host</th>
                                     <th>Type</th>
                                     <th>Status</th>
@@ -154,10 +161,27 @@
                             <tbody>
                                 {# Stretched-link row navigation per TASK-018 (TASK-035).
                                    The "Re-test" form gets `relative z-20` so submitting
-                                   the button doesn't fall through to the row anchor. #}
+                                   the button doesn't fall through to the row anchor.
+                                   Leading severity glyph + `border-l-4 border-l-{tone}`
+                                   per TASK-068: errored rows visually punch out of a
+                                   long list without needing the user to read the Status
+                                   column on every row. #}
                                 {% for mailbox in mailboxes %}
                                     {% set summary = activity[mailbox.id.toString()] %}
-                                    <tr class="hover:bg-base-200/50 relative">
+                                    {% if mailbox.lastError %}
+                                        {% set mailboxTone = 'error' %}
+                                        {% set mailboxSeverity = 'error' %}
+                                    {% elseif mailbox.isActive %}
+                                        {% set mailboxTone = 'success' %}
+                                        {% set mailboxSeverity = 'success' %}
+                                    {% else %}
+                                        {% set mailboxTone = 'base-300' %}
+                                        {% set mailboxSeverity = 'neutral' %}
+                                    {% endif %}
+                                    <tr class="hover:bg-base-200/50 relative border-l-4 border-l-{{ mailboxTone }}">
+                                        <td class="w-10">
+                                            {{ severity.glyph(mailboxSeverity, 'sm') }}
+                                        </td>
                                         <td class="font-medium">
                                             <a href="{{ path('dashboard_mailbox_detail', { id: mailbox.id }) }}"
                                                class="absolute inset-0 z-10"

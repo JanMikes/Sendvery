@@ -87,8 +87,14 @@
 
             <div class="space-y-2">
                 {% for alert in alerts %}
-                    {# Stretched-link pattern (matches TASK-018): row is relative, anchor is absolute-inset. #}
-                    <div class="relative card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow flex-row items-center gap-3 p-4 {{ not alert.isRead ? 'border-l-4' : '' }} {{ alert.severity == 'critical' ? 'border-l-error' : (alert.severity == 'warning' ? 'border-l-warning' : 'border-l-info') }}">
+                    {# Stretched-link pattern (matches TASK-018): row is relative, anchor is absolute-inset.
+                       Severity → tone map: critical→error, warning→warning, info→info.
+                       TASK-070: unread rows get a faint `bg-{tone}/5` wash so a single
+                       critical-unread alert in a long list is unmistakable from peripheral
+                       vision; read rows fall back to plain `bg-base-100`. #}
+                    {% set alertTone = alert.severity == 'critical' ? 'error' : (alert.severity == 'warning' ? 'warning' : 'info') %}
+                    {% set alertBg = alert.isRead ? 'bg-base-100' : 'bg-' ~ alertTone ~ '/5' %}
+                    <div class="relative card {{ alertBg }} border border-base-200 shadow-sm hover:shadow-md transition-shadow flex-row items-center gap-3 p-4 {{ not alert.isRead ? 'border-l-4' : '' }} border-l-{{ alertTone }}">
                         <input type="checkbox"
                                name="alertIds[]"
                                value="{{ alert.alertId }}"
@@ -119,12 +125,16 @@
                                class="absolute inset-0 z-0"
                                aria-label="Open alert {{ alert.title }}"></a>
                             <div class="flex items-center gap-2">
+                                {# TASK-070: leading 8px rounded-full unread dot replaces the
+                                   redundant `badge-xs badge-primary` "New" badge. The dot,
+                                   tinted bg, and bold title already convey unread state — the
+                                   removed badge was duplicate signal that crowded the title row. #}
+                                {% if not alert.isRead %}
+                                    <span class="w-2 h-2 rounded-full bg-{{ alertTone }} shrink-0" aria-label="Unread"></span>
+                                {% endif %}
                                 <h3 class="text-sm font-semibold truncate {{ not alert.isRead ? 'text-base-content' : 'text-base-content/70' }}">
                                     {{ alert.title }}
                                 </h3>
-                                {% if not alert.isRead %}
-                                    <span class="badge badge-xs badge-primary">New</span>
-                                {% endif %}
                                 {% if alert.snoozedUntil %}
                                     <span class="badge badge-xs badge-outline">Snoozed</span>
                                 {% endif %}

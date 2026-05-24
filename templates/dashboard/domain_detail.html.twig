@@ -26,6 +26,8 @@
 {% endblock %}
 
 {% block content %}
+    {% import 'components/_severity_glyph.html.twig' as severity %}
+
     {# One-line status banner (TASK-067) — the headline answer to "is this
        domain set up correctly?". Sits above the workspace tabs so it leads
        the page the same way the overview health banner leads /app. #}
@@ -236,6 +238,10 @@
                     <table class="table table-sm">
                         <thead>
                             <tr>
+                                {# Leading severity glyph column (TASK-069) — mirrors the
+                                   shape of `_reports_table.html.twig` so the per-domain
+                                   "Recent Reports" table reads the same as the global one. #}
+                                <th class="w-8"><span class="sr-only">Health</span></th>
                                 <th>Reporter</th>
                                 <th>Date Range</th>
                                 <th class="text-right">Records</th>
@@ -244,7 +250,11 @@
                         </thead>
                         <tbody>
                             {% for report in reports %}
-                                <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                                {% set reportTone = severity.pass_rate_tone(report.passRate)|trim %}
+                                <tr class="hover:bg-base-200/50 cursor-pointer relative border-l-4 border-l-{{ reportTone }}">
+                                    <td class="w-8">
+                                        {{ severity.glyph(reportTone, 'sm') }}
+                                    </td>
                                     <td class="font-medium">
                                         <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
                                            class="absolute inset-0 z-10"
@@ -254,7 +264,7 @@
                                     <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                     <td class="text-right">{{ report.recordCount }}</td>
                                     <td class="text-right">
-                                        <span class="{{ report.passRate >= 90 ? 'text-success' : (report.passRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                        <span class="text-{{ reportTone }}">
                                             {{ report.passRate|number_format(1) }}%
                                         </span>
                                     </td>
