@@ -118,6 +118,99 @@
     </div>
 </twig:SectionContainer>
 
+{# === 4.5. Product Preview — per-domain dashboard mock. TODO(placeholder): swap
+       for an <img> of a real screenshot once one exists; the swap is a single
+       <div> replacement, no other template/markup changes needed. #}
+<twig:SectionContainer bgClass="bg-base-200/20">
+    <twig:SectionHeader
+        eyebrow="Your dashboard, one screen"
+        title="Everything for one domain in one view"
+        lede="DNS state, pass rate, recent reports, and a single A–F grade — without leaving the page."
+    />
+    <div class="max-w-4xl mx-auto relative">
+        {# Annotation callout — desktop only, points at the grade badge with a thin diagonal connecting line. #}
+        <div class="hidden lg:flex absolute -top-2 right-0 items-center gap-2 text-xs text-base-content/60 z-10" style="transform: translate(20%, -20%);">
+            <span class="bg-base-100 border border-base-300 rounded px-2 py-1 shadow-sm">Single A–F score per domain</span>
+            <svg class="w-12 h-8 text-base-content/40" viewBox="0 0 64 32" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true">
+                <path d="M0 4 L 50 26" stroke-linecap="round"/>
+                <path d="M44 22 L 50 26 L 46 30" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </div>
+
+        {# Browser-chrome frame to ground the mock as a real product surface. #}
+        <div class="bg-base-100 border border-base-300 rounded-lg shadow-xl overflow-hidden">
+            <div class="flex items-center gap-2 px-4 py-2 border-b border-base-300 bg-base-200/50">
+                <div class="flex gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-error/40"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-warning/40"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-success/40"></span>
+                </div>
+                <div class="flex-1 mx-2 px-3 py-1 rounded text-xs text-base-content/60 bg-base-100 border border-base-300 font-mono truncate">app.sendvery.com/app/domains/acme.io</div>
+            </div>
+
+            <div class="p-6 lg:p-8 space-y-6">
+                {# Domain header row #}
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <div class="text-xs text-base-content/50 uppercase tracking-wider">Domain</div>
+                        <h3 class="text-2xl font-bold">acme.io</h3>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="text-right">
+                            <div class="text-xs text-base-content/50 uppercase tracking-wider">Health grade</div>
+                            <div class="text-xs text-base-content/60">based on 12 reports</div>
+                        </div>
+                        <span class="inline-flex items-center justify-center w-14 h-14 rounded-lg bg-success text-success-content text-2xl font-bold">A</span>
+                    </div>
+                </div>
+
+                {# DNS status pill row #}
+                <div class="flex flex-wrap gap-2">
+                    <span class="badge badge-success gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-success-content/80"></span>SPF</span>
+                    <span class="badge badge-success gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-success-content/80"></span>DKIM</span>
+                    <span class="badge badge-success gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-success-content/80"></span>DMARC</span>
+                    <span class="badge badge-success gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-success-content/80"></span>MX</span>
+                </div>
+
+                {# Pass-rate sparkline — pure CSS gradient bar, no chart lib. #}
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-sm font-medium">DMARC pass rate (last 30 days)</div>
+                        <div class="text-sm font-mono text-success">98.4%</div>
+                    </div>
+                    <div class="h-2 rounded-full bg-base-200 overflow-hidden">
+                        <div class="h-full rounded-full bg-gradient-to-r from-success/80 to-success" style="width: 98.4%;"></div>
+                    </div>
+                </div>
+
+                {# Recent reports list #}
+                <div>
+                    <div class="text-sm font-medium mb-3">Recent reports</div>
+                    <ul class="space-y-2">
+                        <li class="flex items-center justify-between text-sm py-1.5 border-b border-base-200">
+                            <span class="font-mono text-base-content/70">google.com</span>
+                            <span class="text-xs text-base-content/50">2 hours ago</span>
+                            <span class="font-mono text-success">100%</span>
+                        </li>
+                        <li class="flex items-center justify-between text-sm py-1.5 border-b border-base-200">
+                            <span class="font-mono text-base-content/70">outlook.com</span>
+                            <span class="text-xs text-base-content/50">5 hours ago</span>
+                            <span class="font-mono text-success">97.8%</span>
+                        </li>
+                        <li class="flex items-center justify-between text-sm py-1.5">
+                            <span class="font-mono text-base-content/70">yahoo.com</span>
+                            <span class="text-xs text-base-content/50">11 hours ago</span>
+                            <span class="font-mono text-warning">88.1%</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-center text-xs text-base-content/40 mt-4">Illustrative — your data, your domains.</p>
+    </div>
+</twig:SectionContainer>
+
 {# === 5. How it Works === #}
 <twig:SectionContainer bgClass="bg-base-200/50">
     <twig:SectionHeader

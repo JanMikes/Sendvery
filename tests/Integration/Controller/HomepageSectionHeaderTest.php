@@ -95,6 +95,28 @@ final class HomepageSectionHeaderTest extends WebTestCase
     }
 
     #[Test]
+    public function productPreviewMockRendersAboveHowItWorks(): void
+    {
+        // TASK-027: insert a per-domain dashboard mock between Problem Statement
+        // and How it Works. Distinct from /what-is-sendvery's multi-domain table.
+        $client = self::createClient();
+        $client->request('GET', '/');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertStringContainsString('Everything for one domain in one view', $body);
+        self::assertStringContainsString('app.sendvery.com/app/domains/acme.io', $body);
+        self::assertStringContainsString('Illustrative — your data, your domains.', $body);
+
+        // Mock must precede "Three steps to email authentication peace of mind".
+        $previewPos = strpos($body, 'Everything for one domain in one view');
+        $howItWorksPos = strpos($body, 'Three steps to email authentication peace of mind');
+        self::assertNotFalse($previewPos);
+        self::assertNotFalse($howItWorksPos);
+        self::assertGreaterThan($previewPos, $howItWorksPos, 'Product preview must render before "How it works".');
+    }
+
+    #[Test]
     public function risksGridReplacesTheOldToolCardGrid(): void
     {
         // TASK-028: sections 6 and 7 used to be two near-identical 4-card grids.

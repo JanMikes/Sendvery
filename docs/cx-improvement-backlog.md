@@ -1816,7 +1816,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-027: Homepage product preview — replace the three tiny WebP icons with a real dashboard mock above the fold of "How it works"
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: `/what-is-sendvery` has a credible daisyUI dashboard mock (the rotated card with the 3-row domains table). The homepage `How it works` section uses three 80×80px rounded-square WebP icons (`how-connect.webp`, `how-monitor.webp`, `how-act.webp`) and no actual product preview anywhere. A first-time visitor scrolls past the hero and the next thing they're shown is three tiny illustrations and short text — they never see what they'd be buying. The brief explicitly says: *"the homepage should have its own treatment, not duplicate"* the `/what-is-sendvery` mock — so this proposes a different framing: a single annotated mock placed BEFORE "How it works", positioned as "here's what your dashboard looks like" rather than a 3-step diagram.
 - Acceptance:
