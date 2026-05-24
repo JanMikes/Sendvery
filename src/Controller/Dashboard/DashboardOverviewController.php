@@ -10,6 +10,7 @@ use App\Query\GetDashboardStats;
 use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainVerificationStatus;
+use App\Query\GetEarliestDomainAddedAt;
 use App\Query\GetMonthlyReportUsage;
 use App\Query\GetTeamPlan;
 use App\Repository\MailboxConnectionRepository;
@@ -19,6 +20,7 @@ use App\Results\MonthlyReportUsageResult;
 use App\Services\DashboardContext;
 use App\Services\DomainVerificationEvaluator;
 use App\Services\HealthSummaryResolver;
+use App\Services\IngestionPathResolver;
 use App\Services\NextActionResolver;
 use App\Services\ReportAddressProvider;
 use App\Services\SetupChecklistResolver;
@@ -52,6 +54,8 @@ final class DashboardOverviewController extends AbstractController
         private readonly SetupChecklistResolver $setupChecklistResolver,
         private readonly TeamRepository $teamRepository,
         private readonly ClockInterface $clock,
+        private readonly IngestionPathResolver $ingestionPathResolver,
+        private readonly GetEarliestDomainAddedAt $getEarliestDomainAddedAt,
     ) {
     }
 
@@ -149,6 +153,17 @@ final class DashboardOverviewController extends AbstractController
         $unreadCriticalAlertCount = $this->getAlerts->countUnreadCriticalForTeams($teamIds);
         $hasMailbox = [] !== $this->mailboxRepository->findByTeam($this->dashboardContext->getTeamId());
 
+        // TASK-091 inputs — DNS-first next-step. The resolver needs to know
+        // (a) whether the central inbox is already delivering reports, (b)
+        // how old the oldest domain is (for the 7-day fallback timer), and
+        // (c) whether the team has explicitly dismissed the recommendation.
+        // $team is loaded here (was previously created for the setup-checklist
+        // branch further down) so we can read `ingestionRecommendationDismissedAt`.
+        $team = $this->teamRepository->get($this->dashboardContext->getTeamId());
+        $ingestionPaths = $this->ingestionPathResolver->resolveForTeams($teamIds);
+        $earliestDomainAddedAt = $this->getEarliestDomainAddedAt->forTeams($teamIds);
+        $reportAddress = $this->reportAddressProvider->get();
+
         $nextAction = $this->nextActionResolver->resolve(
             domains: $domains,
             verificationStatus: $verificationStatus,
@@ -156,6 +171,11 @@ final class DashboardOverviewController extends AbstractController
             unreadCriticalAlertCount: $unreadCriticalAlertCount,
             quarantineCount: $quarantineCount,
             hasMailbox: $hasMailbox,
+            reportAddress: $reportAddress,
+            earliestDomainAddedAt: $earliestDomainAddedAt,
+            ingestionPaths: $ingestionPaths,
+            ingestionRecommendationDismissedAt: $team->ingestionRecommendationDismissedAt,
+            now: $this->clock->now(),
         );
 
         $healthSummary = $this->healthSummaryResolver->resolve(
@@ -196,7 +216,6 @@ final class DashboardOverviewController extends AbstractController
         // domain (LIMIT 1 in GetDomainVerificationStatus), so the DMARC /
         // first-report signals here are single-domain — same as the Next
         // Action card. A multi-domain "any" check is a v2 enhancement.
-        $team = $this->teamRepository->get($this->dashboardContext->getTeamId());
         $hasDmarcRegression = null !== $verificationStatus
             && null !== $verificationStatus->dmarcVerifiedAt
             && $verificationStatus->consecutiveDmarcFailures >= 2;
@@ -222,7 +241,7 @@ final class DashboardOverviewController extends AbstractController
             'recentAlerts' => $recentAlerts,
             'verificationStatus' => $verificationStatus,
             'verificationSeverity' => $verificationSeverity,
-            'reportAddress' => $this->reportAddressProvider->get(),
+            'reportAddress' => $reportAddress,
             'quarantineCount' => $quarantineCount,
             'nextAction' => $nextAction,
             'healthSummary' => $healthSummary,

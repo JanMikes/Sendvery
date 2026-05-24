@@ -16,5 +16,6 @@ enum NextAction: string
     case WaitForReports = 'wait_for_reports';
     case ReviewAlerts = 'review_alerts';
     case ConnectMailbox = 'connect_mailbox';
+    case PublishRuaRecord = 'publish_rua_record';
     case AllHealthy = 'all_healthy';
 }

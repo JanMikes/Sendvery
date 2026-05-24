@@ -2942,7 +2942,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-081: DNS History page is a vertical wall of cards with no date picker, no type filter, no "what is this page for" lede — the named pain page
 
-- Status: planned
+- Status: done
 - Area: dashboard
 - Why: Named pain from the human owner on `/app/domains/{id}/dns-history`: *"this is not really clear, there is missing date, might be small calendar or something, or might be collapsible; overall this whole page is not clear with clear intent and well designed"*. The current template (`templates/dashboard/domain_dns_history.html.twig`) renders an `<h1>DNS History</h1>` + the domain name (line 13-15) — and then a flat vertical list of up to 100 cards (`LIMIT 100` in `GetDomainDnsHistory::forDomain()`). A `<div class="divider">` shows the date heading between groups but there is (a) no filter UI to scope to a date range, (b) no filter UI to scope to a single record type (SPF / DKIM / DMARC / MX), (c) no lede that explains what a "DNS check" IS or why this page exists, (d) no visible "I'm scrolling past 60 checks — when does it stop?" affordance, (e) no calendar or sparkline-of-changes that would let the user spot the day the record actually changed. A first-time-this-week user reads "DNS History" and sees a screen of code blocks with timestamps — they don't know if this is an audit log, a change log, a diff viewer, or a debug dump. The page exists to answer "when did my DNS record change?" and "what did the change break?" but every visual element treats every check as equal weight, when in reality the user only cares about the rows where `has_changed=true`.
 - Acceptance:
@@ -2957,6 +2957,39 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
   - Empty state when filters mask everything: a card centered with `"No DNS checks match the current filter"` + a `Clear filters` button (matches the established pattern in `domains.html.twig` lines 35-40).
   - Functional test: render `/app/domains/{id}/dns-history` with no params and assert the body contains the lede string `"Every DNS check we've run"` AND a chip `"All"` AND chips for `7 days / 30 days / 90 days` AND a `"Show only changes"` toggle chip. Render with `?changes_only=1` and assert only `has_changed=true` rows appear. Render with `?type=spf` and assert no DKIM/DMARC/MX type badges appear in the result rows.
 - Notes: This single page is the most-quoted PO pain in the brief. The fix is pattern-matching to the existing filter-chip + per-day-expander idiom — no new component category needed. The "small calendar" the human floated would also work, but the per-day-expander solves the same scanning problem at one-third the implementation cost and matches existing patterns. Suggested implementation effort: 2-3 hours (query params + template restructure + 3-4 tests).
+
+### Architect plan (2026-05-24)
+
+**Confirmed**: `DnsCheckType` enum already exists at `src/Value/DnsCheckType.php` with cases `Spf='spf'`, `Dkim='dkim'`, `Dmarc='dmarc'`, `Mx='mx'`. Reuse directly. `has_changed` is a persisted boolean on `dns_check_result` set at write-time by `DnsMonitor` comparing `$previousRawRecord !== $rawRecord` — `changes_only` filter is `AND dcr.has_changed = TRUE`, no LAG window function needed. Filter-chip idiom: `<a class="btn btn-sm {{ active ? 'btn-primary' : 'btn-ghost' }}">` matching `templates/dashboard/quarantine.html.twig:31-47`.
+
+**Query changes** (`src/Query/GetDomainDnsHistory.php`):
+- Extend signature: `forDomain(string $domainId, array $teamIds, ?DnsCheckType $type = null, int $rangeDays = 30, bool $changesOnly = false): array<DnsCheckHistoryResult>`. `$rangeDays = 0` means "all time" (skip the `checked_at >=` predicate). Add three conditional WHERE clauses.
+- Add `countChanges(string $domainId, array $teamIds, ?DnsCheckType $type = null, int $rangeDays = 30): int` for the toggle chip's count label.
+- Add `hasAnyHistory(string $domainId, array $teamIds): bool` using `SELECT EXISTS(SELECT 1 FROM dns_check_result WHERE monitored_domain_id = :domainId)` so the controller can distinguish "no history yet" from "filters mask everything".
+
+**Controller** (`src/Controller/Dashboard/DomainDnsHistoryController.php`):
+- Read `?type` (via `DnsCheckType::tryFrom()`), `?range` (validate against `[7, 30, 90, 0]`, default 30), `?changes_only` (boolean) from the request.
+- Group `$history` by `Y-m-d` substring of `checkedAt` in PHP. Build `$groupedHistory` with `checks` + `changeCount` per date.
+- Compute `$openDays`: open by default when (a) date == today, OR (b) changeCount > 0, OR (c) first 3 days in result set, OR (d) `$activeType !== null`. Otherwise collapsed.
+- Pass: `domain`, `groupedHistory`, `openDays`, `activeType`, `rangeDays`, `changesOnly`, `changesOnlyCount`, `hasAnyHistory`.
+
+**Template** (`templates/dashboard/domain_dns_history.html.twig`):
+- New H1 + lede: "Every DNS check we've run for {{ domain.domainName }}. We re-check SPF, DKIM, DMARC and MX once a day — and any time you click 'Re-check now'. Rows highlighted in yellow show a change from the previous check."
+- Three filter chip groups (Type / Date / Changes-only toggle) inside one bordered card. Each `<a>` chip uses `data-turbo-action="advance"` and carries the OTHER active filter values forward via query params.
+- Per-day `<details>` expanders: `<summary>` shows formatted date + check count + `badge-warning` change-count badge. Open default per `$openDays`. Day expanders use `class="card bg-base-100 border border-base-200 shadow-sm"`, summary `flex items-center justify-between flex-wrap` for 360px-friendly wrapping.
+- Two empty states: (a) `hasAnyHistory === false` → "No DNS checks yet" `<twig:EmptyState>` + "Re-check now" form button (POST to `dashboard_domain_reverify`); (b) `hasAnyHistory === true` but filtered to zero rows → "No DNS checks match the current filter" + "Clear filters" link to the unparametered route.
+
+**Tests** (new `tests/Integration/Controller/DnsHistoryFilterTest.php`):
+- `ledeAndChipsRenderOnDefaultView` — no fixtures beyond persona; assert body contains the lede string, "All", "Last 30 days", "Show only changes".
+- `changesOnlyFilterShowsOnlyChangedRows` — seed 3 rows (2 `hasChanged=true`, 1 false); request `?changes_only=1`; assert exactly 2 change badges.
+- `typeFilterScopesToSingleType` — seed SPF + DKIM + DMARC; request `?type=spf`; assert no DKIM/DMARC type badges in result rows.
+- `perDayDetailsGroupsByDate` — seed rows across 2 dates; request unparametered; assert exactly 2 `<details>` elements.
+- `filteredEmptyStateRenders` — seed 2 SPF rows; request `?type=mx`; assert "No DNS checks match the current filter" + "Clear filters" link.
+- `zeroHistoryEmptyStateRenders` (regression) — fresh persona with 0 rows; assert "No DNS checks yet".
+- `rangeFilterScopesToDateWindow` — seed 1 row at -5d and 1 row at -40d; request `?range=7`; assert only the recent row appears.
+- `clearFiltersLinkResetsToDefaultRoute` — request `?type=spf&range=7&changes_only=1`; assert "Clear filters" href equals `/app/domains/{id}/dns-history` with no query string.
+
+**Convention checklist**: query is `readonly final class` (already), controller is `final class` extending `AbstractController` (already), `DnsCheckType::tryFrom()` for null-safe enum parse, no new enum/component/migration, no `dark:` prefix, daisyUI v5 tokens only.
 
 ---
 
@@ -3115,7 +3148,7 @@ A domain's ingestion path is determined exclusively by inspecting `received_repo
 
 ## TASK-091: `/app` "Next Step" card pushes "Connect a mailbox" without ever offering "Publish RUA pointing at Sendvery" as the recommended alternative
 
-- Status: planned
+- Status: done
 - Area: dashboard / guidance
 - Why: Confusion moment named explicitly by the PO. `NextActionResolver::resolve()` has a 5th-priority branch (`!hasMailbox && allDomainsWithoutReports`) that emits a `ConnectMailbox` next-action with copy *"Connect a dedicated IMAP mailbox to receive DMARC reports directly, in addition to Sendvery's central inbox."* That branch fires for the most common new-user state — domain added, DMARC verified, waiting-for-first-report — and pushes the user into the *fallback* path rather than confirming the *preferred* path (central inbox via RUA). Worse: the existing `WaitForReports` branch (priority 3) DOES say "DMARC is set up correctly … your first one should arrive within 48 hours" but never names the address (`reports@sendvery.com`) the records should point at, and doesn't tell the user *how to verify* their RUA actually points at us. The phrase "in addition to" actively contradicts the mutual-exclusivity rule TASK-090 is enforcing.
 - Acceptance:
@@ -3127,6 +3160,55 @@ A domain's ingestion path is determined exclusively by inspecting `received_repo
 - Notes:
   - Touches `NextActionResolver`, the controller assembling its inputs (to pass in per-domain RUA status), and adds a small `IngestionRecommendationDismisser` controller for the dismissal POST. The dismissal field is one new nullable timestamp column on `team`.
   - Pairs with TASK-090: same mental model, same KB article, but TASK-091 owns the `/app` "Next Step" surface; TASK-090 owns the `/app/mailboxes` surface. Together they enforce the DNS-first hierarchy at both entry points.
+
+### Architect plan (2026-05-24)
+
+**Patterns confirmed**:
+- `NextActionResolver` at `src/Services/NextActionResolver.php` is `final readonly class`, pure-computation (no DB, no clock). Extend in-place — no parallel resolver.
+- `NextActionResult` at `src/Results/NextActionResult.php` — add two optional trailing constructor params: `?string $secondaryCtaLabel = null` and `?string $secondaryCtaRoute = null`.
+- `NextAction` enum at `src/Value/NextAction.php` — add `case PublishRuaRecord = 'publish_rua_record';` after `ConnectMailbox`.
+- `IngestionPathResolver` (TASK-090) returns `list<DomainIngestionMatrixResult>` with `IngestionPath::{Dns,Mailbox,Mixed,None}`. `Dns` or `Mixed` means central inbox active. Reuse this classification.
+- Dismissal precedent: `team.setup_checklist_dismissed_at` + `DismissSetupChecklistController` + the inline `<form method="post">` dismiss pattern in `overview.html.twig:64-67`. Mirror exactly.
+- `MonitoredDomain.createdAt` exists; 7-day timer anchor = `MIN(created_at)` across team domains. Requires a new query (`DomainOverviewResult` doesn't carry `createdAt`).
+
+**Dismissal mechanism: (a) — `team.ingestion_recommendation_dismissed_at TIMESTAMPTZ NULL`**. Direct precedent in `Team`. Shared across team members. Survives device changes.
+
+**Decision tree (first matching branch wins)**:
+1. `count(domains) == 0` → `AddDomain` [unchanged]
+2. `verificationSeverity == Critical && verificationStatus != null` → `VerifyDns` [unchanged]
+3. `verificationSeverity in {Warning, Info}` → `WaitForReports` [copy updated: description includes `{reportAddress}`]
+4. `unreadCriticalAlertCount > 0` → `ReviewAlerts` [unchanged]
+5. Compute: `hasCentralInboxReports = any(ingestionPaths, path in {Dns, Mixed})`, `sevenDaysPassed = earliestDomainAddedAt != null && now > earliestDomainAddedAt + 7d`, `dismissed = ingestionRecommendationDismissedAt != null`.
+   - `!hasCentralInboxReports && !dismissed && !sevenDaysPassed` → **NEW `PublishRuaRecord`** with title "Publish a DMARC RUA record", description "Add a `_dmarc` TXT record with `rua=mailto:{reportAddress}` to ingest reports without connecting a mailbox. Reports start flowing within 24 hours.", primary CTA "How to publish RUA" → `dashboard_dns_health#health-dmarc`, secondary CTA "Prefer to connect a mailbox instead? (fallback)" → `dashboard_mailbox_add`.
+   - `!hasCentralInboxReports && (dismissed || sevenDaysPassed)` → `ConnectMailbox` [demoted fallback; description drops the "in addition to" phrasing].
+6. → `AllHealthy` [unchanged]
+
+**Files to create**:
+- `migrations/Version20260529000000.php` — `ALTER TABLE team ADD ingestion_recommendation_dismissed_at TIMESTAMPTZ DEFAULT NULL`.
+- `src/Query/GetEarliestDomainAddedAt.php` — `readonly final class`; `forTeams(list<string> $teamIds): ?\DateTimeImmutable`; SQL `SELECT MIN(created_at) FROM monitored_domain WHERE team_id IN (:teamIds)`.
+- `src/Controller/Dashboard/DismissIngestionRecommendationController.php` — POST `/app/ingestion-recommendation/dismiss`, route `dashboard_ingestion_recommendation_dismiss`, CSRF token `ingestion_recommendation_dismiss`, mirrors `DismissSetupChecklistController` line-for-line.
+
+**Files to modify**:
+- `src/Entity/Team.php` — add `#[ORM\Column(type: 'datetime_immutable', nullable: true)] public ?\DateTimeImmutable $ingestionRecommendationDismissedAt = null;`, optional constructor param defaulting null, mutator `dismissIngestionRecommendation(\DateTimeImmutable $at): void`.
+- `src/Value/NextAction.php` — add `PublishRuaRecord` case.
+- `src/Results/NextActionResult.php` — add trailing `?string $secondaryCtaLabel = null` + `?string $secondaryCtaRoute = null` constructor params.
+- `src/Services/NextActionResolver.php` — extend `resolve()` with 5 new trailing params: `string $reportAddress`, `?\DateTimeImmutable $earliestDomainAddedAt`, `list<DomainIngestionMatrixResult> $ingestionPaths`, `?\DateTimeImmutable $ingestionRecommendationDismissedAt`, `\DateTimeImmutable $now`. Rewrite branch 5; update `WaitForReports` description with `$reportAddress`.
+- `src/Controller/Dashboard/DashboardOverviewController.php` — inject `GetEarliestDomainAddedAt`, `IngestionPathResolver` (likely already injected from TASK-090 work — verify), `ReportAddressProvider`; compute the 5 new inputs; pass to `resolve()`. Extract `$team->ingestionRecommendationDismissedAt` from the `$team` already loaded for the setup-checklist branch.
+- `templates/dashboard/overview.html.twig` — (a) add `{% elseif nextAction.actionKey.value == 'publish_rua_record' %}` SVG icon branch; (b) after the primary CTA `<a>`, add `{% if nextAction.secondaryCtaRoute is not null %}` block with text-link secondary CTA + inline `<form method="post">` dismiss button (CSRF token `ingestion_recommendation_dismiss`, mirrors lines 64-67).
+
+**Tests** (`tests/Unit/Services/NextActionResolverTest.php`):
+- `resolvePublishRuaRecordWhenNoReportsAndWithinSevenDays` — domain added 2 days ago, all `IngestionPath::None`, not dismissed → `PublishRuaRecord` with secondary CTA set.
+- `resolveConnectMailboxAfterSevenDaysWithNoCentralReports` — domain added 8 days ago, no central reports, not dismissed → `ConnectMailbox`.
+- `resolveConnectMailboxWhenDismissed` — domain 2 days ago, not dismissed → `ConnectMailbox`.
+- `resolveAllHealthyWhenCentralReportsExist` — at least one domain with `IngestionPath::Dns` → `AllHealthy`.
+- `resolveWaitForReportsDescriptionContainsReportAddress` — verify the new copy.
+- UPDATE existing `resolveConnectMailboxWhenNoMailboxAndNoReports` — set `earliestDomainAddedAt = new \DateTimeImmutable('-8 days')` so it still expects `ConnectMailbox`.
+
+Integration tests on `DashboardOverviewController` covering each branch + `DismissIngestionRecommendationControllerTest` for the POST endpoint (happy path + CSRF rejection).
+
+**Convention checklist**: `final readonly class` on the new query; `final class` on the dismissal controller (not readonly per CLAUDE.md); `IdentityProvider` not needed (no new entity IDs); `ClockInterface` injected for `$now` (deterministic in tests). No `dark:`, daisyUI v5 only.
+
+**Critical**: `$now` MUST come from `ClockInterface::now()` in the controller, never `new \DateTimeImmutable()` — tests mock the clock for deterministic 7-day boundary assertions.
 
 ---
 

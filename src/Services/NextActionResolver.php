@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Results\DomainIngestionMatrixResult;
 use App\Results\DomainOverviewResult;
 use App\Results\DomainVerificationStatusResult;
 use App\Results\NextActionResult;
 use App\Value\DomainVerificationSeverity;
+use App\Value\IngestionPath;
 use App\Value\NextAction;
 
 /**
@@ -20,13 +22,16 @@ use App\Value\NextAction;
  *  2. DMARC verification Critical → VerifyDns (alerts are noise without DMARC)
  *  3. DMARC Warning / Info    → WaitForReports
  *  4. Unread critical alerts  → ReviewAlerts
- *  5. No mailbox + no reports → ConnectMailbox (suppressed if any reports flow)
+ *  5. No central-inbox reports → PublishRuaRecord (DNS-first; TASK-091),
+ *                                ConnectMailbox (fallback after 7 days OR
+ *                                explicit dismissal)
  *  6. Default                 → AllHealthy
  */
 final readonly class NextActionResolver
 {
     /**
-     * @param array<DomainOverviewResult> $domains
+     * @param array<DomainOverviewResult>       $domains
+     * @param list<DomainIngestionMatrixResult> $ingestionPaths
      */
     public function resolve(
         array $domains,
@@ -35,6 +40,11 @@ final readonly class NextActionResolver
         int $unreadCriticalAlertCount,
         int $quarantineCount,
         bool $hasMailbox,
+        string $reportAddress,
+        ?\DateTimeImmutable $earliestDomainAddedAt,
+        array $ingestionPaths,
+        ?\DateTimeImmutable $ingestionRecommendationDismissedAt,
+        \DateTimeImmutable $now,
     ): NextActionResult {
         if (0 === count($domains)) {
             return new NextActionResult(
@@ -69,7 +79,10 @@ final readonly class NextActionResolver
             return new NextActionResult(
                 actionKey: NextAction::WaitForReports,
                 title: 'Waiting for your first report',
-                description: 'DMARC is set up correctly. Email receivers send aggregate reports daily — your first one should arrive within 48 hours.',
+                description: sprintf(
+                    'DMARC is published. Email providers send aggregate reports to %s daily — your first one should arrive within 48 hours.',
+                    $reportAddress,
+                ),
                 ctaLabel: 'Check DNS setup',
                 ctaRoute: 'dashboard_dns_health',
                 ctaRouteParams: [],
@@ -93,20 +106,49 @@ final readonly class NextActionResolver
             );
         }
 
-        // Central inbox already delivering reports → connecting a personal mailbox
-        // is no longer the top priority. Only nudge ConnectMailbox when *every*
-        // domain has zero reports.
-        $allDomainsWithoutReports = array_reduce(
-            $domains,
-            static fn (bool $carry, DomainOverviewResult $domain): bool => $carry && 0 === $domain->totalReports,
-            true,
-        );
+        // TASK-091: DNS-first ingestion guidance. The central inbox is the
+        // recommended path — only fall back to "Connect a mailbox" after the
+        // user has either explicitly dismissed the recommendation OR the
+        // 7-day grace window has elapsed without any DNS-routed reports.
+        $hasCentralInboxReports = false;
+        foreach ($ingestionPaths as $row) {
+            if (IngestionPath::Dns === $row->path || IngestionPath::Mixed === $row->path) {
+                $hasCentralInboxReports = true;
 
-        if (!$hasMailbox && $allDomainsWithoutReports) {
+                break;
+            }
+        }
+
+        if (!$hasCentralInboxReports) {
+            $sevenDaysPassed = null !== $earliestDomainAddedAt
+                && $now > $earliestDomainAddedAt->modify('+7 days');
+            $dismissed = null !== $ingestionRecommendationDismissedAt;
+
+            if (!$dismissed && !$sevenDaysPassed) {
+                return new NextActionResult(
+                    actionKey: NextAction::PublishRuaRecord,
+                    title: 'Publish a DMARC RUA record',
+                    description: sprintf(
+                        'Add a `_dmarc` TXT record with `rua=mailto:%s` to ingest reports without connecting a mailbox. Reports start flowing within 24 hours.',
+                        $reportAddress,
+                    ),
+                    ctaLabel: 'How to publish RUA',
+                    ctaRoute: 'dashboard_dns_health',
+                    ctaRouteParams: [],
+                    severity: 'info',
+                    secondaryCtaLabel: 'Prefer to connect a mailbox instead? (fallback)',
+                    secondaryCtaRoute: 'dashboard_mailbox_add',
+                );
+            }
+
+            // Demoted fallback — only when DNS-based ingestion hasn't
+            // produced anything after either an explicit user dismissal
+            // or the 7-day grace window. Suppressed entirely once the
+            // central inbox is delivering reports for any domain.
             return new NextActionResult(
                 actionKey: NextAction::ConnectMailbox,
-                title: 'Connect a mailbox',
-                description: "Connect a dedicated IMAP mailbox to receive DMARC reports directly, in addition to Sendvery's central inbox.",
+                title: 'Connect a mailbox (fallback)',
+                description: "Reports aren't reaching Sendvery via DNS yet. Connect a mailbox where DMARC reports already arrive (e.g. `dmarc@yourcompany.com`) and we'll poll it every 5 minutes.",
                 ctaLabel: 'Connect mailbox',
                 ctaRoute: 'dashboard_mailbox_add',
                 ctaRouteParams: [],

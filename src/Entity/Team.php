@@ -44,6 +44,9 @@ final class Team implements EntityWithEvents
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     public ?\DateTimeImmutable $setupChecklistDismissedAt;
 
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $ingestionRecommendationDismissedAt;
+
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
 
@@ -58,6 +61,7 @@ final class Team implements EntityWithEvents
         ?\DateTimeImmutable $planWarningAt = null,
         ?string $billingInterval = null,
         ?\DateTimeImmutable $setupChecklistDismissedAt = null,
+        ?\DateTimeImmutable $ingestionRecommendationDismissedAt = null,
     ) {
         $this->id = $id;
         $this->name = $name;
@@ -69,6 +73,7 @@ final class Team implements EntityWithEvents
         $this->planWarningAt = $planWarningAt;
         $this->billingInterval = $billingInterval;
         $this->setupChecklistDismissedAt = $setupChecklistDismissedAt;
+        $this->ingestionRecommendationDismissedAt = $ingestionRecommendationDismissedAt;
 
         $this->recordThat(new TeamCreated($this->id));
     }
@@ -82,6 +87,17 @@ final class Team implements EntityWithEvents
     public function dismissSetupChecklist(\DateTimeImmutable $at): void
     {
         $this->setupChecklistDismissedAt = $at;
+    }
+
+    /**
+     * Hide the dashboard's DNS-first "Publish a DMARC RUA record" next-step
+     * for every member of this team. Used when the team explicitly prefers
+     * the mailbox-ingestion fallback. The dismissal is never auto-cleared —
+     * after dismissal the resolver promotes the legacy ConnectMailbox step.
+     */
+    public function dismissIngestionRecommendation(\DateTimeImmutable $at): void
+    {
+        $this->ingestionRecommendationDismissedAt = $at;
     }
 
     public function getSubscriptionPlan(): SubscriptionPlan
