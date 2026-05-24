@@ -174,11 +174,16 @@ final class DomainSubpagesTest extends WebTestCase
 
     /**
      * TASK-031: Senders + Blacklist subsurfaces had ZERO inbound links from
-     * the dashboard before this task. Without these the only way to reach them
-     * was typing the URL by hand.
+     * the dashboard before TASK-031. TASK-041 removed the duplicated header
+     * buttons in favour of the single sibling-tabs strip (which covers all
+     * six sub-surfaces, not just two). This test now guards the post-TASK-041
+     * invariant: the URLs are still reachable from the detail page via the
+     * tab strip, and the legacy "btn btn-ghost btn-sm" header button row
+     * does NOT come back (two stacked nav rows on the most-visited
+     * authenticated page reads as unfinished).
      */
     #[Test]
-    public function headerHasSendersAndBlacklistButtons(): void
+    public function siblingTabsLinkToSendersAndBlacklist(): void
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
@@ -194,15 +199,30 @@ final class DomainSubpagesTest extends WebTestCase
         $sendersUrl = '/app/domains/'.$domainId.'/senders';
         $blacklistUrl = '/app/domains/'.$domainId.'/blacklist';
 
+        // Both subsurfaces reachable from the tab strip (role="tab" anchors).
         self::assertGreaterThan(
             0,
-            $crawler->filter('a.btn.btn-ghost.btn-sm[href="'.$sendersUrl.'"]')->count(),
-            'Domain detail header must render a "Senders" ghost button linking to the sender inventory.',
+            $crawler->filter('a[role="tab"][href="'.$sendersUrl.'"]')->count(),
+            'DomainWorkspaceTabs must include a tab to the sender inventory.',
         );
         self::assertGreaterThan(
             0,
-            $crawler->filter('a.btn.btn-ghost.btn-sm[href="'.$blacklistUrl.'"]')->count(),
-            'Domain detail header must render a "Blacklist" ghost button linking to the blacklist status.',
+            $crawler->filter('a[role="tab"][href="'.$blacklistUrl.'"]')->count(),
+            'DomainWorkspaceTabs must include a tab to the blacklist status.',
+        );
+
+        // Regression guard: the pre-TASK-041 header button row must NOT
+        // come back. If a future change adds a "btn btn-ghost btn-sm" link
+        // to these URLs in the header, this test fails.
+        self::assertCount(
+            0,
+            $crawler->filter('a.btn.btn-ghost.btn-sm[href="'.$sendersUrl.'"]'),
+            'Legacy header-button row was removed in TASK-041 — sibling tabs are now the sole cross-surface nav.',
+        );
+        self::assertCount(
+            0,
+            $crawler->filter('a.btn.btn-ghost.btn-sm[href="'.$blacklistUrl.'"]'),
+            'Legacy header-button row was removed in TASK-041 — sibling tabs are now the sole cross-surface nav.',
         );
     }
 

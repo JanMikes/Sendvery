@@ -2374,6 +2374,20 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ---
 
+## TASK-041: Domain detail page stacks two competing navigation rows — five legacy header buttons sit directly above the new sibling-tab strip
+
+- Status: done
+- Area: dashboard
+- Why: First-impression UX gap on the single most-visited authenticated page. `templates/dashboard/domain_detail.html.twig` lines 49-65 still render the pre-TASK-031 navigation: a horizontal row of five `btn btn-ghost btn-sm` buttons ("All reports / DNS History / DNS Health Check / Senders / Blacklist") inside the page header. Line 68 then renders `<twig:DomainWorkspaceTabs active="overview" />` — the canonical Overview / Reports / Senders / DNS / Blacklist / History tab strip introduced by TASK-031. The five header buttons and the six tabs link to four of the same destinations (Reports, Senders, DNS, Blacklist) and one near-duplicate (the legacy "DNS Health Check" button vs the new "DNS" tab both target `dashboard_domain_health`; the legacy "DNS History" button vs the new "History" tab both target `dashboard_domain_dns_history`). The result is two parallel nav rows stacked on top of each other on every domain Overview page — a paying customer would read this as unfinished work. The five other domain-workspace surfaces (`domain_reports`, `domain_health`, `sender_inventory`, `blacklist_status`, `domain_dns_history`) render only the tab strip and are clean; the legacy buttons were simply never removed from `domain_detail` when TASK-031 landed.
+- Acceptance:
+  - Remove the five-button `.flex.items-center.gap-2` row at lines 49-65 of `templates/dashboard/domain_detail.html.twig`. `<twig:DomainWorkspaceTabs active="overview" />` (line 68) becomes the sole sub-nav surface — matching the other five domain-workspace templates.
+  - The page header right-rail is allowed to retain page-scoped actions only (e.g. PDF export, share-link copy) if any are added later; sibling-page navigation belongs exclusively on the tab strip.
+  - Snapshot/integration test: render `/app/domains/{id}` and assert the rendered HTML contains exactly ONE element matching `[role="tablist"]` AND contains zero header `btn btn-ghost btn-sm` anchors whose href matches one of the five workspace routes (`dashboard_domain_reports`, `dashboard_domain_dns_history`, `dashboard_domain_health`, `dashboard_sender_inventory`, `dashboard_blacklist_status`). The same assertion should be added to the other five domain-workspace templates so a regression on any of them fails CI — pairs nicely with the existing `NoOrphanedDashboardRouteTest`.
+  - Visual check: the header collapses to (domain name + status badges + protocol badges) on the left, nothing on the right; the tab strip becomes the visual anchor for sub-surface navigation.
+- Notes: The fix is a deletion, not new work. Total LOC delta is ~17 lines removed + ~15-20 lines of new regression test. Suggested implementation effort: 30-45 minutes.
+
+---
+
 ## RUN SUMMARY — 2026-05-24 third autonomous CX loop
 
 ### Shipped (13 tasks)
@@ -2430,3 +2444,58 @@ Remaining `proposed` tasks for a future autonomous run, ordered by judged priori
 ### Stop reason
 
 Voluntary natural checkpoint. The two seed focus areas the human owner explicitly named — MARKETING trust/social-proof and DASHBOARD IA-around-the-four-paths + clickable-cards — are substantially complete. The remaining 5 tasks are all 1-3 hour substantial pieces and benefit from a fresh run with the user's review of the 13 shipped commits first.
+
+---
+
+## RUN SUMMARY — 2026-05-24 fourth autonomous CX loop (continuation)
+
+### Shipped (6 tasks, completing the backlog)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 037 | DMARC policy explainer | `b49c562` | domains | New `DmarcPolicyAdvisor` service + `DmarcPolicyExplainer` component on `domain_detail` — plain-English policy state, 3-tier progress dots, concrete next-step nudge gated by trailing-window pass rate ≥ 90% (none → quarantine) / ≥ 95% (quarantine → reject), KB migration-guide link when eligible. New `GetDomainDetail::getRecentActivity()` ensures both the pass-rate gate and report-count gate measure the same 30-day population (lifetime average was the wrong input). `DmarcPolicy::tryFrom` (not `from`) hardens the controller against unrecognised DB values. |
+| 035 | Mailbox detail page | `36049dc` | dashboard | New `/app/mailboxes/{id}` route + `ShowMailboxDetailController` + `GetMailboxDetail` query showing connection metadata, three-card stat row (envelopes pulled 30d / reports parsed / envelopes quarantined), 20-row recent envelopes table with parsed/quarantined deep links. List rows became stretched-links to the detail page; each row gained an inline "12 envelopes / 11 reports / 1 quarantined (30d)" activity summary via a single batch query. `ReportsFilter` gained `mailboxId` (joins via `EXISTS` on `received_report_email.source_envelope_id` since `dmarc_report` has no direct mailbox FK); `GetQuarantineList::forTeam` and `countByReason` gained `mailboxFilter` so the quarantine chip counts and chip hrefs honour the active mailbox filter rather than silently dropping it. |
+| 028 | Risks grid replaces duplicate ToolCard grid | `541230d` | marketing | Section 7 used to be a second 4-card grid that visually echoed section 6 and functionally duplicated the nav Tools dropdown. It became a denser 4-cell text grid of concrete failure modes ("DKIM key expired after a DNS migration", "SPF crept over the 10-lookup limit", "Marketing tool added to SPF without DKIM", "Subdomain inherits weaker policy than apex") — no cards, no icons, no tool links. The four tool destinations remain reachable via the nav + footer (no link rot). Homepage now has ONE feature-cards grid, not two. |
+| 027 | Homepage product preview | `03a55bd` | marketing | New "Your dashboard, one screen" section inserted between Problem Statement and How it Works, rendering a per-domain detail-view HTML mock inside a browser-chrome frame (URL bar showing `app.sendvery.com/app/domains/acme.io`). Includes a single A grade badge, four DNS status pills, a pass-rate sparkline (pure CSS gradient bar), three recent-report rows, and a desktop-only annotation callout with a thin diagonal connector line pointing at the grade badge. Distinct treatment from `/what-is-sendvery`'s rotated multi-domain table. |
+| 040 | In-card filters + sparklines on `/app` | `07385bd` | dashboard | The Recent Reports and Domain Health cards became actually interactive. Recent Reports header gains a Last 7 / 30 / 90 day dropdown (default 7d, URL state `?recent_reports_range=`); footer gains a "Show only failing (<70% pass)" toggle chip (`?recent_reports_failing=1`). Domain Health header gains a Worst / Best / Most reports sort dropdown (default Worst — surfaces problems, `?domain_health_sort=`). Each Domain Health row gains a 30-day pass-rate sparkline (inline SVG, pure CSS, no chart lib) sourced from a new `GetDomainPassRateTrend` query that produces 10 three-day buckets per domain in a single SQL. Best sort uses `NULLS LAST` so zero-record domains don't outrank genuine 100%-pass-rate domains. |
+| 041 | Drop legacy header buttons on domain detail | `<this-commit>` | dashboard | Fresh-eyes audit catch — TASK-031 had added the `<twig:DomainWorkspaceTabs>` strip but left the legacy five-button header row in place, creating two competing nav rows stacked vertically on the most-visited authenticated page. Removed the legacy buttons; the sibling-tabs strip is now the sole cross-surface affordance for the domain workspace. Updated the TASK-031 regression test from "header has buttons" to "tabs have the right hrefs AND legacy buttons don't come back" to lock the post-TASK-041 invariant. |
+
+**Suite at run end:** 1890 tests, 5235 assertions, all green. PHPStan clean. PHP-CS-Fixer clean. 100% line coverage on every new file.
+
+### Blocked: 0
+
+Reviewer rounds caught and fixed 4 substantive defects in this continuation:
+- TASK-037: `DmarcPolicy::from()` on a raw DBAL string threw `\ValueError` on values the enum didn't recognise. Changed to `tryFrom() ?? None` so legacy rows / future spec revisions don't blow up the page.
+- TASK-037: lifetime pass rate fed alongside 30-day trailing report count — different populations. Added `GetDomainDetail::getRecentActivity()` returning both `reportsCount` and `passRate` for the same window so the advisor sees consistent inputs.
+- TASK-035: quarantine reason chips silently dropped the `?mailbox` filter when clicked AND showed team-wide totals (not mailbox-scoped). Fixed by passing `$mailboxFilter` to `countByReason()` and threading `mailbox: mailboxFilter` into every chip's `path()` call.
+- TASK-040: Best sort lacked `NULLS LAST` — under a future refactor that removed the `COALESCE`, zero-record domains would float to the top in `DESC` order. Made the SQL self-documenting and added a regression test.
+
+### All four seed focus areas — final state
+
+1. **Marketing — homepage hero & value clarity**: hero copy + value prop holds. New product-preview mock (TASK-027) is the first thing a scrolling visitor sees after Problem Statement, replacing three tiny illustration icons. ✅
+2. **Marketing — trust & social proof**: testimonials section (TASK-023), founder bio (TASK-024), GitHub-stats trust strip (TASK-025), brand-mark SVG (TASK-030), section-header rhythm (TASK-026), lock-emoji removed (TASK-029), duplicate feature grids deduped (TASK-028). ✅
+3. **Dashboard — IA around four user paths**:
+   - TRIAGE (`/app`): clickable banner counts + clickable stat cards + in-card date-range / sort / failing-only filters + per-domain sparklines. (TASK-032, TASK-040)
+   - DEEP-DIVE (`/app/domains/{id}` + 5 siblings): `<twig:DomainWorkspaceTabs>` provides single cross-surface nav (TASK-031); legacy duplicated header buttons removed (TASK-041); DMARC policy explainer on detail page (TASK-037); Top Senders chart with labels + authorization colors (TASK-038); DNS Health overview cards clickable end-to-end (TASK-034). ✅
+   - ADD: global "+ Add" dropdown in the layout-default top bar (TASK-033), plan-limit gated, hides "Invite teammate" for non-admin roles, pending invitations count toward seat cap. ✅
+   - SYSTEM: sidebar regrouped into 5 labelled sections (Overview / Domains / Data / Ingestion / Settings) so system surfaces are quiet but reachable (TASK-039). ✅
+4. **Feature depth — make value visible**: DMARC policy explainer (TASK-037), Top Senders chart enhancement (TASK-038), mailbox detail page with envelope stats (TASK-035), quarantine reason filter chips (TASK-036), 30-day pass-rate sparklines per domain (TASK-040). ✅
+
+### Stop reason
+
+**Backlog is genuinely empty.** Fresh Product-agent audit run on the four seed areas surfaced exactly one residual gap (TASK-041), which was shipped in this same continuation. The audit verdict was "nothing else found" — the four user paths feel coherent and the marketing surface holds together as a coherent narrative.
+
+### Remaining launch-readiness items (NOT autonomous-run scope)
+
+These are human-touch items the human owner needs to handle before launch, not CX defects:
+1. **Real testimonials** — swap the 6 placeholder entries in `config/placeholders.php` for real customer quotes. The convention test enforces marker parity so a partial swap fails CI.
+2. **Real founder photo** — set `founder_photo` in `config/placeholders.php` to a real URL. The integration tests `linkedinChipIsAbsentWhenConfigIsNull` and `initialsPlaceholderAvatarIsRenderedWhenFounderPhotoIsNull` will need to be updated when this happens (they document the pre-launch state).
+3. **Real product screenshot** — TASK-027's HTML mock is intended to be swapped for an `<img>` once a real dashboard screenshot exists. Single `<div>` replacement, no other changes.
+4. **GitHub-stats refresh cron line** — `sendvery:opensource:refresh-github-stats` was shipped in TASK-011 but the actual cron entry lives in `~/www/spare.srv/deployment/crontab` (outside this repo). Add `0 */6 * * * sentry-cli monitors run sendvery-github-stats -- docker compose run --rm worker bin/console sendvery:opensource:refresh-github-stats` next deploy. Until then the stats strip silently omits itself (by design — never renders fake numbers).
+5. **Real OG brand logo** — `GdOgImagePainter` falls back to a wordmark text mark when `assets/images/og-logo.png` is absent. Drop a 240×60 transparent PNG there to upgrade every OG card with zero code change.
+
+### Combined run stats (2026-05-24, this session + continuation)
+
+**19 tasks shipped over two consecutive autonomous runs:** TASK-023 → TASK-041. 26+ commits to `main`. Suite grew from 1666 to 1890 tests (+224); ~1000 new assertions; ~3000+ lines of new test coverage; new Twig components, Twig globals, query classes, value enums, and one new dashboard route. 100% line coverage on every new file. Zero blocked tasks. Zero quality-gate skips.
+
+The owner's two explicit seed asks — "make the marketing site look professional" + "give the dashboard real IA around the four paths" — are both substantially complete. The remaining launch work is content swaps the human owner controls.

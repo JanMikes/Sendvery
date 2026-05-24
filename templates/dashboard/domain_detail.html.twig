@@ -46,25 +46,12 @@
                 {% endif %}
             </div>
         </div>
-        <div class="flex items-center gap-2">
-            <a href="{{ path('dashboard_domain_reports', { id: domain.domainId }) }}" class="btn btn-ghost btn-sm">
-                All reports
-            </a>
-            <a href="{{ path('dashboard_domain_dns_history', { id: domain.domainId }) }}" class="btn btn-ghost btn-sm">
-                DNS History
-            </a>
-            <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}" class="btn btn-ghost btn-sm">
-                DNS Health Check
-            </a>
-            <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}" class="btn btn-ghost btn-sm">
-                Senders
-            </a>
-            <a href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}" class="btn btn-ghost btn-sm">
-                Blacklist
-            </a>
-        </div>
     </div>
 
+    {# Sibling navigation: the legacy five-button header that used to sit here
+       was removed (TASK-041) — DomainWorkspaceTabs (TASK-031) is now the sole
+       cross-surface affordance for the domain workspace. Two stacked nav rows
+       on the most-visited authenticated page read as unfinished. #}
     <twig:DomainWorkspaceTabs :domain="domain" active="overview" />
 
     {% if quarantineCount > 0 %}
