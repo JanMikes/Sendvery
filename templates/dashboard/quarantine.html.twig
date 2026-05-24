@@ -23,20 +23,24 @@
     {# Filter chips — URL-driven via ?reason=. Mirrors the alerts / domains pattern.
        Counts come from countByReason() in one SQL round-trip so chip labels stay
        accurate under pagination (TASK-036). #}
+    {# Chip hrefs carry the active mailbox filter forward — without this,
+       clicking a reason chip while arriving from /app/mailboxes/{id} silently
+       drops the user's context. Chip (N) counts also honour the mailbox
+       filter so the numbers reflect the rows the user is actually seeing. #}
     <div class="flex flex-wrap gap-2 mb-4">
-        <a href="{{ path('dashboard_quarantine') }}"
+        <a href="{{ path('dashboard_quarantine', { mailbox: mailboxFilter }) }}"
            class="btn btn-sm {{ activeFilter is null ? 'btn-primary' : 'btn-ghost' }}">
-            All ({{ totalCount }})
+            All ({{ allChipCount }})
         </a>
-        <a href="{{ path('dashboard_quarantine', { reason: 'unknown_domain' }) }}"
+        <a href="{{ path('dashboard_quarantine', { reason: 'unknown_domain', mailbox: mailboxFilter }) }}"
            class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'unknown_domain' ? 'btn-warning' : 'btn-ghost' }}">
             Unknown domain ({{ reasonCounts.unknown_domain }})
         </a>
-        <a href="{{ path('dashboard_quarantine', { reason: 'unverified_domain' }) }}"
+        <a href="{{ path('dashboard_quarantine', { reason: 'unverified_domain', mailbox: mailboxFilter }) }}"
            class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'unverified_domain' ? 'btn-warning' : 'btn-ghost' }}">
             Unverified domain ({{ reasonCounts.unverified_domain }})
         </a>
-        <a href="{{ path('dashboard_quarantine', { reason: 'plan_overage' }) }}"
+        <a href="{{ path('dashboard_quarantine', { reason: 'plan_overage', mailbox: mailboxFilter }) }}"
            class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'plan_overage' ? 'btn-warning' : 'btn-ghost' }}">
             Plan overage ({{ reasonCounts.plan_overage }})
         </a>
@@ -173,10 +177,10 @@
                     <div class="text-xs text-base-content/50">Page {{ currentPage }}</div>
                     <div class="join">
                         {% if currentPage > 1 %}
-                            <a href="{{ path('dashboard_quarantine', { page: currentPage - 1, reason: activeFilter is not null ? activeFilter.value : null }) }}" class="join-item btn btn-sm btn-ghost">Previous</a>
+                            <a href="{{ path('dashboard_quarantine', { page: currentPage - 1, reason: activeFilter is not null ? activeFilter.value : null, mailbox: mailboxFilter }) }}" class="join-item btn btn-sm btn-ghost">Previous</a>
                         {% endif %}
                         {% if hasNextPage %}
-                            <a href="{{ path('dashboard_quarantine', { page: currentPage + 1, reason: activeFilter is not null ? activeFilter.value : null }) }}" class="join-item btn btn-sm btn-ghost">Next</a>
+                            <a href="{{ path('dashboard_quarantine', { page: currentPage + 1, reason: activeFilter is not null ? activeFilter.value : null, mailbox: mailboxFilter }) }}" class="join-item btn btn-sm btn-ghost">Next</a>
                         {% endif %}
                     </div>
                 </div>

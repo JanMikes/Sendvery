@@ -46,6 +46,7 @@ final class ListReportsController extends AbstractController
             dateFrom: $filter->dateFrom,
             dateTo: $filter->dateTo,
             search: $filter->search,
+            mailboxId: $filter->mailboxId,
         );
 
         $domains = $this->getDomainOverview->forTeams($teamIds);

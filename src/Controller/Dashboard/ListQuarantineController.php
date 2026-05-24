@@ -8,6 +8,7 @@ use App\Query\GetAllReports;
 use App\Query\GetQuarantineList;
 use App\Services\DashboardContext;
 use App\Value\Reports\QuarantineReasonFilter;
+use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,18 +34,33 @@ final class ListQuarantineController extends AbstractController
         $teamId = $this->dashboardContext->getTeamId();
         $reasonFilter = QuarantineReasonFilter::tryFrom($request->query->getString('reason', ''));
 
+        // Mailbox filter is URL-driven (`?mailbox=<uuid>`) and only honoured
+        // when it parses as a UUID — random strings collapse to "no filter"
+        // rather than 400-ing, matching the rest of the list filter behaviour.
+        $rawMailbox = trim($request->query->getString('mailbox', ''));
+        $mailboxFilter = '' !== $rawMailbox && Uuid::isValid($rawMailbox) ? $rawMailbox : null;
+
         $items = $this->getQuarantineList->forTeam(
             $teamId->toString(),
             limit: self::PAGE_SIZE,
             offset: $offset,
             reasonFilter: $reasonFilter,
+            mailboxFilter: $mailboxFilter,
         );
 
         // `totalCount` (unfiltered) drives the three-way empty state — we
         // need to distinguish "team has nothing at all" from "filter masked
         // every row" so the empty-state copy + CTAs differ.
         $totalCount = $this->getQuarantineList->countForTeam($teamId->toString());
-        $reasonCounts = $this->getQuarantineList->countByReason($teamId->toString());
+        // Chip counts MUST honour the active mailbox filter — otherwise the
+        // user arriving from a mailbox detail page sees global team-wide
+        // totals on chips that should be scoped to their current view. The
+        // "All ({N})" chip uses a mailbox-scoped count for the same reason;
+        // when no mailbox filter is active this equals `$totalCount`.
+        $reasonCounts = $this->getQuarantineList->countByReason($teamId->toString(), $mailboxFilter);
+        $allChipCount = null === $mailboxFilter
+            ? $totalCount
+            : $this->getQuarantineList->countForTeam($teamId->toString(), mailboxFilter: $mailboxFilter);
 
         $mostRecentReportId = null;
         if (0 === $totalCount && 1 === $page) {
@@ -67,7 +83,9 @@ final class ListQuarantineController extends AbstractController
             'mostRecentReportId' => $mostRecentReportId,
             'activeFilter' => $reasonFilter,
             'totalCount' => $totalCount,
+            'allChipCount' => $allChipCount,
             'reasonCounts' => $reasonCounts,
+            'mailboxFilter' => $mailboxFilter,
         ]);
     }
 }

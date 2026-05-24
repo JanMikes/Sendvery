@@ -31,14 +31,24 @@
                                 <th>Type</th>
                                 <th>Status</th>
                                 <th>Last Polled</th>
+                                <th>Activity (30d)</th>
                                 <th>Last Error</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
+                            {# Stretched-link row navigation per TASK-018 (TASK-035).
+                               The "Re-test" form gets `relative z-20` so submitting
+                               the button doesn't fall through to the row anchor. #}
                             {% for mailbox in mailboxes %}
-                                <tr>
-                                    <td class="font-medium">{{ mailbox.host }}:{{ mailbox.port }}</td>
+                                {% set summary = activity[mailbox.id.toString()] %}
+                                <tr class="hover:bg-base-200/50 relative">
+                                    <td class="font-medium">
+                                        <a href="{{ path('dashboard_mailbox_detail', { id: mailbox.id }) }}"
+                                           class="absolute inset-0 z-10"
+                                           aria-label="Open mailbox detail for {{ mailbox.host }}"></a>
+                                        {{ mailbox.host }}:{{ mailbox.port }}
+                                    </td>
                                     <td>{{ mailbox.type.value }}</td>
                                     <td>
                                         {% if mailbox.isActive and mailbox.lastError is null %}
@@ -50,9 +60,12 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ mailbox.lastPolledAt ? mailbox.lastPolledAt|date('M j, H:i') : '—' }}</td>
+                                    <td class="text-xs text-base-content/60 whitespace-nowrap">
+                                        {{ summary.envelopes30d }} envelopes / {{ summary.reports30d }} reports / {{ summary.quarantined30d }} quarantined
+                                    </td>
                                     <td class="text-xs text-error max-w-xs truncate">{{ mailbox.lastError ?? '—' }}</td>
                                     <td>
-                                        <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.id }) }}">
+                                        <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.id }) }}" class="relative z-20">
                                             <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
                                             <button type="submit" class="btn btn-ghost btn-xs">Re-test</button>
                                         </form>

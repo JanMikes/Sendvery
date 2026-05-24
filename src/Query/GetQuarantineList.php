@@ -46,6 +46,7 @@ final readonly class GetQuarantineList
         int $limit = 50,
         int $offset = 0,
         ?QuarantineReasonFilter $reasonFilter = null,
+        ?string $mailboxFilter = null,
     ): array {
         $sql = 'SELECT
                 q.id AS quarantine_id,
@@ -72,6 +73,11 @@ final readonly class GetQuarantineList
             $params['reasonFilter'] = $reasonFilter->value;
         }
 
+        if (null !== $mailboxFilter) {
+            $sql .= ' AND e.mailbox_connection_id = :mailboxFilter';
+            $params['mailboxFilter'] = $mailboxFilter;
+        }
+
         $sql .= ' ORDER BY q.quarantined_at DESC LIMIT :limit OFFSET :offset';
 
         /** @var list<array{quarantine_id: string, domain_name: string, reporter_email: string, reason: string, quarantined_at: string, expires_at: string, subject: string, size_bytes: int|string}> $rows */
@@ -80,8 +86,11 @@ final readonly class GetQuarantineList
         return array_map(QuarantineListResult::fromDatabaseRow(...), $rows);
     }
 
-    public function countForTeam(string $teamId, ?QuarantineReasonFilter $reasonFilter = null): int
-    {
+    public function countForTeam(
+        string $teamId,
+        ?QuarantineReasonFilter $reasonFilter = null,
+        ?string $mailboxFilter = null,
+    ): int {
         $sql = 'SELECT COUNT(*)
             FROM quarantined_dmarc_report q
             JOIN received_report_email e ON e.id = q.received_email_id
@@ -97,6 +106,11 @@ final readonly class GetQuarantineList
             $params['reasonFilter'] = $reasonFilter->value;
         }
 
+        if (null !== $mailboxFilter) {
+            $sql .= ' AND e.mailbox_connection_id = :mailboxFilter';
+            $params['mailboxFilter'] = $mailboxFilter;
+        }
+
         return (int) $this->database->executeQuery($sql, $params)->fetchOne();
     }
 
@@ -107,19 +121,26 @@ final readonly class GetQuarantineList
      *
      * @return array<value-of<QuarantineReasonFilter>, int>
      */
-    public function countByReason(string $teamId): array
+    public function countByReason(string $teamId, ?string $mailboxFilter = null): array
     {
+        $mailboxClause = null === $mailboxFilter ? '' : ' AND e.mailbox_connection_id = :mailboxFilter';
+
+        $parameters = [
+            'teamId' => $teamId,
+            'unknownDomainReason' => QuarantineReason::UnknownDomain->value,
+        ];
+        if (null !== $mailboxFilter) {
+            $parameters['mailboxFilter'] = $mailboxFilter;
+        }
+
         /** @var list<array{reason: string, total: int|string}> $rows */
         $rows = $this->database->executeQuery(
             'SELECT q.reason, COUNT(*) AS total
             FROM quarantined_dmarc_report q
             JOIN received_report_email e ON e.id = q.received_email_id
-            WHERE ('.$this->visibilitySql().')
+            WHERE ('.$this->visibilitySql().')'.$mailboxClause.'
             GROUP BY q.reason',
-            [
-                'teamId' => $teamId,
-                'unknownDomainReason' => QuarantineReason::UnknownDomain->value,
-            ],
+            $parameters,
         )->fetchAllAssociative();
 
         $counts = [];

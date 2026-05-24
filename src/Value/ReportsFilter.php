@@ -28,6 +28,7 @@ final readonly class ReportsFilter
         public ?\DateTimeImmutable $dateFrom,
         public ?\DateTimeImmutable $dateTo,
         public ?string $search,
+        public ?string $mailboxId = null,
     ) {
     }
 
@@ -108,6 +109,15 @@ final readonly class ReportsFilter
             $search = '' === $trimmed ? null : $trimmed;
         }
 
+        $rawMailbox = $request->query->get('mailbox');
+        $mailboxId = null;
+        if (is_string($rawMailbox)) {
+            $trimmed = trim($rawMailbox);
+            if ('' !== $trimmed && Uuid::isValid($trimmed)) {
+                $mailboxId = $trimmed;
+            }
+        }
+
         return new self(
             domainIds: $domainIds,
             reporterOrgs: $reporterOrgs,
@@ -116,6 +126,7 @@ final readonly class ReportsFilter
             dateFrom: $dateFrom,
             dateTo: $dateTo,
             search: $search,
+            mailboxId: $mailboxId,
         );
     }
 
@@ -159,6 +170,10 @@ final readonly class ReportsFilter
             $params['q'] = $this->search;
         }
 
+        if (null !== $this->mailboxId) {
+            $params['mailbox'] = $this->mailboxId;
+        }
+
         return $params;
     }
 
@@ -168,7 +183,8 @@ final readonly class ReportsFilter
             || [] !== $this->reporterOrgs
             || null !== $this->passRateBand
             || null !== $this->dateRange
-            || null !== $this->search;
+            || null !== $this->search
+            || null !== $this->mailboxId;
     }
 
     public function passRateMin(): ?float

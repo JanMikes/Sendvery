@@ -2270,7 +2270,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-035: Mailboxes page is a dead-end table — rows aren't clickable, no inbox preview, no per-mailbox poll history
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: TRIAGE + DEEP-DIVE path audit. `templates/dashboard/mailboxes.html.twig` shows a five-column table (Host, Type, Status, Last Polled, Last Error) with a "Re-test" button per row. The rows aren't clickable. Worse, even on success there is no way to answer the most basic operator questions: *"how many envelopes has this mailbox pulled in?"*, *"what was the last DMARC report that came through here?"*, *"is this mailbox sending its envelopes to my domains or to quarantine?"*. Per the PO's "make value visible" lens this is the biggest hidden-data offender in the app — `received_report_email` rows are tied to a `mailbox_connection_id` but the UI never surfaces that relationship. A non-technical user looking at "Last Error: —" has no signal that the mailbox is actually doing useful work.
 - Acceptance:

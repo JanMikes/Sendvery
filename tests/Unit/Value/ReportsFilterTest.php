@@ -250,4 +250,52 @@ final class ReportsFilterTest extends TestCase
         self::assertNull($none->passRateMin());
         self::assertNull($none->passRateMax());
     }
+
+    public function testMailboxIdAcceptsValidUuid(): void
+    {
+        $uuid = Uuid::uuid7()->toString();
+        $filter = ReportsFilter::fromRequest(new Request(['mailbox' => $uuid]), $this->clock);
+
+        self::assertSame($uuid, $filter->mailboxId);
+        self::assertTrue($filter->hasActiveFilters());
+    }
+
+    public function testMailboxIdRejectsNonUuidValue(): void
+    {
+        $filter = ReportsFilter::fromRequest(new Request(['mailbox' => 'not-a-uuid']), $this->clock);
+
+        self::assertNull($filter->mailboxId);
+    }
+
+    public function testMailboxIdRejectsEmptyValue(): void
+    {
+        $filter = ReportsFilter::fromRequest(new Request(['mailbox' => '   ']), $this->clock);
+
+        self::assertNull($filter->mailboxId);
+    }
+
+    public function testMailboxIdIsEmittedInQueryParams(): void
+    {
+        $uuid = Uuid::uuid7()->toString();
+        $filter = new ReportsFilter(
+            domainIds: [],
+            reporterOrgs: [],
+            passRateBand: null,
+            dateRange: null,
+            dateFrom: null,
+            dateTo: null,
+            search: null,
+            mailboxId: $uuid,
+        );
+
+        self::assertSame($uuid, $filter->toQueryParams()['mailbox']);
+    }
+
+    public function testMailboxIdAlonePreservesHasActiveFilters(): void
+    {
+        $uuid = Uuid::uuid7()->toString();
+        $filter = new ReportsFilter([], [], null, null, null, null, null, $uuid);
+
+        self::assertTrue($filter->hasActiveFilters());
+    }
 }

@@ -1,0 +1,145 @@
+{% extends 'dashboard/layout.html.twig' %}
+
+{% block page_title %}{{ mailbox.host }}{% endblock %}
+{% block breadcrumbs %}
+    <li><a href="{{ path('dashboard_mailboxes') }}">Mailboxes</a></li>
+    <li>{{ mailbox.host }}</li>
+{% endblock %}
+
+{% block content %}
+    {# Flash messages #}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="flex items-start justify-between mb-6 gap-4 flex-wrap">
+        <div>
+            <h1 class="text-2xl font-bold flex items-center gap-3">
+                {{ mailbox.host }}:{{ mailbox.port }}
+                {% if mailbox.isActive and mailbox.lastError is null %}
+                    <twig:StatusBadge status="active" label="Active" />
+                {% elseif mailbox.lastError %}
+                    <twig:StatusBadge status="error" label="Error" />
+                {% else %}
+                    <twig:StatusBadge status="inactive" label="Inactive" />
+                {% endif %}
+            </h1>
+            <p class="text-sm text-base-content/60 mt-1">Sendvery polls this mailbox every 5 minutes.</p>
+        </div>
+        <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.mailboxId }) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
+            <button type="submit" class="btn btn-ghost btn-sm">Re-test connection</button>
+        </form>
+    </div>
+
+    {# Connection details #}
+    <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+        <div class="card-body p-4">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-base-content/50 mb-3">Connection details</h2>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div>
+                    <dt class="text-xs text-base-content/50">Host</dt>
+                    <dd class="font-medium">{{ mailbox.host }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-base-content/50">Port</dt>
+                    <dd class="font-medium">{{ mailbox.port }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-base-content/50">Type</dt>
+                    <dd class="font-medium">{{ mailbox.type }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-base-content/50">Encryption</dt>
+                    <dd class="font-medium">{{ mailbox.encryption }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-base-content/50">Last polled</dt>
+                    <dd class="font-medium">{{ mailbox.lastPolledAt ? mailbox.lastPolledAt|date('M j, H:i') : '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-base-content/50">Last error</dt>
+                    <dd class="font-medium {{ mailbox.lastError ? 'text-error' : '' }}">{{ mailbox.lastError ?? '—' }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    {# Stat row — Envelopes pulled / Reports parsed / Envelopes quarantined.
+       The latter two cards are wrapped in anchors to the filtered list views
+       so the operator can drill from "10 reports parsed by this mailbox" to
+       "show me those 10 reports". The envelopes card stays static — there's
+       no per-envelope list page yet, and the recent-envelopes table below
+       already surfaces the most-recent 20 rows. #}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <twig:StatCard
+            title="Envelopes pulled (30d)"
+            value="{{ mailbox.envelopes30d }}"
+        />
+        <a href="{{ path('dashboard_reports', { mailbox: mailbox.mailboxId }) }}" class="block">
+            <twig:StatCard
+                title="Reports parsed"
+                value="{{ mailbox.reportsParsed }}"
+                variant="success"
+            />
+        </a>
+        <a href="{{ path('dashboard_quarantine', { mailbox: mailbox.mailboxId }) }}" class="block">
+            <twig:StatCard
+                title="Envelopes quarantined"
+                value="{{ mailbox.envelopesQuarantined }}"
+                variant="warning"
+            />
+        </a>
+    </div>
+
+    {# Recent envelopes — 20 most recent #}
+    <div class="card bg-base-100 border border-base-200 shadow-sm">
+        <div class="card-body p-4">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-base-content/50 mb-3">Recent envelopes</h2>
+            {% if recentEnvelopes is empty %}
+                <div class="text-center py-8">
+                    <p class="text-sm text-base-content/60 max-w-md mx-auto">
+                        No envelopes received yet — Sendvery polls this mailbox every 5 minutes. Reports usually appear within 24 hours of publishing DMARC.
+                    </p>
+                </div>
+            {% else %}
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Received at</th>
+                                <th>From</th>
+                                <th>Subject</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for envelope in recentEnvelopes %}
+                                <tr>
+                                    <td class="whitespace-nowrap">{{ envelope.receivedAt|date('M j, H:i') }}</td>
+                                    <td class="text-sm">{{ envelope.fromAddress }}</td>
+                                    <td class="text-sm max-w-xs truncate">{{ envelope.subject }}</td>
+                                    <td>
+                                        {% if envelope.status.value == 'parsed' %}
+                                            <a href="{{ path('dashboard_report_detail', { id: envelope.targetReportId }) }}"
+                                               class="badge badge-sm badge-success">Parsed</a>
+                                        {% elseif envelope.status.value == 'quarantined' %}
+                                            <a href="{{ path('dashboard_quarantine_detail', { id: envelope.targetReportId }) }}"
+                                               class="badge badge-sm badge-warning">Quarantined</a>
+                                        {% else %}
+                                            <span class="badge badge-sm badge-ghost">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

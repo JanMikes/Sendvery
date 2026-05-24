@@ -46,6 +46,7 @@ final readonly class GetAllReports
         ?\DateTimeImmutable $dateFrom = null,
         ?\DateTimeImmutable $dateTo = null,
         ?string $search = null,
+        ?string $mailboxId = null,
     ): array {
         if ([] === $teamIds) {
             return [];
@@ -93,6 +94,20 @@ final readonly class GetAllReports
         if (null !== $search) {
             $whereClauses[] = '(dr.reporter_org ILIKE :search OR md.domain ILIKE :search)';
             $params['search'] = '%'.$search.'%';
+        }
+
+        // Filter reports by the inbox that pulled their underlying envelope.
+        // `dmarc_report.source_envelope_id` is nullable (legacy rows pre-dating
+        // the envelope intermediary, plus central-inbox reports with no team
+        // mailbox) — an INNER JOIN here would silently drop those rows from
+        // the unfiltered list, so we only join when the mailbox filter is set.
+        if (null !== $mailboxId) {
+            $whereClauses[] = 'EXISTS (
+                SELECT 1 FROM received_report_email rre
+                WHERE rre.id = dr.source_envelope_id
+                AND rre.mailbox_connection_id = :mailboxId
+            )';
+            $params['mailboxId'] = $mailboxId;
         }
 
         $havingClauses = [];

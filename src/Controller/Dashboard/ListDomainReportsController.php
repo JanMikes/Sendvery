@@ -52,6 +52,7 @@ final class ListDomainReportsController extends AbstractController
             dateFrom: $filter->dateFrom,
             dateTo: $filter->dateTo,
             search: $filter->search,
+            mailboxId: $filter->mailboxId,
         );
 
         $reporterOptions = $this->getReporterOrgs->forTeams($teamIds);
