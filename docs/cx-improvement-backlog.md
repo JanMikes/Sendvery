@@ -1644,7 +1644,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-024: Homepage founder bio section — first-person legitimacy, distinct from /what-is-sendvery treatment
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: The owner explicitly named this as a missing surface. `/what-is-sendvery` already has a founder blockquote (initials avatar, italic pull-quote, GitHub link) — the homepage needs a separately-designed founder section so a first-time visitor (who never clicks through to `/what-is-sendvery`) still gets the "this is built by a human you can name" signal. Distinct visual treatment ensures the two surfaces reinforce rather than duplicate.
 - Acceptance:
@@ -1655,6 +1655,74 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
   - daisyUI v5 only, no `dark:` prefix. Mobile renders without horizontal overflow at 360px viewport.
   - Integration test asserts the section renders on `/`, contains "Jan Mikeš", contains the GitHub link, and that the LinkedIn chip is absent when the config value is null.
 - Notes:
+  **Architect plan (locked in, 2026-05-24)**
+
+  TASK-023 (commit `9a5a5b3`) already wired the infrastructure: `config/placeholders.php` reserves `founder_photo => null` and `linkedin_url => null` with TASK-024-tagged markers, and `PlaceholdersExtension::getGlobals()` already exposes both as Twig globals. TASK-024 is pure-template — zero PHP changes, no new service, no controller change.
+
+  **Differentiation checklist vs `/what-is-sendvery` blockquote** (templates/about/what-is-sendvery.html.twig lines 275–298): no `<blockquote>`, no `text-5xl` quotation-mark glyph, no `italic` class, no `w-12` avatar, no `.card` wrapper. All four must be absent.
+
+  **Insertion point**: `templates/homepage/index.html.twig` between `<twig:TestimonialsSection />` (currently line ~237) and `{# === 9. Open Source Callout === #}` (currently line ~239). Insert:
+  ```
+  {# === 8.7. Founder bio === #}
+  <twig:FounderBio />
+  ```
+
+  **Files to create**
+
+  1. `templates/components/FounderBio.html.twig` — raw `<section id="founder" class="py-20 lg:py-24">` (NOT `<twig:SectionContainer>` — matches `TestimonialsSection.html.twig` pattern for consistent vertical rhythm). Inside `<div class="container mx-auto">`:
+     - Centred section header: eyebrow `text-xs font-semibold text-primary uppercase tracking-wider mb-3 text-center` reading "The team", H2 `text-2xl md:text-3xl font-bold mb-10 text-center` reading "Built by one person, in the open".
+     - Content row: `<div class="flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 max-w-4xl mx-auto">`.
+     - Avatar block left (`<div class="flex flex-col items-center flex-shrink-0">`): `{% if founder_photo %}` renders `<img src="{{ founder_photo }}" alt="Jan Mikeš" class="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover shadow-md">`; `{% else %}` renders daisyUI placeholder avatar (preceded by inline Twig comment `{# TODO(placeholder): swap to <img> when config/placeholders.php has founder_photo set #}`):
+       ```twig
+       <div class="avatar avatar-placeholder">
+           <div class="bg-primary text-primary-content w-32 md:w-40 rounded-full">
+               <span class="text-3xl font-semibold">JM</span>
+           </div>
+       </div>
+       ```
+     - Bio block right (`<div class="flex-1 max-w-2xl">`): three `<p>` paragraphs inside `<div class="space-y-4 text-base-content/80 leading-relaxed">`:
+       - **P1 (who + what)**: "I'm Jan Mikeš. I've spent over ten years building developer-facing infrastructure — most recently as a freelance PHP and Symfony consultant for small Czech product companies. I'm the kind of engineer who reads the RFC before filing the bug."
+       - **P2 (why)**: "I built Sendvery because every team I've ever worked with hit the same DMARC wall: nobody on the team can read the XML attachments that land in the reports inbox, nobody has time to learn, and the existing tools cost more per month than the email infrastructure they're supposed to be monitoring. That felt fixable."
+       - **P3 (what to expect)**: "Sendvery is a one-person company — when you email support, you reach me directly. I aim to reply within 24 hours on EU business days. The code is on GitHub; issues and feature requests are triaged in public. If you find a bug, open an issue; I'll fix it."
+     - Chip row `<div class="mt-6 flex flex-wrap gap-3 items-center">`:
+       - GitHub: `<a href="https://github.com/janmikes" target="_blank" rel="noopener" class="btn btn-sm btn-ghost gap-2">` + inline SVG octocat (currentColor, `w-4 h-4`) + "GitHub".
+       - Email: `<a href="mailto:jan.mikes@sendvery.com" class="btn btn-sm btn-ghost gap-2">` + inline SVG envelope (currentColor, `w-4 h-4`) + "Email me". Address confirmed canonical from `templates/about/pricing.html.twig` and `templates/components/PricingFaq.html.twig`.
+       - LinkedIn: wrapped in `{% if linkedin_url %} ... {% endif %}` — load-bearing for the test. Currently absent because the global is null.
+
+     **Absent by design**: no `<blockquote>`, no `italic`, no `text-5xl` quote glyph, no `w-12` avatar.
+
+  2. `tests/Integration/Controller/HomepageFounderBioTest.php` extending `App\Tests\WebTestCase`. Nine `#[Test]` methods, all on `GET /`:
+     - `homepageReturns200`
+     - `founderSectionExists` (`#founder` count === 1)
+     - `founderSectionH2IsPresent` (`#founder h2` contains "Built by one person")
+     - `founderNameIsPresent` (`#founder` text contains "Jan Mikeš")
+     - `githubLinkIsRendered` (`#founder a[href*="github.com"]` count ≥ 1)
+     - `emailLinkIsRendered` (`#founder a[href^="mailto:"]` count ≥ 1)
+     - `linkedinChipIsAbsentWhenConfigIsNull` (`#founder a[href*="linkedin.com"]` count === 0 — relies on live `linkedin_url => null`)
+     - `initialsPlaceholderAvatarIsRenderedWhenFounderPhotoIsNull` (`#founder .avatar-placeholder` count === 1 AND `#founder img` count === 0)
+     - `bioParagraphCountIsThree` (`#founder p` count === 3; chip row uses `<a>`, not `<p>`)
+
+     File-top comment (not docblock): `// Mobile overflow at 360px viewport cannot be asserted here — verify manually after implementation.`
+
+     No mocking — tests exercise the live wiring against the live config. When real values land, two test names + assertions update in the same PR.
+
+  **Files to modify**
+
+  - `templates/homepage/index.html.twig` — 3-line insertion only:
+    ```diff
+     <twig:TestimonialsSection />
+
+    +{# === 8.7. Founder bio === #}
+    +<twig:FounderBio />
+    +
+     {# === 9. Open Source Callout === #}
+    ```
+
+  **Data flow**: `config/placeholders.php` (`founder_photo: null`, `linkedin_url: null`) → `PlaceholdersExtension::getGlobals()` → Twig globals → `FounderBio.html.twig` `{% if founder_photo %}` false / `{% if linkedin_url %}` false → rendered HTML has `#founder .avatar-placeholder`, no `#founder img`, no LinkedIn `<a>` → tests pass.
+
+  **Non-goals**: no new keys in `placeholders.php`, no `PlaceholdersExtension` changes, no `SectionHeader` extraction (TASK-026), no `<blockquote>` / `italic` / `text-5xl` quote-glyph / `w-12` avatar / `.card` wrapper, no logo / company strip on this section.
+
+  **Build sequence**: verify `placeholders.php` still has both null keys → create `FounderBio.html.twig` → insert 3-line block in homepage → create integration test → phpunit + phpstan + php-cs-fixer (with `--allow-risky=yes`) → browser smoke at 1280px desktop + 360px mobile (DevTools).
 
 ---
 
