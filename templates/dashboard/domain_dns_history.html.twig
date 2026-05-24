@@ -9,11 +9,11 @@
 {% endblock %}
 
 {% block content %}
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h1 class="text-2xl font-bold">DNS History</h1>
-            <p class="text-sm text-base-content/50 mt-1">{{ domain.domainName }}</p>
-        </div>
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold">DNS History</h1>
+        <p class="text-base-content/65 text-base mt-2 max-w-2xl">
+            Every DNS check we've run for {{ domain.domainName }}. We re-check SPF, DKIM, DMARC and MX once a day — and any time you click "Re-check now". Rows highlighted in yellow show a change from the previous check.
+        </p>
     </div>
 
     <twig:DomainWorkspaceTabs :domain="domain" active="history" />
@@ -32,79 +32,179 @@
         </div>
     {% endif %}
 
-    {% if history is empty %}
-        <twig:EmptyState
-            title="No DNS checks yet"
-            message="DNS checks run automatically once a day. Results will appear here after the first check."
-        />
-    {% else %}
-        {# Group by date #}
-        <div class="space-y-4">
-            {% set current_date = null %}
-            {% for check in history %}
-                {% set check_date = check.checkedAt|date('Y-m-d') %}
+    {% if hasAnyHistory %}
+        {# Filter chip groups. Each chip carries the other active filters
+           forward so the user never silently loses scope by clicking. #}
+        {% set baseParams = { id: domain.domainId } %}
+        {% set typeParams = baseParams|merge({ range: rangeDays, changes_only: changesOnly ? 1 : null }) %}
+        {% set rangeParams = baseParams|merge({ type: activeType ? activeType.value : null, changes_only: changesOnly ? 1 : null }) %}
+        {% set changesParams = baseParams|merge({ type: activeType ? activeType.value : null, range: rangeDays }) %}
 
-                {% if check_date != current_date %}
-                    {% set current_date = check_date %}
-                    <div class="divider text-xs text-base-content/40">{{ check.checkedAt|date('F j, Y') }}</div>
-                {% endif %}
-
-                <div class="card bg-base-100 border border-base-200 shadow-sm {{ check.hasChanged ? 'border-l-4 border-l-warning' : '' }}">
-                    <div class="card-body p-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2">
-                                <span class="badge badge-sm {{ check.type == 'spf' ? 'badge-primary' : (check.type == 'dkim' ? 'badge-secondary' : (check.type == 'dmarc' ? 'badge-accent' : 'badge-ghost')) }}">
-                                    {{ check.type|upper }}
-                                </span>
-                                {% if check.isValid %}
-                                    <span class="badge badge-sm badge-success badge-outline">Valid</span>
-                                {% else %}
-                                    <span class="badge badge-sm badge-error badge-outline">Invalid</span>
-                                {% endif %}
-                                {% if check.hasChanged %}
-                                    <span class="badge badge-sm badge-warning">Changed</span>
-                                {% endif %}
-                            </div>
-                            <span class="text-xs text-base-content/50">{{ check.checkedAt|date('H:i') }}</span>
-                        </div>
-
-                        {# Current record #}
-                        {% if check.rawRecord %}
-                            <div class="bg-base-200 rounded-btn px-3 py-2 mb-2">
-                                <code class="text-xs break-all">{{ check.rawRecord }}</code>
-                            </div>
-                        {% else %}
-                            <p class="text-sm text-base-content/50 italic mb-2">No record found</p>
-                        {% endif %}
-
-                        {# Change diff #}
-                        {% if check.hasChanged and check.previousRawRecord %}
-                            <div class="text-xs text-base-content/50">
-                                <span class="font-medium">Previous:</span>
-                                <code class="break-all">{{ check.previousRawRecord }}</code>
-                            </div>
-                        {% endif %}
-
-                        {# Issues #}
-                        {% if check.issues is not empty %}
-                            <div class="mt-2 space-y-1">
-                                {% for issue in check.issues %}
-                                    <div class="text-xs flex items-center gap-1">
-                                        {% if issue.severity == 'critical' %}
-                                            <span class="text-error">&#x2716;</span>
-                                        {% elseif issue.severity == 'warning' %}
-                                            <span class="text-warning">&#x26A0;</span>
-                                        {% else %}
-                                            <span class="text-info">&#x2139;</span>
-                                        {% endif %}
-                                        <span class="text-base-content/70">{{ issue.message }}</span>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
+        <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+            <div class="card-body p-4 gap-4">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Record type</p>
+                    <div class="flex flex-wrap gap-2">
+                        <a href="{{ path('dashboard_domain_dns_history', typeParams) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ activeType is null ? 'btn-primary' : 'btn-ghost' }}">
+                            All
+                        </a>
+                        <a href="{{ path('dashboard_domain_dns_history', typeParams|merge({ type: 'spf' })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ activeType is not null and activeType.value == 'spf' ? 'btn-primary' : 'btn-ghost' }}">
+                            SPF
+                        </a>
+                        <a href="{{ path('dashboard_domain_dns_history', typeParams|merge({ type: 'dkim' })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ activeType is not null and activeType.value == 'dkim' ? 'btn-primary' : 'btn-ghost' }}">
+                            DKIM
+                        </a>
+                        <a href="{{ path('dashboard_domain_dns_history', typeParams|merge({ type: 'dmarc' })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ activeType is not null and activeType.value == 'dmarc' ? 'btn-primary' : 'btn-ghost' }}">
+                            DMARC
+                        </a>
+                        <a href="{{ path('dashboard_domain_dns_history', typeParams|merge({ type: 'mx' })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ activeType is not null and activeType.value == 'mx' ? 'btn-primary' : 'btn-ghost' }}">
+                            MX
+                        </a>
                     </div>
                 </div>
-            {% endfor %}
+
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Date range</p>
+                    <div class="flex flex-wrap gap-2">
+                        <a href="{{ path('dashboard_domain_dns_history', rangeParams|merge({ range: 7 })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ rangeDays == 7 ? 'btn-primary' : 'btn-ghost' }}">
+                            Last 7 days
+                        </a>
+                        <a href="{{ path('dashboard_domain_dns_history', rangeParams|merge({ range: 30 })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ rangeDays == 30 ? 'btn-primary' : 'btn-ghost' }}">
+                            Last 30 days
+                        </a>
+                        <a href="{{ path('dashboard_domain_dns_history', rangeParams|merge({ range: 90 })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ rangeDays == 90 ? 'btn-primary' : 'btn-ghost' }}">
+                            Last 90 days
+                        </a>
+                        <a href="{{ path('dashboard_domain_dns_history', rangeParams|merge({ range: 0 })) }}"
+                           data-turbo-action="advance"
+                           class="btn btn-sm {{ rangeDays == 0 ? 'btn-primary' : 'btn-ghost' }}">
+                            All time
+                        </a>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-base-content/50 mb-2">Quick filter</p>
+                    <a href="{{ path('dashboard_domain_dns_history', changesParams|merge({ changes_only: changesOnly ? null : 1 })) }}"
+                       data-turbo-action="advance"
+                       class="btn btn-sm {{ changesOnly ? 'btn-warning' : 'btn-ghost' }}">
+                        Show only changes ({{ changesOnlyCount }})
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% if groupedHistory is empty %}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body items-center text-center py-10">
+                    <h3 class="text-lg font-semibold mb-1">No DNS checks match the current filter</h3>
+                    <p class="text-sm text-base-content/60 mb-4 max-w-md">
+                        Try widening the date range, switching record types, or turning off the changes-only filter.
+                    </p>
+                    <a href="{{ path('dashboard_domain_dns_history', { id: domain.domainId }) }}"
+                       data-turbo-action="advance"
+                       class="btn btn-primary btn-sm">
+                        Clear filters
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            <div class="space-y-3">
+                {% for date, group in groupedHistory %}
+                    <details class="card bg-base-100 border border-base-200 shadow-sm" {{ date in openDays ? 'open' : '' }}>
+                        <summary class="flex items-center justify-between gap-2 flex-wrap cursor-pointer py-3 px-4 hover:bg-base-200 list-none">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-semibold">{{ date|date('l, F j, Y') }}</span>
+                                <span class="text-sm text-base-content/60">{{ group.checks|length }} check{{ group.checks|length == 1 ? '' : 's' }}</span>
+                                {% if group.changeCount > 0 %}
+                                    <span class="badge badge-sm badge-warning">{{ group.changeCount }} change{{ group.changeCount == 1 ? '' : 's' }}</span>
+                                {% endif %}
+                            </div>
+                        </summary>
+
+                        <div class="px-4 pb-4 space-y-3">
+                            {% for check in group.checks %}
+                                <div class="border border-base-200 rounded-box p-3 {{ check.hasChanged ? 'bg-warning/5 border-l-4 border-l-warning' : 'bg-base-100' }}">
+                                    <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="badge badge-sm {{ check.type == 'spf' ? 'badge-primary' : (check.type == 'dkim' ? 'badge-secondary' : (check.type == 'dmarc' ? 'badge-accent' : 'badge-ghost')) }}">
+                                                {{ check.type|upper }}
+                                            </span>
+                                            {% if check.isValid %}
+                                                <span class="badge badge-sm badge-success badge-outline">Valid</span>
+                                            {% else %}
+                                                <span class="badge badge-sm badge-error badge-outline">Invalid</span>
+                                            {% endif %}
+                                            {% if check.hasChanged %}
+                                                <span class="badge badge-sm badge-warning">Changed</span>
+                                            {% endif %}
+                                        </div>
+                                        <span class="text-xs text-base-content/50">{{ check.checkedAt|date('H:i') }}</span>
+                                    </div>
+
+                                    {% if check.rawRecord %}
+                                        <div class="bg-base-200 rounded-btn px-3 py-2 mb-2">
+                                            <code class="text-xs break-all">{{ check.rawRecord }}</code>
+                                        </div>
+                                    {% else %}
+                                        <p class="text-sm text-base-content/50 italic mb-2">No record found</p>
+                                    {% endif %}
+
+                                    {% if check.hasChanged and check.previousRawRecord %}
+                                        <div class="text-xs text-base-content/50">
+                                            <span class="font-medium">Previous:</span>
+                                            <code class="break-all">{{ check.previousRawRecord }}</code>
+                                        </div>
+                                    {% endif %}
+
+                                    {% if check.issues is not empty %}
+                                        <div class="mt-2 space-y-1">
+                                            {% for issue in check.issues %}
+                                                <div class="text-xs flex items-center gap-1">
+                                                    {% if issue.severity == 'critical' %}
+                                                        <span class="text-error">&#x2716;</span>
+                                                    {% elseif issue.severity == 'warning' %}
+                                                        <span class="text-warning">&#x26A0;</span>
+                                                    {% else %}
+                                                        <span class="text-info">&#x2139;</span>
+                                                    {% endif %}
+                                                    <span class="text-base-content/70">{{ issue.message }}</span>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% else %}
+        <twig:EmptyState
+            title="No DNS checks yet"
+            message="DNS checks run automatically once a day. Trigger one now to see results immediately."
+        />
+        <div class="flex justify-center -mt-4">
+            <form method="post" action="{{ path('dashboard_domain_reverify', { id: domain.domainId }) }}">
+                <button type="submit" class="btn btn-primary btn-sm">Re-check now</button>
+            </form>
         </div>
     {% endif %}
 {% endblock %}
