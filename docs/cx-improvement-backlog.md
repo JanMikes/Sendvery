@@ -1877,7 +1877,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-031: Sender Inventory & per-domain Blacklist Status are completely unlinked — paying customers can't reach two whole product surfaces
 
-- Status: proposed
+- Status: done
 - Area: domains
 - Why: Audit finding from the four-paths IA review. `SenderInventoryController` and `BlacklistStatusController` both ship working routes (`/app/domains/{id}/senders`, `/app/domains/{id}/blacklist`), templates, queries, and 100% test coverage — but they appear in **zero** templates as a link. A user lands on `/app/domains/{id}` (the canonical DEEP-DIVE surface), sees a "Top Senders" chart and a "Unique Senders" stat card, and has no clickable affordance to drill from there into the full sender list. Same for blacklist status — `latest.blacklistScore` is rendered as a progress bar on `domain_health.html.twig` with no link to the underlying per-blacklist breakdown. This is the worst single discoverability bug in the dashboard: features that exist, are tested, and that customers paid for, are URL-typing-only. The DEEP-DIVE path is broken — users feel lost because two of the four sub-surfaces of the domain workspace are invisible.
 - Acceptance:
@@ -1889,6 +1889,135 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
   - Integration test guard: `noOrphanedDashboardRoute` — iterate every `dashboard_*` route, render at least one page that links to it, fail if any controller's route name isn't referenced from at least one rendered template (excluded set: webhooks, POST-only action routes). This catches the next orphaned-page bug at CI time.
   - 100% test coverage on the tab-row component + the new domain-detail link assertions.
 - Notes:
+  **Architect plan (locked in, 2026-05-24)**
+
+  **Route inventory (CRITICAL — `dashboard_sender_inventory` uses `{domainId}`, ALL others use `{id}`)**:
+  | Tab | Route | Param |
+  |---|---|---|
+  | Overview | `dashboard_domain_detail` | `{id: domain.domainId}` |
+  | Reports | `dashboard_domain_reports` | `{id: domain.domainId}` |
+  | Senders | `dashboard_sender_inventory` | `{domainId: domain.domainId}` ⚠ |
+  | DNS | `dashboard_domain_health` | `{id: domain.domainId}` |
+  | Blacklist | `dashboard_blacklist_status` | `{id: domain.domainId}` |
+  | History | `dashboard_domain_dns_history` | `{id: domain.domainId}` |
+
+  Using `{id}` for Senders throws `MissingMandatoryParametersException`. This is the single most likely correctness bug.
+
+  **Prerequisite controller change**: `src/Controller/Dashboard/ListDomainReportsController.php` does NOT currently pass a `domain` object — only `domainId` string. Add `GetDomainDetail $getDomainDetail` dependency, call `$domain = $this->getDomainDetail->forDomain($id, $teamIds)` at top of `__invoke`, 404 on null, add `'domain' => $domain` to render vars. WITHOUT this, the tab component throws `Undefined variable "domain"` on `/app/domains/{id}/reports`. This also tightens cross-tenant access enforcement on the reports page.
+
+  **Files to create**
+
+  1. `templates/components/DomainWorkspaceTabs.html.twig` — props `domain` (DomainDetailResult) + `active` (string: `overview|reports|senders|dns|blacklist|history`). Pattern:
+     ```twig
+     {% props domain, active %}
+     <div role="tablist" class="tabs tabs-bordered mb-6 overflow-x-auto">
+         <a role="tab" href="{{ path('dashboard_domain_detail', {id: domain.domainId}) }}"
+            class="tab {{ active == 'overview' ? 'tab-active' : '' }}">Overview</a>
+         <a role="tab" href="{{ path('dashboard_domain_reports', {id: domain.domainId}) }}"
+            class="tab {{ active == 'reports' ? 'tab-active' : '' }}">Reports</a>
+         <a role="tab" href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
+            class="tab {{ active == 'senders' ? 'tab-active' : '' }}">Senders</a>
+         <a role="tab" href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}"
+            class="tab {{ active == 'dns' ? 'tab-active' : '' }}">DNS</a>
+         <a role="tab" href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}"
+            class="tab {{ active == 'blacklist' ? 'tab-active' : '' }}">Blacklist</a>
+         <a role="tab" href="{{ path('dashboard_domain_dns_history', {id: domain.domainId}) }}"
+            class="tab {{ active == 'history' ? 'tab-active' : '' }}">History</a>
+     </div>
+     ```
+     `overflow-x-auto` handles horizontal scroll on narrow viewports.
+
+  2. `tests/Integration/Controller/NoOrphanedDashboardRouteTest.php` — extends `KernelTestCase`. Enumerates all routes from `RouterInterface`, filters to `dashboard_*` prefix, auto-excludes POST-only routes via `$route->getMethods()` check (skip if non-empty and no GET). Explicit exclusion constant for GET-but-unreachable-via-nav routes:
+     ```php
+     private const array EXCLUDED_ROUTE_NAMES = [
+         'dashboard_billing_manage', 'dashboard_billing_upgrade',
+         'dashboard_export_domain_pdf',
+         'dashboard_billing_success', 'dashboard_billing_cancel',
+     ];
+     ```
+     Strategy: concatenate all `.twig` files under `templates/` via `RecursiveDirectoryIterator`, then for each non-excluded GET route assert `str_contains($allTemplates, "path('$routeName'")`. Single `#[Test]` method with per-route assertions.
+
+  3. `tests/Integration/Twig/Components/DomainWorkspaceTabsTest.php` — six `#[Test]` methods, one per surface (overview/reports/senders/dns/blacklist/history). For each: login `onboardedOwner`, GET the URL, assert 200, assert `tab-active` class appears next to the expected label, assert all six labels render.
+
+  **Files to modify**
+
+  4. `src/Controller/Dashboard/ListDomainReportsController.php` — add `GetDomainDetail` dependency + fetch domain + 404 + `domain` template var (see prerequisite above).
+
+  5. `templates/dashboard/domain_detail.html.twig` — four changes:
+     - **A. Header buttons** (in the `<div class="flex items-center gap-2">` at lines ~49-59): append two `<a class="btn btn-ghost btn-sm">` for Senders + Blacklist using the right route/param.
+     - **B. Sub-tab row** (after closing of header `</div>` ~line 60, before quarantine banner): `<twig:DomainWorkspaceTabs :domain="domain" active="overview" />`.
+     - **C. Unique Senders StatCard** (line ~93): wrap in `<a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}" class="block">`.
+     - **D. Top Senders chart** (lines ~106-123): `<twig:ChartCard>` has no slot for adding header links. Replace the `<twig:ChartCard>` call (NOT the empty-state branch) with inline card markup that mirrors ChartCard's shell:
+       ```twig
+       <div class="card bg-base-100 border border-base-200 shadow-sm">
+           <div class="card-body p-4">
+               <div class="flex items-center justify-between">
+                   <div>
+                       <h3 class="text-sm font-semibold">Top Senders</h3>
+                       <p class="text-xs text-base-content/50 mt-0.5">By message volume</p>
+                   </div>
+                   <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
+                      class="text-xs text-primary hover:underline">View all senders →</a>
+               </div>
+               <div class="mt-3" style="min-height: 300px"
+                    {{ stimulus_controller('chart', { config: senderChartConfig }) }}></div>
+           </div>
+       </div>
+       ```
+       Empty-state branch unchanged (no senders → no point linking).
+
+  6. `templates/dashboard/domain_health.html.twig` — two changes:
+     - **A. Sub-tab row**: insert `<twig:DomainWorkspaceTabs :domain="domain" active="dns" />` after closing `</div>` of header (~line 26), before `{% if ruaInstruction %}`.
+     - **B. Blacklist row link**: inside `{% for cat in categories %}` loop, wrap only the `<progress>` element conditionally:
+       ```twig
+       {% if cat.id == 'health-blacklist' %}
+           <a href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}" class="block">
+       {% endif %}
+       <progress class="progress {{ ... }}" value="{{ cat.score }}" max="100"></progress>
+       {% if cat.id == 'health-blacklist' %}
+           </a>
+       {% endif %}
+       ```
+       Preserves `id="{{ cat.id }}"` on the outer `<div>` for deep-linking.
+
+  7. `templates/dashboard/domain_reports.html.twig` — sub-tab insert as first line of `{% block content %}`, before `<twig:ReportsFilterBar>`. (Requires controller change #4 first.)
+
+  8. `templates/dashboard/domain_dns_history.html.twig` — sub-tab insert after closing `</div>` of header (~line 17), before `{% if ruaInstruction %}`.
+
+  9. `templates/dashboard/sender_inventory.html.twig` — sub-tab insert after closing `</div>` of page header (~line 16), BEFORE the existing page-local filter tabs (All/Authorized/Unauthorized at ~line 18). Two-level hierarchy: workspace tabs first, page-local filter tabs below.
+
+  10. `templates/dashboard/blacklist_status.html.twig` — sub-tab insert after closing `</div>` of header (~line 16), before `{% if statusResults is empty %}`.
+
+  **Test additions to `tests/Integration/Controller/DomainSubpagesTest.php`** (5 new methods):
+  - `headerHasSendersAndBlacklistButtons` — GET /app/domains/{id}, assert button text + hrefs
+  - `uniqueSendersStatCardLinksToSenderInventory` — assert `<a>` wrap around card with right href
+  - `topSendersChartHasViewAllSendersLink` — requires `KnownSender` fixture; assert "View all senders →" text + href
+  - `blacklistRowLinksToBlacklistStatus` — GET /app/domains/{id}/health with seeded health snapshot
+  - `domainWorkspaceTabsRenderOnEachSurface` — data-provider with 6 URLs + expected active labels
+
+  **Edge cases / critical correctness**
+
+  - Senders route param asymmetry — see top of plan. Most likely bug.
+  - `domain_reports` controller change is load-bearing — without it the new component fails on `/app/domains/{id}/reports`.
+  - Twig component CLAUDE.md anti-pattern (`{% block content %}` around `<twig:>` children) doesn't apply — `DomainWorkspaceTabs` is a leaf component with no children.
+  - The Blacklist row keeps its `id="health-blacklist"` anchor on the outer `<div>` so deep-links from elsewhere (e.g. `/app/domains/{id}/health#health-blacklist`) still work.
+  - `NoOrphanedDashboardRouteTest` MUST be created LAST (after all templates updated) — otherwise it fails immediately because `dashboard_sender_inventory` and `dashboard_blacklist_status` are still orphaned before the changes land.
+
+  **Non-goals**: no new controllers/routes, no `<twig:StatCard>` refactor, no new tabs on non-domain-workspace pages, no destination-page empty-state copy changes, no `<twig:ChartCard>` component refactor (just inline the Top Senders one instance).
+
+  **Build sequence**:
+  1. Modify `ListDomainReportsController` (add `GetDomainDetail`, pass `domain`).
+  2. Create `DomainWorkspaceTabs.html.twig`.
+  3. Update `domain_detail.html.twig` (4 changes: header buttons, sub-tab, StatCard wrap, Top Senders inline replacement).
+  4. Update `domain_health.html.twig` (sub-tab + Blacklist row conditional wrap).
+  5. Update `domain_reports.html.twig` (sub-tab).
+  6. Update `domain_dns_history.html.twig` (sub-tab).
+  7. Update `sender_inventory.html.twig` (sub-tab above existing filter tabs).
+  8. Update `blacklist_status.html.twig` (sub-tab).
+  9. Add 5 methods to `DomainSubpagesTest.php`.
+  10. Create `DomainWorkspaceTabsTest.php` (6 surface tests).
+  11. Create `NoOrphanedDashboardRouteTest.php` LAST.
+  12. Run phpunit (full + coverage), phpstan, php-cs-fixer (with `--allow-risky=yes`).
 
 ---
 

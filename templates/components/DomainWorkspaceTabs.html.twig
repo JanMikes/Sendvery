@@ -1,0 +1,20 @@
+{# Sibling-surface navigation for the domain workspace. `active` matches one of
+   the six tab keys; the matching anchor gets `tab-active`. NOTE: the Senders
+   route uses `{domainId}` while all other domain-workspace routes use `{id}` —
+   using `{id}` for Senders throws `MissingMandatoryParametersException`. #}
+{% props domain, active %}
+
+<div role="tablist" class="tabs tabs-bordered mb-6 overflow-x-auto">
+    <a role="tab" href="{{ path('dashboard_domain_detail', {id: domain.domainId}) }}"
+       class="tab {{ active == 'overview' ? 'tab-active' : '' }}"{{ active == 'overview' ? ' aria-current="page"' : '' }}>Overview</a>
+    <a role="tab" href="{{ path('dashboard_domain_reports', {id: domain.domainId}) }}"
+       class="tab {{ active == 'reports' ? 'tab-active' : '' }}"{{ active == 'reports' ? ' aria-current="page"' : '' }}>Reports</a>
+    <a role="tab" href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
+       class="tab {{ active == 'senders' ? 'tab-active' : '' }}"{{ active == 'senders' ? ' aria-current="page"' : '' }}>Senders</a>
+    <a role="tab" href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}"
+       class="tab {{ active == 'dns' ? 'tab-active' : '' }}"{{ active == 'dns' ? ' aria-current="page"' : '' }}>DNS</a>
+    <a role="tab" href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}"
+       class="tab {{ active == 'blacklist' ? 'tab-active' : '' }}"{{ active == 'blacklist' ? ' aria-current="page"' : '' }}>Blacklist</a>
+    <a role="tab" href="{{ path('dashboard_domain_dns_history', {id: domain.domainId}) }}"
+       class="tab {{ active == 'history' ? 'tab-active' : '' }}"{{ active == 'history' ? ' aria-current="page"' : '' }}>History</a>
+</div>

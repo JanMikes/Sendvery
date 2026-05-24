@@ -7,6 +7,8 @@
 {% endblock %}
 
 {% block content %}
+    <twig:DomainWorkspaceTabs :domain="domain" active="reports" />
+
     <twig:ReportsFilterBar
         filter="{{ filter }}"
         reporterOptions="{{ reporterOptions }}"

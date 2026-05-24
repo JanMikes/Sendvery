@@ -43,11 +43,11 @@ final class CrossTenantAccessTest extends WebTestCase
         [$victimDomainId, $attackerClient] = $this->setupVictimAndAttacker();
         $attackerClient->request('GET', '/app/domains/'.$victimDomainId.'/reports');
 
-        // The reports list controller doesn't 404 on an unknown domain (the
-        // SQL just returns an empty list) — confirm cross-tenant produces an
-        // empty page, not the victim's reports.
-        self::assertResponseIsSuccessful();
-        self::assertSelectorTextNotContains('body', 'noreply@google.com');
+        // TASK-031 tightened this surface: the reports list now resolves the
+        // domain via GetDomainDetail and 404s on cross-tenant ids (in addition
+        // to silently filtering out their report rows). This means an attacker
+        // can't even confirm the domain id exists in our system.
+        self::assertResponseStatusCodeSame(404);
     }
 
     #[Test]

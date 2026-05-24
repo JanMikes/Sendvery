@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Dashboard;
 
 use App\Query\GetAllReports;
+use App\Query\GetDomainDetail;
 use App\Query\GetReporterOrgs;
 use App\Services\DashboardContext;
 use App\Value\ReportsFilter;
@@ -20,6 +21,7 @@ final class ListDomainReportsController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetAllReports $getAllReports,
         private readonly GetReporterOrgs $getReporterOrgs,
+        private readonly GetDomainDetail $getDomainDetail,
         private readonly ClockInterface $clock,
     ) {
     }
@@ -27,11 +29,17 @@ final class ListDomainReportsController extends AbstractController
     #[Route('/app/domains/{id}/reports', name: 'dashboard_domain_reports')]
     public function __invoke(Request $request, string $id): Response
     {
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
+        $domain = $this->getDomainDetail->forDomain($id, $teamIds);
+
+        if (null === $domain) {
+            throw $this->createNotFoundException('Domain not found.');
+        }
+
         $page = max(1, $request->query->getInt('page', 1));
         $limit = 25;
         $offset = ($page - 1) * $limit;
 
-        $teamIds = $this->dashboardContext->getTeamIdStrings();
         $filter = ReportsFilter::fromRequest($request, $this->clock);
 
         $reports = $this->getAllReports->forTeams(
@@ -54,6 +62,7 @@ final class ListDomainReportsController extends AbstractController
 
         return $this->render($template, [
             'reports' => $reports,
+            'domain' => $domain,
             'domainId' => $id,
             'currentPage' => $page,
             'hasNextPage' => count($reports) === $limit,

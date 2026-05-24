@@ -56,8 +56,16 @@
             <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}" class="btn btn-ghost btn-sm">
                 DNS Health Check
             </a>
+            <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}" class="btn btn-ghost btn-sm">
+                Senders
+            </a>
+            <a href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}" class="btn btn-ghost btn-sm">
+                Blacklist
+            </a>
         </div>
     </div>
+
+    <twig:DomainWorkspaceTabs :domain="domain" active="overview" />
 
     {% if quarantineCount > 0 %}
         <div class="rounded-2xl border border-warning/30 bg-warning/5 p-5 mb-6">
@@ -90,7 +98,9 @@
             value="{{ domain.passRate|number_format(1) }}%"
             variant="{{ domain.passRate >= 90 ? 'success' : (domain.passRate >= 70 ? 'warning' : 'error') }}"
         />
-        <twig:StatCard title="Unique Senders" value="{{ domain.uniqueSenders }}" />
+        <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}" class="block">
+            <twig:StatCard title="Unique Senders" value="{{ domain.uniqueSenders }}" />
+        </a>
         <twig:StatCard title="Reports" value="{{ domain.totalReports }}" />
     </div>
 
@@ -104,12 +114,23 @@
         />
 
         {% if senders is not empty %}
-            <twig:ChartCard
-                title="Top Senders"
-                description="By message volume"
-                :config="senderChartConfig"
-                height="300px"
-            />
+            {# Inlined ChartCard so we can attach a "View all senders →" link
+               in the header — the shared ChartCard component has no slot for
+               header extras. Mirrors the rest of the dashboard card shell. #}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-semibold">Top Senders</h3>
+                            <p class="text-xs text-base-content/50 mt-0.5">By message volume</p>
+                        </div>
+                        <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
+                           class="text-xs text-primary hover:underline">View all senders →</a>
+                    </div>
+                    <div class="mt-3" style="min-height: 300px"
+                         {{ stimulus_controller('chart', { config: senderChartConfig }) }}></div>
+                </div>
+            </div>
         {% else %}
             <div class="card bg-base-100 border border-base-200 shadow-sm">
                 <div class="card-body p-4">

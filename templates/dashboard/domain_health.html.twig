@@ -25,6 +25,8 @@
         </div>
     </div>
 
+    <twig:DomainWorkspaceTabs :domain="domain" active="dns" />
+
     {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
         <div class="mb-6">
             <twig:DnsRecordInstruction
@@ -67,7 +69,13 @@
                                     <span>{{ cat.name }}</span>
                                     <span class="font-medium">{{ cat.score }}%</span>
                                 </div>
+                                {% if cat.id == 'health-blacklist' %}
+                                    <a href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}" class="block">
+                                {% endif %}
                                 <progress class="progress {{ cat.score >= 80 ? 'progress-success' : (cat.score >= 50 ? 'progress-warning' : 'progress-error') }} w-full" value="{{ cat.score }}" max="100"></progress>
+                                {% if cat.id == 'health-blacklist' %}
+                                    </a>
+                                {% endif %}
                             </div>
                         {% endfor %}
                     </div>

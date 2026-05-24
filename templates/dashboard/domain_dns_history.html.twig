@@ -16,6 +16,8 @@
         </div>
     </div>
 
+    <twig:DomainWorkspaceTabs :domain="domain" active="history" />
+
     {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
         <div class="mb-6">
             <twig:DnsRecordInstruction
