@@ -281,7 +281,7 @@ return App::config([
             'App\Query\GetDomainVerificationStatus' => [
                 'public' => true,
             ],
-            'App\Query\GetDomainSenderBreakdown' => [
+            'App\Query\GetTopSendersForDomain' => [
                 'public' => true,
             ],
             'App\Query\GetDomainPassRateTrend' => [

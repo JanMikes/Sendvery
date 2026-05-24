@@ -8,7 +8,7 @@ use App\Query\GetAllReports;
 use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainPassRateTrend;
-use App\Query\GetDomainSenderBreakdown;
+use App\Query\GetTopSendersForDomain;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,7 +21,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetAllReports $getAllReports,
-        private readonly GetDomainSenderBreakdown $getDomainSenderBreakdown,
+        private readonly GetTopSendersForDomain $getTopSendersForDomain,
         private readonly GetDomainPassRateTrend $getDomainPassRateTrend,
         private readonly QuarantinedDmarcReportRepository $quarantineRepository,
         private readonly GetDnsHealthOverview $getDnsHealthOverview,
@@ -39,7 +39,8 @@ final class ShowDomainDetailController extends AbstractController
         }
 
         $reports = $this->getAllReports->forTeams($teamIds, limit: 10, domainId: $id);
-        $senders = $this->getDomainSenderBreakdown->forDomain($id, $teamIds);
+        $senders = $this->getTopSendersForDomain->forDomain($id, $teamIds, limit: 5);
+        $senderSummary = $this->getTopSendersForDomain->summaryForDomain($id, $teamIds);
         $trendData = $this->getDomainPassRateTrend->forDomain($id, $teamIds, days: 90);
 
         $trendChartConfig = [
@@ -59,16 +60,28 @@ final class ShowDomainDetailController extends AbstractController
             'tooltip' => ['x' => ['format' => 'MMM dd']],
         ];
 
-        $senderLabels = array_map(static fn ($s) => $s->resolvedOrg ?? $s->sourceIp, $senders);
+        // Colour each bar by authorization status: --color-success for
+        // authorised IPs (we know who you are, no action needed) and
+        // --color-warning for unknown ones (you should review these). Using
+        // CSS variables instead of hex literals keeps the chart palette in
+        // sync with the theme tokens and lets the rendered config self-document
+        // the colour rule for the test suite (TASK-038).
+        $senderLabels = array_map(static fn ($s) => $s->displayLabel, $senders);
+        $senderColors = array_map(
+            static fn ($s) => true === $s->senderIsAuthorized
+                ? 'var(--color-success)'
+                : 'var(--color-warning)',
+            $senders,
+        );
         $senderChartConfig = [
             'chart' => ['type' => 'bar', 'height' => 300],
             'series' => [
-                ['name' => 'Pass', 'data' => array_map(static fn ($s) => $s->passCount, $senders)],
-                ['name' => 'Fail', 'data' => array_map(static fn ($s) => $s->failCount, $senders)],
+                ['name' => 'Messages', 'data' => array_map(static fn ($s) => $s->totalMessages, $senders)],
             ],
             'xaxis' => ['categories' => $senderLabels],
-            'colors' => ['#34d399', '#f87171'],
-            'plotOptions' => ['bar' => ['horizontal' => true, 'barHeight' => '70%', 'stacked' => true]],
+            'colors' => $senderColors,
+            'plotOptions' => ['bar' => ['horizontal' => true, 'barHeight' => '70%', 'distributed' => true]],
+            'legend' => ['show' => false],
             'dataLabels' => ['enabled' => false],
         ];
 
@@ -85,6 +98,7 @@ final class ShowDomainDetailController extends AbstractController
             'domain' => $domain,
             'reports' => $reports,
             'senders' => $senders,
+            'senderSummary' => $senderSummary,
             'trendChartConfig' => $trendChartConfig,
             'senderChartConfig' => $senderChartConfig,
             'quarantineCount' => $quarantineCount,

@@ -2322,7 +2322,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-038: Domain detail "Top Senders" chart is a chart-of-mystery — no labels, no authorization status, not clickable, value is hidden
 
-- Status: proposed
+- Status: done
 - Area: domains
 - Why: Make-value-visible audit. `templates/dashboard/domain_detail.html.twig` (lines 106-123) renders an ApexCharts donut/bar of "Top Senders by message volume." There's no legend showing which sender is which, no indication of which senders are Authorized vs Unknown (the data is in `known_sender` and we already query it for `report_detail.html.twig` per TASK-017), no link from any chart segment to the sender's detail row. The single most actionable insight a user can get from DMARC data — "Mailchimp is sending 40% of my mail and 8% of it fails DKIM" — is literally on this page but unreadable. This is the canonical "data we have, magic we're hiding" gap.
 - Acceptance:

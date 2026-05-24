@@ -80,7 +80,9 @@
                     </thead>
                     <tbody>
                         {% for sender in senders %}
-                            <tr>
+                            {# id="sender-{id}" enables deep-link targets from
+                               the domain-detail "Top Senders" table (TASK-038). #}
+                            <tr id="sender-{{ sender.id }}">
                                 <td>
                                     <input type="checkbox"
                                            name="senderIds[]"

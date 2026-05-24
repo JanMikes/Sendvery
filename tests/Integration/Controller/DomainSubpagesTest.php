@@ -248,7 +248,7 @@ final class DomainSubpagesTest extends WebTestCase
         assert($em instanceof EntityManagerInterface);
 
         // The Top Senders chart pulls from `dmarc_record` rows via
-        // `GetDomainSenderBreakdown`. Seed a `KnownSender` for parity with
+        // `GetTopSendersForDomain`. Seed a `KnownSender` for parity with
         // the inventory table AND a real DMARC record so the senders-not-empty
         // branch of the template renders.
         $em->persist(new KnownSender(
@@ -308,6 +308,372 @@ final class DomainSubpagesTest extends WebTestCase
             0,
             $link->count(),
             'Top Senders chart card must render a "View all senders →" link when sender data is present.',
+        );
+    }
+
+    /**
+     * TASK-038 — the Top Senders card gains a "X authorized · Y unknown ·
+     * Z unique IPs" stat row above the chart. Each count clicks through to
+     * the matching filter on the sender inventory page.
+     */
+    #[Test]
+    public function topSendersStatRowShowsAuthorizedAndUnknownCounts(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $em->persist(new KnownSender(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            sourceIp: '203.0.113.7',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 5000,
+            passRate: 98.0,
+            isAuthorized: true,
+        ));
+        $em->persist(new KnownSender(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            sourceIp: '203.0.113.8',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 200,
+            passRate: 10.0,
+            isAuthorized: false,
+        ));
+        $em->flush();
+
+        $domainId = $persona->domain->id->toString();
+        $crawler = $client->request('GET', '/app/domains/'.$domainId);
+
+        self::assertResponseIsSuccessful();
+
+        $authorizedNode = $crawler->filter('[data-testid="sender-summary-authorized"]');
+        $unknownNode = $crawler->filter('[data-testid="sender-summary-unknown"]');
+        $uniqueIpsNode = $crawler->filter('[data-testid="sender-summary-unique-ips"]');
+
+        self::assertGreaterThan(0, $authorizedNode->count(), 'Stat row must render the authorized count.');
+        self::assertGreaterThan(0, $unknownNode->count(), 'Stat row must render the unknown count.');
+        self::assertGreaterThan(0, $uniqueIpsNode->count(), 'Stat row must render the unique-IPs count.');
+
+        self::assertStringContainsString('1', $authorizedNode->text());
+        self::assertStringContainsString('authorized', $authorizedNode->text());
+        self::assertStringContainsString('1', $unknownNode->text());
+        self::assertStringContainsString('unknown', $unknownNode->text());
+        self::assertStringContainsString('2', $uniqueIpsNode->text());
+        self::assertStringContainsString('unique IPs', $uniqueIpsNode->text());
+    }
+
+    #[Test]
+    public function topSendersStatRowCountsAreClickable(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $em->persist(new KnownSender(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            sourceIp: '203.0.113.10',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 5000,
+            passRate: 98.0,
+            isAuthorized: true,
+        ));
+        $em->flush();
+
+        $domainId = $persona->domain->id->toString();
+        $crawler = $client->request('GET', '/app/domains/'.$domainId);
+
+        self::assertResponseIsSuccessful();
+
+        $sendersUrl = '/app/domains/'.$domainId.'/senders';
+
+        $authorized = $crawler->filter('[data-testid="sender-summary-authorized"]')->attr('href');
+        $unknown = $crawler->filter('[data-testid="sender-summary-unknown"]')->attr('href');
+        $uniqueIps = $crawler->filter('[data-testid="sender-summary-unique-ips"]')->attr('href');
+
+        self::assertSame($sendersUrl.'?filter=authorized', $authorized);
+        self::assertSame($sendersUrl.'?filter=unauthorized', $unknown);
+        self::assertSame($sendersUrl, $uniqueIps);
+    }
+
+    #[Test]
+    public function topSendersTableRendersTopFiveByVolume(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $report = new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'task-038-top5-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: new \DateTimeImmutable('-7 days'),
+            dateRangeEnd: new \DateTimeImmutable('-1 day'),
+            policyDomain: $persona->domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::None,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback/>',
+            processedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($report);
+
+        for ($i = 1; $i <= 7; ++$i) {
+            $em->persist(new DmarcRecord(
+                id: Uuid::uuid7(),
+                dmarcReport: $report,
+                sourceIp: '10.0.0.'.$i,
+                count: 100 - $i,
+                disposition: Disposition::None,
+                dkimResult: AuthResult::Pass,
+                spfResult: AuthResult::Pass,
+                headerFrom: $persona->domain->domain,
+                resolvedOrg: 'Org-'.$i,
+            ));
+        }
+        $em->flush();
+
+        $domainId = $persona->domain->id->toString();
+        $crawler = $client->request('GET', '/app/domains/'.$domainId);
+
+        self::assertResponseIsSuccessful();
+
+        $rows = $crawler->filter('[data-testid="top-senders-table"] tbody tr');
+        self::assertCount(5, $rows, 'Top Senders table must render exactly 5 rows when 7 senders exist.');
+    }
+
+    #[Test]
+    public function topSendersTableRowsLinkToSenderInventoryWithFragment(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $knownSenderId = Uuid::uuid7();
+        $em->persist(new KnownSender(
+            id: $knownSenderId,
+            monitoredDomain: $persona->domain,
+            sourceIp: '203.0.113.7',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 5000,
+            passRate: 98.0,
+            isAuthorized: true,
+        ));
+
+        $report = new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'task-038-fragment-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: new \DateTimeImmutable('-7 days'),
+            dateRangeEnd: new \DateTimeImmutable('-1 day'),
+            policyDomain: $persona->domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::None,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback/>',
+            processedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($report);
+
+        $em->persist(new DmarcRecord(
+            id: Uuid::uuid7(),
+            dmarcReport: $report,
+            sourceIp: '203.0.113.7',
+            count: 1000,
+            disposition: Disposition::None,
+            dkimResult: AuthResult::Pass,
+            spfResult: AuthResult::Pass,
+            headerFrom: $persona->domain->domain,
+            resolvedOrg: 'Mailchimp',
+        ));
+        $em->flush();
+
+        $domainId = $persona->domain->id->toString();
+        $crawler = $client->request('GET', '/app/domains/'.$domainId);
+
+        self::assertResponseIsSuccessful();
+
+        $sendersUrl = '/app/domains/'.$domainId.'/senders';
+        $expected = $sendersUrl.'#sender-'.$knownSenderId->toString();
+        $rowLinks = $crawler->filter('[data-testid="top-senders-table"] tbody tr a[href="'.$expected.'"]');
+        self::assertGreaterThan(
+            0,
+            $rowLinks->count(),
+            'Each Top Senders table row must deep-link to the sender inventory with `#sender-{id}` fragment.',
+        );
+    }
+
+    #[Test]
+    public function topSendersChartConfigUsesAuthorizationColorTokens(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        // One authorized + one unknown IP. The chart's colours array must
+        // reference --color-success for the authorized sender and
+        // --color-warning for the unknown one (TASK-038 acceptance criterion).
+        $em->persist(new KnownSender(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            sourceIp: '203.0.113.7',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 5000,
+            passRate: 98.0,
+            isAuthorized: true,
+        ));
+
+        $report = new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'task-038-colors-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: new \DateTimeImmutable('-7 days'),
+            dateRangeEnd: new \DateTimeImmutable('-1 day'),
+            policyDomain: $persona->domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::None,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback/>',
+            processedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($report);
+
+        $em->persist(new DmarcRecord(
+            id: Uuid::uuid7(),
+            dmarcReport: $report,
+            sourceIp: '203.0.113.7',
+            count: 1000,
+            disposition: Disposition::None,
+            dkimResult: AuthResult::Pass,
+            spfResult: AuthResult::Pass,
+            headerFrom: $persona->domain->domain,
+            resolvedOrg: 'Authorized Org',
+        ));
+        $em->persist(new DmarcRecord(
+            id: Uuid::uuid7(),
+            dmarcReport: $report,
+            sourceIp: '198.51.100.4',
+            count: 100,
+            disposition: Disposition::None,
+            dkimResult: AuthResult::Fail,
+            spfResult: AuthResult::Fail,
+            headerFrom: $persona->domain->domain,
+            resolvedOrg: 'Unknown Org',
+        ));
+        $em->flush();
+
+        $domainId = $persona->domain->id->toString();
+        $client->request('GET', '/app/domains/'.$domainId);
+
+        self::assertResponseIsSuccessful();
+
+        $html = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('--color-success', $html, 'Chart config must reference --color-success for authorized senders.');
+        self::assertStringContainsString('--color-warning', $html, 'Chart config must reference --color-warning for unknown senders.');
+    }
+
+    #[Test]
+    public function topSendersEmptyStateShowsEducationalCopy(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $domainId = $persona->domain->id->toString();
+        $crawler = $client->request('GET', '/app/domains/'.$domainId);
+
+        self::assertResponseIsSuccessful();
+
+        $emptyState = $crawler->filter('[data-testid="top-senders-empty-state"]');
+        self::assertGreaterThan(0, $emptyState->count(), 'Empty state must render when no senders exist.');
+        self::assertStringContainsString('DMARC reports tell us which servers', $emptyState->text());
+        self::assertGreaterThan(
+            0,
+            $emptyState->filter('a[href="/learn/what-is-dmarc"]')->count(),
+            'Empty state must link to the canonical "What is DMARC" KB article.',
+        );
+    }
+
+    #[Test]
+    public function senderInventoryRowsHaveIdForDeepLinking(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $senderId = Uuid::uuid7();
+        $em->persist(new KnownSender(
+            id: $senderId,
+            monitoredDomain: $persona->domain,
+            sourceIp: '203.0.113.7',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 5000,
+            passRate: 98.0,
+            isAuthorized: true,
+        ));
+        $em->flush();
+
+        $domainId = $persona->domain->id->toString();
+        $crawler = $client->request('GET', '/app/domains/'.$domainId.'/senders');
+
+        self::assertResponseIsSuccessful();
+
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('tr#sender-'.$senderId->toString())->count(),
+            'Each sender row must have id="sender-{id}" so the domain-detail top senders table can deep-link via #fragment.',
         );
     }
 

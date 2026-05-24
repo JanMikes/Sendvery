@@ -113,35 +113,125 @@
             height="280px"
         />
 
-        {% if senders is not empty %}
-            {# Inlined ChartCard so we can attach a "View all senders →" link
-               in the header — the shared ChartCard component has no slot for
-               header extras. Mirrors the rest of the dashboard card shell. #}
-            <div class="card bg-base-100 border border-base-200 shadow-sm">
-                <div class="card-body p-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="text-sm font-semibold">Top Senders</h3>
-                            <p class="text-xs text-base-content/50 mt-0.5">By message volume</p>
-                        </div>
+        {# Inlined ChartCard so we can attach a "View all senders →" link
+           in the header AND a sender-summary stat row + labelled table
+           (TASK-038). The shared ChartCard component is intentionally
+           minimal — it owns one chart and no chrome. Mirrors the rest of
+           the dashboard card shell. #}
+        <div class="card bg-base-100 border border-base-200 shadow-sm">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-semibold">Top Senders</h3>
+                        <p class="text-xs text-base-content/50 mt-0.5">By message volume</p>
+                    </div>
+                    {% if senders is not empty %}
                         <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
                            class="text-xs text-primary hover:underline">View all senders →</a>
+                    {% endif %}
+                </div>
+
+                {# Senders-by-authorization stat row. Renders whenever there's
+                   anything to count — known_sender rows can exist even before
+                   DMARC records do (manual seed, import, etc.). Each count
+                   clicks through to the matching filter on the sender
+                   inventory page (`?filter=authorized|unauthorized`). The
+                   "unique IPs" count links to the unfiltered page — there is
+                   no per-IP filter axis on the inventory today. #}
+                {% if senderSummary.authorizedCount > 0 or senderSummary.unknownCount > 0 or senderSummary.uniqueIpCount > 0 %}
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-base-content/70">
+                        <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId, filter: 'authorized'}) }}"
+                           class="hover:underline" data-testid="sender-summary-authorized">
+                            <span class="font-semibold text-success">{{ senderSummary.authorizedCount }}</span> authorized
+                        </a>
+                        <span class="text-base-content/30">·</span>
+                        <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId, filter: 'unauthorized'}) }}"
+                           class="hover:underline" data-testid="sender-summary-unknown">
+                            <span class="font-semibold text-warning">{{ senderSummary.unknownCount }}</span> unknown
+                        </a>
+                        <span class="text-base-content/30">·</span>
+                        <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
+                           class="hover:underline" data-testid="sender-summary-unique-ips">
+                            <span class="font-semibold">{{ senderSummary.uniqueIpCount }}</span> unique IPs
+                        </a>
                     </div>
+                {% endif %}
+
+                {% if senders is not empty %}
                     <div class="mt-3" style="min-height: 300px"
                          {{ stimulus_controller('chart', { config: senderChartConfig }) }}></div>
-                </div>
+
+                    {# Labelled sender summary table — top 5 by volume. Each row
+                       deep-links into the sender inventory page via the
+                       `#sender-{id}` fragment (matching `id` attribute lives
+                       on every inventory row). #}
+                    <div class="overflow-x-auto mt-4" data-testid="top-senders-table">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Sender</th>
+                                    <th class="text-right">Messages</th>
+                                    <th class="text-right">DKIM</th>
+                                    <th class="text-right">SPF</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for sender in senders %}
+                                    <tr class="hover:bg-base-200/50 relative">
+                                        <td class="font-medium">
+                                            {% if sender.knownSenderId %}
+                                                <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}#sender-{{ sender.knownSenderId }}"
+                                                   class="absolute inset-0 z-10"
+                                                   aria-label="View {{ sender.displayLabel }} in sender inventory"></a>
+                                            {% else %}
+                                                <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
+                                                   class="absolute inset-0 z-10"
+                                                   aria-label="View senders for {{ sender.displayLabel }}"></a>
+                                            {% endif %}
+                                            {{ sender.displayLabel }}
+                                        </td>
+                                        <td class="text-right">{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
+                                        <td class="text-right">
+                                            <span class="{{ sender.dkimPassRate >= 90 ? 'text-success' : (sender.dkimPassRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                                {{ sender.dkimPassRate|number_format(1) }}%
+                                            </span>
+                                        </td>
+                                        <td class="text-right">
+                                            <span class="{{ sender.spfPassRate >= 90 ? 'text-success' : (sender.spfPassRate >= 70 ? 'text-warning' : 'text-error') }}">
+                                                {{ sender.spfPassRate|number_format(1) }}%
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if sender.senderIsAuthorized %}
+                                                <span class="badge badge-sm badge-success">Authorized</span>
+                                            {% else %}
+                                                <span class="badge badge-sm badge-warning">Unknown</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    {# Educational empty state — DMARC newcomers see this on
+                       day one before any reports have arrived. Explains the
+                       cause/effect (publish DMARC → receivers send reports →
+                       sender breakdown appears) and links to the canonical
+                       "What is DMARC" KB article. #}
+                    <div class="text-center py-10" data-testid="top-senders-empty-state">
+                        <p class="text-sm text-base-content/70 max-w-md mx-auto">
+                            DMARC reports tell us which servers are sending email as your domain. Sender breakdown appears here once Gmail/Outlook send their first report — usually within 24 hours of publishing DMARC.
+                        </p>
+                        <a href="{{ path('knowledge_base_article', {slug: 'what-is-dmarc'}) }}"
+                           class="link link-primary text-sm mt-3 inline-block">
+                            Learn what DMARC is →
+                        </a>
+                    </div>
+                {% endif %}
             </div>
-        {% else %}
-            <div class="card bg-base-100 border border-base-200 shadow-sm">
-                <div class="card-body p-4">
-                    <h3 class="text-sm font-semibold">Top Senders</h3>
-                    <twig:EmptyState
-                        title="No sender data"
-                        message="Sender breakdown will appear once DMARC reports are processed."
-                    />
-                </div>
-            </div>
-        {% endif %}
+        </div>
     </div>
 
     {# Recent reports table #}
