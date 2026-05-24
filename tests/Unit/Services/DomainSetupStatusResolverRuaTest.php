@@ -116,7 +116,11 @@ final class DomainSetupStatusResolverRuaTest extends TestCase
         );
 
         self::assertSame(DomainSetupDisplayMode::BannerAndPanel, $status->displayMode);
-        self::assertSame('Monitoring active — all four records are in place', $status->headline);
+        // TASK-101: scenario (c) headline is scenario-aware — saying "all
+        // four records are in place" while the panel below shows a yellow
+        // 5th row would have been a same-page contradiction.
+        self::assertSame('DNS records in place — choose where reports land', $status->headline);
+        self::assertStringContainsString('SPF, DKIM, DMARC and MX are all configured', $status->panelLede);
     }
 
     #[Test]

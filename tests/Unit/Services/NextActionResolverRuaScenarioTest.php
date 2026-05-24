@@ -88,6 +88,39 @@ final class NextActionResolverRuaScenarioTest extends TestCase
     }
 
     #[Test]
+    public function scenarioPointsAtSendveryWithoutFirstReportEmitsWaitForReportsNotAllHealthy(): void
+    {
+        // TASK-102 regression: a freshly-verified scenario-(b) domain that's
+        // received zero reports yet must NOT see "All your domains are
+        // healthy and reports are flowing" — that's the round-3-class lie.
+        // The scenario-(b) shortcut should defer to WaitForReports until
+        // the first report actually lands.
+        $resolver = new NextActionResolver();
+
+        $result = $resolver->resolve(
+            domains: [$this->buildDomain(totalReports: 0)],
+            verificationStatus: $this->buildStatus(
+                dmarcVerifiedAt: new \DateTimeImmutable('-1 day'),
+                firstReportAt: null,
+            ),
+            verificationSeverity: DomainVerificationSeverity::Ok,
+            unreadCriticalAlertCount: 0,
+            quarantineCount: 0,
+            hasMailbox: false,
+            reportAddress: 'reports@sendvery.com',
+            earliestDomainAddedAt: new \DateTimeImmutable('-1 day'),
+            ingestionPaths: [$this->buildIngestionPath('example.com', IngestionPath::None)],
+            ingestionRecommendationDismissedAt: null,
+            now: new \DateTimeImmutable(),
+            headlineDomainRuaScenario: new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com'),
+        );
+
+        self::assertSame(NextAction::WaitForReports, $result->actionKey);
+        self::assertStringNotContainsString('reports are flowing', $result->description);
+        self::assertStringContainsString('24-48', $result->description);
+    }
+
+    #[Test]
     public function connectExternalMailboxEmittedWhenScenarioIsPointsAtExternal(): void
     {
         // Scenario (c): DMARC sends reports to an external inbox the user

@@ -51,17 +51,20 @@
     </div>
 
     {# Reason-specific inline help card. Sits above the table when a filter is
-       active so the upsell / tip is co-located with the rows it explains. #}
+       active so the upsell / tip is co-located with the rows it explains.
+       Tone tokens MUST match QuarantineReason::severityTone() — the row
+       glyph, the row badge, and this help card all read from the same
+       enum method (TASK-103) so the three signals can never drift apart. #}
     {% if activeFilter is not null and activeFilter.value == 'plan_overage' and items is not empty %}
-        <div class="alert bg-warning/10 border border-warning/30 mb-4">
-            <svg class="w-6 h-6 text-warning shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <div class="alert bg-error/10 border border-error/30 mb-4">
+            <svg class="w-6 h-6 text-error shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-2.5L13.73 4a2 2 0 00-3.46 0L3.34 16.5c-.77.83.19 2.5 1.73 2.5z"/>
             </svg>
             <div>
                 <p class="font-semibold">These reports were received after you hit this month's cap.</p>
                 <p class="text-sm text-base-content/70">Upgrade to unlock them — your existing parked reports auto-release on the next bill cycle of your new plan.</p>
             </div>
-            <a href="{{ path('dashboard_billing') }}" class="btn btn-warning btn-sm">Upgrade</a>
+            <a href="{{ path('dashboard_billing') }}" class="btn btn-error btn-sm">Upgrade</a>
         </div>
     {% elseif activeFilter is not null and activeFilter.value == 'unknown_domain' and items is not empty %}
         <div class="alert bg-info/10 border border-info/30 mb-4">
@@ -74,8 +77,8 @@
             </div>
         </div>
     {% elseif activeFilter is not null and activeFilter.value == 'unverified_domain' and items is not empty %}
-        <div class="alert bg-info/10 border border-info/30 mb-4">
-            <svg class="w-6 h-6 text-info shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <div class="alert bg-warning/10 border border-warning/30 mb-4">
+            <svg class="w-6 h-6 text-warning shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
             </svg>
             <div>
@@ -179,18 +182,18 @@
                                     <td class="font-medium">{{ item.domainName }}</td>
                                     <td class="text-sm text-base-content/70">{{ item.reporterEmail }}</td>
                                     <td>
-                                        {% if item.reason == 'unknown_domain' %}
-                                            <a href="{{ path('dashboard_quarantine', { reason: 'unknown_domain' }) }}"
-                                               class="relative z-20 badge badge-sm badge-warning"
-                                               aria-label="Filter by Unknown domain">Unknown domain</a>
-                                        {% elseif item.reason == 'unverified_domain' %}
-                                            <a href="{{ path('dashboard_quarantine', { reason: 'unverified_domain' }) }}"
-                                               class="relative z-20 badge badge-sm badge-info"
-                                               aria-label="Filter by Unverified domain">Unverified domain</a>
-                                        {% elseif item.reason == 'plan_overage' %}
-                                            <a href="{{ path('dashboard_quarantine', { reason: 'plan_overage' }) }}"
-                                               class="relative z-20 badge badge-sm badge-error"
-                                               aria-label="Filter by Plan overage">Plan overage</a>
+                                        {# TASK-103: badge color reads from QuarantineReason::severityTone()
+                                           — same source as the leading row glyph + the inline help card —
+                                           so the three signals on this row never disagree. #}
+                                        {% if itemReason %}
+                                            {% set reasonLabel = {
+                                                'unknown_domain': 'Unknown domain',
+                                                'unverified_domain': 'Unverified domain',
+                                                'plan_overage': 'Plan overage',
+                                            }[itemReason.value] %}
+                                            <a href="{{ path('dashboard_quarantine', { reason: itemReason.value }) }}"
+                                               class="relative z-20 badge badge-sm badge-{{ itemSeverity }}"
+                                               aria-label="Filter by {{ reasonLabel }}">{{ reasonLabel }}</a>
                                         {% else %}
                                             <span class="badge badge-sm badge-ghost">{{ item.reason }}</span>
                                         {% endif %}

@@ -3559,3 +3559,93 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
   - Composes with TASK-094 (Mailbox health advisor) — TASK-094 should only nudge "consider switching to DNS-based ingestion" when scenario is (c), not (b).
   - Composes with TASK-096 (onboarding DNS-first reordering) — TASK-100's onboarding step IS the DNS-first reordering. Either bundle them or ship TASK-100 first and let TASK-096 fold into it.
   - **Why this leads round 4**: it's a higher-leverage product recommendation than anything else in the deferred list because it uses Sendvery's own competence (DMARC parsing) to give the user information no other product surface can. Every "what should I do?" moment becomes specific — "based on YOUR DMARC record, here's the exact next step" — instead of generic. It's the canonical "where the system has an opinion, surface it" moment from the original brief. From a product-positioning angle, this is one of Sendvery's defining features applied as a recommendation engine.
+
+---
+
+## TASK-101: `DomainStatusBanner` says "all four records are in place" while the panel directly below says "4 of 5 checks passing" — scenario-(c) contradiction introduced by TASK-100's 5th protocol row
+
+- Status: done
+- Area: dashboard / domains / setup-status
+- Why: TASK-100 added a 5th `ProtocolSetupStatus` row ("RUA destination") to the protocols list returned by `DomainSetupStatusResolver`. The resolver's `$allConfigured` short-circuit still inspects only the original four (SPF/DKIM/DMARC/MX) so it returns the all-green headline `"Monitoring active — all four records are in place"` for a scenario-(c) domain (DMARC published, RUA points at external inbox). But `DomainSetupStatus.html.twig` iterates `status.protocols` (all 5) to compute its OWN `allConfigured` flag, which is false because the RUA row is `Invalid`. So the template falls through to the partial-checklist branch — header says `"4 of 5 checks passing"` and lede says `"Finish the items below to start receiving DMARC reports for this domain."` That second sentence is also a wrong-information claim for scenario (c): reports ARE being delivered, just to the user's own inbox. This is the round-3-style "two adjacent cards contradict each other" regression in a new costume — banner green, panel yellow, lede claims no reports are arriving, all in the first 600px of `/app/domains/{id}`.
+- Acceptance:
+  - For a scenario-(c) domain where SPF/DKIM/DMARC/MX are all `Configured` and the RUA row is `Invalid` (PointsAtExternal), the banner headline and the panel header agree on tone and count. Specifically: the banner should NOT say "all four records are in place" when a 5th relevant row is yellow. Two acceptable resolutions:
+    - (a) Update the banner copy to "DNS records all in place — choose a reports destination" with a warning tone, OR
+    - (b) Hoist `allConfigured` computation into the resolver over all 5 rows so banner severity tracks panel reality, and update the headline accordingly.
+  - For a scenario-(c) domain, the lede in the partial-checklist branch must NOT say "Finish the items below to start receiving DMARC reports for this domain." Reports ARE being received — at an external inbox. Replace with copy that frames the row as a routing decision, e.g. `"Reports are flowing to {ruaEmail}. Pick where you want them to land."`
+  - Snapshot test: render `/app/domains/{id}` for a fixture matching scenario (c) all-DNS-green + RUA external. Assert the banner copy, the panel header text, and the lede text are mutually consistent (no green-says-X-while-yellow-says-Y).
+  - Regression test added to `DomainSetupStatusResolverTest` that exercises the 5-protocol allConfigured logic explicitly.
+- Notes:
+  - This was a foreseeable edge case the TASK-100 implementation comment on `DomainSetupStatusResolver:142` actually flags — "panel does the explaining" — but the explaining contradicts the banner. The fix is small (one match arm or one new copy line), the diagnostic is the cost.
+
+---
+
+## TASK-102: `NextActionResolver` returns `AllHealthy` ("All your domains are healthy and reports are flowing") for a freshly-verified scenario-(b) domain that has received zero reports yet — wrong-information bug in the first 48h after DMARC verification
+
+- Status: done
+- Area: dashboard / overview / next-action
+- Why: After TASK-100, when `RuaScenario::PointsAtSendvery` resolves for the headline domain and `hasCentralInboxReports = false` (because nothing has actually landed yet), the new short-circuit in `NextActionResolver.php:133-142` returns `AllHealthy` with copy `"All your domains are healthy and reports are flowing."` The earlier `WaitForReports` branch (line 79) only fires when `verificationSeverity` is Warning/Info, but `DomainVerificationEvaluator` keeps a freshly-verified-DMARC-no-reports-yet domain at `Ok` for the first 48h (the "report deadline" window). So between hour 0 and hour 48 after DMARC verification on a scenario-(b) domain, the Next Step card explicitly tells the user reports are flowing when zero have arrived. This is the round-3-style "wrong information" regression — same family as TASK-099 ("DMARC reports are being collected" for a domain with no DMARC record).
+- Acceptance:
+  - For a scenario-(b) domain with `verificationSeverity = Ok`, `hasCentralInboxReports = false`, and `firstReportAt = null`, the Next Step card must NOT use copy that claims reports are flowing. Acceptable copy: `"DMARC is published and points at Sendvery. Your first report usually arrives within 24-48 hours."` Severity: `info` or `success` (the setup IS correct), but the description must not lie about report flow.
+  - The fix should not regress the legitimate AllHealthy case where reports ARE flowing — gate the new copy on `firstReportAt is null` (data already on `DomainVerificationStatusResult`).
+  - Test: integration fixture for scenario (b) with `firstReportAt = null`. Assert the rendered Next Step card description string does NOT contain "reports are flowing" or "reports flow in".
+- Notes:
+  - Two near-identical AllHealthy returns now live in the resolver — the new scenario-(b) one (line 134) and the original fall-through (line 207). Easy to drift if both are touched separately. Consider extracting an `allHealthy()` factory + a sibling `dmarcVerifiedAwaitingFirstReport()` factory so the copy difference is structural rather than two ad-hoc string literals.
+
+---
+
+## TASK-103: `/app/quarantine` row badge colors contradict the row's leading severity glyph and the inline-help card tone for every reason — three-way tone disagreement within one table row
+
+- Status: done
+- Area: dashboard / quarantine / visual-status
+- Why: TASK-071 added a leading severity glyph driven by `QuarantineReason::severityTone()`, with `plan_overage = error`, `unverified_domain = warning`, `unknown_domain = info`. But the per-row reason badge hard-codes a different mapping in `quarantine.html.twig:182-194`: `unknown_domain → badge-warning`, `unverified_domain → badge-info`, `plan_overage → badge-error`. So on the same `unknown_domain` row the user sees a blue glyph on the left and a yellow badge in the middle — same row, two different "how alarmed should I be" signals. Worse, the inline help card above the table (lines 56-86) renders `plan_overage` in warning yellow while the row badge says error red. Three palettes for one concept. This is the round-3-style "severity divergence" regression that TASK-098 just unified for domain health, now repeating on the quarantine surface.
+- Acceptance:
+  - Glyph, reason badge, and reason-specific inline help card use the same severity tone for the same reason. Pick the enum (`QuarantineReason::severityTone()`) as the single source of truth and drive all three from it.
+  - Concrete mapping update: `unknown_domain` → blue/info everywhere (glyph already info; badge becomes info; help card already info). `unverified_domain` → yellow/warning everywhere (glyph already warning; badge becomes warning; help card needs to switch from info to warning OR the enum mapping flips to info — pick one and apply globally). `plan_overage` → red/error everywhere (glyph already error; badge already error; help card needs to flip from warning to error OR the alert turns into a danger callout).
+  - Regression test: snapshot a row of each reason. Assert glyph fill, badge class, and inline-help border class all share the same severity token.
+- Notes:
+  - The current code shipped three separate color choices because three separate templates own them. Extract a `quarantineReasonTone()` Twig macro that returns the daisyUI token, fed from the enum — same shape as `_severity_glyph.html.twig` already does for the glyph itself. Then every consumer (badge, help card, glyph wrapper) reads from one source.
+
+---
+
+## TASK-104: `MailboxHealthAdvisor` silentForTooLong copy speaks scenario-aware language but the `broken_credentials` and `quarantine_dominant` branches don't — operator fixes credentials on a redundant mailbox without being told the mailbox is no longer needed
+
+- Status: proposed
+- Area: dashboard / mailboxes / recommendations
+- Why: TASK-094 wired `ruaScenarioForLinkedDomain` into `MailboxHealthAdvisor::silentForTooLong()` so the copy for a silent mailbox bound to a scenario-(b) domain correctly says `"Your domain X already routes reports to Sendvery's central inbox — this private mailbox is redundant and can be disconnected."` But the other two branches (`brokenCredentials` and `quarantineDominant`) never receive the scenario at all — so for a scenario-(b) domain whose mailbox is throwing a credentials error, the operator sees `"Sendvery couldn't log into this mailbox at {polledAt}: {error}. Re-test the connection or update credentials."` with no hint that the mailbox is actually redundant. The operator does the credential-rotation dance, the mailbox starts polling cleanly again, and now they have a working mailbox they didn't need. Same trap for `quarantine_dominant` on a scenario-(b) domain — operator investigates quarantine reasons on an inbox that shouldn't be polled at all.
+- Acceptance:
+  - `brokenCredentials()` and `quarantineDominant()` receive the same `?RuaScenarioResult $ruaScenarioForLinkedDomain` parameter as `silentForTooLong()`.
+  - When the scenario is `PointsAtSendvery` and the mailbox is bound to that domain, append a one-sentence "you might not need this mailbox" advisory to the reason text — preserving the actionable primary CTA but adding a secondary `"Disconnect this mailbox"` link OR a quieter inline line `"Note: this domain already ingests via Sendvery's central inbox — fixing credentials is optional, you can disconnect this mailbox instead."`
+  - Existing tests for the three branches keep passing; new tests cover each branch × each scenario (3×3 = 9 fixtures, only 3 of which add the scenario-aware sentence).
+  - The advisor still works for team-shared mailboxes where `monitoredDomain` is null — no scenario sentence in that case (matches the existing `silentForTooLong` fallback at line 169-171).
+- Notes:
+  - The advisor is the right place for this — not the template — because the rule ("when scenario b + bound mailbox, treat the mailbox as redundant") is product policy not visual chrome.
+
+---
+
+## TASK-105: `IngestionRoutesCallout` renders the "Connect a mailbox (fallback)" card unconditionally — for a team where every domain is already scenario (b), the entire right-hand card is noise the matrix below contradicts row-by-row
+
+- Status: proposed
+- Area: dashboard / mailboxes / clarity-of-intent
+- Why: The callout at the top of `/app/mailboxes` is two equal-weight cards: left = DNS recommended, right = mailbox fallback. The right card's body copy `"Already receiving DMARC reports at a private inbox — e.g. you can't change DNS, or you want a local copy? Connect that mailbox if you can't change DNS..."` is written for a user who hasn't yet decided. But a team whose every domain in the matrix below already shows `badge-success "Ingesting via DNS (Sendvery)"` has already decided — they're on scenario (b) for every row. The fallback card sits there as visual noise, occupying half the above-the-fold space with a CTA whose recommended alternative is already in effect everywhere. This is the round-3-style "redundant card" regression — the user's actual state has moved past the call-to-action but the call-to-action stays.
+- Acceptance:
+  - When EVERY row in the per-domain ingestion matrix has `ruaScenario.scenario === PointsAtSendvery`, the IngestionRoutesCallout collapses to a single confirmation card: `"Every domain is ingesting reports via Sendvery's central inbox — nothing to set up here."` with a quiet link `"Connect a private mailbox anyway →"` for the genuinely-edge-case operator. No two-card grid.
+  - When the team has a mix (some scenario b, some scenario a/c, some no DMARC yet), keep the existing two-card layout — the fallback genuinely applies to the non-b rows.
+  - Single-team-zero-domains and brand-new-team cases continue to render the educational two-card layout (the user has no scenario yet).
+  - Test: integration fixture for an all-scenario-(b) team. Assert the rendered page contains the collapsed copy and does NOT contain the two-card "Connect a mailbox (fallback)" CTA's button.
+- Notes:
+  - Pure template-level conditional plus a controller-side `bool $allScenarioB` precomputed from the matrix the page already loads. No new query. The existing regression test from TASK-090 that guards the literal "Connect a mailbox" substring needs an `unless allScenarioB` predicate adjusted to match the new copy.
+
+---
+
+## TASK-106: Per-domain matrix row prioritises `ruaScenario` over `path` — a row where `path = mailbox` (reports actually arriving via connector) and `ruaScenario = PointsAtExternal` renders as "Configured for external inbox" instead of "Ingesting via mailbox", contradicting the lastReportAt column
+
+- Status: proposed
+- Area: dashboard / mailboxes / matrix
+- Why: The matrix template (`mailboxes.html.twig:62-97`) checks `ruaScenario` branches FIRST and only falls through to `path` branches when the scenario is null. So a domain whose published DMARC record points at an external address (e.g. legacy `dmarc@team.com`) but whose Sendvery-connected mailbox is ACTUALLY pulling reports renders with a `badge-warning "Configured for external inbox"` badge AND a populated `lastReportAt` column showing real recent reports. The user sees "configured for external inbox" alongside "last report received: 2h ago" — confusing, because both are true but the badge implies setup-incomplete-no-reports while the timestamp proves the opposite. The path classifier (`path.value === 'mailbox'`) has the more honest signal in this case — reports are physically arriving via the mailbox connector.
+- Acceptance:
+  - When `path.value === 'mailbox'` AND `lastReportAt` is not null AND scenario is `PointsAtExternal` AND the mailbox bound to this domain matches the rua email (or close enough), render the path-based "Mailbox" badge with a small inline hint `"DMARC routes here via your connected mailbox"` instead of the scenario-aware "Configured for external inbox" badge that implies the mailbox isn't connected.
+  - When `path.value === 'mailbox'` but the rua email DOESN'T match the connected mailbox (rare — operator wired the wrong inbox), keep the current scenario-aware badge — it correctly tells the operator something is off.
+  - When `path.value === 'none'` (no reports yet) and scenario is `PointsAtExternal`, keep the current scenario badge — it's the only signal we have.
+  - Test: fixture for `path = mailbox`, `lastReportAt = recent`, `scenario = PointsAtExternal` with matching rua email. Assert "Ingesting via mailbox" badge renders.
+- Notes:
+  - The matching test ("close enough rua email vs mailbox login") needs to be slightly loose — many operators connect `dmarc@team.com` as IMAP while the rua tag says `mailto:dmarc@team.com`. A direct lowercase equality on the local-part+domain is sufficient for v1; advanced cases (alias forwarding, etc.) can be deferred.

@@ -140,16 +140,24 @@ final readonly class DomainSetupStatusResolver
             && ProtocolState::Configured === $mx->state;
 
         if ($allConfigured) {
-            // TASK-100: when the RUA scenario is PointsAtExternal, render the
-            // panel even in the all-green case so the user actually sees the
-            // RUA decision row ("Decide: poll the inbox at <addr>, or
-            // replace the rua= target with mailto:reports@sendvery.com").
-            // Otherwise BannerOnly hides the panel and the user never sees
-            // the scenario-(c) recommendation. The headline copy is kept —
-            // the all-four are still in place; the panel does the explaining.
-            $displayMode = (RuaScenario::PointsAtExternal === $ruaScenario?->scenario)
-                ? DomainSetupDisplayMode::BannerAndPanel
-                : DomainSetupDisplayMode::BannerOnly;
+            // TASK-100 / TASK-101: scenario (c) gets a softer headline so the
+            // banner doesn't claim "all four records in place" while the
+            // panel directly below shows a yellow RUA destination row.
+            // Render panel alongside so the user actually sees the RUA
+            // decision row. Severity stays Healthy (DNS itself IS healthy);
+            // the panel does the explaining without escalating tone.
+            if (RuaScenario::PointsAtExternal === $ruaScenario?->scenario) {
+                return new DomainSetupStatus(
+                    severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Healthy),
+                    headline: 'DNS records in place — choose where reports land',
+                    ctaLabel: null,
+                    ctaRoute: null,
+                    ctaFragment: null,
+                    protocols: $protocols,
+                    displayMode: DomainSetupDisplayMode::BannerAndPanel,
+                    panelLede: 'SPF, DKIM, DMARC and MX are all configured. Pick how you want reports delivered — see the RUA destination row below.',
+                );
+            }
 
             return new DomainSetupStatus(
                 severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Healthy),
@@ -158,7 +166,7 @@ final readonly class DomainSetupStatusResolver
                 ctaRoute: null,
                 ctaFragment: null,
                 protocols: $protocols,
-                displayMode: $displayMode,
+                displayMode: DomainSetupDisplayMode::BannerOnly,
             );
         }
 

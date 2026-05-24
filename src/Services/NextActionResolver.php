@@ -124,13 +124,29 @@ final readonly class NextActionResolver
 
         if (!$hasCentralInboxReports) {
             // TASK-100 scenario (b): DMARC already points at Sendvery — DNS
-            // is doing the work. If no reports have landed yet that's a
-            // propagation-window issue, NOT a missing-CTA one, so skip the
-            // entire "publish RUA / connect a mailbox" branch and fall
-            // through to AllHealthy. The earlier WaitForReports branch
-            // covers the verified-DMARC-but-no-reports case for users in
-            // the settling window.
+            // is doing the work. Skip the "publish RUA / connect a mailbox"
+            // nudge entirely. But guard against TASK-102's lie: when no
+            // central-inbox reports have arrived AND the team also hasn't
+            // verified yet (verificationStatus null OR firstReportAt null),
+            // saying "reports are flowing" would be false. Emit a
+            // WaitForReports variant instead so the copy matches reality.
             if (RuaScenario::PointsAtSendvery === $headlineDomainRuaScenario?->scenario) {
+                $firstReportAt = $verificationStatus?->firstReportAt;
+                if (null === $firstReportAt) {
+                    return new NextActionResult(
+                        actionKey: NextAction::WaitForReports,
+                        title: 'Waiting for your first report',
+                        description: sprintf(
+                            'DMARC is published and points at Sendvery. Email providers send aggregate reports to %s daily — your first one usually arrives within 24-48 hours.',
+                            $reportAddress,
+                        ),
+                        ctaLabel: 'Check DNS setup',
+                        ctaRoute: 'dashboard_dns_health',
+                        ctaRouteParams: [],
+                        severity: 'info',
+                    );
+                }
+
                 return new NextActionResult(
                     actionKey: NextAction::AllHealthy,
                     title: 'Everything looks good',

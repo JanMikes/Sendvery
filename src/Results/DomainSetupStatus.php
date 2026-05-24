@@ -33,6 +33,7 @@ final readonly class DomainSetupStatus
         public ?string $ctaFragment,
         public array $protocols,
         public DomainSetupDisplayMode $displayMode,
+        public string $panelLede = 'Finish the items below to start receiving DMARC reports for this domain.',
     ) {
     }
 }
