@@ -48,6 +48,7 @@
                     totalReports="{{ domain.totalReports }}"
                     latestReportDate="{{ domain.latestReportDate }}"
                     teamName="{{ showTeamColumn ? domain.teamName : null }}"
+                    severity="{{ domain.severity.value }}"
                 />
             {% endfor %}
         </div>

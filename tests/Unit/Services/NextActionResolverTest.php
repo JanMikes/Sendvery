@@ -373,6 +373,7 @@ final class NextActionResolverTest extends TestCase
             passRate: $passRate,
             teamId: 'team-id',
             teamName: 'Team',
+            dmarcVerifiedAt: null,
         );
     }
 

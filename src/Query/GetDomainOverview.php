@@ -72,11 +72,12 @@ final readonly class GetDomainOverview
             null => 'md.domain ASC',
         };
 
-        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string}> $data */
+        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null}> $data */
         $data = $this->database->executeQuery(
             'SELECT
                 md.id AS domain_id,
                 md.domain AS domain_name,
+                md.dmarc_verified_at AS dmarc_verified_at,
                 t.id::text AS team_id,
                 t.name AS team_name,
                 COUNT(dr.id) AS total_reports,
@@ -92,7 +93,7 @@ final readonly class GetDomainOverview
             LEFT JOIN dmarc_report dr ON dr.monitored_domain_id = md.id
             LEFT JOIN dmarc_record rec ON rec.dmarc_report_id = dr.id
             WHERE md.team_id IN (:teamIds)'.$whereClause.'
-            GROUP BY md.id, md.domain, t.id, t.name'.$havingClause.'
+            GROUP BY md.id, md.domain, md.dmarc_verified_at, t.id, t.name'.$havingClause.'
             ORDER BY '.$orderClause,
             [
                 'teamIds' => $teamIds,

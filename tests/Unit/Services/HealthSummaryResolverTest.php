@@ -177,6 +177,7 @@ final class HealthSummaryResolverTest extends TestCase
             passRate: $passRate,
             teamId: 'team-id',
             teamName: 'Team',
+            dmarcVerifiedAt: null,
         );
     }
 

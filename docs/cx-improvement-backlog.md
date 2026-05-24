@@ -2724,7 +2724,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-066: Domain list cards have NO leading severity indicator — paying customers can't telegraph "fine vs needs attention vs broken" before reading any number
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: Named pain from the human owner: on `/app/domains`, "i want directly to be clear that there is some next step required or is not healthy like icon with warning/danger or something". Right now `templates/components/DomainCard.html.twig` shows the domain name (plain text), the pass-rate number (colored, top-right), and a couple of meta lines. The only color cue is the pass-rate number itself — the eye has to read the digit to know whether the card is healthy. Compare to the alerts list (`templates/dashboard/alerts.html.twig` lines 89-112) which already uses the canonical idiom: a colored left border (`border-l-4 border-l-error|warning|info`) PLUS a leading 32px rounded-full circle with a severity SVG icon. The DomainCard should adopt the same idiom so a user scanning 20 cards can spot the one red card in the grid in <500ms without parsing numbers. The taxonomy already exists: `DomainHealthFilter::Healthy|Attention|Unverified` from TASK-032 is the canonical severity vocabulary and is already wired into `GetDomainOverview` for the filter chips. The missing piece is a `severity()` accessor on `DomainOverviewResult` so the same enum drives the per-card icon.
 - Acceptance:
@@ -2735,11 +2735,42 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
   - Regression: `DomainHealthFilter` enum unchanged; the existing filter chips on `/app/domains` and the banner counts on `/app` continue to render unchanged.
 - Notes: Moment of confusion this resolves: "I look at my domain list and have to read every pass-rate digit to find the one I should care about." Largest UX win for the single-most-used dashboard surface. Total LOC: ~30 lines in DomainCard + ~5 lines on DomainOverviewResult (+ method) + ~3 lines added to the SELECT + ~80 lines of new tests. The icon SVGs are already in the codebase; lift the exact paths from `templates/dashboard/alerts.html.twig` lines 101 (critical/error), 105 (warning), 109 (info — substitute check-circle for the Healthy variant).
 
+### Architect plan (2026-05-24)
+
+**Findings**: `DomainHealthFilter` (3 cases) has no `fromOverview()` helper yet. `DomainOverviewResult` has no `dmarcVerifiedAt` field. `GetDomainOverview::forTeams()` does NOT project `md.dmarc_verified_at`. Both data-layer additions are required prerequisites. The Healthy check-circle SVG path is NOT in `alerts.html.twig` (only exclamation variants) — lift it from `templates/dashboard/overview.html.twig:20` (`d="M9 12l2 2 4-4m5.618-4.016A11.955..."`). The TASK-066 brief's reference to `alerts.html.twig:109 (info — substitute check-circle)` is incorrect; that line is an info-circle path.
+
+**Severity decision rule** (single source of truth, `DomainHealthFilter::fromOverview`):
+- `dmarcVerifiedAt === null` → `Unverified`
+- `passRate >= 90.0` → `Healthy`
+- else → `Attention`
+
+A new domain with `dmarcVerifiedAt=null` AND zero reports maps to `Unverified` (yellow), not `Attention` (red) — prevents the new-domain false-alarm.
+
+**Placement**: `border-l-4 border-l-{tone}` on the card `<a>` root PLUS a `w-10 h-10 rounded-full bg-{tone}/10` leading icon circle as the FIRST child of `card-body` (before the existing `flex items-start justify-between` title row). Matches the alerts list idiom. Mobile-safe (left border invisible on full-width mobile cards, leading icon always rendered).
+
+**Files to create:**
+- `tests/Unit/Value/DomainHealthFilterFromOverviewTest.php` — 6 tests: Unverified-when-null, Healthy-at-90, Healthy-above-90, Attention-below-90, Attention-when-verified-zero-reports, Unverified-not-Attention-for-new-domain.
+- `tests/Unit/Results/DomainOverviewResultTest.php` — fromDatabaseRow + severity() accessor delegates to enum.
+- `tests/Integration/Controller/DomainListSeverityGlyphTest.php` — seed 3 domains in 3 states, assert exactly 3 glyph wrappers in response body, assert each card has its expected `border-l-{tone}` + `text-{tone}` classes, regression: filter chips still render.
+
+**Files to modify:**
+- `src/Value/DomainHealthFilter.php` — add `public static function fromOverview(DomainOverviewResult $result): self`.
+- `src/Results/DomainOverviewResult.php` — add `public readonly ?string $dmarcVerifiedAt` constructor param; update `fromDatabaseRow()` to read `$row['dmarc_verified_at']`; add `public function severity(): DomainHealthFilter` delegating to `DomainHealthFilter::fromOverview($this)`; update docblock array shape to include `dmarc_verified_at: string|null`.
+- `src/Query/GetDomainOverview.php:77` — add `md.dmarc_verified_at AS dmarc_verified_at` to the SELECT; update the `@var` docblock array shape.
+- `templates/components/DomainCard.html.twig` — add `severity` to `{% props %}`; append `border-l-4 border-l-{success|warning|error}` ternary to the `<a>` root classes; insert a `w-10 h-10 rounded-full bg-{tone}/10` icon block as the first child of `card-body` with the canonical SVG paths (Healthy = `overview.html.twig:20` check path; Attention = `alerts.html.twig:101` exclamation-triangle; Unverified = `alerts.html.twig:109` exclamation-circle).
+- `templates/dashboard/domains.html.twig:44-51` — pass `severity="{{ domain.severity.value }}"` to `<twig:DomainCard>`.
+
+**Color tokens**: daisyUI v5 only — `success`/`warning`/`error` and their `bg-{tone}/10`, `text-{tone}`, `border-l-{tone}` variants. NO `dark:` prefix. NO hex literals.
+
+**Build sequence**: SELECT → Result DTO → enum helper → unit tests → template → integration test → cs-fixer.
+
+**Convention checklist**: `DomainHealthFilter` stays a plain backed enum (no interface, no new cases). `DomainOverviewResult` remains `final readonly`. `DomainHealthFilter::fromOverview()` is the sole classification utility — no parallel enums introduced. Color tokens daisyUI v5 only. TASK-067 (status banner) explicitly out of scope; it will consume `DomainHealthFilter::fromOverview()` from its own resolver without conflict.
+
 ---
 
 ## TASK-067: Domain detail page has no one-line status summary at the top — DMARC/SPF/DKIM/MX badge cluster doesn't answer "is this domain set up correctly or not?"
 
-- Status: proposed
+- Status: planned (bundled with TASK-080)
 - Area: dashboard
 - Why: Named pain from the human owner: on `/app/domains/{id}` we need "a clear status banner at the top ('Setup complete — monitoring active' vs 'Action needed — DMARC record missing') that summarises the whole page in one line". Post-TASK-041 the domain detail header now shows: domain name, `p=none/quarantine/reject` policy badge, Verified/Unverified badge, then a row of SPF/DKIM/DMARC/MX badges (each green or red individually). That cluster requires the user to mentally aggregate 4-6 signals to answer the basic question "is this fine?". The `/app` overview already does exactly this — see `templates/dashboard/overview.html.twig` lines 14-52 (the `summaryTone` banner with `bar`/`badge`/`icon` map). Reuse that same idiom on the per-domain detail page, sourced from the same `DomainHealthFilter` severity the domain card now uses (TASK-066).
 - Acceptance:
@@ -2810,7 +2841,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-080: Domain detail page never answers "is this domain set up correctly?" — replace badge soup with a 3-state setup-status panel
 
-- Status: proposed
+- Status: planned (bundled with TASK-067)
 - Area: dashboard
 - Why: Named pain from the human owner on `/app/domains/{id}`: *"it is unclear there is something not ok and I need to do something, I want as well to know the DNS monitoring is correct and passing and what is and what is not set"*. The current header (`templates/dashboard/domain_detail.html.twig` lines 11-49) shows the domain name, a `p=…` policy badge, a `Verified` / `Unverified` chip, and a row of four tiny SPF / DKIM / DMARC / MX badges colored green or red — but it never tells the user IN WORDS whether the domain is fully set up or what's missing. A first-time-this-week user sees four colored chips and has to decode: "the DMARC badge is green — does that mean reports are flowing? Or that the TXT record exists? What about the unverified chip — is that different from DKIM?" The page leads with stat cards (Total Messages / Pass Rate / Unique Senders / Reports) which only make sense AFTER setup is correct. The quarantine-pile banner only renders when `quarantineCount > 0` and only addresses the DMARC-not-published case. Until DNS monitoring is plain-English, the most important question the page should answer ("are we collecting data correctly?") lives entirely in the user's head. The four badges already encode every piece of state needed — the gap is presentational, not data. (TASK-067 in this same run proposes a one-line health summary up top; this task proposes the EXPANDED setup-status panel that makes the verdict actionable per-protocol. They compose: TASK-067 is the headline, TASK-080 is the body.)
 - Acceptance:
@@ -2941,7 +2972,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-090: `/app/mailboxes` treats DNS-based ingestion and mailbox-based ingestion as equivalent — must surface DNS-as-primary, mailbox-as-fallback, and the mutual-exclusivity rule
 
-- Status: proposed
+- Status: planned
 - Area: dashboard / ingestion / guidance
 - Why: Confusion moment named explicitly by the PO ("we encourage users to use DNS instead of connecting mailboxes"). The page header today is just "Mailboxes" with a table of `MailboxConnection` rows; the `EmptyState` (lines 16-22 of `templates/dashboard/mailboxes.html.twig`) literally says *"Connect a mailbox to automatically receive and parse DMARC reports."* as if that were the only path. In reality Sendvery's preferred ingestion path is "publish `rua=mailto:reports@sendvery.com` in DNS and let mail providers deliver reports to our central inbox" (`DmarcReportRouter` + `ReportAddressProvider`); the per-user IMAP/POP3 `MailboxConnection` is the *fallback* for customers who can't change DNS or want a private copy. A new user landing on `/app/mailboxes` reads it as "I MUST connect a mailbox" — exact opposite of the product preference. Worse: the page never says "these two paths are mutually exclusive per domain" — a user could connect a mailbox AND publish RUA pointing at us and double-ingest the same reports.
 - Acceptance:
@@ -2961,6 +2992,41 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 - Notes:
   - New KB article `ingestion-paths-mutual-exclusivity` is a stub for this run — single H1 + 2 paragraphs covering the rule. A full article is a separate proposal.
   - The matrix uses `received_report_email.mailbox_connection_id IS NULL` as the central-inbox marker — verify this field exists / add it to the entity if missing. The `PollReportsInbox` central poller doesn't currently stamp a mailbox FK on its envelopes; that's the load-bearing data point for this whole task. If the field is missing, the migration to add it is in-scope.
+
+### Architect plan (2026-05-24)
+
+**Pre-flight findings**
+
+- `received_report_email.mailbox_connection_id` EXISTS (`src/Entity/ReceivedReportEmail.php:30-32`, nullable FK). The companion `ReportSource` enum (`src/Value/Reports/ReportSource.php`) already encodes the distinction as `CentralInbox = 'central_inbox'` vs `ByoMailbox = 'byo_mailbox'`. **Use `e.source = 'central_inbox'` as the SQL discriminator — non-nullable, semantically clearer than the FK null-check.** No migration required.
+- URL stays `/app/mailboxes`; route name `dashboard_mailboxes` stays. Only labels/H1/breadcrumb change to "Report ingestion" (sidebar entry becomes "Ingestion"). `RetestMailboxConnectionController:67` and `AddMailboxController:94` hardcode `redirectToRoute('dashboard_mailboxes')` — renaming the route would break those plus existing tests. URL/route rename = follow-up task.
+- Matrix classification uses last-5-DMARC-reports per domain (sorted `processed_at DESC`), NOT a 30-day window — the brief's 30-day-window note was draft; acceptance text "last 5 envelopes" supersedes. Time windows would falsely classify low-volume domains as `None`.
+- Join path: `monitored_domain → dmarc_report (.source_envelope_id) → received_report_email`. `source_envelope_id` is `ON DELETE SET NULL` — purged-envelope reports get NULL `envelope_source` and are dropped by `COUNT(envelope_source)`, falling through to `None`.
+
+**Mutual-exclusivity guarantee (explicit)**
+
+A domain's ingestion path is determined exclusively by inspecting `received_report_email.source` on the envelopes backing its 5 most recent parsed DMARC reports. Four classifications are mutually exclusive by construction: `Mixed` only when both source values appear in the window. UI enforces at two levels: (1) the two-card callout is either/or with no "use both" CTA anywhere; (2) regression test asserts `"Connect a mailbox"` substring appears ONLY inside `data-testid="fallback-callout"`.
+
+**Files to create:**
+- `src/Value/IngestionPath.php` — enum: `Dns='dns'`, `Mailbox='mailbox'`, `Mixed='mixed'`, `None='none'`.
+- `src/Results/DomainIngestionMatrixResult.php` — `readonly final class`; props: `domainId`, `domainName`, `IngestionPath $path`, `?lastReportAt`, `?mailboxId`, `?mailboxHost`, `?mailboxPort`, `?mailboxDomainId`; `fromDatabaseRow()` with array-shape docblock; helper `isMisconfigured(): bool` ↔ `path === Mixed`.
+- `src/Query/GetDomainIngestionMatrix.php` — `readonly final class`, injects `Connection`; `forTeams(array $teamIds): array<DomainIngestionMatrixResult>`. SQL uses CTE: `domain_envelope_sources` → `ROW_NUMBER() OVER (PARTITION BY md.id ORDER BY dr.processed_at DESC NULLS LAST)` → `WHERE rn <= 5` → `BOOL_OR(source = 'central_inbox')` + `BOOL_OR(source = 'byo_mailbox')` → CASE on `(has_dns, has_mailbox, sample_count)` → one of `'none' | 'mixed' | 'dns' | 'mailbox'`. Starts from `monitored_domain` with `LEFT JOIN` chains so zero-report domains appear as `None`.
+- `src/Services/IngestionPathResolver.php` — `readonly final class`, thin wrapper for mockability; `resolveForTeams(array $teamIds): array<DomainIngestionMatrixResult>`.
+- `templates/components/IngestionRoutesCallout.html.twig` — Props: `reportAddress`, `dnsCtaUrl`. Two-card `grid grid-cols-1 md:grid-cols-2 gap-4`. Left card `data-testid="recommended-callout"` with `border border-primary/30 bg-primary/5`, `badge badge-primary badge-sm` eyebrow "Recommended", heading "DNS-based ingestion", CTA `btn btn-primary btn-sm` "View DMARC setup". Right card `data-testid="fallback-callout"` with `border border-base-200 bg-base-100`, no badge, heading "Connect a mailbox (fallback)", qualifier "if you can't change DNS", secondary CTA `btn btn-ghost btn-sm` "Connect a mailbox" → `dashboard_mailbox_add`. **The literal string "Connect a mailbox" appears ONLY inside the fallback callout.**
+- `tests/Unit/Services/IngestionPathResolverTest.php` — 5 classification cases.
+- `tests/Integration/Query/GetDomainIngestionMatrixTest.php` — cross-tenant isolation; MIXED detection; "last 5 reports" sampling (domain with 10 reports gets classification from the 5 most recent only).
+- `tests/Integration/Controller/ReportIngestionPageTest.php` — 6 scenarios: 3-domains-different-paths matrix rendering, MIXED carries `data-testid="mixed-warning"`, page H1 "Report ingestion", zero-domains onboarding redirect (matches existing redirect behavior), connected-mailboxes section visible/absent based on data, **regression-net test**: strip `data-testid="fallback-callout"` element from response, assert "Connect a mailbox" / "Connect mailbox" / "Add mailbox" substrings absent in remainder, sidebar label "Ingestion" present.
+
+**Files to modify:**
+- `src/Controller/Dashboard/ListMailboxesController.php` — inject `IngestionPathResolver`; pass `matrix`, `reportAddress`, existing `mailboxes` + `activity` to template.
+- `templates/dashboard/mailboxes.html.twig` — rewrite content block: H1 "Report ingestion" + subhead → `<twig:IngestionRoutesCallout>` → per-domain matrix table (Domain / Active path badge / Last report / Action; mixed rows carry `data-testid="mixed-warning"`) → optional "Connected mailboxes" sub-section when `mailboxes` non-empty. Remove the existing unqualified-CTA EmptyState.
+- `templates/dashboard/layout.html.twig:129` — sidebar link text "Mailboxes" → "Ingestion". Existing `current_route starts with 'dashboard_mailbox'` active-state check is unchanged.
+- `tests/Integration/Controller/MailboxesListTest.php` — update existing string assertions to match new page structure; add the regression-net assertion explicitly.
+
+**Critical follow-up:** `reportAddress` (e.g. `reports@sendvery.com`) — grep `src/Services/` and `config/services.php` for an existing constant/provider before creating a duplicate. Likely an env var or hardcoded constant.
+
+**Build sequence:** enum → DTO → query + integration test → resolver + unit test → callout component → template rewrite → controller change → sidebar label → integration test → MailboxesListTest update → quality gates.
+
+**Convention checklist:** new query returns Result DTOs (not entities); `readonly final class` on Value/Results/Query/Service; CQRS strict (DBAL Connection for reads, EM for writes — query does no writes); team scoping via `WHERE md.team_id IN (:teamIds)` from `DashboardContext::getTeamIdStrings()`; no parallel `IngestionPath` enum (single new one introduced); daisyUI v5 tokens only; no `dark:` prefix.
 
 ---
 
