@@ -2253,7 +2253,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-034: DNS Health overview cards are 80% non-interactive — only one tiny "View details" link per card, badges and grade are dead text
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: Clickable-cards audit finding. `templates/dashboard/dns_health_overview.html.twig` renders one card per domain. Inside each card: domain name (dead text), grade badge `A`/`B`/`C` (dead text), four SPF/DKIM/DMARC/MX status badges (dead text), and a single "View details" anchor at the card bottom. The card itself isn't a link, the grade isn't a link, the per-protocol badges aren't links. Contrast with `templates/dashboard/domain_detail.html.twig` (lines 31-46) where the same four badges DO deep-link to `#health-spf` etc. anchors. The DNS Health overview is supposed to be the **glanceable** answer to "is anything wrong with my DNS?" — every visual signal on it must drop you on the broken thing in one click.
 - Acceptance:

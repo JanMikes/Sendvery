@@ -232,6 +232,76 @@ final class DnsHealthOverviewTest extends WebTestCase
     }
 
     #[Test]
+    public function eachCardHasStretchedLinkToDomainHealth(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+        $client->loginUser($persona->user);
+
+        $client->request('GET', '/app/dns-health');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        $detailPath = sprintf('/app/domains/%s/health', $persona->domain->id);
+
+        // Stretched-link <a class="absolute inset-0"> covers the whole card.
+        self::assertMatchesRegularExpression(
+            '/<a href="'.preg_quote($detailPath, '/').'"[^>]*class="absolute inset-0"/',
+            $body,
+        );
+    }
+
+    #[Test]
+    public function eachProtocolBadgeIsAnAnchorToTheProtocolAnchor(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+        $client->loginUser($persona->user);
+
+        $client->request('GET', '/app/dns-health');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        $detailPath = sprintf('/app/domains/%s/health', $persona->domain->id);
+
+        foreach (['health-spf', 'health-dkim', 'health-dmarc', 'health-mx'] as $fragment) {
+            self::assertStringContainsString(
+                sprintf('href="%s#%s"', $detailPath, $fragment),
+                $body,
+                sprintf('Badge for %s should deep-link to its anchor on the per-domain DNS health page.', $fragment),
+            );
+        }
+    }
+
+    #[Test]
+    public function badgeAnchorsCarryZIndexSoStretchedLinkDoesNotEatTheirClicks(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+        $client->loginUser($persona->user);
+
+        $client->request('GET', '/app/dns-health');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        // Every inner badge anchor needs relative z-10 so it stacks above the
+        // absolute-positioned card-wrap anchor and receives its own clicks.
+        foreach (['health-spf', 'health-dkim', 'health-dmarc', 'health-mx'] as $fragment) {
+            self::assertMatchesRegularExpression(
+                '/href="[^"]*#'.preg_quote($fragment, '/').'"[^>]*class="[^"]*relative z-10/',
+                $body,
+                sprintf('Badge anchor for %s must carry "relative z-10" so the stretched card link does not intercept its click.', $fragment),
+            );
+        }
+    }
+
+    #[Test]
     public function noDashboardLinksToPublicDomainHealthTool(): void
     {
         $client = self::createClient();

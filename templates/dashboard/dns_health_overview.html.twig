@@ -14,33 +14,41 @@
     {% else %}
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {% for domain in domains %}
-                <div class="card bg-base-100 shadow">
+                {% set detailUrl = path('dashboard_domain_health', {id: domain.domainId}) %}
+                <div class="card bg-base-100 shadow border border-base-200 hover:shadow-md hover:border-primary/30 transition-all relative">
+                    <a href="{{ detailUrl }}" class="absolute inset-0" aria-label="Open DNS health for {{ domain.domainName }}"></a>
                     <div class="card-body">
                         <div class="flex items-center justify-between">
                             <h3 class="card-title text-lg">{{ domain.domainName }}</h3>
                             {% if domain.hasSnapshot() %}
-                                <span class="badge {{ domain.snapshotGradeColor() }} font-bold">{{ domain.latestSnapshotGrade }}</span>
+                                <a href="{{ detailUrl }}#health-score"
+                                   class="badge {{ domain.snapshotGradeColor() }} font-bold relative z-10 hover:opacity-80"
+                                   aria-label="Overall DNS health score for {{ domain.domainName }}">{{ domain.latestSnapshotGrade }}</a>
                             {% endif %}
                         </div>
                         <div class="flex flex-wrap gap-2 mt-2">
-                            <span class="badge {{ domain.isSpfVerified() ? 'badge-success' : 'badge-error' }}">SPF</span>
-                            <span class="badge {{ domain.isDkimVerified() ? 'badge-success' : 'badge-error' }}">DKIM</span>
-                            <span class="badge {{ domain.isDmarcVerified() ? 'badge-success' : 'badge-error' }}">DMARC</span>
+                            <a href="{{ detailUrl }}#health-spf"
+                               class="badge {{ domain.isSpfVerified() ? 'badge-success' : 'badge-error' }} relative z-10 hover:opacity-80">SPF</a>
+                            <a href="{{ detailUrl }}#health-dkim"
+                               class="badge {{ domain.isDkimVerified() ? 'badge-success' : 'badge-error' }} relative z-10 hover:opacity-80">DKIM</a>
+                            <a href="{{ detailUrl }}#health-dmarc"
+                               class="badge {{ domain.isDmarcVerified() ? 'badge-success' : 'badge-error' }} relative z-10 hover:opacity-80">DMARC</a>
                             {% if domain.latestMxScore is null %}
-                                <span class="badge badge-ghost">MX</span>
+                                <a href="{{ detailUrl }}#health-mx" class="badge badge-ghost relative z-10 hover:opacity-80">MX</a>
                             {% elseif domain.latestMxScore >= 80 %}
-                                <span class="badge badge-success">MX</span>
+                                <a href="{{ detailUrl }}#health-mx" class="badge badge-success relative z-10 hover:opacity-80">MX</a>
                             {% elseif domain.latestMxScore >= 50 %}
-                                <span class="badge badge-warning">MX</span>
+                                <a href="{{ detailUrl }}#health-mx" class="badge badge-warning relative z-10 hover:opacity-80">MX</a>
                             {% else %}
-                                <span class="badge badge-error">MX</span>
+                                <a href="{{ detailUrl }}#health-mx" class="badge badge-error relative z-10 hover:opacity-80">MX</a>
                             {% endif %}
                         </div>
+                        {% if not domain.hasSnapshot() %}
+                            <div class="mt-4 text-sm text-base-content/50">No health data yet</div>
+                        {% endif %}
                         <div class="card-actions justify-end mt-4">
-                            {% if not domain.hasSnapshot() %}
-                                <span class="text-sm text-base-content/50">No health data yet</span>
-                            {% endif %}
-                            <a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}" class="btn btn-ghost btn-sm">View details</a>
+                            <a href="{{ path('dashboard_domain_dns_history', {id: domain.domainId}) }}"
+                               class="btn btn-ghost btn-sm relative z-10">DNS history</a>
                         </div>
                     </div>
                 </div>
