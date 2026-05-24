@@ -719,6 +719,200 @@ final class DomainSubpagesTest extends WebTestCase
         );
     }
 
+    #[Test]
+    public function dmarcPolicyExplainerRendersOnDomainDetail(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+        $client->loginUser($persona->user);
+
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('[data-testid="dmarc-policy-explainer"]')->count(),
+            'Domain detail must render the DmarcPolicyExplainer card between quick-stats and charts.',
+        );
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerShowsCurrentPolicyTitle(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::None;
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        $title = $crawler->filter('[data-testid="dmarc-policy-title"]')->text();
+        self::assertStringContainsString('p=none', $title);
+        self::assertStringContainsString('Monitor-only mode', $title);
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerShowsReadyRecommendationWhenEligible(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::None;
+
+        // Seed 3+ reports with all-pass records over the last 30 days so the
+        // advisor sees a 100% pass rate AND meets the min-reports threshold.
+        for ($i = 0; $i < 4; ++$i) {
+            $report = new DmarcReport(
+                id: Uuid::uuid7(),
+                monitoredDomain: $persona->domain,
+                reporterOrg: 'google.com',
+                reporterEmail: 'noreply@google.com',
+                externalReportId: 'task-037-ready-'.$i.'-'.Uuid::uuid7()->toString(),
+                dateRangeBegin: new \DateTimeImmutable('-7 days'),
+                dateRangeEnd: new \DateTimeImmutable('-1 day'),
+                policyDomain: $persona->domain->domain,
+                policyAdkim: DmarcAlignment::Relaxed,
+                policyAspf: DmarcAlignment::Relaxed,
+                policyP: DmarcPolicy::None,
+                policySp: null,
+                policyPct: 100,
+                rawXml: '<feedback/>',
+                processedAt: new \DateTimeImmutable(),
+            );
+            $em->persist($report);
+            $em->persist(new DmarcRecord(
+                id: Uuid::uuid7(),
+                dmarcReport: $report,
+                sourceIp: '203.0.113.7',
+                count: 100,
+                disposition: Disposition::None,
+                dkimResult: AuthResult::Pass,
+                spfResult: AuthResult::Pass,
+                headerFrom: $persona->domain->domain,
+            ));
+        }
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        $next = $crawler->filter('[data-testid="dmarc-policy-next"]')->text();
+        self::assertStringContainsString('p=quarantine', $next);
+        self::assertStringContainsString('ready to begin gradual enforcement', $next);
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerShowsBuildingDataCopyWhenNotEligible(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::None;
+
+        // Seed enough recent reports to pass the min-reports gate, but with
+        // a mix of pass/fail so the trailing pass rate sits below 90%.
+        for ($i = 0; $i < 4; ++$i) {
+            $report = new DmarcReport(
+                id: Uuid::uuid7(),
+                monitoredDomain: $persona->domain,
+                reporterOrg: 'google.com',
+                reporterEmail: 'noreply@google.com',
+                externalReportId: 'task-037-notready-'.$i.'-'.Uuid::uuid7()->toString(),
+                dateRangeBegin: new \DateTimeImmutable('-7 days'),
+                dateRangeEnd: new \DateTimeImmutable('-1 day'),
+                policyDomain: $persona->domain->domain,
+                policyAdkim: DmarcAlignment::Relaxed,
+                policyAspf: DmarcAlignment::Relaxed,
+                policyP: DmarcPolicy::None,
+                policySp: null,
+                policyPct: 100,
+                rawXml: '<feedback/>',
+                processedAt: new \DateTimeImmutable(),
+            );
+            $em->persist($report);
+            $em->persist(new DmarcRecord(
+                id: Uuid::uuid7(),
+                dmarcReport: $report,
+                sourceIp: '203.0.113.7',
+                count: 100,
+                disposition: Disposition::None,
+                dkimResult: AuthResult::Fail,
+                spfResult: AuthResult::Fail,
+                headerFrom: $persona->domain->domain,
+            ));
+        }
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        $next = $crawler->filter('[data-testid="dmarc-policy-next"]')->text();
+        self::assertStringContainsString('Still collecting data', $next);
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerLinksToMigrationGuide(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+        $client->loginUser($persona->user);
+
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        $link = $crawler->filter('[data-testid="dmarc-policy-migration-link"]');
+        self::assertGreaterThan(0, $link->count(), 'Explainer must render the migration-guide link when not at p=reject.');
+        self::assertSame('/learn/dmarc-migration-guide-none-to-reject', $link->attr('href'));
+    }
+
+    #[Test]
+    public function dmarcPolicyExplainerHidesMigrationLinkAtReject(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $persona->domain->dmarcPolicy = DmarcPolicy::Reject;
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+        $title = $crawler->filter('[data-testid="dmarc-policy-title"]')->text();
+        self::assertStringContainsString('p=reject', $title);
+        self::assertStringContainsString('Full enforcement', $title);
+        self::assertCount(
+            0,
+            $crawler->filter('[data-testid="dmarc-policy-migration-link"]'),
+            'Migration-guide link must NOT render at p=reject (no next tier).',
+        );
+    }
+
     /**
      * @return iterable<string, array{0: string, 1: string}>
      */

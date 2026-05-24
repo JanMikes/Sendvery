@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Query;
 
 use App\Results\DomainDetailResult;
+use App\Results\DomainRecentActivity;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
@@ -75,5 +76,58 @@ final readonly class GetDomainDetail
         }
 
         return DomainDetailResult::fromDatabaseRow($row);
+    }
+
+    /**
+     * Trailing-window snapshot (report count + pass rate) over the last
+     * $days days. Used by {@see \App\Services\DmarcPolicyAdvisor} so its
+     * eligibility logic compares the same population for both the
+     * report-count gate and the pass-rate gate. The lifetime pass rate on
+     * {@see DomainDetailResult} mixes old and recent sending posture and is
+     * the wrong input for "are we ready to escalate?".
+     *
+     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     */
+    public function getRecentActivity(string $domainId, array $teamIds, int $days = 30): DomainRecentActivity
+    {
+        if ([] === $teamIds) {
+            return DomainRecentActivity::empty();
+        }
+
+        /** @var array{reports_count: int|string, pass_rate: float|string|null}|false $row */
+        $row = $this->database->executeQuery(
+            'SELECT
+                COUNT(DISTINCT dr.id) AS reports_count,
+                COALESCE(
+                    SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
+                    / NULLIF(SUM(rec.count), 0)
+                    * 100,
+                    0
+                ) AS pass_rate
+            FROM dmarc_report dr
+            JOIN monitored_domain md ON md.id = dr.monitored_domain_id
+            LEFT JOIN dmarc_record rec ON rec.dmarc_report_id = dr.id
+            WHERE md.id = :domainId
+              AND md.team_id IN (:teamIds)
+              AND dr.date_range_end >= NOW() - (:days || \' days\')::interval',
+            [
+                'domainId' => $domainId,
+                'teamIds' => $teamIds,
+                'days' => $days,
+                'pass' => 'pass',
+            ],
+            [
+                'teamIds' => ArrayParameterType::STRING,
+            ],
+        )->fetchAssociative();
+
+        if (false === $row) {
+            return DomainRecentActivity::empty();
+        }
+
+        return new DomainRecentActivity(
+            reportsCount: (int) $row['reports_count'],
+            passRate: (float) ($row['pass_rate'] ?? 0.0),
+        );
     }
 }

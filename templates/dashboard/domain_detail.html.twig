@@ -104,6 +104,10 @@
         <twig:StatCard title="Reports" value="{{ domain.totalReports }}" />
     </div>
 
+    {# DMARC policy explainer (TASK-037) — sits directly under the metrics
+       that justify the next-tier recommendation. #}
+    <twig:DmarcPolicyExplainer :result="dmarcPolicyAdvice" />
+
     {# Charts row #}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <twig:ChartCard

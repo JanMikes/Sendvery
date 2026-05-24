@@ -11,6 +11,8 @@ use App\Query\GetDomainPassRateTrend;
 use App\Query\GetTopSendersForDomain;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
+use App\Services\DmarcPolicyAdvisor;
+use App\Value\DmarcPolicy;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -25,6 +27,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly GetDomainPassRateTrend $getDomainPassRateTrend,
         private readonly QuarantinedDmarcReportRepository $quarantineRepository,
         private readonly GetDnsHealthOverview $getDnsHealthOverview,
+        private readonly DmarcPolicyAdvisor $dmarcPolicyAdvisor,
     ) {
     }
 
@@ -94,6 +97,25 @@ final class ShowDomainDetailController extends AbstractController
 
         $dnsHealth = $this->getDnsHealthOverview->forDomain($id, $teamIds);
 
+        // The detail result carries `dmarc_policy` as a raw nullable string
+        // straight from DBAL — `tryFrom` (not `from`) protects against a DB
+        // value the enum doesn't yet recognise (legacy rows, future spec
+        // revisions). Null and unknown both collapse to `p=none` so the
+        // advisor's empty-state branch handles the rest.
+        $currentPolicy = null === $domain->dmarcPolicy
+            ? DmarcPolicy::None
+            : (DmarcPolicy::tryFrom($domain->dmarcPolicy) ?? DmarcPolicy::None);
+        // Both inputs to the advisor MUST measure the same trailing window —
+        // the lifetime pass rate on $domain mixes old and recent posture and
+        // would tell a recovering domain it's not ready when it is, or the
+        // reverse for a degrading one.
+        $recentActivity = $this->getDomainDetail->getRecentActivity($id, $teamIds);
+        $dmarcPolicyAdvice = $this->dmarcPolicyAdvisor->adviseFor(
+            $currentPolicy,
+            $recentActivity->passRate,
+            $recentActivity->reportsCount,
+        );
+
         return $this->render('dashboard/domain_detail.html.twig', [
             'domain' => $domain,
             'reports' => $reports,
@@ -103,6 +125,7 @@ final class ShowDomainDetailController extends AbstractController
             'senderChartConfig' => $senderChartConfig,
             'quarantineCount' => $quarantineCount,
             'dnsHealth' => $dnsHealth,
+            'dmarcPolicyAdvice' => $dmarcPolicyAdvice,
         ]);
     }
 }

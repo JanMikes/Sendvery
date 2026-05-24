@@ -2303,7 +2303,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-037: Domain detail teaches nothing about what `p=none` / `p=quarantine` / `p=reject` MEAN — the most-visible badge in the app is unexplained
 
-- Status: proposed
+- Status: done
 - Area: domains
 - Why: Make-value-visible audit. The DMARC policy badge (`p=none`, `p=quarantine`, `p=reject`) is rendered on three surfaces: `templates/dashboard/domain_detail.html.twig` (line 16), `templates/dashboard/report_detail.html.twig` (multiple places), and `templates/dashboard/domain_health.html.twig` (in the recommendations). It's a tiny badge with no tooltip, no explanation, no "what should I do next?" callout. A Marketing-Maria persona looking at `p=none` for the first time has no idea this is the WEAKEST DMARC policy — she'd assume "none = no problems". This is exactly the moment Sendvery is supposed to translate XML jargon to plain English, and it doesn't. The next-tier upgrade ("move to p=quarantine") is also a content goal in `docs/05-monetization.md` — the moment to surface that in-product is when the user is staring at their current policy.
 - Acceptance:

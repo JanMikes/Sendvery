@@ -1,0 +1,98 @@
+{# Plain-English explainer for the current DMARC policy on the domain detail
+   page. Pure render off DmarcPolicyAdvisorResult — no logic, no fallbacks.
+   `result` is the only prop; the caller (controller) is responsible for
+   computing it. #}
+{% props result %}
+
+{% set policyValue = result.currentPolicy.value %}
+
+{% set policyTitle = {
+    'none': "You're at p=none — Monitor-only mode",
+    'quarantine': "You're at p=quarantine — Gradual enforcement",
+    'reject': "You're at p=reject — Full enforcement",
+}[policyValue] %}
+
+{% set policyExplanation = {
+    'none': "DMARC reports are being collected, but no enforcement is in place. Anyone can spoof your domain right now — Sendvery is watching, but receivers (Gmail, Outlook) aren't blocking yet.",
+    'quarantine': "Receivers route mail that fails DMARC to spam. This is the middle tier — enforcement is on but legitimate mail caught accidentally still lands in spam, not in the abyss.",
+    'reject': "Mail that fails DMARC alignment is rejected outright at the receiver. Spoofed mail never lands. This is the strongest DMARC posture.",
+}[policyValue] %}
+
+<div class="card bg-base-100 border border-base-200 shadow-sm mb-6" data-testid="dmarc-policy-explainer">
+    <div class="card-body p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+                <div class="text-xs font-medium text-base-content/50 uppercase tracking-wider mb-1">
+                    DMARC policy
+                </div>
+                <h3 class="text-lg font-semibold" data-testid="dmarc-policy-title">
+                    {{ policyTitle }}
+                </h3>
+            </div>
+            <twig:StatusBadge status="{{ policyValue }}" label="p={{ policyValue }}" />
+        </div>
+
+        <p class="mt-3 text-sm text-base-content/70 max-w-3xl">
+            {{ policyExplanation }}
+        </p>
+
+        {# Three-tier progress dots: none → quarantine → reject. Highlight
+           the current tier; everything before it counts as "achieved", everything
+           after is the runway. Custom flex instead of daisyUI `steps` so the
+           connector spacing stays compact inside the card. #}
+        {% set tiers = [
+            {value: 'none', label: 'p=none'},
+            {value: 'quarantine', label: 'p=quarantine'},
+            {value: 'reject', label: 'p=reject'},
+        ] %}
+        {% set currentIndex = {
+            'none': 0,
+            'quarantine': 1,
+            'reject': 2,
+        }[policyValue] %}
+
+        <div class="flex items-center gap-2 mt-5" data-testid="dmarc-policy-progress">
+            {% for tier in tiers %}
+                {% set tierIndex = loop.index0 %}
+                {% set isCurrent = tierIndex == currentIndex %}
+                {% set isAchieved = tierIndex < currentIndex %}
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-bold
+                        {% if isCurrent %}bg-primary text-primary-content
+                        {% elseif isAchieved %}bg-success text-success-content
+                        {% else %}bg-base-200 text-base-content/40{% endif %}">
+                        {{ tierIndex + 1 }}
+                    </div>
+                    <span class="text-xs {% if isCurrent %}font-semibold text-base-content{% else %}text-base-content/60{% endif %}">
+                        {{ tier.label }}
+                    </span>
+                </div>
+                {% if not loop.last %}
+                    <div class="flex-1 h-px
+                        {% if tierIndex < currentIndex %}bg-success{% else %}bg-base-200{% endif %}"></div>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        {# "What's next" callout — informational when not eligible / not at reject,
+           celebratory when at reject, actionable when eligible. #}
+        <div class="mt-5 bg-base-200 rounded p-4" data-testid="dmarc-policy-next">
+            {% if result.recommendedNextPolicy is null %}
+                <div class="font-semibold text-sm mb-1">You're set</div>
+                <p class="text-sm text-base-content/70">
+                    {{ result.reasonText }}
+                </p>
+            {% else %}
+                <div class="font-semibold text-sm mb-1">What's next</div>
+                <p class="text-sm text-base-content/70">
+                    {{ result.reasonText }}
+                </p>
+                <a href="{{ path('knowledge_base_article', {slug: 'dmarc-migration-guide-none-to-reject'}) }}"
+                   class="link link-primary text-sm mt-2 inline-block"
+                   data-testid="dmarc-policy-migration-link">
+                    Read the migration guide →
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
