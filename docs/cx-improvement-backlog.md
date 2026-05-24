@@ -1728,7 +1728,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-025: Homepage GitHub-stats trust strip — wire the existing data into the hero credibility row
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: TASK-011 wired up the `github_stats` Twig global (cached JSON refreshed by cron). `/what-is-sendvery` and `/open-source` both read it. The homepage — the highest-traffic surface — does NOT. The hero's "trust badges" row right now is three text spans (Open source, 1 domain free, Self-hostable) plus a "See the source" link, none of which are dynamic. The moment the cron runs and stars exist, the homepage should say so. Owner explicitly named this: "GitHub stats are wired (cached JSON, may be empty until cron runs)" — proposing a surface for it.
 - Acceptance:
@@ -1738,6 +1738,64 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
   - No new controller, no new service. Purely template-side wiring of the existing `GithubStatsExtension` global.
   - Integration test with a fake `GithubStats` instance injected via the test-time service alias asserts the hero shows the star count; a second test with the JSON file absent asserts the span is omitted (not rendered as zero or as the literal "null").
 - Notes:
+  **Architect plan (locked in, 2026-05-24)**
+
+  **Live `github_stats` shape verified** (`src/Value/GithubStats.php`): `readonly final class GithubStats` with `public int $stars`, `public int $forks`, `public \DateTimeImmutable $lastCommitAt` (NEVER null — `fromJson()` returns null for the whole object if the date is missing or malformed), `public string $defaultBranch`. Use `is not null` not bare truthiness (`0` stars is a valid live state — and `0` is falsy in Twig). Existing consumers `/open-source` and `/what-is-sendvery` both use `{% if github_stats is not null %}`.
+
+  **Files to modify** — only `templates/homepage/index.html.twig`. Three insertion points:
+
+  **A. Hero trust badges row** (find the "Self-hostable" span followed by `<span class="text-base-content/20">·</span>` separator before the "See the source" anchor). Insert between them:
+  ```twig
+  {% if github_stats is not null %}
+  <span class="text-base-content/20">·</span>
+  <span class="inline-flex items-center gap-1.5">
+      {{ github_stats.stars|number_format }} ★ on GitHub · last commit {{ github_stats.lastCommitAt|date('M j') }}
+  </span>
+  {% endif %}
+  ```
+  Both the separator dot AND the stats span are inside the `{% if %}` so the separator only renders when stats are present. Use the `★` character (matches acceptance criteria); no inline SVG icon — the unicode star + the surrounding inline-flex pattern matches the other badges' visual rhythm.
+
+  **B. "Star on GitHub" button in section 9 Open Source Callout** — inline label augment, no structural change:
+  ```twig
+  Star on GitHub{% if github_stats is not null %} ({{ github_stats.stars|number_format }}){% endif %}
+  ```
+
+  **C. Technical Credibility badges row** (section 11) — append after the last existing badge ("AI-Powered"), before the closing `</div>`:
+  ```twig
+  {% if github_stats is not null %}
+  <span class="badge badge-lg badge-outline gap-2">
+      AGPL-3.0 · {{ github_stats.stars }} stars
+  </span>
+  {% endif %}
+  ```
+  Note: badge uses `{{ github_stats.stars }}` WITHOUT `|number_format` (matches acceptance criteria text literally; visual compactness — large counts are unlikely soon).
+
+  **Test injection mechanism — precedent from TASK-011**:
+
+  Both `OpenSourcePageTest` and `WhatIsSendveryPageTest` inject fake stats via:
+  ```php
+  $twig = self::getContainer()->get('twig');
+  \assert($twig instanceof \Twig\Environment);
+  $twig->addGlobal('github_stats', new GithubStats(...));
+  // or for null case:
+  $twig->addGlobal('github_stats', null);
+  ```
+  `addGlobal()` overwrites whatever `GithubStatsExtension::getGlobals()` registered. Call before `$client->request(...)`. NO `when@test` service alias needed; NO JSON fixture file needed.
+
+  **File to create**: `tests/Integration/Controller/HomepageGithubStatsTest.php` extending `App\Tests\WebTestCase`. Six `#[Test]` methods:
+
+  1. `heroStarsSpanIsRenderedWhenGithubStatsArePresent` — inject `new GithubStats(stars: 314, forks: 15, lastCommitAt: new \DateTimeImmutable('2026-05-20T08:00:00+00:00'), defaultBranch: 'main')`. Assert body contains `'314'`, `'★ on GitHub'`, `'last commit'`, `'May 20'`.
+  2. `heroStarsSpanIsOmittedWhenGithubStatsAreNull` — inject `null`. Assert body does NOT contain `'★ on GitHub'`, `'last commit'`, `'null'`, `'0 ★'`.
+  3. `starOnGithubButtonLabelIncludesStarCountWhenStatsArePresent` — inject `stars: 89`. Assert body contains `'Star on GitHub (89)'`.
+  4. `starOnGithubButtonLabelOmitsStarCountWhenStatsAreNull` — inject null. Assert body contains `'Star on GitHub'` AND does NOT contain `'Star on GitHub ('`.
+  5. `agplBadgeIsAppendedWithStarCountWhenStatsArePresent` — inject `stars: 42`. Assert body contains `'AGPL-3.0 · 42 stars'`.
+  6. `agplBadgeIsAbsentWhenStatsAreNull` — inject null. Assert body does NOT contain `'AGPL-3.0 · '` (unique substring; verify during impl by grepping rendered HTML that no other element produces this combo).
+
+  **Non-goals**: no `GithubStatsExtension` changes, no new component, no new service, no cron trigger, no extended GitHub data (issues/PRs/contributors).
+
+  **Edge cases decided**: `stars === 0` renders "0 ★ on GitHub" (valid state — null is the missing-state, not zero). `lastCommitAt` is never null on a non-null `GithubStats` (constructor-typed non-nullable). Large counts use comma-separated format via `|number_format` in hero + button; raw in badge.
+
+  **Build sequence**: read homepage line numbers (post-TASK-023/024 shift) → apply insertions A/B/C → create the test file with `$twig->addGlobal()` pattern → phpunit (full suite) → phpstan → php-cs-fixer (with `--allow-risky=yes`) → optional smoke: write a fake `var/github_stats.json`, hit `/`, verify all three augmentations render; delete the JSON, hit `/`, verify all three disappear cleanly.
 
 ---
 
