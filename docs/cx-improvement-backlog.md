@@ -1585,3 +1585,336 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 - **`var/{github_stats,og_cache}/` cache-directory pattern (TASK-011 + TASK-008)** — Twig globals exposed via `GlobalsInterface` extensions read these on each request, with try/catch wrappers returning safe defaults for unauthenticated / pre-cron contexts. Mirror this pattern for any future on-disk read-mostly cache.
 - **`BetaSignup` source taxonomy (TASK-006)** — the unique constraint moved from `(email)` to `(email, source)`. Future capture forms (e.g. a "notify me when self-host is published" form) can land another `source` value without colliding with existing rows. Per-source analytics queries become trivial.
 - **KB index grid auto-fill pattern (TASK-007)** — `[grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr))]` handles any article count gracefully. Apply to any other "grid of cards where the row may have 1-many entries" surface.
+
+---
+
+## TASK-023: Homepage testimonials section — placeholder-but-credible social proof, swap-in via single config file
+
+- Status: done
+- Area: marketing
+- Why: The homepage has zero testimonials. Every visitor in the 5-second scan sees feature claims and price tiers but no human saying "this worked for me." For a category (DMARC/email-auth) where buyers are deeply sceptical of yet-another-tool, the missing testimonials section is the single largest trust gap. Sendvery is pre-launch so real quotes don't exist yet — but a polished placeholder section, marked with a one-grep swap convention, lets the design land now and the words drop in at launch with a 10-minute edit.
+- Acceptance:
+  - New `templates/components/TestimonialsSection.html.twig` Twig component rendering a 3-card responsive grid (1 col mobile, 2 col tablet, 3 col desktop) — quote, attribution (name + role + company), initials-avatar with brand-tinted background (no fake photo URLs). Optional small "logos strip" row below the cards with company name marks rendered as text (no fake SVG logos).
+  - Component data lives in **one** file `config/placeholders.php` (new), returning a `list<array{quote: string, name: string, role: string, company: string, initials: string}>`. Loaded into Twig via a new `PlaceholdersExtension` that exposes a `testimonials` global. **Every entry** carries an inline `// TODO(placeholder): replace before launch` comment on the same line as the array key opening. The file ALSO carries a top-of-file `// TODO(placeholder): see docs/cx-improvement-backlog.md TASK-023 — entire file is launch-swap content` banner.
+  - Six placeholder testimonials, diverse plausible names and roles: e.g. *"Maya Hernandez, Head of Deliverability, Lattice Mail"* / *"Tomáš Novák, Platform Engineer, Forkbox"* / *"Priya Iyer, IT Director, Northwind Logistics"* / *"David Okafor, DevOps Lead, RouteSignal"* / *"Anna Lindqvist, CTO, Klippa Studio"* / *"Marco Bianchi, SRE, Telio Cloud"*. Quotes must sound like real ops/deliverability practitioners — concrete artefacts ("p=none for 14 months until Sendvery flagged the missing DKIM selector"), not marketing fluff ("game-changer", "best in class", "10x"). Render only 3 in the section; the other 3 are the bench for swap-in.
+  - Renders as the new section 8.5 on the homepage — between the "Domain Health Score Preview" (current section 8) and the "Open Source Callout" (current section 9). Eyebrow label, H2, no kicker emoji.
+  - Single hard rule documented at the top of `config/placeholders.php`: `grep "TODO(placeholder)" config/placeholders.php` returns ≥ 1 hit per fake item, and a `tests/Unit/Config/PlaceholdersConventionTest.php` test asserts this so a future swap that removes the marker on only some entries fails CI.
+  - Integration test asserts the section renders, contains the H2 heading, and renders all visible placeholder names.
+- Notes:
+  **Architect plan (locked in)**
+
+  Insertion point confirmed: `templates/homepage/index.html.twig` between section 8 close (`</twig:SectionContainer>`) and section 9 comment (`{# === 9. Open Source Callout === #}`). Extension model to mirror: `src/Twig/GithubStatsExtension.php` (`final class ... extends AbstractExtension implements GlobalsInterface`, `#[Autowire('%kernel.project_dir%')]`). Autowiring under `src/` is automatic; the `when@test` block in `config/services.php` (~line 406) needs a `public: true` entry for `App\Twig\PlaceholdersExtension`. Integration tests live in `tests/Integration/Controller/` (no `Marketing/` subdir). Unit test home: `tests/Unit/Config/`. Base class: `App\Tests\WebTestCase`.
+
+  **Files to create**
+
+  1. `config/placeholders.php` — plain PHP `return [...]` array (no namespace). Top-of-file banner: `// TODO(placeholder): see docs/cx-improvement-backlog.md TASK-023 — entire file is launch-swap content. Swap convention: every fake entry carries an inline "// TODO(placeholder): replace before launch" comment...`. Three top-level keys:
+     - `founder_photo => null` — line-end marker `// TODO(placeholder): replace with real photo URL or asset path before launch (TASK-024)`.
+     - `linkedin_url => null` — line-end marker (same convention, TASK-024).
+     - `testimonials => [ 6 entries ]` — each opening bracket has line-end marker `// TODO(placeholder): replace before launch` (bench entries 3-5 carry the same marker plus " — bench entry, not rendered in the default 3-card grid").
+     Concrete-artefact quotes (no marketing fluff) — see the architect output for the exact 6 quotes; names: Maya Hernandez (Lattice Mail, MH), Tomáš Novák (Forkbox, TN), Priya Iyer (Northwind Logistics, PI) — visible; David Okafor (RouteSignal, DO), Anna Lindqvist (Klippa Studio, AL), Marco Bianchi (Telio Cloud, MB) — bench. Each entry shape: `{quote, name, role, company, initials}`.
+
+  2. `src/Twig/PlaceholdersExtension.php` — `final class PlaceholdersExtension extends AbstractExtension implements GlobalsInterface`. Constructor takes `#[Autowire('%kernel.project_dir%')] private readonly string $projectDir`. `getGlobals()` returns `['testimonials' => ..., 'founder_photo' => ..., 'linkedin_url' => ...]` — explicit key enumeration (no array spreading) to prevent accidental global namespace leakage. Private `loadPlaceholders()` does `require $this->projectDir.'/config/placeholders.php'` then `array_merge` with defaults `['founder_photo' => null, 'linkedin_url' => null, 'testimonials' => []]`. Class is `final` (not `readonly final` because `AbstractExtension` is not readonly-compatible). PHPStan docblock on `loadPlaceholders()`: `@return array{testimonials: list<array{quote: string, name: string, role: string, company: string, initials: string}>, founder_photo: string|null, linkedin_url: string|null}`.
+
+  3. `templates/components/TestimonialsSection.html.twig` — raw `<section id="testimonials" class="py-20 lg:py-24">` (NOT wrapped in `<twig:SectionContainer>` — this component IS the section). Eyebrow `<div class="text-xs font-semibold text-primary uppercase tracking-wider mb-3">What practitioners say</div>` + H2 `text-2xl md:text-3xl font-bold` reading "Trusted by the people who actually read DMARC reports". Grid `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto`. `{% for entry in testimonials|slice(0, 3) %}` — hard-cuts at 3 even if config has more. Card: `card bg-base-100 border border-base-300` → `card-body` → quote `<p class="text-base-content/80 text-sm leading-relaxed flex-1">&ldquo;{{ entry.quote }}&rdquo;</p>` → attribution row with `avatar avatar-placeholder` (inner `bg-primary/10 text-primary w-10 rounded-full` — lighter tint than the /what-is-sendvery founder avatar to differentiate) showing initials, then `<div class="font-semibold text-sm">{{ entry.name }}</div>` and `<div class="text-xs text-base-content/50">{{ entry.role }} &middot; <span class="font-medium text-base-content/60">{{ entry.company }}</span></div>`. Company name as inline text in the attribution row fulfills "company name marks rendered as text (no fake SVG logos)" — no separate logos row. Heading classes match the rest of the homepage so TASK-026 can mechanically substitute when it lands.
+
+  4. `tests/Unit/Config/PlaceholdersConventionTest.php` — extends `PHPUnit\Framework\TestCase` (NOT WebTestCase — pure file read). `setUpBeforeClass` loads `dirname(__DIR__, 3).'/config/placeholders.php'` both as `require` and via `file_get_contents`. Tests: `configFileExists`, `topOfFileBannerIsPresent` (asserts substring `'TODO(placeholder): see docs/cx-improvement-backlog.md TASK-023'`), `everyTestimonialEntryHasPlaceholderMarker` (asserts `substr_count(source, '// TODO(placeholder): replace before launch') >= count(testimonials)`), `testimonialListHasSixEntries`, `founderPhotoKeyIsReserved`, `linkedinUrlKeyIsReserved`, `eachTestimonialEntryHasAllRequiredKeys` (loops 5 required keys).
+
+  5. `tests/Integration/Controller/HomepageTestimonialsTest.php` — extends `App\Tests\WebTestCase`. Tests: `homepageWith200Response`, `testimonialsSectionH2IsPresent` (CSS selector `#testimonials h2`), `firstThreeTestimonialNamesAreVisible` (Maya Hernandez / Tomáš Novák / Priya Iyer in body text), `benchTestimonialNamesAreNotRendered` (David Okafor / Anna Lindqvist / Marco Bianchi absent — proves `|slice(0, 3)` cut), `testimonialsSectionContainsThreeCards` (`crawler->filter('#testimonials .card')->count() === 3`), `initialsAvatarsAreRendered` (MH / TN / PI substrings in `#testimonials` text).
+
+  **Files to modify**
+
+  - `templates/homepage/index.html.twig` — insert between section 8 close and section 9 comment:
+    ```diff
+         </twig:SectionContainer>
+
+    +{# === 8.5. Testimonials === #}
+    +<twig:TestimonialsSection />
+    +
+     {# === 9. Open Source Callout === #}
+    ```
+  - `config/services.php` — `when@test` block, after the `GithubStatsExtension` entry: add `'App\Twig\PlaceholdersExtension' => ['public' => true],`.
+
+  **Data flow**: `config/placeholders.php` (required once per worker on extension construction) → `PlaceholdersExtension::loadPlaceholders()` → `array_merge` with defaults → `getGlobals()` explicit enumeration → Twig global `testimonials` → `templates/homepage/index.html.twig` calls `<twig:TestimonialsSection />` → component template iterates `testimonials|slice(0, 3)`.
+
+  **Non-goals (out of scope for this task — DO NOT do them here)**: No `SectionHeader` component extraction (TASK-026). No founder-bio code paths (TASK-024 — but the `founder_photo` / `linkedin_url` keys are reserved in `placeholders.php` now). No logos-strip row of fake SVG company marks. No real photo URLs anywhere.
+
+  **Build sequence**: create `placeholders.php` → create `PlaceholdersExtension.php` → edit `services.php` (`when@test` registration) → create `TestimonialsSection.html.twig` → edit `homepage/index.html.twig` (3-line insertion) → create `PlaceholdersConventionTest.php` → create `HomepageTestimonialsTest.php` → run phpunit / phpstan / php-cs-fixer.
+
+---
+
+## TASK-024: Homepage founder bio section — first-person legitimacy, distinct from /what-is-sendvery treatment
+
+- Status: proposed
+- Area: marketing
+- Why: The owner explicitly named this as a missing surface. `/what-is-sendvery` already has a founder blockquote (initials avatar, italic pull-quote, GitHub link) — the homepage needs a separately-designed founder section so a first-time visitor (who never clicks through to `/what-is-sendvery`) still gets the "this is built by a human you can name" signal. Distinct visual treatment ensures the two surfaces reinforce rather than duplicate.
+- Acceptance:
+  - New `templates/components/FounderBio.html.twig` Twig component. **Different visual language** from the `/what-is-sendvery` blockquote: a 2-column row on desktop (avatar left, ~140px circular; bio text right, max-w-2xl), collapsing to centred single column on mobile. NOT an italic pull-quote — a 3-paragraph short-form bio in normal weight: paragraph 1 = who I am + what I do, paragraph 2 = why I built Sendvery (deliverability pain story, ~2 sentences), paragraph 3 = how to reach me / what to expect (one-person company, replies within 24h, GitHub/email links).
+  - Avatar uses the same initials-placeholder pattern as `/what-is-sendvery` (`avatar avatar-placeholder` daisyUI v5 component, primary-tinted, initials `JM`, larger size — `w-32 h-32` vs the `w-12` blockquote variant) with an `// TODO(placeholder): replace JM avatar with real photo before launch` comment on the same line as the placeholder block in the component template. **Crucially, the photo URL is sourced from `config/placeholders.php` (TASK-023's file) as a single `founder_photo` key**, currently `null`. When non-null, the component renders an `<img>`; when null, the initials placeholder. One grep, one swap.
+  - Below the bio: a small inline row with 3 chips/links — GitHub profile, "Email me directly" mailto to `jan.mikes@sendvery.com`, optional LinkedIn (gated on `linkedin_url` in the placeholders config — `null` by default, the chip hides).
+  - Section lives on the homepage at a new slot: **between** the testimonials section (TASK-023) and the "Open Source Callout". The flow becomes: social proof from others → human face behind it → "yes you can self-host the whole thing." Heading: "Built by one person, in the open" (or similar — not "Meet the founder" which reads marketing-deck).
+  - daisyUI v5 only, no `dark:` prefix. Mobile renders without horizontal overflow at 360px viewport.
+  - Integration test asserts the section renders on `/`, contains "Jan Mikeš", contains the GitHub link, and that the LinkedIn chip is absent when the config value is null.
+- Notes:
+
+---
+
+## TASK-025: Homepage GitHub-stats trust strip — wire the existing data into the hero credibility row
+
+- Status: proposed
+- Area: marketing
+- Why: TASK-011 wired up the `github_stats` Twig global (cached JSON refreshed by cron). `/what-is-sendvery` and `/open-source` both read it. The homepage — the highest-traffic surface — does NOT. The hero's "trust badges" row right now is three text spans (Open source, 1 domain free, Self-hostable) plus a "See the source" link, none of which are dynamic. The moment the cron runs and stars exist, the homepage should say so. Owner explicitly named this: "GitHub stats are wired (cached JSON, may be empty until cron runs)" — proposing a surface for it.
+- Acceptance:
+  - In `templates/homepage/index.html.twig`, the hero trust-badges row (lines 56-76) gains a fourth inline span (between "Self-hostable" and "See the source"): `{% if github_stats is not null %}<span>{{ github_stats.stars|number_format }} ★ on GitHub · last commit {{ github_stats.lastCommitAt|date('M j') }}</span>{% endif %}`. When `github_stats` is null (no cron has run / cron failed / repo not public yet) the span is silently omitted — no fake numbers, no "10k+ developers" placeholder. Same null-fallback pattern as `/what-is-sendvery`.
+  - The existing "Star on GitHub" button in section 9 ("Open Source Callout") is augmented when stats are present: button label becomes `Star on GitHub ({{ github_stats.stars|number_format }})`. Null-safe.
+  - The Technical Credibility section (currently a flat row of 6 framework badges) gains, when `github_stats` is present, one trailing badge: `<span class="badge badge-lg badge-outline gap-2">AGPL-3.0 · {{ github_stats.stars }} stars</span>`. Null-safe.
+  - No new controller, no new service. Purely template-side wiring of the existing `GithubStatsExtension` global.
+  - Integration test with a fake `GithubStats` instance injected via the test-time service alias asserts the hero shows the star count; a second test with the JSON file absent asserts the span is omitted (not rendered as zero or as the literal "null").
+- Notes:
+
+---
+
+## TASK-026: Homepage section-header system — eyebrow + H2 + lede, replace the seven identical `text-2xl md:text-3xl font-bold` headings
+
+- Status: proposed
+- Area: marketing
+- Why: Audit finding. The homepage uses the exact same `<h2 class="text-2xl md:text-3xl font-bold">` markup on **every** section header (How it works, Feature Highlights, Security Expertise, Domain Health Score Preview, Free forever if you self-host, Simple transparent pricing, Frequently asked questions, Built for developers, Start monitoring today). Visually identical headings on 9+ sections create a "scroll-by-flatness" rhythm — the page reads as a long list with no visual hierarchy distinguishing the hero from the support sections from the pre-CTA closer. Real product sites layer their section heads (small uppercase eyebrow + larger headline + optional lede paragraph) to give each section a distinct weight and to telegraph "this is a fresh idea, lean in."
+- Acceptance:
+  - New `templates/components/SectionHeader.html.twig` Twig component with three slots: `eyebrow: ?string`, `title: string`, `lede: ?string`, plus a `centered: bool = true` prop. Renders eyebrow as `text-xs font-semibold uppercase tracking-[0.18em] text-primary mb-3` (only when non-null), title as `text-3xl md:text-4xl font-bold tracking-tight`, lede as `mt-4 text-base-content/65 text-lg max-w-2xl mx-auto` (only when non-null). Single max-width wrapper.
+  - Replace the inline `<h2>`/`<p>` markup on all six body sections of `templates/homepage/index.html.twig` that currently use the identical pattern (sections 2, 5, 6, 7, 8, 9, 10, 11, 12 — anything that's not the hero or the final CTA). Provide each with a distinct eyebrow: "Free check", "How it works", "Capabilities", "Risks in your DNS", "Health grade", "Self-host", "Pricing", "Built for engineers", "Common questions". The hero H1 stays as-is (it's the page's anchor headline). The final CTA H2 stays as-is (intentionally larger to read as a closer).
+  - Visually verify on a 1280px desktop and a 360px mobile viewport: the eyebrow + H2 + lede triplet should be visibly different from the hero H1 (smaller) and the final CTA H2 (smaller still). No section header should read as identical-weight to the one before it.
+  - Daisyui v5 only. No `dark:` prefix.
+  - Integration test: count distinct `<h2>` markup variants in the homepage HTML — at least one section uses the new `eyebrow` label "Capabilities" (regression-guard that the component actually landed). Re-using `SectionHeader` in `templates/about/what-is-sendvery.html.twig` is out of scope for this task to keep the PR small — that page already has a working hierarchy.
+- Notes:
+
+---
+
+## TASK-027: Homepage product preview — replace the three tiny WebP icons with a real dashboard mock above the fold of "How it works"
+
+- Status: proposed
+- Area: marketing
+- Why: `/what-is-sendvery` has a credible daisyUI dashboard mock (the rotated card with the 3-row domains table). The homepage `How it works` section uses three 80×80px rounded-square WebP icons (`how-connect.webp`, `how-monitor.webp`, `how-act.webp`) and no actual product preview anywhere. A first-time visitor scrolls past the hero and the next thing they're shown is three tiny illustrations and short text — they never see what they'd be buying. The brief explicitly says: *"the homepage should have its own treatment, not duplicate"* the `/what-is-sendvery` mock — so this proposes a different framing: a single annotated mock placed BEFORE "How it works", positioned as "here's what your dashboard looks like" rather than a 3-step diagram.
+- Acceptance:
+  - New homepage section inserted between section 4 ("Problem Statement") and section 5 ("How it works"): `<twig:SectionContainer bgClass="bg-base-200/20">`. Eyebrow "Your dashboard, one screen", H2 "Everything for one domain in one view".
+  - Render a stylised daisyUI HTML mock — distinct from `/what-is-sendvery`'s rotated 3-row domains table. Suggested distinct framing: a **per-domain detail view** mock, not a multi-domain list. Single header row with domain name + grade badge, four DNS status pills (SPF/DKIM/DMARC/MX) in a row, a fake pass-rate sparkline (CSS gradient bar, no real chart lib), and three "recent reports" list items with reporter name + percentage. All values illustrative; small "Illustrative — your data, your domains" caption underneath, identical convention to `/what-is-sendvery`.
+  - The mock is wrapped in a subtle browser-chrome frame (three dots + URL bar showing `app.sendvery.com/app/domains/acme.io`) to ground it as a real product surface.
+  - One annotation callout (small `<div class="hidden lg:block absolute">` with a thin connecting line) pointing at the grade badge, label: "Single A–F score per domain". Pure CSS, no JS.
+  - "How it works" (current section 5) stays in place after this section, framed as the **process** that produces what the mock shows.
+  - Mobile (< 768px): mock renders as a vertically-stacked card without the annotation callout. No horizontal overflow at 360px viewport.
+  - No real screenshot needed — the mock is pure HTML, swap-in for a real screenshot is a single `<img>` substitution later (note in a `{# TODO #}` comment above the mock).
+- Notes:
+
+---
+
+## TASK-028: Homepage de-duplicate the two near-identical feature grids ("Feature Highlights" vs "Security Expertise")
+
+- Status: proposed
+- Area: marketing
+- Why: Audit finding. Sections 6 ("Everything you need for email authentication") and 7 ("Your email security, explained") are both 4-card grids using inline-SVG-icon-plus-title-plus-paragraph cards. Section 6 uses `<twig:FeatureCard>`, section 7 uses `<twig:ToolCard>`, but the visitor scrolling past sees two consecutive "grid of four feature cards" sections that feel like leftover drafts of the same idea. Worse, section 7's cards all link to public tool pages, which makes section 7 functionally identical in intent to the footer Tools column — three places (nav dropdown, footer column, section 7) pushing the same destination. Either the second grid is a redundant restatement of capabilities, or it's a tool-discovery surface — pick one and let it be that.
+- Acceptance:
+  - Either: (A) **Merge** sections 6 and 7 into a single "Capabilities + risks-in-your-DNS" grid of 6-8 cards with a unified visual treatment (`FeatureCard` or `ToolCard`, not both) — half "what we monitor" cards, half "what we have free tools for" cards with explicit tool links; OR
+  - (B) **Reframe** section 7 to drop tool-card duplication and instead become a "What problems does this catch?" grid — concrete failure scenarios (e.g. "DKIM key expired after DNS migration", "SPF over 10-lookup limit", "Marketing tool added to SPF without DKIM", "Subdomain inheriting weaker DMARC than apex") with the resolution one-liner, no tool link, no icon, no card — a denser text grid that doesn't visually echo section 6.
+  - Whichever ships, the homepage has ONE feature-cards grid, not two. Reduces the section count from 13 to 12.
+  - The 4 tool destinations currently in section 7 are still reachable via the nav Tools dropdown and the footer Free Tools column — no link rot.
+  - Integration test: count the number of `<twig:FeatureCard>` and `<twig:ToolCard>` invocations on the homepage; assert the combined count is ≤ 8 (down from current 8) AND that exactly one of the two component types is used (not both). Regression-guard.
+- Notes:
+
+---
+
+## TASK-029: Replace the lock emoji in section 9 with a real inline-SVG icon (kill the only "AI-default" leak on the homepage)
+
+- Status: proposed
+- Area: marketing
+- Why: Audit finding. Every other icon on the homepage is a hand-tuned inline SVG (lucide-style stroke icons, consistent 1.5-2 stroke-width). One outlier: section 9 ("Free forever if you self-host") opens with `<div class="text-4xl mb-4">&#128272;</div>` — a giant lock **emoji**. Emojis render with platform-native styling (Apple emoji on macOS, Segoe on Windows, Noto on Android) — they're the single most-reliable visual tell that a page was drafted by an LLM or shipped quickly without a designer's pass. The page reads polished elsewhere; this one element undermines the rest.
+- Acceptance:
+  - Replace `<div class="text-4xl mb-4">&#128272;</div>` with an inline SVG lock icon (lucide `lock` or equivalent), sized `w-12 h-12 mx-auto mb-4 text-primary` to match the established icon language on the homepage.
+  - Audit the rest of the marketing surface (`templates/homepage/`, `templates/about/`, `templates/legal/`, `templates/knowledge_base/_article_layout.html.twig`, all `templates/tools/*.html.twig`) for any remaining literal-emoji uses inside `<h*>` / hero / section-header positions. Replace each with inline SVG. Acceptable to keep emojis inside body copy that's quoting a user / showing example DNS text — but NOT as a section's visual icon.
+  - List of files audited (and either changed or marked "no emoji icons present") is included in the PR description so the next agent can rely on the audit having happened.
+- Notes:
+
+---
+
+## TASK-030: Brand mark — add a small Sendvery logo SVG to the nav and footer alongside the wordmark
+
+- Status: proposed
+- Area: marketing
+- Why: Audit finding. Both the nav (`templates/components/Nav.html.twig`) and the footer (`templates/components/Footer.html.twig`) brand row render only the text wordmark "Sendvery" in primary colour. No symbol, no mark, no icon. This is fine for a wireframe but unusual for a paying-product marketing site — visitors associate brand legitimacy with a small mark next to the wordmark (envelope-with-checkmark, shield, signal-bars, etc.). The OG image generator (TASK-008) already has a `og-logo.png` fallback path that ships as text — meaning the brand mark exists nowhere as an asset, only as a TODO. This task lands a single SVG mark and wires it into the two primary brand surfaces.
+- Acceptance:
+  - Add `assets/images/logo-mark.svg` — a simple geometric mark, ~24×24 viewBox, single-colour (uses `currentColor`), works at 16px and 32px. Suggested design language: an envelope outline with a small shield-or-checkmark overlay (mail-with-trust signal), 2px stroke. No multi-colour gradients (must inherit `text-primary` cleanly).
+  - Insert in `Nav.html.twig` brand `<a>`: 24×24 SVG to the left of the "Sendvery" text, `gap-2` between mark and wordmark, both inheriting `text-primary`. Both desktop and mobile nav.
+  - Insert in `Footer.html.twig` brand block: 32×32 SVG above the wordmark `<a>`, same primary colour.
+  - Convert the OG image painter (TASK-008) to render the SVG-derived mark too: drop a 240×60 transparent PNG at `assets/images/og-logo.png` that visually matches the mark + wordmark (this is the asset the existing painter already looks for and silently falls back from). The painter code does NOT change — this task only delivers the asset.
+  - Daisyui v5 only. No new dependencies. SVG is hand-written, ≤ 1 KB.
+  - The mark uses `currentColor` so when nav or footer is themed (`text-primary` / `text-base-content`) it adopts the surrounding colour automatically.
+- Notes:
+
+---
+
+## TASK-031: Sender Inventory & per-domain Blacklist Status are completely unlinked — paying customers can't reach two whole product surfaces
+
+- Status: proposed
+- Area: domains
+- Why: Audit finding from the four-paths IA review. `SenderInventoryController` and `BlacklistStatusController` both ship working routes (`/app/domains/{id}/senders`, `/app/domains/{id}/blacklist`), templates, queries, and 100% test coverage — but they appear in **zero** templates as a link. A user lands on `/app/domains/{id}` (the canonical DEEP-DIVE surface), sees a "Top Senders" chart and a "Unique Senders" stat card, and has no clickable affordance to drill from there into the full sender list. Same for blacklist status — `latest.blacklistScore` is rendered as a progress bar on `domain_health.html.twig` with no link to the underlying per-blacklist breakdown. This is the worst single discoverability bug in the dashboard: features that exist, are tested, and that customers paid for, are URL-typing-only. The DEEP-DIVE path is broken — users feel lost because two of the four sub-surfaces of the domain workspace are invisible.
+- Acceptance:
+  - On `templates/dashboard/domain_detail.html.twig`, add two header action buttons (matching the existing "All reports / DNS History / DNS Health Check" row): "Senders" → `dashboard_sender_inventory` with `{domainId: domain.domainId}`, and "Blacklist" → `dashboard_blacklist_status` with `{id: domain.domainId}`. Use the same `btn btn-ghost btn-sm` styling.
+  - On `templates/dashboard/domain_detail.html.twig`, make the **"Unique Senders" `<twig:StatCard>`** (line 93) wrap in an `<a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}">` so the count is clickable to its list (per the clickable-cards rule).
+  - On `templates/dashboard/domain_detail.html.twig`, add a "View all senders →" link in the "Top Senders" chart card header (alongside the existing chart) pointing at `dashboard_sender_inventory`. The chart is a tease for the deeper view.
+  - On `templates/dashboard/domain_health.html.twig`, make the "Blacklist" row in the category-scores list (lines 62, `health-blacklist`) wrap its progress bar in an `<a href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}">` so clicking the row drills into the per-blacklist detail.
+  - Add a sub-tab row at the top of `domain_detail.html.twig` (under the header, above the quarantine banner) showing the four sibling surfaces of a domain workspace: **Overview · Reports · Senders · DNS · Blacklist · History**. Use `tabs tabs-bordered` daisyUI v5 component. Highlights the currently-active sibling. Add identical tab row to `domain_health.html.twig`, `domain_reports.html.twig`, `domain_dns_history.html.twig`, `sender_inventory.html.twig`, `blacklist_status.html.twig` so the user can move between the six surfaces without bouncing back to the domain detail page each time.
+  - Integration test guard: `noOrphanedDashboardRoute` — iterate every `dashboard_*` route, render at least one page that links to it, fail if any controller's route name isn't referenced from at least one rendered template (excluded set: webhooks, POST-only action routes). This catches the next orphaned-page bug at CI time.
+  - 100% test coverage on the tab-row component + the new domain-detail link assertions.
+- Notes:
+
+---
+
+## TASK-032: "Healthy domain" counts on the overview banner aren't clickable — the named example from the PO brief
+
+- Status: proposed
+- Area: dashboard
+- Why: PO brief names this explicitly: *"1 domain needs attention" should drop the user on the offending domain (or a filtered list)*. Today the health-summary banner on `templates/dashboard/overview.html.twig` (lines 29-50) renders three inline counts — "N healthy", "N need attention", "N unverified" — as plain `<span>` text. The user reads "1 needs attention" and has to scroll down past the next-action card, past the setup checklist, past the stat cards, past the trend chart, past the alerts list, to find the Domain Health card at the bottom, then scan five domain rows to find the one with a yellow pass-rate. Every count on this banner must be a one-click jump to the exact filtered subset.
+- Acceptance:
+  - Each of the three counts ("N healthy", "N need attention", "N unverified") in `overview.html.twig` lines 31-48 becomes an `<a>` linking to `dashboard_domains` with a new `?status=healthy|attention|unverified` query param. When `domainsHealthyCount = 0` etc. the row hides entirely (existing behavior) — links only render for non-zero counts.
+  - `templates/dashboard/domains.html.twig` and `ListDomainsController` gain a top filter chip row (`All · Healthy · Need attention · Unverified`) mirroring the alerts page filter pattern (`alerts.html.twig` lines 28-55). URL-driven state via `?status=` query param. "All" is the default.
+  - `GetDomainOverview::forTeams()` accepts an optional `?DomainHealthFilter $statusFilter = null` parameter; SQL filters via `HAVING pass_rate >= 90` (healthy), `pass_rate < 90 AND dmarc_verified_at IS NOT NULL` (attention), `dmarc_verified_at IS NULL` (unverified).
+  - Empty-with-filter state copy ("No domains match the current filter — clear filter") differentiates from empty-without-filter ("Add your first domain").
+  - Stat cards on `overview.html.twig` lines 186-228 also become clickable to their corresponding filtered lists (per audit): Monitored Domains → `/app/domains`, Reports → `/app/reports`, DMARC Pass Rate → `/app/reports?pass_rate=low` (reuses TASK-016's filter), Total Messages → `/app/reports` (no good destination, leave unlinked — document why), Unread Alerts (already linked), Reports this month (already linked).
+  - 100% test coverage on the new query filter branches + the integration assertions that each banner count is wrapped in an `<a>` with the right href.
+- Notes:
+
+---
+
+## TASK-033: No global "Add" affordance — adding a domain / mailbox / teammate from anywhere needs three clicks across three pages
+
+- Status: proposed
+- Area: dashboard
+- Why: PO brief named ADD as one of the four user paths and asked: *"clear and always reachable?"*. Today: to add a domain from `/app/reports` the user must (1) navigate to Domains, (2) wait for the list to load, (3) click "Add domain". To invite a teammate from `/app/alerts` they must (1) find "Team" in the sidebar Settings section, (2) navigate, (3) scroll to the invite form. To connect a mailbox from `/app/billing` they must (1) navigate to Mailboxes, (2) click "Add mailbox". The "Add" affordance only exists as a page-specific header action on each list page. For a multi-domain team the most-used action — Add domain — should be one click from anywhere.
+- Acceptance:
+  - Add a single "**+ Add**" dropdown button to the top-bar `{% block header_actions %}` default content in `templates/dashboard/layout.html.twig` (around line 177, before the user email). daisyUI v5 `dropdown dropdown-end` with three menu items: **Add domain** → `dashboard_domain_add`, **Connect mailbox** → `dashboard_mailbox_add`, **Invite teammate** → `team_settings#invite` (or a dedicated `team_invite` route if that anchor doesn't exist).
+  - The button is **always visible** on every dashboard page (i.e. the layout-default header action) — page-specific `{% block header_actions %}` overrides on `domains.html.twig`, `mailboxes.html.twig`, `dns_health_overview.html.twig` currently REPLACE the default; change them to additionally include the global dropdown OR drop the page-specific "+ Add domain" header buttons in favour of just the global dropdown (since they duplicate it).
+  - Plan-limit guard: each menu item checks the relevant `PlanEnforcement::canAdd*` and renders disabled with a tiny `(limit reached — upgrade)` tooltip when the cap is hit. Disabled item shows `cursor-not-allowed`, no link, and a small `→ Upgrade` chip linking to `dashboard_billing`.
+  - Mobile (<lg): the button is `btn btn-sm btn-primary btn-square` showing only the `+` icon to save bar width; the dropdown still works on tap.
+  - Integration test: GET each of `/app`, `/app/reports`, `/app/alerts`, `/app/billing`, `/app/team`, `/app/quarantine` and assert the response body contains a link to each of `dashboard_domain_add`, `dashboard_mailbox_add`, and `team_settings`. This regression-guards the always-reachable invariant.
+  - 100% test coverage on the plan-limit gating branches (each combination of can-add / can't-add).
+- Notes:
+
+---
+
+## TASK-034: DNS Health overview cards are 80% non-interactive — only one tiny "View details" link per card, badges and grade are dead text
+
+- Status: proposed
+- Area: dashboard
+- Why: Clickable-cards audit finding. `templates/dashboard/dns_health_overview.html.twig` renders one card per domain. Inside each card: domain name (dead text), grade badge `A`/`B`/`C` (dead text), four SPF/DKIM/DMARC/MX status badges (dead text), and a single "View details" anchor at the card bottom. The card itself isn't a link, the grade isn't a link, the per-protocol badges aren't links. Contrast with `templates/dashboard/domain_detail.html.twig` (lines 31-46) where the same four badges DO deep-link to `#health-spf` etc. anchors. The DNS Health overview is supposed to be the **glanceable** answer to "is anything wrong with my DNS?" — every visual signal on it must drop you on the broken thing in one click.
+- Acceptance:
+  - The entire card on `dns_health_overview.html.twig` becomes clickable via the stretched-link pattern (per TASK-018) — wrap the card in `<a href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}">` or apply the `position: relative` + `<a class="absolute inset-0">` idiom so the whole card surface is the affordance.
+  - The grade badge inside the card becomes a direct link to `#health-score` anchor on the per-domain page.
+  - The four SPF/DKIM/DMARC/MX badges become `<a>` tags pointing at `dashboard_domain_health` with the corresponding `#health-spf` / `#health-dkim` / `#health-dmarc` / `#health-mx` fragment — exactly mirroring the deep-link pattern already shipped on `domain_detail.html.twig` (TASK-013).
+  - The "View details" button becomes redundant when the whole card is clickable; either remove it or convert it to a secondary action like "DNS history" → `dashboard_domain_dns_history`.
+  - Card hover state matches the daisyUI v5 `DomainCard.html.twig` precedent (`hover:shadow-md hover:border-primary/30 transition-all`) so the card visually communicates clickability.
+  - Mobile: stretched-link anchor doesn't intercept badge clicks — apply `relative z-10` to the badge `<a>` tags so badge-click drills to the protocol anchor, card-body-click drills to the per-domain page.
+  - 100% test coverage on the new anchor assertions (each badge has a deep-link href; the card-wrapping anchor is present; the badge clicks resolve to the anchor URLs, not the parent card URL — verify by asserting `z-10` class on inner anchors).
+- Notes:
+
+---
+
+## TASK-035: Mailboxes page is a dead-end table — rows aren't clickable, no inbox preview, no per-mailbox poll history
+
+- Status: proposed
+- Area: dashboard
+- Why: TRIAGE + DEEP-DIVE path audit. `templates/dashboard/mailboxes.html.twig` shows a five-column table (Host, Type, Status, Last Polled, Last Error) with a "Re-test" button per row. The rows aren't clickable. Worse, even on success there is no way to answer the most basic operator questions: *"how many envelopes has this mailbox pulled in?"*, *"what was the last DMARC report that came through here?"*, *"is this mailbox sending its envelopes to my domains or to quarantine?"*. Per the PO's "make value visible" lens this is the biggest hidden-data offender in the app — `received_report_email` rows are tied to a `mailbox_connection_id` but the UI never surfaces that relationship. A non-technical user looking at "Last Error: —" has no signal that the mailbox is actually doing useful work.
+- Acceptance:
+  - New per-mailbox detail page `dashboard_mailbox_detail` at `/app/mailboxes/{id}` rendering: connection details (host/port/encryption/folder), last-poll metadata, **a small stat row** ("Envelopes pulled — total / last 30 days / last 7 days", "Reports parsed", "Envelopes quarantined"), and a 20-row recent-envelopes table (Received at · From · Subject · Status: parsed/quarantined). Each envelope row links to either the parsed report or the quarantine detail (`dashboard_report_detail` / `dashboard_quarantine_detail`).
+  - `mailboxes.html.twig` rows become clickable via the stretched-link pattern (TASK-018) to the new detail page. The "Re-test" action stays as a secondary inline button (with `relative z-20` to win pointer events over the stretched link).
+  - The stat row's count cells on the mailbox detail page are clickable to the corresponding filtered list (per the clickable-cards rule): "Reports parsed" → `dashboard_reports` filtered by `?mailbox={id}` (extend TASK-016's `ReportsFilter` with a `mailboxId` field), "Envelopes quarantined" → `dashboard_quarantine` filtered by `?mailbox={id}` (extend the quarantine query accordingly).
+  - The mailbox listing on `mailboxes.html.twig` gains a small inline activity summary per row: "12 envelopes / 11 reports / 1 quarantined (30d)" so the user can answer "is this mailbox doing useful work?" at the list level without drilling in.
+  - 100% test coverage on the new query + the cross-tenant 404 branches + the filtered-list integration paths.
+- Notes:
+
+---
+
+## TASK-036: Quarantine page has no filter chips — the three reasons that get reports parked are the obvious axis, and each badge should be clickable
+
+- Status: proposed
+- Area: dashboard
+- Why: Clickable-cards audit + IA review. `templates/dashboard/quarantine.html.twig` lists envelopes with a "Reason" column rendering one of three coloured badges: `Unknown domain` / `Unverified domain` / `Plan overage`. The badges are dead text. For a team with 50+ parked envelopes across two reasons (a typical state — Plan overage piles up monthly, Unknown domain piles up from typo / fake-sender traffic), the user has no way to isolate "show me only the plan-overage rows so I can decide whether to upgrade" or "show me only the unknown-domain rows so I can add domains in bulk". Quarantine is also the canonical "data we received but parked" surface — visibility into reason-mix is the first decision the user makes upon arriving.
+- Acceptance:
+  - Filter chip row at top of `quarantine.html.twig` mirroring the `alerts.html.twig` pattern (lines 28-55): **All · Unknown domain · Unverified domain · Plan overage**. Each chip carries the reason count as a small `(N)` after the label.
+  - Each reason badge in the table body becomes an `<a>` linking to the same-filter view (clicking "Plan overage" on row 3 = clicking the "Plan overage" chip up top). Apply `relative z-20` so the badge click wins over the stretched-row anchor.
+  - URL-driven filter via `?reason=unknown_domain|unverified_domain|plan_overage`. Empty / `all` shows everything (current default).
+  - `GetQuarantineList::forTeam()` and `countForTeam()` both gain a `?string $reasonFilter = null` parameter. Counts are SQL-side, not PHP-filtered, so the chip badges stay accurate under pagination.
+  - The "**Reason: Plan overage**" filter view shows a small inline upsell card above the table (re-uses the billing page's PlanOverage warning copy): "These reports were received after you hit this month's cap. Upgrade to unlock them." with link to upgrade flow. Surfaced inline because the user is already looking at the offending rows.
+  - The "**Reason: Unknown domain**" filter view shows an inline tip card: "These reports were sent for domains you haven't added yet. Add the domain to start receiving reports — existing parked reports auto-release." (Reuses TASK-020's add-domain-from-quarantine flow.)
+  - Empty-with-filter copy differentiates from empty-without-filter ("No reports in quarantine — every report we received has been parsed").
+  - 100% test coverage on the new query filter branches + each chip's count assertion.
+- Notes:
+
+---
+
+## TASK-037: Domain detail teaches nothing about what `p=none` / `p=quarantine` / `p=reject` MEAN — the most-visible badge in the app is unexplained
+
+- Status: proposed
+- Area: domains
+- Why: Make-value-visible audit. The DMARC policy badge (`p=none`, `p=quarantine`, `p=reject`) is rendered on three surfaces: `templates/dashboard/domain_detail.html.twig` (line 16), `templates/dashboard/report_detail.html.twig` (multiple places), and `templates/dashboard/domain_health.html.twig` (in the recommendations). It's a tiny badge with no tooltip, no explanation, no "what should I do next?" callout. A Marketing-Maria persona looking at `p=none` for the first time has no idea this is the WEAKEST DMARC policy — she'd assume "none = no problems". This is exactly the moment Sendvery is supposed to translate XML jargon to plain English, and it doesn't. The next-tier upgrade ("move to p=quarantine") is also a content goal in `docs/05-monetization.md` — the moment to surface that in-product is when the user is staring at their current policy.
+- Acceptance:
+  - New `templates/components/DmarcPolicyExplainer.html.twig` Twig component rendering a `card bg-base-100 border` panel with: large current-policy badge, plain-English title ("You're at **p=none** — Monitor-only mode"), 2-3 sentence explanation, a horizontal progress-row showing the three policy tiers as connected dots (`none → quarantine → reject`), and a "What's next" suggestion box with concrete copy per current policy:
+    - **p=none**: "You're collecting data but not enforcing. Once your DMARC pass rate is consistently above 90% for ~4 weeks, move to `p=quarantine; pct=10` to start gradual enforcement on suspicious mail."
+    - **p=quarantine**: "Suspicious mail is going to spam. Once your DKIM/SPF alignment is rock-solid (pass rate >95%), move to `p=reject` to fully block spoofed mail."
+    - **p=reject**: "You're at the strongest DMARC posture. Spoofed mail is blocked outright. Monitor for legitimate mail accidentally caught by enforcement."
+  - Each suggestion links to the corresponding KB article: `learn/migrate-dmarc-from-none-to-reject` (already exists per TASK-007). The component's "Read the migration guide →" link is the in-app entry to that article.
+  - Insert the component on `domain_detail.html.twig` between the quick-stats grid (line 86-95) and the charts row — so it's directly under the metrics that justify the recommendation (a 99% pass-rate domain with `p=none` SHOULD nudge to quarantine; a 60% pass-rate domain with `p=none` should NOT — see logic below).
+  - Logic lives in `src/Services/DmarcPolicyAdvisor.php` testable service — pure-computation, returns a `DmarcPolicyAdvisorResult` DTO with `currentPolicy`, `recommendedNextPolicy`, `eligibleForNextTier: bool`, `reasonText: string`. Eligibility rule: at `p=none` → eligible when 4-week trailing pass rate ≥ 90% AND at least 3 reports parsed; at `p=quarantine` → eligible when pass rate ≥ 95%; at `p=reject` → always "you're at strongest tier".
+  - When NOT eligible (still building data), the suggestion box becomes informational: "Still collecting data. Move to the next tier once your pass rate stabilises above 90%."
+  - 100% test coverage on the advisor service (all five branches: no-policy / p=none-not-ready / p=none-ready / p=quarantine-not-ready / p=quarantine-ready / p=reject) + the component renders for each branch.
+- Notes:
+
+---
+
+## TASK-038: Domain detail "Top Senders" chart is a chart-of-mystery — no labels, no authorization status, not clickable, value is hidden
+
+- Status: proposed
+- Area: domains
+- Why: Make-value-visible audit. `templates/dashboard/domain_detail.html.twig` (lines 106-123) renders an ApexCharts donut/bar of "Top Senders by message volume." There's no legend showing which sender is which, no indication of which senders are Authorized vs Unknown (the data is in `known_sender` and we already query it for `report_detail.html.twig` per TASK-017), no link from any chart segment to the sender's detail row. The single most actionable insight a user can get from DMARC data — "Mailchimp is sending 40% of my mail and 8% of it fails DKIM" — is literally on this page but unreadable. This is the canonical "data we have, magic we're hiding" gap.
+- Acceptance:
+  - Below the existing chart, add a **labelled sender summary table** (top 5 senders, sorted by message volume): columns *Sender (org or hostname or IP) · Messages · DKIM pass % · SPF pass % · Status (Authorized/Unknown badge)*. Reuses the `ReportSenderGroupResult` shape from TASK-017 but aggregated across all reports for the domain (new query `GetTopSendersForDomain`).
+  - Each row in the table is a stretched-link anchor to `dashboard_sender_inventory` with a `#sender-{id}` fragment that scrolls to the matching row on the sender list. (Requires adding `id="sender-{{ sender.id }}"` to each row on `sender_inventory.html.twig`.)
+  - The chart segments get matching labels (org/hostname/IP) and the colour palette pairs Authorized senders in `--color-success` and Unknown senders in `--color-warning` — so the visual signal "your bulk-mail volume comes mostly from authorized sources" is glanceable.
+  - A small **"Senders by authorization status"** stat row appears above the chart: "**X** authorized · **Y** unknown · **Z** unique IPs" — each count is clickable and filters the sender inventory page (uses the existing `?filter=authorized|unauthorized` query param).
+  - Empty-state copy (no sender data yet): instead of just hiding the chart, render an educational placeholder ("DMARC reports tell us which servers are sending email as your domain. Sender breakdown appears here once Gmail/Outlook send their first report — usually within 24 hours of publishing DMARC.") with a link to `learn/what-is-dmarc`.
+  - 100% test coverage on the new query + the table's stretched-link + the chart's authorization-colour-coding (assert `--color-success` / `--color-warning` references in the rendered chart config).
+- Notes:
+
+---
+
+## TASK-039: Sidebar groups operational, ingestion, and system surfaces in one flat list — the only divider is "Settings" but it covers Team/Billing/Preferences too
+
+- Status: proposed
+- Area: dashboard
+- Why: IA audit, four-paths review. `templates/dashboard/layout.html.twig` lines 78-142 render a single flat nav list with one `<div class="divider">Settings</div>` separator at line 124. The OPERATIONAL surfaces (Dashboard / Domains / Reports / Quarantine / Alerts / DNS Health / Mailboxes) sit above the divider in one flat block of 7 items; SYSTEM surfaces (Team / Settings / Billing) sit below. But within the OPERATIONAL block, "Mailboxes" is an ingestion-side tool while everything else is a viewing-side surface — they're conceptually different. The PO brief asked specifically: *"is the sidebar order sensible? Are operational vs system surfaces visually separated?"*. Current state: yes there's one divider, but no grouping/eyebrow labels, and "Mailboxes" feels lost in the operations block.
+- Acceptance:
+  - Group the sidebar into three labelled sections with small uppercase eyebrow labels (`text-[10px] uppercase tracking-wider text-base-content/40`):
+    1. **OVERVIEW** — Dashboard
+    2. **DOMAINS** — Domains, DNS Health
+    3. **DATA** — Reports, Quarantine, Alerts
+    4. **INGESTION** — Mailboxes
+    5. **SETTINGS** (existing divider, keep label) — Team, Settings, Billing
+  - The visual treatment for eyebrow labels matches the existing "Team" section label on lines 28-29 (small uppercase, low-contrast). Use plain `<div>` not divider — dividers between every group is too noisy.
+  - Sidebar order within each section preserved from current order. The only re-grouping is the eyebrow labels.
+  - Active-state highlighting unchanged — operational/system grouping is purely cosmetic.
+  - Mobile (<lg): same grouping renders cleanly inside the hamburger overlay.
+  - Integration test: assert each eyebrow label is present in the rendered sidebar; assert the 5 eyebrow labels appear in the documented order.
+- Notes:
+
+---
+
+## TASK-040: Recent-Reports / Domain-Health cards on `/app` show numbers but no in-card filters — "View all" is the only escape hatch
+
+- Status: proposed
+- Area: dashboard
+- Why: Clickable-cards + IA audit. `templates/dashboard/overview.html.twig` lines 268-348 render two side-by-side cards: "Recent Reports" (5 latest, table) and "Domain Health" (top 5 domains, list). Both cards' header has a single "View all" link, and the rows inside are clickable to the report/domain detail page. What's missing: there are no per-card filter chips to narrow the view in-place, AND the column headers (Pass Rate, Reports count) aren't sortable. A user scanning these cards has no way to answer "which domains are failing most?" — they have to click "View all" → land on the full domains list → and only then get sorting via the columns.
+- Acceptance:
+  - On the "Recent Reports" card header, add a small inline filter dropdown next to "View all": **Last 7 days · Last 30 days · Last 90 days** (default 7d). URL-state persisted via `?recent_reports_range=7d|30d|90d` on `/app`. Re-fetches the card via existing Doctrine query parameterised by the date range.
+  - On the "Domain Health" card header, add a small sort toggle: **Worst first · Best first · Most reports** (default Worst first — surfaces problems). URL-state via `?domain_health_sort=`.
+  - On the "Recent Reports" table, add a small clickable filter chip below the table: "Show only failing (<70% pass)" — toggles a per-card filter to surface problems. URL-state via `?recent_reports_failing=1`.
+  - In the "Domain Health" card, each domain row gains a small "pass rate sparkline" — a tiny 30-day SVG trend so the user can see "this domain is degrading" without clicking through.
+  - The two "View all" links continue to work as escape hatches to the full list pages — the in-card filters supplement them, don't replace them.
+  - 100% test coverage on the new filter branches + sparkline rendering (assert `<svg>` and the right number of data points).
+- Notes:
+

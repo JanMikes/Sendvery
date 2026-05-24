@@ -406,6 +406,9 @@ return App::config([
             'App\Twig\GithubStatsExtension' => [
                 'public' => true,
             ],
+            'App\Twig\PlaceholdersExtension' => [
+                'public' => true,
+            ],
             'App\Services\OgImage\OgImageRenderer' => [
                 'public' => true,
             ],
