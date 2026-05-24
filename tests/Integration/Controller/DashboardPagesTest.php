@@ -141,6 +141,27 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
+    public function sidebarGroupEyebrowsRenderInDocumentedOrder(): void
+    {
+        $data = $this->createAuthenticatedClientWithData();
+
+        $data['client']->request('GET', '/app');
+
+        $sidebar = (string) $data['client']->getResponse()->getContent();
+        $aside = (string) (1 === preg_match('/<aside[^>]*>(.*?)<\/aside>/s', $sidebar, $m) ? $m[1] : '');
+
+        $labels = ['Overview', 'Domains', 'Data', 'Ingestion', 'Settings'];
+        $lastPos = -1;
+        foreach ($labels as $label) {
+            $needle = sprintf('uppercase tracking-wider text-base-content/40">%s</div>', $label);
+            $pos = strpos($aside, $needle);
+            self::assertNotFalse($pos, sprintf('Sidebar eyebrow "%s" missing or markup drifted.', $label));
+            self::assertGreaterThan($lastPos, $pos, sprintf('Sidebar eyebrow "%s" appears out of order.', $label));
+            $lastPos = $pos;
+        }
+    }
+
+    #[Test]
     public function domainsListReturns200(): void
     {
         $data = $this->createAuthenticatedClientWithData();

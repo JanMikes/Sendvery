@@ -2338,7 +2338,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-039: Sidebar groups operational, ingestion, and system surfaces in one flat list — the only divider is "Settings" but it covers Team/Billing/Preferences too
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: IA audit, four-paths review. `templates/dashboard/layout.html.twig` lines 78-142 render a single flat nav list with one `<div class="divider">Settings</div>` separator at line 124. The OPERATIONAL surfaces (Dashboard / Domains / Reports / Quarantine / Alerts / DNS Health / Mailboxes) sit above the divider in one flat block of 7 items; SYSTEM surfaces (Team / Settings / Billing) sit below. But within the OPERATIONAL block, "Mailboxes" is an ingestion-side tool while everything else is a viewing-side surface — they're conceptually different. The PO brief asked specifically: *"is the sidebar order sensible? Are operational vs system surfaces visually separated?"*. Current state: yes there's one divider, but no grouping/eyebrow labels, and "Mailboxes" feels lost in the operations block.
 - Acceptance:
