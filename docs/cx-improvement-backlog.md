@@ -1848,7 +1848,7 @@ Every architect → developer → reviewer cycle landed cleanly. Reviewer rounds
 
 ## TASK-029: Replace the lock emoji in section 9 with a real inline-SVG icon (kill the only "AI-default" leak on the homepage)
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: Audit finding. Every other icon on the homepage is a hand-tuned inline SVG (lucide-style stroke icons, consistent 1.5-2 stroke-width). One outlier: section 9 ("Free forever if you self-host") opens with `<div class="text-4xl mb-4">&#128272;</div>` — a giant lock **emoji**. Emojis render with platform-native styling (Apple emoji on macOS, Segoe on Windows, Noto on Android) — they're the single most-reliable visual tell that a page was drafted by an LLM or shipped quickly without a designer's pass. The page reads polished elsewhere; this one element undermines the rest.
 - Acceptance:
