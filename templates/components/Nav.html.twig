@@ -5,7 +5,17 @@
    then treat the top bar and the mobile menu panel as side-by-side flex
    items — the mobile menu would render as a narrow column next to the bar
    instead of dropping below it. Outer <nav> stays block; the top bar gets
-   the visual chrome (min-height, padding) instead. #}
+   the visual chrome (min-height, padding) instead.
+
+   NOTE (TASK-065): we deliberately do NOT mirror the sidebar attention
+   badges (TASK-060 alerts count, TASK-061 unverified domains count, the
+   existing quarantine count) on the marketing-site Dashboard CTA above.
+   The marketing nav renders on PUBLIC pages (Pricing, Learn, Tools); a red
+   count on the Dashboard button while the user is researching or sharing
+   those pages would feel intrusive and would betray the user's session
+   state to any over-the-shoulder onlooker. The dashboard sidebar is the
+   right home for live attention signals — once the user is signed in and
+   working, not while they're browsing public content. #}
 <nav class="bg-base-100/80 backdrop-blur-md sticky top-0 z-50 border-b border-base-200"
      {{ stimulus_controller('mobile-nav') }}>
     <div class="container mx-auto flex items-center w-full gap-2 min-h-16 px-4">

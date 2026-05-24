@@ -2764,7 +2764,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-065: Marketing-site `Nav.html.twig` — record the decision to NOT mirror sidebar attention badges on the public Dashboard CTA
 
-- Status: todo
+- Status: done
 - Area: marketing
 - Why: Fresh-eyes consistency check. The marketing-site top nav (`templates/components/Nav.html.twig`) for AUTHENTICATED users currently shows a single "Dashboard" CTA button (line 49) — no badge. A naive copy-paste of the sidebar work in TASK-060/061 onto the marketing nav would put a red "3" on the Dashboard button for logged-in users browsing public marketing pages (Pricing, Learn, etc.). This would feel intrusive in a context where the user is researching or sharing the marketing site, not working, AND it would betray the user's session state to over-the-shoulder onlookers (low-grade info disclosure). The right decision is "no badges on the marketing nav for logged-in users" — but it should be a DELIBERATE decision recorded in code, not a "we forgot."
 - Acceptance:

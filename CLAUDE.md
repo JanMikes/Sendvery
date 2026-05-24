@@ -399,6 +399,10 @@ Do NOT use `{% block content %}...{% endblock %}` inside `<twig:Component>` tags
 
 Single light theme only (`data-theme="sendvery"` on `<html>`). Dark mode was intentionally removed — do not reintroduce a `sendvery-dark` theme or a `dark-mode` Stimulus controller without a product decision. Do NOT use Tailwind `dark:` prefix for theme-dependent styling — it won't work with daisyUI's data-theme approach.
 
+### Marketing nav: no attention badges
+
+The marketing-site top nav (`templates/components/Nav.html.twig`) intentionally has NO attention badges on its "Dashboard" CTA for signed-in users. The dashboard sidebar (TASK-060 / TASK-061 / quarantine badge) is the right home for live counts — surfacing them on public pages (Pricing, Learn, Tools) would feel intrusive and would leak the user's session state to over-the-shoulder onlookers. Do not propose mirroring sidebar badges onto the marketing nav.
+
 ## Docker
 
 - Base image: `ghcr.io/thedevs-cz/php:8.5`
