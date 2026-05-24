@@ -11,6 +11,7 @@ use App\Entity\ReceivedReportEmail;
 use App\Services\CredentialEncryptor;
 use App\Tests\Fixtures\Persona;
 use App\Tests\Fixtures\TestFixtures;
+use App\Tests\TestSupport\FallbackCalloutStripping;
 use App\Tests\WebTestCase;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
@@ -30,6 +31,8 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
  */
 final class MailboxesListTest extends WebTestCase
 {
+    use FallbackCalloutStripping;
+
     /**
      * @return array{client: KernelBrowser, em: EntityManagerInterface, persona: Persona, mailbox: MailboxConnection}
      */
@@ -141,6 +144,31 @@ final class MailboxesListTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $body = (string) $data['client']->getResponse()->getContent();
         self::assertStringContainsString('0 envelopes / 0 reports / 0 quarantined', $body);
+    }
+
+    /**
+     * Regression-net guard (TASK-090): the literal "Connect a mailbox" copy
+     * is allowed inside the page's fallback callout only. Any other place on
+     * the page surfacing the same string (e.g. a future EmptyState revert or
+     * a header CTA) breaks the DNS-first hierarchy and must trip this test.
+     */
+    #[Test]
+    public function unqualifiedMailboxCtaOnlyAppearsInFallbackCallout(): void
+    {
+        $data = $this->bootClientWithMailbox();
+
+        $data['client']->request('GET', '/app/mailboxes');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+
+        // DOM-based strip (see FallbackCalloutStripping). Layout-level
+        // GlobalAddDropdown is intentionally exempt — see
+        // ReportIngestionPageTest for the same exemption.
+        $stripped = $this->stripFallbackCalloutAndGlobalDropdown($body);
+
+        self::assertStringContainsString('Connect a mailbox', $body);
+        self::assertStringNotContainsString('Connect a mailbox', $stripped);
     }
 
     private function persistEnvelope(

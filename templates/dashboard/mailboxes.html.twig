@@ -1,7 +1,7 @@
 {% extends 'dashboard/layout.html.twig' %}
 
-{% block page_title %}Mailboxes{% endblock %}
-{% block breadcrumbs %}<li>Mailboxes</li>{% endblock %}
+{% block page_title %}Report ingestion{% endblock %}
+{% block breadcrumbs %}<li>Report ingestion</li>{% endblock %}
 
 {% block content %}
     {# Flash messages #}
@@ -13,69 +13,148 @@
         {% endfor %}
     {% endfor %}
 
-    {% if mailboxes is empty %}
-        <twig:EmptyState
-            title="No mailboxes connected"
-            message="Connect a mailbox to automatically receive and parse DMARC reports."
-            actionUrl="{{ path('dashboard_mailbox_add') }}"
-            actionLabel="Connect a mailbox"
-        />
-    {% else %}
-        <div class="card bg-base-100 border border-base-200 shadow-sm">
-            <div class="card-body p-4">
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Host</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Last Polled</th>
-                                <th>Activity (30d)</th>
-                                <th>Last Error</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {# Stretched-link row navigation per TASK-018 (TASK-035).
-                               The "Re-test" form gets `relative z-20` so submitting
-                               the button doesn't fall through to the row anchor. #}
-                            {% for mailbox in mailboxes %}
-                                {% set summary = activity[mailbox.id.toString()] %}
-                                <tr class="hover:bg-base-200/50 relative">
-                                    <td class="font-medium">
-                                        <a href="{{ path('dashboard_mailbox_detail', { id: mailbox.id }) }}"
-                                           class="absolute inset-0 z-10"
-                                           aria-label="Open mailbox detail for {{ mailbox.host }}"></a>
-                                        {{ mailbox.host }}:{{ mailbox.port }}
-                                    </td>
-                                    <td>{{ mailbox.type.value }}</td>
-                                    <td>
-                                        {% if mailbox.isActive and mailbox.lastError is null %}
-                                            <twig:StatusBadge status="active" label="Active" />
-                                        {% elseif mailbox.lastError %}
-                                            <twig:StatusBadge status="error" label="Error" />
-                                        {% else %}
-                                            <twig:StatusBadge status="inactive" label="Inactive" />
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ mailbox.lastPolledAt ? mailbox.lastPolledAt|date('M j, H:i') : '—' }}</td>
-                                    <td class="text-xs text-base-content/60 whitespace-nowrap">
-                                        {{ summary.envelopes30d }} envelopes / {{ summary.reports30d }} reports / {{ summary.quarantined30d }} quarantined
-                                    </td>
-                                    <td class="text-xs text-error max-w-xs truncate">{{ mailbox.lastError ?? '—' }}</td>
-                                    <td>
-                                        <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.id }) }}" class="relative z-20">
-                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
-                                            <button type="submit" class="btn btn-ghost btn-xs">Re-test</button>
-                                        </form>
-                                    </td>
+    <header class="mb-6">
+        <h1 class="text-2xl font-bold">Report ingestion</h1>
+        <p class="text-sm text-base-content/60 mt-1">
+            Where DMARC reports arrive from email providers.
+        </p>
+    </header>
+
+    <twig:IngestionRoutesCallout
+        reportAddress="{{ reportAddress }}"
+        dnsCtaUrl="{{ dnsCtaUrl }}"
+    />
+
+    {% if matrix|length > 0 %}
+        <section class="mb-8" data-testid="ingestion-matrix">
+            <h2 class="text-lg font-semibold mb-3">Per-domain ingestion</h2>
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Domain</th>
+                                    <th>Active ingestion path</th>
+                                    <th>Last report received</th>
+                                    <th>Action</th>
                                 </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {% for row in matrix %}
+                                    <tr {% if row.isMisconfigured %}data-testid="mixed-warning"{% endif %}>
+                                        <td class="font-medium">{{ row.domainName }}</td>
+                                        <td>
+                                            {% if row.path.value == 'dns' %}
+                                                <span class="badge badge-primary">DNS (central inbox)</span>
+                                                <div class="text-xs text-base-content/60 mt-1">
+                                                    via <span class="font-mono">{{ reportAddress }}</span>
+                                                </div>
+                                            {% elseif row.path.value == 'mailbox' %}
+                                                <span class="badge badge-ghost">Mailbox</span>
+                                                {% if row.mailboxHost %}
+                                                    <div class="text-xs text-base-content/60 mt-1">
+                                                        via
+                                                        {% if row.mailboxId %}
+                                                            <a href="{{ path('dashboard_mailbox_detail', {id: row.mailboxId}) }}"
+                                                               class="link link-hover font-mono">{{ row.mailboxHost }}:{{ row.mailboxPort }}</a>
+                                                        {% else %}
+                                                            <span class="font-mono">{{ row.mailboxHost }}:{{ row.mailboxPort }}</span>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                            {% elseif row.path.value == 'mixed' %}
+                                                <span class="badge badge-warning">Both — please pick one</span>
+                                                <div class="text-xs text-warning mt-1">
+                                                    Duplicate ingestion — choose DNS or mailbox per domain.
+                                                </div>
+                                            {% else %}
+                                                <span class="badge badge-ghost">No reports yet</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-sm text-base-content/70">
+                                            {{ row.lastReportAt ? row.lastReportAt|date('M j, H:i') : '—' }}
+                                        </td>
+                                        <td>
+                                            {% if row.path.value == 'none' %}
+                                                <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
+                                                   class="btn btn-ghost btn-xs">Publish RUA</a>
+                                            {% elseif row.path.value == 'mixed' %}
+                                                <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
+                                                   class="btn btn-warning btn-xs">Decide</a>
+                                            {% else %}
+                                                <span class="text-base-content/40">—</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div>
+        </section>
+    {% endif %}
+
+    {% if mailboxes|length > 0 %}
+        <section data-testid="connected-mailboxes">
+            <h2 class="text-lg font-semibold mb-3">Connected mailboxes</h2>
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Host</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Last Polled</th>
+                                    <th>Activity (30d)</th>
+                                    <th>Last Error</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {# Stretched-link row navigation per TASK-018 (TASK-035).
+                                   The "Re-test" form gets `relative z-20` so submitting
+                                   the button doesn't fall through to the row anchor. #}
+                                {% for mailbox in mailboxes %}
+                                    {% set summary = activity[mailbox.id.toString()] %}
+                                    <tr class="hover:bg-base-200/50 relative">
+                                        <td class="font-medium">
+                                            <a href="{{ path('dashboard_mailbox_detail', { id: mailbox.id }) }}"
+                                               class="absolute inset-0 z-10"
+                                               aria-label="Open mailbox detail for {{ mailbox.host }}"></a>
+                                            {{ mailbox.host }}:{{ mailbox.port }}
+                                        </td>
+                                        <td>{{ mailbox.type.value }}</td>
+                                        <td>
+                                            {% if mailbox.isActive and mailbox.lastError is null %}
+                                                <twig:StatusBadge status="active" label="Active" />
+                                            {% elseif mailbox.lastError %}
+                                                <twig:StatusBadge status="error" label="Error" />
+                                            {% else %}
+                                                <twig:StatusBadge status="inactive" label="Inactive" />
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ mailbox.lastPolledAt ? mailbox.lastPolledAt|date('M j, H:i') : '—' }}</td>
+                                        <td class="text-xs text-base-content/60 whitespace-nowrap">
+                                            {{ summary.envelopes30d }} envelopes / {{ summary.reports30d }} reports / {{ summary.quarantined30d }} quarantined
+                                        </td>
+                                        <td class="text-xs text-error max-w-xs truncate">{{ mailbox.lastError ?? '—' }}</td>
+                                        <td>
+                                            <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.id }) }}" class="relative z-20">
+                                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
+                                                <button type="submit" class="btn btn-ghost btn-xs">Re-test</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
     {% endif %}
 {% endblock %}

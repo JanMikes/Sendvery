@@ -1,0 +1,60 @@
+{# Two-card callout at the top of `/app/mailboxes` (the "Report ingestion"
+   page). Encodes Sendvery's product preference for DNS-based ingestion: the
+   left card is the recommended path (publish RUA pointing at our central
+   inbox), the right card is the fallback (connect your own mailbox) for
+   customers who can't change DNS.
+
+   The literal substring "Connect a mailbox" appears ONLY inside the
+   `data-testid="fallback-callout"` element — guarded by a regression test
+   so future refactors can't accidentally re-introduce unqualified
+   mailbox-first copy elsewhere on the page.
+
+   Props:
+     - reportAddress (string)  e.g. "reports@sendvery.com"; the address the
+                               team's DMARC RUA tag should point at.
+     - dnsCtaUrl (string)      Pre-resolved URL for the "View DMARC setup"
+                               CTA — single-domain teams land on the per-domain
+                               health page, multi-domain teams on the DNS Health
+                               overview.
+#}
+{% props reportAddress, dnsCtaUrl %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    {# RECOMMENDED — DNS-based ingestion #}
+    <div data-testid="recommended-callout"
+         class="card border border-primary/30 bg-primary/5 shadow-sm">
+        <div class="card-body p-5">
+            <span class="badge badge-primary badge-sm font-semibold mb-2 w-fit">Recommended</span>
+            <h3 class="font-bold text-base sm:text-lg leading-snug">DNS-based ingestion</h3>
+            <p class="text-sm text-base-content/70 mt-2 leading-relaxed">
+                Publish <code class="kbd kbd-xs">rua=mailto:{{ reportAddress }}</code> in your domain's DMARC TXT
+                record. Email providers (Gmail, Outlook, Yahoo) deliver reports to Sendvery's central inbox — nothing
+                to configure here.
+            </p>
+            <div class="card-actions mt-4">
+                <a href="{{ dnsCtaUrl }}" class="btn btn-primary btn-sm">
+                    View DMARC setup →
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {# FALLBACK — Connect a mailbox. The only place on this page allowed to
+       say "Connect a mailbox" — locked by the regression test. #}
+    <div data-testid="fallback-callout"
+         class="card border border-base-200 bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <h3 class="font-bold text-base sm:text-lg leading-snug">Connect a mailbox (fallback)</h3>
+            <p class="text-sm text-base-content/70 mt-2 leading-relaxed">
+                Already receiving DMARC reports at a private inbox — e.g. you can't change DNS, or you want a local
+                copy? Connect that mailbox <strong>if you can't change DNS</strong> and Sendvery polls it every
+                5 minutes.
+            </p>
+            <div class="card-actions mt-4">
+                <a href="{{ path('dashboard_mailbox_add') }}" class="btn btn-ghost btn-sm">
+                    Connect a mailbox
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

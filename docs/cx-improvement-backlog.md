@@ -2780,6 +2780,57 @@ A new domain with `dmarcVerifiedAt=null` AND zero reports maps to `Unverified` (
   - Test: build three controller-integration fixtures (healthy / attention / unverified) and assert each renders the expected headline substring + correct tone-bar color class. Resolver unit test asserts the highest-severity issue wins the headline.
 - Notes: Moment of confusion this resolves: "I land on my domain page and have to scan 8 different colored badges to know if I'm done setting up or not." The headline becomes the one-line answer. Pairs with the marketing promise on the homepage (`templates/homepage/index.html.twig` lines 169-172 — the four DNS badges) — the dashboard now delivers the same one-glance reading the homepage mock promised. Total LOC: ~60 lines of resolver + DTO, ~40 lines of template, ~120 lines of tests.
 
+### Architect plan (2026-05-24) — bundled with TASK-080
+
+**Confirmed**: `DnsHealthOverviewResult` already exposes `isSpfVerified()`, `isDkimVerified()`, `isDmarcVerified()`, `latestSpfScore: ?int`, `latestDkimScore: ?int`, `latestDmarcScore: ?int`, `latestMxScore: ?int` — no new query needed. The controller already loads `$dnsHealth` at `ShowDomainDetailController.php:98`. Domain detail template lines 24-47 still contain the four bare badge chips (both null-dnsHealth and else branches); TASK-041 only removed header action buttons. No blocker.
+
+**Per-protocol state mapping (unambiguous):**
+- SPF: configured = `isSpfVerified()`; missing = `!isSpfVerified() && latestSpfScore === null`; invalid = `!isSpfVerified() && latestSpfScore !== null`.
+- DKIM: same rule with DKIM fields.
+- DMARC: same rule with DMARC fields.
+- MX: configured = `latestMxScore >= 80`; missing = `latestMxScore === null`; invalid = `latestMxScore < 80`.
+- Unknown (all four): `dnsHealth === null`.
+
+**Severity → headline copy:**
+| Severity | Trigger | Headline |
+|----------|---------|----------|
+| Healthy | all four configured | "Monitoring active — all four records are in place" |
+| Attention | DMARC verified, one or more failing | "Action needed — {comma-list of failing protocols}" |
+| Unverified | DMARC missing/invalid (dnsHealth not null) | "Setup incomplete — DMARC record not yet published" |
+| Unverified (null edge) | dnsHealth === null | "DNS not configured yet — start with the SPF record" |
+
+Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent failing anchor (DMARC > SPF > DKIM > MX). CTA for `Unverified`: `#health-dmarc` (or `#health-spf` for null edge). `Healthy` no CTA.
+
+**Per-protocol nextStep copy** (all KB slugs as `#` placeholders for v1, tracked as follow-up):
+- SPF missing → "Publish a TXT record starting with `v=spf1`" (slug `spf-record-syntax`)
+- SPF invalid → "Fix the SPF record syntax"
+- DKIM missing → "Add a CNAME or TXT record at your mail provider's selector" (slug `dkim-setup-guide`)
+- DKIM invalid → "Renew or fix the DKIM key"
+- DMARC missing → "Publish a `_dmarc` TXT record with `rua=mailto:reports@sendvery.com`" (slug `dmarc-quick-start`)
+- DMARC invalid → "Fix the DMARC record syntax"
+- MX missing → "Add MX records for your mail provider" (slug `mx-records-explained`)
+- MX invalid → "Check MX records with your DNS provider"
+
+**Files to create:**
+- `src/Value/ProtocolState.php` — backed enum: `Configured`, `Missing`, `Invalid`, `Unknown`.
+- `src/Results/ProtocolSetupStatus.php` — `readonly final class`: `name`, `state`, `statusLine`, `?nextStep`, `?kbSlug`, `healthAnchor`.
+- `src/Results/DomainSetupStatus.php` — `readonly final class`: `severity: DomainHealthFilter`, `headline`, `?ctaLabel`, `?ctaRoute`, `?ctaFragment`, `protocols: list<ProtocolSetupStatus>`.
+- `src/Services/DomainSetupStatusResolver.php` — `readonly final class`, single public `resolve(?DnsHealthOverviewResult $dnsHealth): DomainSetupStatus`; private `buildSpf`/`buildDkim`/`buildDmarc`/`buildMx`.
+- `templates/components/DomainStatusBanner.html.twig` — TASK-067 component. Replicates `overview.html.twig:14-52` shape exactly; tone map success/warning/error. Renders headline + optional right-rail CTA `<a>` to `path(status.ctaRoute) ~ '#' ~ status.ctaFragment`.
+- `templates/components/DomainSetupStatus.html.twig` — TASK-080 component. Props: `status`, `domainId`. Three branches: (a) all-green card with check; (b) "X of 4 checks passing" + vertical 4-item checklist with per-row "Fix this" links to `path('dashboard_domain_health', {id: domainId}) ~ '#' ~ protocol.healthAnchor`; (c) all-Unknown info card with "Re-check now" form button to `dashboard_domain_reverify`.
+- `tests/Unit/Services/DomainSetupStatusResolverTest.php` — 6 unit tests covering Unverified (null), Healthy (all pass), Unverified (DMARC missing), Attention (SPF missing), Attention (DKIM+MX failing), Attention (SPF invalid + DKIM missing with most-urgent SPF CTA).
+- `tests/Integration/Controller/ShowDomainDetailSetupStatusTest.php` — 3 integration scenarios: all-green + regression-guard for removed badge chips; SPF-missing + `#health-spf` anchor; null-dnsHealth + `dashboard_domain_reverify` form action.
+
+**Files to modify:**
+- `src/Controller/Dashboard/ShowDomainDetailController.php` — inject `DomainSetupStatusResolver`; call `$domainSetupStatus = $resolver->resolve($dnsHealth)` after line 98; pass `'domainSetupStatus' => $domainSetupStatus` in render array.
+- `templates/dashboard/domain_detail.html.twig` — (a) delete lines 24-47 (both badge-chip branches); (b) insert `<twig:DomainStatusBanner :status="domainSetupStatus" />` after the header div (~line 48), before `<twig:DomainWorkspaceTabs>`; (c) insert `<twig:DomainSetupStatus :status="domainSetupStatus" domainId="{{ domain.domainId }}" />` after `<twig:DomainWorkspaceTabs>` and before the `{% if quarantineCount > 0 %}` block.
+
+**Page order after change:** H1 + policy badge + Verified chip → DomainStatusBanner → DomainWorkspaceTabs → DomainSetupStatus → Quarantine warning (conditional) → Stats grid → DmarcPolicyExplainer → Charts → Recent Reports.
+
+**Convention checklist:** `readonly final class` on all DTOs and the resolver; backed enums for `ProtocolState`; daisyUI v5 tokens only (success/warning/error + base-200/base-100, plus `border-{tone}/30`, `bg-{tone}/5`); no `dark:`; no hex; zero Twig logic — components are props-only rendering. `DomainHealthFilter` enum is consumed unchanged (no new cases or statics added to it).
+
+**Follow-up:** KB slugs `spf-record-syntax`, `dkim-setup-guide`, `dmarc-quick-start`, `mx-records-explained` are `#` placeholders. Track as a content task before launch.
+
 ---
 
 ## TASK-068: Mailbox list rows have no leading severity glyph — error rows look identical to active rows at a glance
@@ -2972,7 +3023,7 @@ A new domain with `dmarcVerifiedAt=null` AND zero reports maps to `Unverified` (
 
 ## TASK-090: `/app/mailboxes` treats DNS-based ingestion and mailbox-based ingestion as equivalent — must surface DNS-as-primary, mailbox-as-fallback, and the mutual-exclusivity rule
 
-- Status: planned
+- Status: done
 - Area: dashboard / ingestion / guidance
 - Why: Confusion moment named explicitly by the PO ("we encourage users to use DNS instead of connecting mailboxes"). The page header today is just "Mailboxes" with a table of `MailboxConnection` rows; the `EmptyState` (lines 16-22 of `templates/dashboard/mailboxes.html.twig`) literally says *"Connect a mailbox to automatically receive and parse DMARC reports."* as if that were the only path. In reality Sendvery's preferred ingestion path is "publish `rua=mailto:reports@sendvery.com` in DNS and let mail providers deliver reports to our central inbox" (`DmarcReportRouter` + `ReportAddressProvider`); the per-user IMAP/POP3 `MailboxConnection` is the *fallback* for customers who can't change DNS or want a private copy. A new user landing on `/app/mailboxes` reads it as "I MUST connect a mailbox" — exact opposite of the product preference. Worse: the page never says "these two paths are mutually exclusive per domain" — a user could connect a mailbox AND publish RUA pointing at us and double-ingest the same reports.
 - Acceptance:

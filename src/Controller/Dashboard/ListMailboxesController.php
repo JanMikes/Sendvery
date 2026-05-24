@@ -8,6 +8,9 @@ use App\Query\GetMailboxDetail;
 use App\Repository\MailboxConnectionRepository;
 use App\Results\MailboxActivitySummary;
 use App\Services\DashboardContext;
+use App\Services\IngestionPathResolver;
+use App\Services\ReportAddressProvider;
+use App\Value\IngestionPath;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -18,6 +21,8 @@ final class ListMailboxesController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly MailboxConnectionRepository $mailboxConnectionRepository,
         private readonly GetMailboxDetail $getMailboxDetail,
+        private readonly IngestionPathResolver $ingestionPathResolver,
+        private readonly ReportAddressProvider $reportAddressProvider,
     ) {
     }
 
@@ -42,9 +47,42 @@ final class ListMailboxesController extends AbstractController
             }
         }
 
+        // Per-domain ingestion classification — drives the matrix table.
+        // Scoped across every team the user is a member of so the matrix is
+        // consistent with the rest of the dashboard's cross-tenant reads.
+        $matrix = $this->ingestionPathResolver->resolveForTeams(
+            $this->dashboardContext->getTeamIdStrings(),
+        );
+
+        // Single verified-domain teams land directly on that domain's health
+        // page; everyone else (including unverified single-domain teams) goes
+        // to the DNS overview. Avoids one extra click for the most common
+        // shape (one verified domain) without dropping unverified teams onto
+        // a per-domain health page that has nothing meaningful to show.
+        $dnsCtaUrl = $this->resolveDnsCtaUrl($matrix);
+
         return $this->render('dashboard/mailboxes.html.twig', [
             'mailboxes' => $mailboxes,
             'activity' => $activity,
+            'matrix' => $matrix,
+            'reportAddress' => $this->reportAddressProvider->get(),
+            'dnsCtaUrl' => $dnsCtaUrl,
         ]);
+    }
+
+    /**
+     * @param list<\App\Results\DomainIngestionMatrixResult> $matrix
+     */
+    private function resolveDnsCtaUrl(array $matrix): string
+    {
+        // Only deep-link to the per-domain health page when the single domain
+        // is already receiving reports (path !== None). An unverified domain
+        // would land on an empty per-domain page; the DNS overview is the more
+        // useful target since it shows what's missing.
+        if (1 === count($matrix) && IngestionPath::None !== $matrix[0]->path) {
+            return $this->generateUrl('dashboard_domain_health', ['id' => $matrix[0]->domainId]);
+        }
+
+        return $this->generateUrl('dashboard_dns_health');
     }
 }

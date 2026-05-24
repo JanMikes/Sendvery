@@ -137,7 +137,9 @@ final class DashboardPagesTest extends WebTestCase
         self::assertSelectorTextContains('aside', 'Dashboard');
         self::assertSelectorTextContains('aside', 'Domains');
         self::assertSelectorTextContains('aside', 'Reports');
-        self::assertSelectorTextContains('aside', 'Mailboxes');
+        // Sidebar link "Mailboxes" was renamed to "Ingestion" by TASK-090
+        // (URL/route stay; only the user-facing label changed).
+        self::assertSelectorTextContains('aside', 'Ingestion');
     }
 
     #[Test]
@@ -319,13 +321,19 @@ final class DashboardPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function mailboxesListShowsEmptyState(): void
+    public function mailboxesListShowsReportIngestionPage(): void
     {
+        // TASK-090 replaced the bare-empty-state mailboxes page with the
+        // "Report ingestion" page: a DNS-first callout, a per-domain
+        // ingestion matrix, and the connected-mailboxes section only when
+        // mailboxes exist. The empty-state copy ("No mailboxes connected")
+        // was retired together with the unqualified mailbox-first CTA.
         $data = $this->createAuthenticatedClientWithData();
 
         $data['client']->request('GET', '/app/mailboxes');
 
-        self::assertSelectorTextContains('body', 'No mailboxes connected');
+        self::assertSelectorTextContains('body', 'Report ingestion');
+        self::assertSelectorTextContains('body', 'Where DMARC reports arrive from email providers.');
     }
 
     #[Test]
