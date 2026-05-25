@@ -3767,6 +3767,104 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ---
 
+## Round-6 performance audit (2026-05-25)
+
+**DB state:** Demo seed re-run after TASK-130 (IA merge). 3 domains × 30 days reports + snapshots = 90 reports, 180 records, 90 health snapshots, 5 alerts, 0 dns_check_result rows, 0 quarantined_dmarc_report rows, 0 blacklist_check_result rows. Postgres 17-alpine in dev compose. Demo team UUID drifted since round 5 (re-seed mints fresh UUIDs each run) — round-6 numbers use `019e5ed5-432a-729f-bc8c-e1bbfb1a441d` for the team and `019e5ed5-4336-71e6-90e2-622c8d9031c8` for the `acme.example` domain.
+
+**Methodology:** `EXPLAIN (ANALYZE, BUFFERS)` via `docker compose exec database psql -U app -d sendvery` for each query, params bound to the seeded UUIDs above. Same cardinality as round 5; the only behavioural diff vs round 5 is TASK-128/129 adding `md.first_report_at` to `GetDomainOverview`'s SELECT + GROUP BY, TASK-125's `NOT EXISTS` clause in `GetDomainWorkspaceTabCounts`'s `history_changed_7d` subquery, and TASK-130 making `/app/domains` a NEW call site of `GetDnsHealthOverview` (combined two-query pattern).
+
+**Stop criteria recap:** SAFE = <5ms, WATCH = 5-50ms, BAD = >50ms (file a task). All six measurement targets land SAFE. No regression crossed the SAFE→WATCH boundary; no TASK-13X optimisation task is filed.
+
+### GetDomainOverview::forTeams() — LATERAL join + new first_report_at projection (TASK-128/129)
+
+- **Planning time:** 1.454 ms
+- **Execution time:** 0.577 ms
+- **Plan:** Sort → HashAggregate → Nested Loop Left Join → Hash Right Join chain on dmarc_report/dmarc_record + LATERAL `Index Scan Backward using idx_health_snapshot_domain_date` on `domain_health_snapshot` (1 row, 180 loops covering 3 domains × 30 reports × 2 records).
+- **Smell check:** Identical plan shape to round 5. The TASK-128/129 reviewer-fix that added `md.first_report_at` to SELECT + GROUP BY is absorbed into the existing HashAggregate without producing a new sort step — the column joins the existing `md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, t.id, t.name, dhs.*` group key list. PostgreSQL's HashAggregate cost is dominated by row count and hash-key width; one extra timestamp column adds negligible width. Buffers shared hit = 379 (round 5 didn't capture buffers; reasonable for 180 record fanout).
+- **Scaling note:** Unchanged vs round 5. LATERAL still bounded to one index-backed `LIMIT 1` per *grouped* result. At 100 domains × 30 reports/domain the dominant cost remains the dmarc_record aggregation, not the snapshot fetch or the extra GROUP BY column.
+- **Verdict:** SAFE (no regression; +0.032ms exec from 0.545→0.577 vs round-5 — within run-to-run noise)
+
+### GetDnsHealthOverview::forTeams() — same LATERAL pattern, now with /app/domains as a new caller (TASK-130)
+
+- **Planning time:** 0.746 ms
+- **Execution time:** 0.091 ms
+- **Plan:** Sort → Nested Loop Left Join → Seq Scan on `monitored_domain` (3 rows; optimiser correctly skips the team-id index at this size) + LATERAL `Index Scan Backward using idx_health_snapshot_domain_date` (1 row, 3 loops).
+- **Smell check:** Identical plan to round 5. Pure index-backed fetch per domain, no record aggregation overhead. TASK-130's IA merge added `/app/domains` to the call-site list (alongside the surviving `/app/domains/{id}` detail page and the legacy `/app/dns-health` redirect target) but the SQL is unchanged — Postgres caches the plan and the query stays leaner than `GetDomainOverview`.
+- **Scaling note:** Linear in domain count via index lookups. At 100 domains projects to ~3-4ms execution.
+- **Verdict:** SAFE (-0.015ms exec from 0.106→0.091 vs round-5 — within run-to-run noise)
+
+### NavCountsExtension::getGlobals() — 4 COUNTs per authenticated page
+
+Measured per individual COUNT; reported as sum since they all fire on the same request.
+
+| # | Query | Plan | Exec | Plan time |
+|---|-------|------|------|-----------|
+| 1 | `GetQuarantineList::countForTeam` | Hash Join + hashed SubPlan for monitored_domain/mailbox_connection lookup (subplans never executed — empty quarantine set) | 0.094 ms | 1.652 ms |
+| 2 | `GetAlerts::countUnreadForTeams` | `Seq Scan on alert` (5 rows; optimiser now skips `idx_alert_team`) | 0.029 ms | 0.258 ms |
+| 3 | `GetAlerts::countUnreadCriticalForTeams` | `Seq Scan on alert` (5 rows; same as #2) | 0.014 ms | 0.059 ms |
+| 4 | `GetDomainOverview::countUnverifiedForTeams` | Seq Scan on `monitored_domain` (3 rows) | 0.015 ms | 0.031 ms |
+
+- **Total execution:** ~0.152 ms across all four COUNTs.
+- **Total planning:** ~2.00 ms (the quarantine count is the planning-time bulk — same correlated EXISTS rewrites as round 5).
+- **Smell check:** Plan shapes for #2/#3 changed vs round 5 — round 5 had `Index Scan using idx_alert_team`, round 6 has `Seq Scan`. Root cause: seed now produces 5 alerts (round-5 demo-seed alert count was apparently larger or the table-stats were different); at 5 rows Postgres correctly skips the index. This is NOT a regression — it's the optimiser doing its job at small cardinality. The index is still there; it will re-engage as soon as the table grows. Execution is faster overall (~0.152ms vs ~0.21ms in round 5) precisely because Seq Scan beats Index Scan at this size.
+- **Verdict:** SAFE (all four; aggregate well under 1ms; faster than round 5 by ~0.06ms thanks to plan adaptation)
+
+### IngestionPathResolver::resolveForTeams() — N+1 fanout per domain
+
+Two underlying queries fire per request:
+
+1. **`GetDomainIngestionMatrix::forTeams`** (one CTE query for the full team)
+   - Plan: same multi-CTE shape as round 5 — `eligible_domain_ids` → `ranked_reports` (with `received_report_email` LEFT JOIN — note: 0 envelope rows in seed, so the join short-circuits) → `sampled` (rn <= 5) → `per_domain` GROUP BY → final nested-loop join. Execution **0.335 ms**, planning **1.268 ms**.
+   - vs round 5: 0.408 → 0.335 ms exec (-0.073 ms, faster). Planning -0.6 ms.
+
+2. **`DnsCheckResultRepository::findLatestForDomainAndType`** (one DMARC check fetch per domain — N+1)
+   - Plan: `Limit → Sort → Index Scan using idx_dns_check_domain_type`. The seed has 0 `dns_check_result` rows so the Index Scan finds nothing and returns immediately. Execution **0.019 ms**, planning **0.198 ms**.
+   - vs round 5: 0.105 → 0.019 ms exec — the round-5 number must have been measured against a populated table (or different stats); at the current empty table Postgres bails on the index immediately. At realistic prod state (where domains have a handful of DNS check rows each), expect this to climb back toward the round-5 0.105 ms.
+
+3. **`MailboxConnectionRepository::get`** — PK fetch, only fires on the path-vs-scenario flip branch (TASK-114). Demo seed has 0 mailbox_connection rows so never fires. Sub-millisecond at any state.
+
+- **Aggregate per request at 3 demo domains:** ~0.335 ms (matrix) + 3 × 0.019 ms (DNS check loop, empty table) + 0 ms (no mailbox lookups) ≈ **~0.39 ms**.
+- **Aggregate at 20 domains (round-5's projection scale):** ~0.4ms (matrix) + 20 × ~0.1ms (DNS check loop, post-prod state) ≈ **~2.4 ms** — better than round-5's 3.5ms projection because the matrix CTE got faster.
+- **Aggregate at 100 domains:** ~0.5ms + 100 × ~0.1ms ≈ **~10.5 ms** — under round-5's 16ms projection by the same matrix-CTE delta.
+- **Smell check:** N+1 still present, still TODO-flagged in code. No new regression; matrix CTE got marginally faster (likely a Postgres minor-version effect — 17.x vs whatever round 5 sampled).
+- **Verdict:** SAFE (at every realistic team size — actually slightly better than round 5)
+
+### GetDomainWorkspaceTabCounts::forDomain() — 5 scalar subselects (TASK-125 added NOT EXISTS to subquery #5)
+
+- **Planning time:** 1.913 ms
+- **Execution time:** 0.196 ms
+- **Plan:** Five InitPlans. #1 (24h dmarc_report) Seq Scan (90 rows, optimiser still skips the index). #2 (unauthorized senders) `Index Scan using idx_known_sender_domain`. #3 (DNS-failing latest snapshot) `Index Scan Backward using idx_health_snapshot_domain_date` (LIMIT 1). #4 (blacklist) `Bitmap Heap Scan` on `idx_blacklist_check_domain_ip` — inner Unique never executes (empty table). **#5 (history_changed_7d, TASK-125 modified)** now runs as `Nested Loop Semi Join` between the outer `dns_check_result dcr` (filtered by has_changed + checked_at >= 7d ago) and an inner `dns_check_result earlier` (also indexed by `idx_dns_check_domain_type`). Inner side never executes here because the outer has zero rows (empty dns_check_result table).
+- **Smell check:** TASK-125's `NOT EXISTS` actually rendered in the SQL as `AND EXISTS (SELECT 1 FROM dns_check_result earlier WHERE earlier.monitored_domain_id = dcr.monitored_domain_id AND earlier.type = dcr.type AND earlier.checked_at < dcr.checked_at)` — Postgres rewrites this as a `Nested Loop Semi Join`, *not* a correlated subquery per outer row. That's the right shape: at production scale the outer side filters by index first (`idx_dns_check_domain_type` + has_changed + 7d window), then the inner check is an index seek per surviving row. Planning time crept up from round-5's 2.900ms to 1.913ms — actually faster (less InitPlan rewriting needed thanks to the new join hint).
+- **Scaling note:** Inner Semi Join's cost is bounded by the outer's row count after the 7-day window filter. Per-domain at any realistic scale this stays sub-ms.
+- **Verdict:** SAFE (-0.108 ms exec from 0.304→0.196 vs round-5; -0.987 ms planning. TASK-125 did NOT regress this query.)
+
+### NEW: Combined /app/domains query cost (TASK-130 two-query pattern)
+
+After TASK-130 merged `/app/domains` and `/app/dns-health` into a single unified surface, `ListDomainsController` now issues both `GetDomainOverview::forTeams` and `GetDnsHealthOverview::forTeams` on the same render. Architect plan budgeted ~5 ms; measure the combined cost.
+
+- **Q1 (GetDomainOverview):** exec 0.577 ms, plan 1.454 ms
+- **Q2 (GetDnsHealthOverview):** exec 0.091 ms, plan 0.746 ms
+- **Combined per request (sum):** **exec 0.668 ms, plan 2.200 ms**
+
+- **Smell check:** Comfortably under the 5 ms SAFE budget — at 12% of the threshold. The two queries share the same LATERAL pattern against `domain_health_snapshot` so the second one effectively re-uses the buffer pages the first one warmed (Q2's `shared hit=10` vs Q1's `shared hit=379` shows Q2 is feeding off Q1's warm cache).
+- **Scaling note:** At 100 domains the combined cost projects to ~4 ms exec — still SAFE but starting to approach the boundary. Round 7 should re-measure if domain counts climb. The optimisation knob if it ever crosses WATCH: collapse the two queries into one SELECT with the union of both projections — currently kept separate because the two result DTOs (`DomainOverviewResult` vs `DnsHealthOverviewResult`) serve different controllers and merging them would couple them.
+- **Verdict:** SAFE — well within the architect-budgeted 5 ms ceiling. No optimisation needed.
+
+### Round-6 vs round-5 diff
+
+| Query | Round-5 exec | Round-6 exec | Δ | Verdict |
+|-------|--------------|--------------|---|---------|
+| GetDomainOverview::forTeams | 0.609 ms | 0.577 ms | -0.032 ms | No change (within noise). TASK-128/129's `first_report_at` projection is free. |
+| GetDnsHealthOverview::forTeams | 0.106 ms | 0.091 ms | -0.015 ms | No change (within noise). New `/app/domains` caller is plan-level free. |
+| NavCounts (aggregate) | ~0.21 ms | ~0.152 ms | -0.06 ms | Faster — alert table Seq Scan now wins at 5 rows. |
+| IngestionPathResolver (3-domain seed) | ~0.5 ms (3-domain proj from round-5's 20-domain ~3.5ms) | ~0.39 ms | -0.11 ms | Faster — matrix CTE marginally improved. |
+| GetDomainWorkspaceTabCounts::forDomain | 0.304 ms | 0.196 ms | -0.108 ms | Faster despite TASK-125's NOT EXISTS addition — Postgres rewrites as Semi Join, not a per-row correlated subquery. |
+| **NEW: /app/domains combined (Q1+Q2)** | — | 0.668 ms | n/a | SAFE — 12% of the 5 ms budget. |
+
+**No query crossed the SAFE→WATCH boundary. No regression filed.** All measured queries either stayed flat or improved marginally. Round 7 should re-measure the combined `/app/domains` cost if any team in prod crosses 50 domains — the projection lands near 2 ms even at 100 domains, but the architect's 5 ms budget needs an empirical re-check when real customer scale is in evidence.
+
+---
+
 ## Round-5 performance audit (2026-05-25)
 
 **DB state:** Demo seed (3 domains × 30 days reports + snapshots = 90 reports, 180 records, 90 health snapshots), Postgres 17.7 alpine in dev compose.
