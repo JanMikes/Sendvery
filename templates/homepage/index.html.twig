@@ -27,7 +27,32 @@
 
 {% block content %}
 
-{# === 1. Hero (TASK-131) === #}
+{# ===========================================================================
+   TASK-145 homepage narrative arc (top → bottom):
+
+     1. Hero          — Hook + free instant check
+     2. Problem       — Risks in your DNS (what silently breaks)
+     3. Solution 1/3  — XML → plain English (the AI summary)
+     4. Solution 2/3  — One letter, A–F grade (the score)
+     5. Product preview — Real dashboard screenshot
+     6. How it works  — 3-step setup
+     7. Pricing       — Moved earlier per user direction: once visitor sees
+                        the problem + solution + preview + setup, the next
+                        question is always "what does it cost?"
+     8. Health grade reinforcement — Lightweight score preview + free CTA
+     9. Feature highlights — Deeper differentiation for comparison shoppers
+    10. Testimonials  — Social proof from practitioners
+    11. Open source   — Self-host credibility + lock-in defence
+    12. Founder bio   — Last trust signal before the close
+    13. FAQ           — Objection handling
+    14. Final CTA     — Close
+
+   Each section's `bgClass` alternates between `bg-base-100` (default) and
+   `bg-zinc-50/80` so the eye has a visual rhythm to follow without the page
+   reading as one undifferentiated wall of content.
+   =========================================================================== #}
+
+{# === 1. HERO — Hook + free instant check (TASK-131) === #}
 <section id="dns-checker" class="relative overflow-hidden py-16 md:py-24" style="background-color: oklch(98.5% 0.002 247)">
     <div class="pointer-events-none absolute inset-0 bg-cover bg-center opacity-60" style="background-image: url('/images/hero-bg.png')"></div>
     <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(49%_0.13_176/.06),transparent_70%)]"></div>
@@ -91,7 +116,46 @@
     </div>
 </section>
 
-{# === 3. From XML to plain English (TASK-131) === #}
+{# === 2. PROBLEM FRAMING — Risks in your DNS (moved up from §7 in TASK-145).
+       Visitors who landed for a quick check now see the silent failure modes
+       their DNS hides. Lead with the painful "you didn't know" examples before
+       pitching the solution — classic problem-then-solution arc. Reframed
+       in TASK-028 from a tools-card grid into concrete failure scenarios. #}
+<twig:SectionContainer>
+    <div class="max-w-4xl mx-auto">
+        <twig:SectionHeader
+            eyebrow="Risks in your DNS"
+            title="What Sendvery catches that nobody else does"
+            lede="The silent failure modes that break email authentication weeks before anyone notices."
+        />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">DKIM</div>
+                <h3 class="font-semibold text-base-content mb-1">Key expired after a DNS migration</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">Your provider rotated DKIM keys but the new selector never landed in DNS. Every transactional email has been silently failing authentication for weeks — Sendvery flags it on the next report.</p>
+            </div>
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">SPF</div>
+                <h3 class="font-semibold text-base-content mb-1">Record crept over the 10-lookup limit</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">Each new sender adds an include directive. Once you cross 10 DNS lookups, the entire SPF record is treated as permerror — receivers reject mail without telling you.</p>
+            </div>
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">Alignment</div>
+                <h3 class="font-semibold text-base-content mb-1">Marketing tool added to SPF without DKIM</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">SPF passes (the IP is authorised) but DKIM is missing (the sender doesn't sign on your behalf). DMARC alignment fails. Mail lands in spam from a "trusted" sender.</p>
+            </div>
+            <div>
+                <div class="text-xs font-mono text-base-content/50 mb-1">Subdomain</div>
+                <h3 class="font-semibold text-base-content mb-1">Subdomain inherits weaker policy than apex</h3>
+                <p class="text-sm text-base-content/70 leading-relaxed">Your apex domain is on <code class="font-mono text-xs">p=reject</code>, but `mail.yourdomain.com` has no DMARC record — it inherits the apex's <code class="font-mono text-xs">sp=</code> tag (or `p=none` if absent), opening a spoofing window.</p>
+            </div>
+        </div>
+    </div>
+</twig:SectionContainer>
+
+{# === 3. SOLUTION 1/3 — XML → plain English (TASK-131).
+       Now that the visitor cares about the problem, show the first leg of our
+       solution: we translate DMARC XML into one-sentence AI summaries. #}
 <section class="bg-zinc-50/80 py-16 md:py-24">
     <div class="container mx-auto px-4 md:px-6">
         <div class="text-center max-w-3xl mx-auto">
@@ -154,10 +218,11 @@
     </div>
 </section>
 
-{# === 4. Your domain, one letter (TASK-131) ===
-   Two-column at md+. Left: pitch + CTAs. Right: realistic grade card mockup (A tile + domain
-   + pass rate + 4 emerald pass chips). Uses the same monochrome zinc palette + emerald
-   semantic colour for state chips only. #}
+{# === 4. SOLUTION 2/3 — Your domain, one letter (TASK-131).
+       Then we present the result as a single human-readable score, not raw
+       numbers. Two-column at md+. Left: pitch + CTAs. Right: realistic grade
+       card mockup (A tile + domain + pass rate + 4 emerald pass chips). Uses
+       the monochrome zinc palette + emerald semantic colour for state chips. #}
 <section class="bg-base-100 py-16 md:py-24">
     <div class="container mx-auto px-4 md:px-6">
         <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
@@ -215,10 +280,11 @@
     </div>
 </section>
 
-{# === 4.5. Product Preview — real dashboard screenshot of /app/domains/{acme.example-id}
-       captured against the demo seed data (TASK-120). The annotation callout
-       now points at the "Monitoring active" banner (the round-4 setup-status
-       surface from TASK-097/100) rather than a grade badge — that's what the
+{# === 5. PRODUCT PREVIEW — Real dashboard screenshot (TASK-120).
+       Proof: here's what you'd actually see after signup. Tangible artefact
+       between abstract solution claims and the setup steps below. The
+       annotation callout points at the "Monitoring active" banner from the
+       round-4 setup-status surface (TASK-097/100) — that's what the
        screenshot actually leads with. #}
 <twig:SectionContainer bgClass="bg-zinc-50/80">
     <twig:SectionHeader
@@ -256,7 +322,12 @@
     </div>
 </twig:SectionContainer>
 
-{# === 5. How it Works === #}
+{# === 6. HOW IT WORKS — 3-step setup.
+       Allay the "but it must be complex" concern: Add domain → Monitor → Act.
+       TASK-132: Step 1 leads with DNS-first ingestion (publish
+       `rua=mailto:reports@sendvery.com` in your DMARC TXT record) — the same
+       posture the dashboard's IngestionRoutesCallout takes. Mailbox connection
+       stays named here but as the fallback path, not equal billing. #}
 <twig:SectionContainer>
     <twig:SectionHeader
         eyebrow="How it works"
@@ -291,74 +362,25 @@
     </div>
 </twig:SectionContainer>
 
-{# === 6. Feature Highlights === #}
-<twig:SectionContainer bgClass="bg-zinc-50/80">
+{# === 7. PRICING — moved earlier per TASK-145 user direction.
+       Once visitor has seen the problem + solution + preview + setup, the
+       next question is always "what does it cost?" — answer it before they
+       scroll past. PricingTable speaks for itself. #}
+<twig:SectionContainer id="pricing" bgClass="bg-zinc-50/80">
     <twig:SectionHeader
-        eyebrow="Capabilities"
-        title="Everything you need for email authentication"
+        eyebrow="Pricing"
+        title="Simple, transparent pricing"
+        lede="Start free. Self-host free forever. Scale as you grow."
     />
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-        <twig:FeatureCard
-            title="8 Free DNS Tools"
-            description="SPF, DKIM, DMARC, MX, blacklist, and domain health checks. Instant results, no signup."
-            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>'
-        />
-        <twig:FeatureCard
-            title="DMARC Report Parsing"
-            description="Automatic ingestion and parsing of aggregate reports. Visual pass/fail rates and sender breakdown."
-            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
-        />
-        <twig:FeatureCard
-            title="DNS Change Monitoring"
-            description="Continuous monitoring of SPF, DKIM, and DMARC records. Instant alerts when anything changes."
-            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>'
-        />
-        <twig:FeatureCard
-            title="AI-Powered Insights"
-            description="Plain-English explanations of your DMARC data. Anomaly detection and remediation guidance."
-            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>'
-        />
-    </div>
+    <twig:PricingTable />
 </twig:SectionContainer>
 
-{# === 7. Risks in Your DNS — denser text grid, no cards/icons/tool links.
-       Reframed (TASK-028) from a second four-card grid into concrete failure
-       scenarios. The four tool destinations the old section linked to are
-       reachable via the nav Tools dropdown + footer Free Tools column. #}
+{# === 8. HEALTH GRADE REINFORCEMENT — A/B/C/D/F preview tiles.
+       Lightweight reinforcement of the score concept introduced in §4, with
+       a "Check your domain's grade" CTA for visitors who skipped the hero
+       check. Sits after pricing to recapture intent after the price line is
+       digested. #}
 <twig:SectionContainer>
-    <div class="max-w-4xl mx-auto">
-        <twig:SectionHeader
-            eyebrow="Risks in your DNS"
-            title="What Sendvery catches that nobody else does"
-            lede="The silent failure modes that break email authentication weeks before anyone notices."
-        />
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
-            <div>
-                <div class="text-xs font-mono text-base-content/50 mb-1">DKIM</div>
-                <h3 class="font-semibold text-base-content mb-1">Key expired after a DNS migration</h3>
-                <p class="text-sm text-base-content/70 leading-relaxed">Your provider rotated DKIM keys but the new selector never landed in DNS. Every transactional email has been silently failing authentication for weeks — Sendvery flags it on the next report.</p>
-            </div>
-            <div>
-                <div class="text-xs font-mono text-base-content/50 mb-1">SPF</div>
-                <h3 class="font-semibold text-base-content mb-1">Record crept over the 10-lookup limit</h3>
-                <p class="text-sm text-base-content/70 leading-relaxed">Each new sender adds an include directive. Once you cross 10 DNS lookups, the entire SPF record is treated as permerror — receivers reject mail without telling you.</p>
-            </div>
-            <div>
-                <div class="text-xs font-mono text-base-content/50 mb-1">Alignment</div>
-                <h3 class="font-semibold text-base-content mb-1">Marketing tool added to SPF without DKIM</h3>
-                <p class="text-sm text-base-content/70 leading-relaxed">SPF passes (the IP is authorised) but DKIM is missing (the sender doesn't sign on your behalf). DMARC alignment fails. Mail lands in spam from a "trusted" sender.</p>
-            </div>
-            <div>
-                <div class="text-xs font-mono text-base-content/50 mb-1">Subdomain</div>
-                <h3 class="font-semibold text-base-content mb-1">Subdomain inherits weaker policy than apex</h3>
-                <p class="text-sm text-base-content/70 leading-relaxed">Your apex domain is on <code class="font-mono text-xs">p=reject</code>, but `mail.yourdomain.com` has no DMARC record — it inherits the apex's <code class="font-mono text-xs">sp=</code> tag (or `p=none` if absent), opening a spoofing window.</p>
-            </div>
-        </div>
-    </div>
-</twig:SectionContainer>
-
-{# === 8. Domain Health Score Preview === #}
-<twig:SectionContainer bgClass="bg-zinc-50/80">
     <div class="max-w-4xl mx-auto text-center">
         <twig:SectionHeader
             eyebrow="Health grade"
@@ -389,14 +411,50 @@
     </div>
 </twig:SectionContainer>
 
-{# === 8.5. Testimonials === #}
+{# === 9. FEATURE HIGHLIGHTS — Capabilities grid.
+       Deeper differentiation for comparison shoppers. Comes after pricing
+       because feature-shopping is a lower-intent activity than price-comparison:
+       the visitor who's already committed to "this looks worth $4.99" now wants
+       the receipts on what's actually included. #}
+<twig:SectionContainer bgClass="bg-zinc-50/80">
+    <twig:SectionHeader
+        eyebrow="Capabilities"
+        title="Everything you need for email authentication"
+    />
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <twig:FeatureCard
+            title="8 Free DNS Tools"
+            description="SPF, DKIM, DMARC, MX, blacklist, and domain health checks. Instant results, no signup."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>'
+        />
+        <twig:FeatureCard
+            title="DMARC Report Parsing"
+            description="Automatic ingestion and parsing of aggregate reports. Visual pass/fail rates and sender breakdown."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
+        />
+        <twig:FeatureCard
+            title="DNS Change Monitoring"
+            description="Continuous monitoring of SPF, DKIM, and DMARC records. Instant alerts when anything changes."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>'
+        />
+        <twig:FeatureCard
+            title="AI-Powered Insights"
+            description="Plain-English explanations of your DMARC data. Anomaly detection and remediation guidance."
+            icon='<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>'
+        />
+    </div>
+</twig:SectionContainer>
+
+{# === 10. TESTIMONIALS — Social proof from practitioners.
+       What the people who actually read DMARC reports say. The component
+       carries its own light bg so it alternates naturally from the zinc-50
+       Features section above. #}
 <twig:TestimonialsSection />
 
-{# === 8.7. Founder bio === #}
-<twig:FounderBio />
-
-{# === 9. Open Source Callout === #}
-<twig:SectionContainer>
+{# === 11. OPEN SOURCE — Self-host credibility + lock-in defence.
+       For visitors who care about vendor lock-in or want to inspect the code
+       before trusting their DMARC data to a SaaS. AGPL-3.0 + self-host pitch. #}
+<twig:SectionContainer bgClass="bg-zinc-50/80">
     <div class="max-w-3xl mx-auto text-center">
         <svg class="w-12 h-12 mx-auto mb-4 text-primary" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4" y="11" width="16" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"></rect>
@@ -418,21 +476,14 @@
     </div>
 </twig:SectionContainer>
 
-{# === 10. Pricing === #}
-<twig:SectionContainer id="pricing" bgClass="bg-zinc-50/80">
-    <twig:SectionHeader
-        eyebrow="Pricing"
-        title="Simple, transparent pricing"
-        lede="Start free. Self-host free forever. Scale as you grow."
-    />
-    <twig:PricingTable />
-</twig:SectionContainer>
+{# === 12. FOUNDER BIO — Last trust signal before FAQ + close.
+       The human behind the project. The component carries its own zinc-50/80
+       background — fine because it follows the zinc-50/80 Open Source section
+       and reads as one continuous "trust" passage rather than two visually
+       separate sections. #}
+<twig:FounderBio />
 
-{# === 11. FAQ ===
-   TASK-139 retired the "Built for engineers" tech-stack name-drop section that
-   used to sit here — humans don't pick a deliverability tool by which router
-   it runs under, and the "Symfony 8 / PostgreSQL / FrankenPHP" badges read as
-   the AI-aesthetic clutter we are deliberately cutting. #}
+{# === 13. FAQ — Objection handling, standard pre-purchase friction reducer. #}
 <twig:SectionContainer id="faq">
     <twig:SectionHeader
         eyebrow="Common questions"
@@ -448,7 +499,7 @@
     ]" />
 </twig:SectionContainer>
 
-{# === 12. Final CTA — Get Started === #}
+{# === 14. FINAL CTA — One last try-now button before the footer. #}
 <section class="py-24 lg:py-32 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
     <div class="container mx-auto text-center">
         <h2 class="text-3xl md:text-4xl font-medium tracking-tight text-zinc-900">Start monitoring your email health today</h2>
@@ -462,6 +513,6 @@
     </div>
 </section>
 
-{# === 13. Footer is rendered by marketing_layout.html.twig === #}
+{# === 15. Footer is rendered by marketing_layout.html.twig === #}
 
 {% endblock %}

@@ -465,15 +465,16 @@ final class MarketingPagesTest extends WebTestCase
      * the assets stay deleted.
      */
     #[Test]
-    public function task137And138HomepageRegisterAndIcons(): void
+    public function homepageHeadingsUseUnifiedLighterRegister(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
 
         $body = (string) $client->getResponse()->getContent();
 
-        // TASK-137: every <h2> on the page must carry font-medium and must NOT carry
-        //           font-bold / font-semibold / font-extrabold. Walk each <h2>.
+        // Every <h2> on the page must carry font-medium and must NOT carry
+        // font-bold / font-semibold / font-extrabold. The page reads as one
+        // coherent first-impression surface — no visual seam between sections.
         $headings = $crawler->filter('h2');
         self::assertGreaterThan(
             5,
@@ -487,26 +488,27 @@ final class MarketingPagesTest extends WebTestCase
             self::assertStringContainsString(
                 'font-medium',
                 $class,
-                sprintf('TASK-137: H2 "%s" must carry font-medium (got class="%s").', $text, $class),
+                sprintf('Section heading "%s" must use the lighter `font-medium` register (got class="%s").', $text, $class),
             );
             self::assertDoesNotMatchRegularExpression(
                 '~\b(?:font-bold|font-semibold|font-extrabold)\b~',
                 $class,
-                sprintf('TASK-137: H2 "%s" must NOT carry font-bold/semibold/extrabold (got class="%s").', $text, $class),
+                sprintf('Section heading "%s" must NOT carry font-bold/semibold/extrabold — they break visual coherence with the hero (got class="%s").', $text, $class),
             );
         });
 
-        // TASK-138: the three how-*.webp illustrations are gone; per-step Lucide icons render instead.
-        self::assertStringNotContainsString('how-connect.webp', $body, 'TASK-138: how-connect.webp asset reference must be deleted.');
-        self::assertStringNotContainsString('how-monitor.webp', $body, 'TASK-138: how-monitor.webp asset reference must be deleted.');
-        self::assertStringNotContainsString('how-act.webp', $body, 'TASK-138: how-act.webp asset reference must be deleted.');
+        // The legacy custom "How it works" illustrations were replaced with
+        // inline Lucide icons inside zinc-bordered tiles. Make sure the assets
+        // stay deleted and the icon tiles render.
+        self::assertStringNotContainsString('how-connect.webp', $body, 'Legacy how-connect.webp illustration must not be re-introduced.');
+        self::assertStringNotContainsString('how-monitor.webp', $body, 'Legacy how-monitor.webp illustration must not be re-introduced.');
+        self::assertStringNotContainsString('how-act.webp', $body, 'Legacy how-act.webp illustration must not be re-introduced.');
 
-        // The three Lucide icon tiles inside the How-it-works section share a zinc-bordered shell.
         $iconTiles = $crawler->filter('section .bg-zinc-50.border.border-zinc-200.rounded-lg svg');
         self::assertGreaterThanOrEqual(
             3,
             $iconTiles->count(),
-            'TASK-138: each How-it-works step must render an SVG icon inside a zinc-bordered tile.',
+            'Each How-it-works step must render an SVG icon inside a zinc-bordered tile.',
         );
     }
 
@@ -527,58 +529,125 @@ final class MarketingPagesTest extends WebTestCase
      *   broken `<meta property="og:image">`.
      */
     #[Test]
-    public function task142SeoBaselineContract(): void
+    public function publicPagesShipSeoBaseline(): void
     {
         $client = self::createClient();
 
-        // OG fallback file must exist on disk — referenced by base.html.twig.
+        // The static OG fallback file must exist on disk — referenced by
+        // base.html.twig. Without it, every page lacking a dynamic og:image
+        // (home, pricing, about/*, KB index, login, legal, auth flows) would
+        // ship a broken Open Graph image to Twitter / LinkedIn / Slack.
         self::assertFileExists(
             \dirname(__DIR__, 3).'/public/images/og-default.webp',
-            'TASK-142: the static OG fallback `public/images/og-default.webp` must exist; otherwise every page that does not override `og_image` ships a broken Open Graph image.',
+            'The static OG fallback `public/images/og-default.webp` must exist; otherwise pages that do not override `og_image` ship a broken Open Graph image to social previews.',
         );
 
-        // /robots.txt disallows the authenticated surfaces.
+        // robots.txt must disallow authenticated surfaces so crawl budget
+        // isn't wasted on URLs that 302 to login.
         $client->request('GET', '/robots.txt');
         $robots = (string) $client->getResponse()->getContent();
-        self::assertStringContainsString('Disallow: /app/', $robots, 'TASK-142: robots.txt must disallow /app/ (dashboard).');
-        self::assertStringContainsString('Disallow: /onboarding/', $robots, 'TASK-142: robots.txt must disallow /onboarding/.');
-        self::assertStringContainsString('Disallow: /auth/', $robots, 'TASK-142: robots.txt must disallow /auth/.');
+        self::assertStringContainsString('Disallow: /app/', $robots, 'robots.txt must disallow the authenticated dashboard surface (/app/).');
+        self::assertStringContainsString('Disallow: /onboarding/', $robots, 'robots.txt must disallow the onboarding flow.');
+        self::assertStringContainsString('Disallow: /auth/', $robots, 'robots.txt must disallow auth callback URLs.');
 
-        // sitemap.xml carries the previously-orphaned KB article.
+        // The sitemap must include every public KB article. The
+        // `authorizing-senders-explained` article was orphaned for a while —
+        // pin its presence so future edits cannot drop it again.
         $client->request('GET', '/sitemap.xml');
-        self::assertStringContainsString('authorizing-senders-explained', (string) $client->getResponse()->getContent(), 'TASK-142: sitemap.xml must include the authorizing-senders-explained KB article.');
+        self::assertStringContainsString(
+            'authorizing-senders-explained',
+            (string) $client->getResponse()->getContent(),
+            'Sitemap must include every public KB article — `authorizing-senders-explained` was orphaned before; do not let it disappear again.',
+        );
 
-        // Canonical strips query string: hitting a tool with `?domain=foo` resolves to the
-        // bare route URL, not the parameterised one.
+        // Canonical URLs strip query strings so a parameterised tool request
+        // (e.g. /tools/spf-checker?domain=example.com) does not canonicalize
+        // to a unique URL — Google would otherwise treat every checked
+        // domain as a near-duplicate of the bare tool page.
         $client->request('GET', '/tools/spf-checker?domain=example.com');
         $body = (string) $client->getResponse()->getContent();
         self::assertMatchesRegularExpression(
             '~<link\s+rel="canonical"\s+href="[^"]*?/tools/spf-checker"~',
             $body,
-            'TASK-142: canonical URL on /tools/spf-checker must NOT include ?domain=… — query-string-free.',
+            'Canonical URL on a tool page must point at the bare route — `?domain=…` parameters must NOT leak into the canonical (Google would index every parameterised request as a near-duplicate).',
         );
         self::assertDoesNotMatchRegularExpression(
             '~<link\s+rel="canonical"[^>]*\?[^"]*"~',
             $body,
-            'TASK-142: canonical href must not contain any query string.',
+            'Canonical href must never contain a query string.',
         );
 
-        // Login page carries noindex,follow.
+        // Login page must stay out of search results.
         $client->request('GET', '/login');
         $body = (string) $client->getResponse()->getContent();
         self::assertMatchesRegularExpression(
             '~<meta\s+name="robots"\s+content="noindex[^"]*"~',
             $body,
-            'TASK-142: /login must carry <meta name="robots" content="noindex,…"> so it stays out of Google.',
+            'Login page must declare `noindex` so it does not show up in Google — auth pages add zero organic value.',
         );
 
-        // Pricing page exposes SoftwareApplication JSON-LD with all 4 offer rungs.
+        // Pricing page exposes structured data so Google can show price
+        // information in rich results.
         $client->request('GET', '/pricing');
         $body = (string) $client->getResponse()->getContent();
-        self::assertStringContainsString('"@type": "SoftwareApplication"', $body, 'TASK-142: /pricing must carry SoftwareApplication JSON-LD.');
-        self::assertStringContainsString('"name": "Personal"', $body, 'TASK-142: SoftwareApplication offers must include Personal.');
-        self::assertStringContainsString('"name": "Pro"', $body, 'TASK-142: SoftwareApplication offers must include Pro.');
-        self::assertStringContainsString('"name": "Business"', $body, 'TASK-142: SoftwareApplication offers must include Business.');
+        self::assertStringContainsString('"@type": "SoftwareApplication"', $body, 'Pricing page must declare a SoftwareApplication entity in JSON-LD so Google can eligible-detect price rich results.');
+        self::assertStringContainsString('"name": "Personal"', $body, 'Pricing JSON-LD must enumerate the Personal tier.');
+        self::assertStringContainsString('"name": "Pro"', $body, 'Pricing JSON-LD must enumerate the Pro tier.');
+        self::assertStringContainsString('"name": "Business"', $body, 'Pricing JSON-LD must enumerate the Business tier.');
+    }
+
+    /**
+     * TASK-145 — homepage narrative arc pinned: hero → problem framing →
+     * solution (XML→English + grade) → product preview → how it works →
+     * pricing (moved EARLIER per user direction) → health-grade reinforcement
+     * → features → testimonials → open source → founder bio → FAQ → final CTA.
+     *
+     * Key pins:
+     * - Pricing now sits BEFORE the FAQ + before the deep-dive Features section
+     *   (was §10 of 14, now §7 of 14). User: "maybe put pricing slightly higher."
+     * - The "Risks in your DNS" problem-framing section sits BETWEEN the hero
+     *   and the AI-summary solution section (was §7, now §2). Visitors see
+     *   the pain before the pitch.
+     * - The screenshot product preview sits BETWEEN the solution sections
+     *   and the how-it-works steps.
+     */
+    #[Test]
+    public function homepageFlowsProblemToSolutionToPriceToClose(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/');
+        $body = (string) $client->getResponse()->getContent();
+
+        $heroPos = strpos($body, 'id="dns-checker"');
+        $risksPos = strpos($body, 'What Sendvery catches that nobody else does');
+        $aiSummaryPos = strpos($body, 'DMARC reports are written for machines');
+        $gradePos = strpos($body, 'One letter tells you if your email is at risk');
+        $previewPos = strpos($body, 'Everything for one domain in one view');
+        $howItWorksPos = strpos($body, 'Three steps to email authentication peace of mind');
+        $pricingPos = strpos($body, 'id="pricing"');
+        $featuresPos = strpos($body, 'Everything you need for email authentication');
+        $faqPos = strpos($body, 'id="faq"');
+        $finalCtaPos = strpos($body, 'Start monitoring your email health today');
+
+        foreach ([
+            'hero' => $heroPos, 'risks' => $risksPos, 'ai-summary' => $aiSummaryPos,
+            'grade' => $gradePos, 'preview' => $previewPos, 'how-it-works' => $howItWorksPos,
+            'pricing' => $pricingPos, 'features' => $featuresPos, 'faq' => $faqPos,
+            'final-cta' => $finalCtaPos,
+        ] as $label => $pos) {
+            self::assertNotFalse($pos, sprintf('Homepage must contain the "%s" section.', $label));
+        }
+
+        // Hook → Problem → Solution → Preview → Setup → Price → Features → FAQ → Close.
+        self::assertGreaterThan($heroPos, $risksPos, 'Problem framing (the risks visitors did not know about) must render AFTER the hero so the visitor cares before the pitch.');
+        self::assertGreaterThan($risksPos, $aiSummaryPos, 'AI-summary solution must render AFTER the problem framing.');
+        self::assertGreaterThan($aiSummaryPos, $gradePos, 'Grade-card solution must render AFTER the AI-summary section.');
+        self::assertGreaterThan($gradePos, $previewPos, 'Product preview must render AFTER the abstract solution claims so visitors see the tangible artefact.');
+        self::assertGreaterThan($previewPos, $howItWorksPos, 'How-it-works must render AFTER the product preview so the visitor knows what they are setting up.');
+        self::assertGreaterThan($howItWorksPos, $pricingPos, 'Pricing must follow how-it-works — once the problem + solution + setup are clear, "what does this cost?" is the natural next question.');
+        self::assertGreaterThan($pricingPos, $featuresPos, 'Deep-dive feature highlights must render AFTER pricing — feature shopping is lower intent than price-checking.');
+        self::assertGreaterThan($featuresPos, $faqPos, 'FAQ must render AFTER feature highlights as the last objection-handling stop before the close.');
+        self::assertGreaterThan($faqPos, $finalCtaPos, 'Final CTA must render LAST so the close is the visitor\'s exit option from the page.');
     }
 
     /**

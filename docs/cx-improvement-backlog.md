@@ -4736,7 +4736,7 @@ User confirmed v1 = SPF + DMARC + DKIM + MX (not the original SPF+DMARC-only spe
 
 ## TASK-145: Homepage section order needs explicit narrative rationale; pricing should sit slightly higher per user direction
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: User: "Completely go through the design of the public and marketing pages — the user story on the homepage should make sense, maybe put pricing slightly higher, but there should be clear story / flow from top the bottom reasoning why the sections are in such order — follow best practices."
 - Acceptance:
