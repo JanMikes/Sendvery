@@ -102,6 +102,18 @@ final readonly class DomainHealthClassifier
     }
 
     /**
+     * Public wrapper around {@see allProtocolsConfigured()} so callers that
+     * already have a {@see DnsHealthOverviewResult} (the DNS Health overview
+     * page, TASK-083) can ask the same "is everything in place?" question
+     * without re-deriving the rule. Keeps the per-protocol threshold in one
+     * place per TASK-098.
+     */
+    public function isFullyHealthy(DnsHealthOverviewResult $dnsHealth): bool
+    {
+        return $this->allProtocolsConfigured($dnsHealth);
+    }
+
+    /**
      * Mirror of {@see allProtocolsConfigured()} for the joined-in shape on
      * `DomainOverviewResult`. Distinct method (rather than a synthetic
      * `DnsHealthOverviewResult` build) because the overview row carries only

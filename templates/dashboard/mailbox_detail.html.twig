@@ -82,23 +82,36 @@
        "show me those 10 reports". The envelopes card stays static — there's
        no per-envelope list page yet, and the recent-envelopes table below
        already surfaces the most-recent 20 rows. #}
+    {# TASK-086: stat-card variants are VALUE-REACTIVE so a silent or broken
+       mailbox doesn't render all-green. Hard-coded `variant="success"` on
+       Reports parsed = 0 read as "good" when 0 reports is exactly the
+       failure mode the page exists to expose. Rules:
+         envelopes (30d): >0 → default; 0 + clean → warning; 0 + lastError → error.
+         reports parsed: >0 → success; 0 → warning (the failure-mode case).
+         envelopes quarantined: 0 → success (zero is the GOOD state); >0 → warning. #}
+    {% set envelopesVariant = mailbox.envelopes30d > 0
+        ? 'default'
+        : (mailbox.lastError ? 'error' : 'warning') %}
+    {% set reportsVariant = mailbox.reportsParsed > 0 ? 'success' : 'warning' %}
+    {% set quarantineVariant = mailbox.envelopesQuarantined > 0 ? 'warning' : 'success' %}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <twig:StatCard
             title="Envelopes pulled (30d)"
             value="{{ mailbox.envelopes30d }}"
+            variant="{{ envelopesVariant }}"
         />
         <a href="{{ path('dashboard_reports', { mailbox: mailbox.mailboxId }) }}" class="block">
             <twig:StatCard
                 title="Reports parsed"
                 value="{{ mailbox.reportsParsed }}"
-                variant="success"
+                variant="{{ reportsVariant }}"
             />
         </a>
         <a href="{{ path('dashboard_quarantine', { mailbox: mailbox.mailboxId }) }}" class="block">
             <twig:StatCard
                 title="Envelopes quarantined"
                 value="{{ mailbox.envelopesQuarantined }}"
-                variant="warning"
+                variant="{{ quarantineVariant }}"
             />
         </a>
     </div>

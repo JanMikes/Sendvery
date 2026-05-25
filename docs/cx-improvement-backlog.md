@@ -3084,7 +3084,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-083: DNS Health overview page jumps straight into the card grid with no headline counts — "are my domains DNS-healthy in aggregate?" is unanswerable from this page
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: First-impression clarity gap on `/app/dns-health`. The current template (`templates/dashboard/dns_health_overview.html.twig`) is a 60-line file that renders an empty-state OR an unbordered card grid. There is no page heading (covered by TASK-082), no lede, AND no summary stat row. The user lands here from the sidebar "DNS Health" link and the first thing they see is N grade-letter cards with no aggregate framing. The dashboard overview (`/app`) DOES have a summary banner ("3 healthy · 1 needs attention · 1 unverified") — but the dedicated DNS Health page that should EXPAND on those numbers has *fewer* aggregate signals than the overview. The single question this page exists to answer at a glance — "out of my N domains, how many have SPF/DKIM/DMARC/MX all green?" — requires the user to mentally scan and count colored chips across every card. With 5+ domains this is hostile. A first-time-this-week user opens this page expecting an at-a-glance dashboard and gets a card list.
 - Acceptance:
@@ -3122,7 +3122,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-085: Alerts page header says "Alerts" with no lede — first-time users don't know what an alert IS, what triggers one, or how it differs from a quarantined report
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: First-impression clarity gap. `/app/alerts` (`templates/dashboard/alerts.html.twig`) renders `<h1>Alerts</h1>` + an optional unread count. The next visible element is a row of filter chips, then the alert list. There is NO lede explaining what an alert is, what generates one, or how alerts differ from the adjacent `Quarantine` sidebar item (which IS explained on `/app/quarantine` with a one-sentence lede — see `quarantine.html.twig` lines 9-11). A first-time-this-week user opening `/app/alerts` sees `Alerts (2 unread)` and a list of titles like `"DKIM key rotation detected on acme.io"` and `"Sender authorization rate dropped 15%"` — and has to infer the alert system's existence, rules, and lifecycle from the items themselves. The `Quarantine` page sets a clear bar for this category (one short paragraph below the page title): we should match it here.
 - Acceptance:
@@ -3136,7 +3136,7 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-086: Mailbox detail stat cards use fixed variants — a silent mailbox shows ALL-GREEN cards (Reports parsed: 0 is styled `success`), which is actively misleading
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: First-impression clarity gap on `/app/mailboxes/{id}` (`templates/dashboard/mailbox_detail.html.twig` lines 78-97). The three stat cards show `Envelopes pulled (30d)` / `Reports parsed` / `Envelopes quarantined` with hard-coded variants that don't reflect the value. The `Reports parsed` card is variant `success` even when the value is `0` — green styling on zero implies "good", but zero parsed reports IS the bad state this page exists to detect. The `Envelopes quarantined` card is variant `warning` even when the value is `0` — yellow on zero implies "things are weird", when zero quarantined is actually the celebratory state. The result: a mailbox that's silently broken (no envelopes flowing, no reports parsed, zero quarantined) shows as GREEN-GREEN-GREEN because the variants are static. The operator can't tell at a glance "is this mailbox doing its job?" — the only ground truth is reading the raw number against an unstated benchmark.
 - Acceptance:

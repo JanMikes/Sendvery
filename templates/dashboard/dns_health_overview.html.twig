@@ -11,7 +11,7 @@
 {% endblock %}
 
 {% block content %}
-    {% if domains is empty %}
+    {% if totalCount == 0 %}
         <twig:EmptyState
             title="No domains yet"
             message="Add your first domain to start monitoring its DNS health."
@@ -19,6 +19,37 @@
             actionLabel="Add your first domain"
         />
     {% else %}
+        {# TASK-083: 4-card summary row + filter chips. Counts are always
+           the unfiltered totals so the chips link to a known target; the
+           grid below shows whichever subset the active filter matches. #}
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <twig:StatCard title="Domains monitored" value="{{ totalCount }}" />
+            <a href="{{ path('dashboard_dns_health', { status: 'healthy' }) }}" class="block">
+                <twig:StatCard title="Fully healthy" value="{{ healthyCount }}" variant="{{ healthyCount > 0 ? 'success' : 'default' }}" />
+            </a>
+            <a href="{{ path('dashboard_dns_health', { status: 'attention' }) }}" class="block">
+                <twig:StatCard title="Need attention" value="{{ attentionCount }}" variant="{{ attentionCount > 0 ? 'warning' : 'default' }}" />
+            </a>
+            <a href="{{ path('dashboard_dns_health', { status: 'unchecked' }) }}" class="block">
+                <twig:StatCard title="Awaiting first check" value="{{ awaitingCount }}" variant="default" />
+            </a>
+        </div>
+
+        <div class="flex flex-wrap gap-2 mb-4" data-testid="dns-health-filter-chips">
+            <a href="{{ path('dashboard_dns_health') }}" class="btn btn-sm {{ activeFilter == '' ? 'btn-primary' : 'btn-ghost' }}">All ({{ totalCount }})</a>
+            <a href="{{ path('dashboard_dns_health', { status: 'healthy' }) }}" class="btn btn-sm {{ activeFilter == 'healthy' ? 'btn-success' : 'btn-ghost' }}">Fully healthy ({{ healthyCount }})</a>
+            <a href="{{ path('dashboard_dns_health', { status: 'attention' }) }}" class="btn btn-sm {{ activeFilter == 'attention' ? 'btn-warning' : 'btn-ghost' }}">Need attention ({{ attentionCount }})</a>
+            <a href="{{ path('dashboard_dns_health', { status: 'unchecked' }) }}" class="btn btn-sm {{ activeFilter == 'unchecked' ? 'btn-info' : 'btn-ghost' }}">Awaiting first check ({{ awaitingCount }})</a>
+        </div>
+
+        {% if domains is empty %}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body text-center py-10">
+                    <p class="text-base-content/60">No domains match the current filter.</p>
+                    <a href="{{ path('dashboard_dns_health') }}" class="btn btn-ghost btn-sm mt-3 w-fit mx-auto">Clear filter</a>
+                </div>
+            </div>
+        {% else %}
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {% for domain in domains %}
                 {% set detailUrl = path('dashboard_domain_health', {id: domain.domainId}) %}
@@ -61,5 +92,6 @@
                 </div>
             {% endfor %}
         </div>
+        {% endif %}
     {% endif %}
 {% endblock %}

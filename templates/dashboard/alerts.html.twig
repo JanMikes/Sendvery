@@ -10,6 +10,7 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold">Alerts</h1>
+            <p class="text-sm text-base-content/60 mt-1 max-w-2xl">Things Sendvery noticed and thought you'd want to know about — DNS changes, pass-rate drops, new unauthorized senders, blacklist hits. Mute the type if it's noisy for your setup.</p>
             {% if unreadCount > 0 %}
                 <p class="text-sm text-base-content/50 mt-1">{{ unreadCount }} unread alert{{ unreadCount != 1 ? 's' : '' }}</p>
             {% endif %}
