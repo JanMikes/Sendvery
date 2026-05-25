@@ -68,55 +68,92 @@
                 <p class="mt-3 text-base-content/60">Three commands. Then open <code class="bg-base-200 px-2 py-0.5 rounded">http://localhost</code> in your browser.</p>
             </div>
 
-            <div class="space-y-8">
-                <div class="flex gap-4 md:gap-6">
-                    <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">1</div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-lg font-semibold">Clone the repo</h3>
-                        <p class="text-sm text-base-content/60 mt-1">Grab the source. Anything you see on the hosted site is in this tree — no closed-source bits.</p>
-                        <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
-                             data-controller="clipboard-copy"
-                             data-clipboard-copy-text-value="git clone https://github.com/janmikes/sendvery.git && cd sendvery">
-                            <pre data-prefix="$"><code>git clone https://github.com/janmikes/sendvery.git &amp;&amp; cd sendvery</code></pre>
-                            <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
-                                <span data-clipboard-copy-target="label">Copy</span>
-                            </button>
+            {% if is_repo_public %}
+                <div class="space-y-8">
+                    <div class="flex gap-4 md:gap-6">
+                        <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">1</div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-lg font-semibold">Clone the repo</h3>
+                            <p class="text-sm text-base-content/60 mt-1">Grab the source. Anything you see on the hosted site is in this tree — no closed-source bits.</p>
+                            <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
+                                 data-controller="clipboard-copy"
+                                 data-clipboard-copy-text-value="git clone https://github.com/janmikes/sendvery.git && cd sendvery">
+                                <pre data-prefix="$"><code>git clone https://github.com/janmikes/sendvery.git &amp;&amp; cd sendvery</code></pre>
+                                <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
+                                    <span data-clipboard-copy-target="label">Copy</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="flex gap-4 md:gap-6">
-                    <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">2</div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-lg font-semibold">Configure your <code class="text-sm">.env</code></h3>
-                        <p class="text-sm text-base-content/60 mt-1">Copy the template and fill in a database URL plus your inbox credentials. Defaults work locally out of the box.</p>
-                        <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
-                             data-controller="clipboard-copy"
-                             data-clipboard-copy-text-value="cp .env .env.local && $EDITOR .env.local">
-                            <pre data-prefix="$"><code>cp .env .env.local &amp;&amp; $EDITOR .env.local</code></pre>
-                            <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
-                                <span data-clipboard-copy-target="label">Copy</span>
-                            </button>
+                    <div class="flex gap-4 md:gap-6">
+                        <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">2</div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-lg font-semibold">Configure your <code class="text-sm">.env</code></h3>
+                            <p class="text-sm text-base-content/60 mt-1">Copy the template and fill in a database URL plus your inbox credentials. Defaults work locally out of the box.</p>
+                            <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
+                                 data-controller="clipboard-copy"
+                                 data-clipboard-copy-text-value="cp .env .env.local && $EDITOR .env.local">
+                                <pre data-prefix="$"><code>cp .env .env.local &amp;&amp; $EDITOR .env.local</code></pre>
+                                <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
+                                    <span data-clipboard-copy-target="label">Copy</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="flex gap-4 md:gap-6">
-                    <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">3</div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-lg font-semibold">Boot the stack</h3>
-                        <p class="text-sm text-base-content/60 mt-1">One command brings up the app, PostgreSQL, and the Messenger worker. Open <code>http://localhost</code> and sign in with the magic link sent to Mailpit.</p>
-                        <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
-                             data-controller="clipboard-copy"
-                             data-clipboard-copy-text-value="docker compose up -d">
-                            <pre data-prefix="$"><code>docker compose up -d</code></pre>
-                            <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
-                                <span data-clipboard-copy-target="label">Copy</span>
-                            </button>
+                    <div class="flex gap-4 md:gap-6">
+                        <div class="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-primary-content flex items-center justify-center font-bold text-lg">3</div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-lg font-semibold">Boot the stack</h3>
+                            <p class="text-sm text-base-content/60 mt-1">One command brings up the app, PostgreSQL, and the Messenger worker. Open <code>http://localhost</code> and sign in with the magic link sent to Mailpit.</p>
+                            <div class="mockup-code mt-3 bg-base-300 text-base-content relative"
+                                 data-controller="clipboard-copy"
+                                 data-clipboard-copy-text-value="docker compose up -d">
+                                <pre data-prefix="$"><code>docker compose up -d</code></pre>
+                                <button type="button" class="btn btn-xs btn-ghost absolute top-2 right-2" data-action="clipboard-copy#copy">
+                                    <span data-clipboard-copy-target="label">Copy</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            {% else %}
+                {# TASK-122: the repo isn't published yet (SENDVERY_REPO_PUBLIC=0). A
+                   clone command 404s for a real visitor, so we replace the
+                   copy-pasteable steps with a notify-me notice card. Steps 2 + 3
+                   collapse into a one-line summary — no clipboard controllers, no
+                   commands that won't work yet. Flip SENDVERY_REPO_PUBLIC=1 to
+                   re-activate the full quickstart with zero code change. #}
+                <div class="max-w-2xl mx-auto" data-notify-repo-launch>
+                    <div class="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/5 via-base-100 to-accent-500/5 p-6 md:p-8">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 17h5l-1.4-1.4A7 7 0 0117 11V9a5 5 0 10-10 0v2c0 1.6-.6 3.1-1.6 4.2L4 17h5m6 0a3 3 0 11-6 0"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-lg font-semibold leading-snug">Quickstart unlocks the moment the repo opens publicly</h3>
+                                <p class="text-sm text-base-content/70 mt-2">
+                                    Sendvery is AGPL-3.0 and self-hosting is free forever — the public
+                                    GitHub mirror flips on at launch. Drop your email and we'll ping you
+                                    the second the quickstart commands work.
+                                </p>
+                                <a href="mailto:hello@sendvery.com?subject=Notify%20me%20when%20the%20Sendvery%20repo%20opens&amp;body=Please%20notify%20me%20when%20the%20open-source%20repo%20goes%20public."
+                                   class="btn btn-primary btn-sm mt-4"
+                                   data-notify-source="open-source-repo-launch">
+                                    Notify me when the repo goes public
+                                </a>
+                                <p class="text-xs text-base-content/50 mt-3">
+                                    Then configure your <code class="text-xs">.env</code> and run
+                                    <code class="text-xs">docker compose up</code> — both work the moment the source is reachable.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </twig:SectionContainer>
 
@@ -214,26 +251,50 @@
                 <p class="mt-3 text-base-content/60">A quick tour of the codebase. Tests are the spec — 100% line coverage is enforced in CI.</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="card bg-base-100 border border-base-300/60">
-                    <div class="card-body">
-                        <h3 class="card-title font-mono text-base">src/</h3>
-                        <p class="text-sm text-base-content/70">PHP 8.5 + Symfony 8 application. CQRS commands and queries, Doctrine entities, Twig components, Stripe + Stimulus + Turbo wiring.</p>
+            {% if is_repo_public %}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body">
+                            <h3 class="card-title font-mono text-base">src/</h3>
+                            <p class="text-sm text-base-content/70">PHP 8.5 + Symfony 8 application. CQRS commands and queries, Doctrine entities, Twig components, Stripe + Stimulus + Turbo wiring.</p>
+                        </div>
+                    </div>
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body">
+                            <h3 class="card-title font-mono text-base">docs/</h3>
+                            <p class="text-sm text-base-content/70">Architecture decisions, features roadmap, monetization model, pricing implementation plan. Every product decision is documented before it ships.</p>
+                        </div>
+                    </div>
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body">
+                            <h3 class="card-title font-mono text-base">tests/</h3>
+                            <p class="text-sm text-base-content/70">Unit + Integration tests. Behaviour-driven — the test names <em>are</em> the business requirements. Mutation testing via Infection.</p>
+                        </div>
                     </div>
                 </div>
-                <div class="card bg-base-100 border border-base-300/60">
-                    <div class="card-body">
-                        <h3 class="card-title font-mono text-base">docs/</h3>
-                        <p class="text-sm text-base-content/70">Architecture decisions, features roadmap, monetization model, pricing implementation plan. Every product decision is documented before it ships.</p>
+            {% else %}
+                {# TASK-122: same gate — until the repo's reachable, the three filesystem
+                   cards would be teases pointing at a 404. One unified "source preview at
+                   launch" callout that reuses the same notify CTA from the quickstart. #}
+                <div class="max-w-2xl mx-auto">
+                    <div class="card bg-base-100 border border-base-300/60">
+                        <div class="card-body items-center text-center">
+                            <h3 class="card-title text-base">Source preview at launch</h3>
+                            <p class="text-sm text-base-content/70 mt-1">
+                                <code class="text-xs">src/</code>, <code class="text-xs">docs/</code>,
+                                and <code class="text-xs">tests/</code> open the moment the public
+                                GitHub mirror flips on. Architecture decisions, CQRS commands, and the
+                                100%-coverage test suite become browsable that same day.
+                            </p>
+                            <a href="mailto:hello@sendvery.com?subject=Notify%20me%20when%20the%20Sendvery%20repo%20opens&amp;body=Please%20notify%20me%20when%20the%20open-source%20repo%20goes%20public."
+                               class="btn btn-outline btn-sm mt-4"
+                               data-notify-source="open-source-repo-launch">
+                                Notify me when the repo goes public
+                            </a>
+                        </div>
                     </div>
                 </div>
-                <div class="card bg-base-100 border border-base-300/60">
-                    <div class="card-body">
-                        <h3 class="card-title font-mono text-base">tests/</h3>
-                        <p class="text-sm text-base-content/70">Unit + Integration tests. Behaviour-driven — the test names <em>are</em> the business requirements. Mutation testing via Infection.</p>
-                    </div>
-                </div>
-            </div>
+            {% endif %}
         </div>
     </twig:SectionContainer>
 

@@ -48,18 +48,57 @@ final class OpenSourcePageTest extends WebTestCase
     }
 
     #[Test]
-    public function quickstartContainsThreeCopyableSteps(): void
+    public function quickstartContainsThreeCopyableStepsWhenRepoIsPublic(): void
     {
         $client = self::createClient();
+        $twig = self::getContainer()->get('twig');
+        \assert($twig instanceof \Twig\Environment);
+        $twig->addGlobal('is_repo_public', true);
+
         $crawler = $client->request('GET', '/about/open-source');
 
         $copyControllers = $crawler->filter('#quickstart [data-controller="clipboard-copy"]');
-        self::assertGreaterThanOrEqual(3, $copyControllers->count(), 'Quickstart must have three copyable code blocks');
+        self::assertGreaterThanOrEqual(3, $copyControllers->count(), 'Quickstart must have three copyable code blocks when the repo is public.');
 
         $body = $client->getResponse()->getContent();
         self::assertIsString($body);
         self::assertStringContainsString('git clone https://github.com/janmikes/sendvery.git', $body);
         self::assertStringContainsString('docker compose up -d', $body);
+    }
+
+    /**
+     * TASK-122 — when SENDVERY_REPO_PUBLIC=0 the `git clone` step 404s for a
+     * real visitor. The quickstart must hide the command and surface a
+     * notify-me CTA instead. The hero / page heading stay (the AGPL-3.0 claim
+     * is still accurate), only the actionable command swaps for the gating
+     * notice. Test pins both halves: command absent AND notify CTA present
+     * with the agreed `source="open-source-repo-launch"` analytics slug.
+     */
+    #[Test]
+    public function quickstartHidesGitCloneAndShowsNotifyCtaWhenRepoIsPrivate(): void
+    {
+        $client = self::createClient();
+        $twig = self::getContainer()->get('twig');
+        \assert($twig instanceof \Twig\Environment);
+        $twig->addGlobal('is_repo_public', false);
+
+        $crawler = $client->request('GET', '/about/open-source');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        // The clone-and-cd command must not render — a visitor who copies it
+        // hits a 404 today.
+        self::assertStringNotContainsString('git clone https://github.com/janmikes/sendvery.git', $body);
+
+        // No clipboard-copy controllers inside #quickstart when private — the
+        // commands disappear entirely, not just visually.
+        $copyControllers = $crawler->filter('#quickstart [data-controller="clipboard-copy"]');
+        self::assertCount(0, $copyControllers, 'Quickstart must hide all copyable command blocks when the repo is private.');
+
+        // The notify CTA must be present, carrying the agreed source slug so
+        // we can later split conversion analytics for repo-launch waitlist.
+        $notifyLinks = $crawler->filter('#quickstart [data-notify-source="open-source-repo-launch"]');
+        self::assertGreaterThanOrEqual(1, $notifyLinks->count(), 'Notify-me CTA with source="open-source-repo-launch" must replace the quickstart commands when the repo is private.');
     }
 
     #[Test]
@@ -89,9 +128,13 @@ final class OpenSourcePageTest extends WebTestCase
     }
 
     #[Test]
-    public function pageHasWhatsInTheRepoSection(): void
+    public function pageHasWhatsInTheRepoSectionWhenRepoIsPublic(): void
     {
         $client = self::createClient();
+        $twig = self::getContainer()->get('twig');
+        \assert($twig instanceof \Twig\Environment);
+        $twig->addGlobal('is_repo_public', true);
+
         $crawler = $client->request('GET', '/about/open-source');
 
         $headings = $crawler->filter('h2')->each(static fn ($node): string => $node->text());
