@@ -1,13 +1,13 @@
 {% extends 'marketing_layout.html.twig' %}
 
 {% block title %}Privacy Policy — Sendvery{% endblock %}
-{% block meta_description %}Sendvery privacy policy: what we collect, why, data retention, sub-processors (Stripe, Anthropic, Sentry, Hetzner), and your GDPR rights. Last updated 2026-05-23.{% endblock %}
+{% block meta_description %}Sendvery privacy policy: what we collect, why, data retention, sub-processors (Stripe, Anthropic, Sentry, Hetzner), and your GDPR rights. Last updated 2026-05-26.{% endblock %}
 
 {% block content %}
 <twig:SectionContainer>
     <div class="max-w-3xl mx-auto">
         <h1 class="text-3xl md:text-4xl font-bold">Privacy Policy</h1>
-        <p class="text-sm text-base-content/50 mt-2 mb-8">Last updated: 2026-05-23</p>
+        <p class="text-sm text-base-content/50 mt-2 mb-8">Last updated: 2026-05-26</p>
 
         <div class="prose prose-lg max-w-none text-base-content/80">
             <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">What we collect</h2>
@@ -18,6 +18,7 @@
                 <li><strong>IMAP / POP3 credentials:</strong> if you connect your own mailbox so we can fetch reports directly, your username and password (or OAuth2 refresh token) are stored encrypted at rest. We only use them to download messages from the report folder you configure.</li>
                 <li><strong>AI prompt data:</strong> when you enable the AI Insights add-on, we send an anonymised summary of your DMARC data (counts, percentages, top-N sending sources by FQDN where present) to Anthropic. We do not send email addresses, message contents, or your account identifiers.</li>
                 <li><strong>Sentry crash data:</strong> if the application errors, we capture the PHP stack trace, request path, and Sendvery user ID. We strip request bodies and form payloads so credentials and report contents never leave the application.</li>
+                <li><strong>Contact form submissions:</strong> if you fill in the contact form at <code>/about/contact</code> we store the name, email address, subject, and message you submit, plus the submitting IP address and browser user-agent for spam-attribution purposes. These rows persist to our database so the conversation has a durable audit trail and so the founder can reply outside the original session.</li>
             </ul>
 
             <h2 class="text-2xl font-bold mt-10 mb-4 text-base-content">Why we collect it</h2>
@@ -29,6 +30,7 @@
                 <li><strong>DMARC reports:</strong> retention is tied to your plan — Free 30 days, Personal 1 year, Pro 2 years, Business unlimited. When you downgrade, older reports are not deleted immediately; they become read-only and a contractual purge runs once your plan's retention window passes.</li>
                 <li><strong>Sentry crash data:</strong> retained for 30 days, then automatically purged by Sentry.</li>
                 <li><strong>Stripe payment data:</strong> retained by Stripe according to Stripe's own retention policy — we keep only the references (customer / subscription IDs) for as long as your account exists.</li>
+                <li><strong>Contact form submissions:</strong> retained for 24 months from submission so the founder can search past correspondence and follow up on long-tail threads, then purged. Older inquiries can be deleted earlier on request via <a href="mailto:privacy@sendvery.com" class="link link-primary">privacy@sendvery.com</a>.</li>
                 <li><strong>Backups:</strong> daily encrypted database backups retained for 30 days, then rotated.</li>
             </ul>
 

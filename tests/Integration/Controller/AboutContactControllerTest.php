@@ -364,16 +364,30 @@ final class AboutContactControllerTest extends WebTestCase
     }
 
     #[Test]
-    public function githubIssuesCardLinksToCanonicalRepoCasing(): void
+    public function contactPageStatesResponseTimeBeforeVisitorSubmits(): void
     {
         $client = self::createClient();
         $client->request('GET', '/about/contact');
 
         $body = (string) $client->getResponse()->getContent();
         self::assertStringContainsString(
-            'https://github.com/janmikes/Sendvery/issues/new',
+            'Jan replies within 24 hours on EU business days.',
             $body,
-            'The GitHub-issues card must link directly to the new-issue page (not the repo root, not /issues), and it MUST use canonical capital-S casing `Sendvery`. The lowercase URL 301-redirects, costing an extra hop GitHub does not need to take.',
+            'The response-time pledge must be visible PRE-submit, not only inside the success alert after POST. A first-time visitor staring at "Send to Jan" needs to know whether to expect a reply in 24h or 7 days — the homepage bio already commits to "24 hours on EU business days", so the contact page must speak with the same voice on the page where the visitor actually decides to type the message.',
+        );
+    }
+
+    #[Test]
+    public function githubIssuesCardLinksDirectlyToIssuesTrackerNewIssueForm(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/about/contact');
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString(
+            'https://github.com/janmikes/sendvery/issues/new',
+            $body,
+            'The GitHub-issues card must link directly to the new-issue page (not the repo root, not /issues). The URL casing matches the rest of the site (Footer, homepage Star CTA, Organization JSON-LD `sameAs`, self-hoster clone command) so the entire product surface is consistent and the central `OpenSourceExtension::GITHUB_URL` constant stays the single source of truth.',
         );
     }
 
@@ -383,8 +397,8 @@ final class AboutContactControllerTest extends WebTestCase
         $client = self::createClient();
         $crawler = $client->request('GET', '/about/contact');
 
-        $link = $crawler->filter('a[href="https://github.com/janmikes/Sendvery/issues/new"]')->first();
-        self::assertCount(1, $link, 'The GitHub-issues card must contain exactly one canonical issue-new link.');
+        $link = $crawler->filter('a[href="https://github.com/janmikes/sendvery/issues/new"]')->first();
+        self::assertCount(1, $link, 'The GitHub-issues card must contain exactly one issue-new link.');
         self::assertSame('_blank', $link->attr('target'), 'Off-domain links should open in a new tab so the visitor does not lose Sendvery context.');
         self::assertStringContainsString('noopener', (string) $link->attr('rel'), 'target="_blank" without rel="noopener" leaks window.opener to the destination site — security baseline.');
     }

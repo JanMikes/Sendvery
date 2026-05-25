@@ -5570,6 +5570,52 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 ## TASK-162: Footer "Talk to Jan" / "Contact" link on every page — founder channel reachable from every public surface
 
 - Status: done
+- Notes:
+  - Single template change in `templates/components/Footer.html.twig` attribution row + 1 test in `MarketingPagesTest::footerAttributionRowSurfacesTalkToJanLinkToContactPage`.
+  - The Trust column already has Contact from TASK-159; the attribution-row link is a second affordance for visitors who skim the legal bottom-bar.
+  - Footer is marketing-layout only (NOT included in `templates/dashboard/layout.html.twig`) — round brief concern about dashboard footer rendering doesn't apply.
+
+---
+
+## TASK-163: Surface the response-time SLA on `/about/contact` pre-submit (not just post-submit)
+
+- Status: done
+- Area: marketing / trust
+- Why: Round-10 Product-agent sweep flagged this. The contact page intro at `templates/about/contact.html.twig` (Talk directly to the founder.) sets up the founder-level promise but says nothing about timing. The "Expect a reply within a working day" line lives inside the green success alert — only renders AFTER a successful POST. A first-time visitor staring at "Send to Jan" has no idea whether Jan replies in 24h or never. The homepage `FounderBio.html.twig:28` already commits to "I aim to reply within 24 hours on EU business days" — leaving that promise off the page the user actually fills in is a missed credibility moment exactly where it matters most.
+- Acceptance:
+  - Add a one-line response-time pledge into the contact-page intro paragraph or as a small line under the form subtitle on `templates/about/contact.html.twig`. Use the bio's exact wording ("I aim to reply within 24 hours on EU business days" → rephrased third-person for the contact page: "Jan replies within 24 hours on EU business days.") for cross-surface consistency.
+  - Tighten the success-alert copy to match — same wording, post-submit (currently "within a working day", a third phrasing variant). Three surfaces (bio, contact intro pre-submit, contact success post-submit) should speak with one voice.
+  - Extend `AboutContactControllerTest.php` with one assertion that the response-time string is present on the GET render (not just post-POST).
+
+---
+
+## TASK-164: Privacy policy must enumerate the new `contact_inquiry` data collection
+
+- Status: done
+- Area: legal / trust
+- Why: Round-10 Product-agent sweep flagged this. `src/Entity/ContactInquiry.php` persists name + email + subject + message + submitter IP + user-agent to DB on every contact form submit. `templates/legal/privacy.html.twig` enumerates the categories of personal data collected (account, payment, DMARC, IMAP creds, AI prompt, Sentry) and does NOT mention contact-form submissions. A GDPR-aware visitor reading the privacy page after submitting the form will notice the omission immediately — and that visitor is exactly the kind of buyer (CISO, DPO, EU enterprise) Sendvery is trying to win. Shipping a public contact form whose data collection isn't enumerated in the privacy policy is the "we said we'd be transparent, then quietly hid a category" smell the round-10 trust pitch is designed to avoid.
+- Acceptance:
+  - Add a `<li><strong>Contact form submissions:</strong> …</li>` bullet to the "What we collect" `<ul>` in `templates/legal/privacy.html.twig` enumerating: name, email, subject, message, submitter IP, user agent.
+  - Add a matching retention entry to the "Data retention" `<ul>` stating how long contact-inquiry rows are kept (suggest: "retained for 24 months from submission to support audit + reply-thread continuity, then purged"; the value isn't in the precise number but in stating one).
+  - Bump the privacy page's "Last updated" date.
+  - Add one assertion to whatever existing test renders `legal_privacy` (or one new test) that the contact-form data row is present.
+
+---
+
+## TASK-165: Standardise the GitHub repo URL casing across every public surface
+
+- Status: done
+- Area: marketing / consistency
+- Why: Round-10 Product-agent sweep flagged this. TASK-160 introduced `github.com/janmikes/Sendvery/issues/new` (capital-S) on the contact page with an inline comment claiming "lowercase 301-redirects." Verified at round-10 close: GitHub does NOT 301-redirect on case — both `janmikes/sendvery` and `janmikes/Sendvery` return 200. The 301 claim was wrong. The REAL issue is consistency: the site currently uses lowercase in 6 places (`Footer.html.twig:67`, `Footer.html.twig:78`, `homepage/index.html.twig:16` Organization JSON-LD `sameAs`, `homepage/index.html.twig:493` homepage "Star on GitHub" CTA, `about/open-source.html.twig:91-92` self-hoster clone command, `src/Twig/OpenSourceExtension.php:18` central constant) and capital-S in 1 place (the round-10 contact-page card). Mixed casing is a visible polish miss when a careful visitor opens devtools or compares the contact page side-by-side with the footer.
+- Acceptance:
+  - Pick a canonical form. Recommend lowercase `janmikes/sendvery` since (a) it's already used in 6 places vs 1 capital-S place — minimal churn; (b) the 301-redirect claim was incorrect, removing the only stated reason for capital-S; (c) the central `OpenSourceExtension::GITHUB_URL` constant already uses lowercase and is the single source of truth other templates should pull from.
+  - Update the contact template (`templates/about/contact.html.twig`) to lowercase and remove the misleading "301-redirects" inline comment.
+  - Update the existing `AboutContactControllerTest::githubIssuesCardLinksToCanonicalRepoCasing` assertion to expect lowercase (and rename to drop the misleading "canonical casing" framing — call it `githubIssuesCardLinksToCorrectIssuesTrackerUrl` or similar).
+  - Verify no other surface contradicts the chosen canonical (grep for `Sendvery` capitalisation across templates).
+
+---
+
+## RUN SUMMARY — 2026-05-25 round 9 autonomous CX loop (homepage hero rewrite + DKIM-selector preference + SEO follow-ups + TASK-144 nice-to-haves)
 - Area: marketing / trust
 - Why: The footer currently shows "Built with love by Jan Mikeš · Source on GitHub →" (TASK-141). Adding a contact link makes the founder channel reachable from EVERY page — KB articles, tool pages, pricing, dashboard — not just from the new `/about/contact` route. Visitors who land on a non-About page first still get the contact affordance without a re-architect.
 - Acceptance:

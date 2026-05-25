@@ -62,7 +62,32 @@ final class TrustPagesTest extends WebTestCase
         $client->request('GET', '/legal/privacy');
 
         $body = (string) $client->getResponse()->getContent();
-        self::assertStringContainsString('2026-05-23', $body);
+        self::assertStringContainsString('2026-05-26', $body);
+    }
+
+    public function testPrivacyPageEnumeratesContactFormDataCollection(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/legal/privacy');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        // The contact form persists name + email + subject + message + submitter IP
+        // + user-agent to the `contact_inquiry` table on every POST. A GDPR-aware
+        // visitor reading the privacy page after submitting the form will notice
+        // the omission immediately — and the visitors most likely to read the
+        // privacy policy AFTER using the contact form (CISO, DPO, EU enterprise)
+        // are exactly the buyers Sendvery's trust pitch is designed to win.
+        self::assertStringContainsString(
+            'Contact form submissions',
+            $body,
+            'The privacy policy must enumerate contact-form submissions as a personal-data category — anything less is the "we said we would be transparent, then quietly hid a category" smell the round-10 trust pitch is designed to avoid.',
+        );
+        self::assertStringContainsString(
+            '/about/contact',
+            $body,
+            'The privacy policy must reference the contact form by its URL so a privacy-curious visitor can navigate directly to the surface that produces this data class.',
+        );
     }
 
     public function testSecurityPageContainsLastUpdated(): void
