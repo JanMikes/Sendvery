@@ -3767,6 +3767,30 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ---
 
+## Round-10 performance audit (2026-05-26)
+
+**Methodology:** Spot-inspection of new DB-touching paths and template renders. Round-10's largest DB-touching change is TASK-159's `contact_inquiry` table — write-once on form submit (one INSERT + one Email::send), read-never (no admin triage queue yet). Every other round-10 task is a marketing-side template edit (TASK-160/161/162/163/164/165) with no server-side cost change.
+
+**New code-path inventory (round 10):**
+
+- **TASK-159** — new `AboutContactController::__invoke()` handles GET + POST on `/about/contact`. GET path: pure Twig render of `templates/about/contact.html.twig` (no DB query). POST path (happy case): 1 honeypot guard (string compare) + 1 time-trap guard (1 `Clock::now()` call + 1 subtract) + 1 rate-limit guard (`RateLimiterFactory::consume()` — backed by `cache.rate_limiter` filesystem pool in test, default cache pool in prod) + 1 validator pass + 1 `commandBus->dispatch(new CreateContactInquiry(...))`. Handler does 1 `EntityManager::persist` + 1 `flush()` (INSERT into `contact_inquiry`) + 1 `MailerInterface::send` (synchronous SMTP via existing `MAILER_DSN` transport — outbound network I/O dominates over PHP + DB cost). Cost profile: a single INSERT to a write-only table that has no JOIN dependencies + a single SMTP RTT. The endpoint is rate-limited at 5/hour per-IP so even a moderate brute-force never exceeds 5 cycles per source per hour.
+- **TASK-160** — pure template addition (the GitHub-issues card). No code path. Twig render cost unchanged.
+- **TASK-161** — single anchor `<a>` added to `templates/components/FounderBio.html.twig`. No code path.
+- **TASK-162** — single anchor `<a>` added to `templates/components/Footer.html.twig`. No code path.
+- **TASK-163** — single `<p>` added to `templates/about/contact.html.twig`. No code path.
+- **TASK-164** — two `<li>` items added to `templates/legal/privacy.html.twig`. No code path.
+- **TASK-165** — string replacement (capital-S → lowercase) in 1 template + 1 test assertion. No code path.
+
+**Watchlist deltas:**
+
+- The new `cache.rate_limiter` filesystem pool in `when@test` is test-only — production uses the default cache pool (Doctrine-backed via `cache.app`). Per-IP rate-limiting at 5/hour creates O(1) cache lookups; no DB cost.
+- TASK-159's `contact_inquiry` table is indexed on `submitted_at` so the eventual triage-queue (TASK-166+) reads cheaply.
+- Round 9's `IngestionPathResolver::resolveForTeams` watchlist — still demo-only at 3-domain scale; carries to round 11.
+
+**Bottom line:** Round-10 perf delta vs round 9 ≈ 0 on the dashboard hot path (no dashboard changes). The new `/about/contact` POST endpoint has a single INSERT + a single SMTP RTT cost when triggered, capped at 5/hour per source — negligible aggregate. No new query introduced on any hot path.
+
+---
+
 ## Round-9 performance audit (2026-05-25)
 
 **Methodology:** Spot-inspection of the new DB-touching paths. Round-9 shipped one new column read (`monitored_domain.dkim_selector`) and four marketing-side / SEO / refactor changes that don't touch DB at all. No new query introduced on the dashboard hot path.
@@ -5615,16 +5639,66 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ---
 
-## RUN SUMMARY — 2026-05-25 round 9 autonomous CX loop (homepage hero rewrite + DKIM-selector preference + SEO follow-ups + TASK-144 nice-to-haves)
-- Area: marketing / trust
-- Why: The footer currently shows "Built with love by Jan Mikeš · Source on GitHub →" (TASK-141). Adding a contact link makes the founder channel reachable from EVERY page — KB articles, tool pages, pricing, dashboard — not just from the new `/about/contact` route. Visitors who land on a non-About page first still get the contact affordance without a re-architect.
-- Acceptance:
-  - Add a "Talk to Jan →" or similar link in the footer (same row as "Built with love" attribution OR in an existing footer column — wherever it reads most naturally next to Pricing / Open Source / KB links).
-  - Link points to `/about/contact` (TASK-159's route).
-  - Test: render any public page (e.g. `/`) + assert the footer contains the contact link.
-  - Confirm the footer renders coherently on dashboard too (signed-in users) — the founder channel is the right route for them too today (no in-product support channel yet).
-- Notes:
-  - Single template change in the shared layout / footer partial. No architect.
+## RUN SUMMARY — 2026-05-26 round 10 autonomous CX loop (founder-contact + GitHub-feedback transparency surface + round-10 trust polish)
+
+### Shipped (7 tasks across 4 code commits)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 159 + 160 | Founder contact surface — `/about/contact` page with form + DB-persisted inquiries + Symfony Mailer to `jan.mikes@sendvery.com`; GitHub-issues sibling card | `f6365f0` | marketing / trust | User round-10 ask (verbatim): *"To build some trust and transparency, it is always good to show who is behind the project, who am i paying to. We need some contact section or something with contact form and public email jan.mikes@sendvery.com — some text like 'Talk directly to the founder'... as well incorporate link to github — one card/section for developers."* New `/about/contact` route with H1 outcome-framed ("Talk directly to the founder."), founder-level lede, plain visible mailto link, Symfony Form with CSRF + validator + dispatch into a new `CreateContactInquiry` CQRS command that persists a `contact_inquiry` row (NO `team_id` FK — public surface, must not be team-scoped) AND sends email to `jan.mikes@sendvery.com` via existing `MailerInterface` (same transport used by magic-link auth + weekly digest). Spam-mitigation defence-in-depth: honeypot field (display:none + tabindex=-1 + autocomplete=off) + time-trap (rejects submissions arriving < 2 seconds after render) + per-IP rate-limit (5/hour token-bucket via `RateLimiterFactory`, alias `$contactFormLimiter`). NO 3rd-party CAPTCHA — positioning conflicts with "open-source + self-hostable + founder-built." GitHub-issues sibling card on the same template (two-column at md:, stacked at mobile) routes engineering questions to `github.com/janmikes/Sendvery/issues/new` (capital-S at first; reverted to lowercase in TASK-165 below). Nav (desktop + mobile) + Footer Trust column + Sitemap (priority 0.6, monthly) wired. BreadcrumbList JSON-LD (Home → Contact). 19 new business-behaviour-named tests (18 controller + 1 handler). Reviewer caught 1 nice-to-have (custom `assertSentEmailCount()` helper redundant with Symfony's standard `assertEmailCount()`) — applied inline before commit. |
+| 161 | Founder bio primary CTA wires to `/about/contact` | `feff7a8` | marketing / trust | The homepage founder bio is the most-credible section on the page; once `/about/contact` exists, the bio needs an actionable next step. New primary CTA "Talk to the founder →" prepended to the existing button row in `templates/components/FounderBio.html.twig` (alongside existing GitHub / mailto / LinkedIn affordances). Test: `HomepageFounderBioTest::bioSurfacesPrimaryCallToActionToContactPage` pins the link + the "Talk to the founder" label so the credibility hook can't silently regress to a generic "Contact" or be removed. |
+| 162 | Footer attribution row surfaces "Talk to Jan →" on every page | `58a5e0a` | marketing / trust | The Trust column already has Contact from TASK-159, but that's column-scoped — visitors who skim the lower attribution row would miss it. Added a "Talk to Jan →" link between "Built with love by Jan Mikeš" and "Source on GitHub →" in `templates/components/Footer.html.twig`'s attribution row so the founder channel is reachable from every public page (KB articles, tool pages, pricing — wherever a visitor lands first) without scrolling back up to the column links. Footer is marketing-layout only (not included in `templates/dashboard/layout.html.twig`) — round-brief concern about dashboard-footer rendering doesn't apply. New test `MarketingPagesTest::footerAttributionRowSurfacesTalkToJanLinkToContactPage` asserts both Trust-column and attribution-row affordances surface `/about/contact`. |
+| 163 + 164 + 165 | Round-10 Product-sweep trust-polish bundle (pre-submit SLA + privacy policy contact-form row + GitHub URL casing) | `75c62c7` | marketing / legal / consistency | Three "we forgot" gaps the user did not name but a careful visitor would notice; Product-agent sweep at round-10 close surfaced them and recommended shipping before stopping. **TASK-163:** response-time SLA ("Jan replies within 24 hours on EU business days.") now visible on the contact page PRE-submit — was only inside the post-POST success alert. Three surfaces (homepage bio first-person / contact intro third-person / contact success post-submit third-person) now speak with one voice. **TASK-164:** `templates/legal/privacy.html.twig` now enumerates `contact_inquiry` data collection (name, email, subject, message, submitter IP, user-agent) in "What we collect" + a 24-month retention entry in "Data retention" + last-updated bumped to `2026-05-26`. A GDPR-aware visitor reading the privacy page after submitting the form will no longer notice the omission. **TASK-165:** GitHub URL casing aligned to lowercase. TASK-160 had introduced capital-S `Sendvery` with an inline comment claiming "lowercase 301-redirects" — verified at round-10 close that GitHub does NOT 301-redirect on case (both return 200), so the premise was wrong. Reverted to lowercase `sendvery` matching the six existing references (Footer x2, homepage Star CTA, Organization JSON-LD `sameAs`, self-hoster clone command, `OpenSourceExtension::GITHUB_URL` central constant). Misleading inline comment removed; test renamed from `*LinksToCanonicalRepoCasing` → `*LinksDirectlyToIssuesTrackerNewIssueForm`. |
+
+### Deferred to round-11 watchlist (not shipped, with reasons)
+
+- **TASK-147** (Organization JSON-LD logo field) — carried from round 9. Still no square logo asset at `public/logo.png`. Sub-task once one lands.
+- **TASK-151** (`twitter:site` handle) — carried from round 9. Still no verified `@sendvery` Twitter/X account. Sub-task once the brand handle is registered.
+- **Marketing-page H1 register audit** — carried from round 9 (`/tools/_tool_layout.html.twig` H1 still ships `font-extrabold` while homepage uses `font-medium`). No user signal yet; defer.
+- **`/app/alerts` empty-state copy** — carried since round 5 with no user signal. Defer unless user flags.
+- **`IngestionPathResolver::resolveForTeams` re-measure** — demo-only at 3-domain scale. First production team hitting 50+ monitored domains is the trigger.
+- **DKIM selector UX expansion** — round 9 v1 is free-form text. Promote to a select-with-known-providers if users start asking "what selectors should I try?". No user signal yet.
+
+### Reviewer-caught nice-to-haves applied inline
+
+| Task | Finding | Fix |
+|---|---|---|
+| 159 | Custom `assertSentEmailCount()` helper based on a false premise about Symfony's standard `assertEmailCount()` mis-reporting the queued+sent dual-dispatch path. Reviewer verified `Symfony\Component\Mailer\Test\Constraint\EmailCount` already counts only `!isQueued()` events. Helper was dead weight diverging from the project idiom. | Removed `assertSentEmailCount()` + `lastSentEmail()` private helpers; replaced 7 usages with `self::assertEmailCount(N, null, $message)` + `self::getMailerMessages()[0]`. Shipped in the same `f6365f0` commit. |
+
+### Self-review findings (every 3 shipped tasks)
+
+- **After TASK-159/160/161/162 (3 ships):** clean first pass. Cross-surface naming check (bio vs contact lede) — both correctly name Jan Mikeš but with different framings (bio = biographical / motivation; contact = transactional / what Jan handles personally). Complementary, no duplication. Footer-on-dashboard concern from the round brief turned out to be N/A: `templates/components/Footer.html.twig` is included only in `marketing_layout.html.twig`, NEVER in `templates/dashboard/layout.html.twig`. Rate-limiter wiring spot-checked via `bin/console debug:autowiring 'RateLimiterFactoryInterface'` → resolves to `target:contact_form` / `alias:limiter.contact_form` (not silent no-op).
+
+### Product-agent stop-condition sweep
+
+The final Product sweep at round-10 close surfaced three genuine "we forgot" gaps (TASK-163 + TASK-164 + TASK-165 above), all about completing the round-10 trust narrative the user-named tasks established. Per the orchestrator brief stop-signal — "backlog has zero proposed/planned tasks AND a final Product-agent sweep returns no new proposals worth shipping" — the round was extended by one bundle to ship them rather than deferring. Post-bundle the backlog is genuinely empty: no `proposed` or `planned` tasks remain, only `deferred` watchlist items waiting on missing prerequisites (logo asset, Twitter handle, production scale signal).
+
+### Suite growth (round-9 baseline → round-10 finish)
+
+| Metric | Round 9 finish | Round 10 finish | Delta |
+|---|---|---|---|
+| Tests | 2303 | 2326 | +23 |
+| Assertions | 6913 | 7041 | +128 |
+
+### Surfaces reviewed and judged "good enough" without code change
+
+- `templates/components/Nav.html.twig` register / layout — the new "Contact" link slotted into both desktop and mobile sections cleanly alongside existing items; no nav-reflow needed.
+- `templates/components/FounderBio.html.twig` bio paragraphs — the existing three-paragraph bio already reads as founder-level credibility (Jan's experience + motivation + "you reach me directly") without restructuring. TASK-161 added the primary CTA on top of the existing copy.
+- `/about/contact` mobile rendering — two-card grid stacks to single column at < md: breakpoint; CTA buttons full-width on mobile, form labels above inputs. No mobile-specific overflow issue.
+- `/legal/privacy` rendering after the new contact-form rows added — `<ul>` items render in order, the `<code>/about/contact</code>` reference is rendered correctly within the prose layout.
+
+### Suggested round-11 seed areas
+
+1. **TASK-147 + TASK-151 follow-through** — same as round-10 watchlist; ship once logo + Twitter handle land.
+2. **Marketing-page H1 register audit** — same as round-9 watchlist; pick up if scope allows.
+3. **Imprint / legal entity statement on `/about/contact`** — some EU jurisdictions (notably Germany's Impressumspflicht) require a public contact page to surface the legal entity, address, and VAT ID. Sendvery's Czech `OSVČ` setup may be sufficient via the privacy-policy footer reference, but a Product/legal review would confirm whether `/about/contact` needs a small "Legal entity: Jan Mikeš, OSVČ, [address], IČ [number], VAT [...]" footnote.
+4. **"What about urgent production issues?" framing on `/about/contact`** — the current copy is great for sales/billing/partnership/"is Sendvery right for me?" framing, but if a user's email is actually down RIGHT NOW, there's no explicit guidance ("for delivery-blocking issues, link to the status page + escalation path"). Low priority; only matters once Sendvery has paying customers reporting incidents.
+5. **Sendvery roadmap link on `/about/contact` and/or homepage Open Source section** — the bio mentions "issues and feature requests are triaged in public" but there's no roadmap link. A public GitHub Projects board or milestone link would close the transparency loop.
+6. **Dashboard `/app/contact-inquiries` triage queue** — TASK-159 persists `contact_inquiry` rows for audit purposes; right now nothing reads them. A simple internal-only DBAL query + dashboard surface (admin-only) would let Jan triage from inside the product. Not user-facing; only needed once volume justifies it.
+
+### Stop signal
+
+Backlog drained against the round-10 user-driven scope (TASK-159/160/161/162) PLUS the Product-agent-surfaced trust-polish bundle (TASK-163/164/165). No `proposed` or `planned` tasks remain. TASK-147 + TASK-151 + the round-9 watchlist items remain `deferred — future-watchlist` with clear prerequisite notes. Round-11 seed areas filed above are NOT proposed tasks — they are hypotheticals for the next time the user kicks off a round, to be promoted to `proposed` only with user signal or fresh evidence.
 
 ---
 
