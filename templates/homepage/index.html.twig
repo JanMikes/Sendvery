@@ -48,7 +48,7 @@
     14. Final CTA     — Close
 
    Each section's `bgClass` alternates between `bg-base-100` (default) and
-   `bg-zinc-50/80` so the eye has a visual rhythm to follow without the page
+   `bg-base-200` so the eye has a visual rhythm to follow without the page
    reading as one undifferentiated wall of content.
    =========================================================================== #}
 
@@ -156,7 +156,7 @@
 {# === 3. SOLUTION 1/3 — XML → plain English (TASK-131).
        Now that the visitor cares about the problem, show the first leg of our
        solution: we translate DMARC XML into one-sentence AI summaries. #}
-<section class="bg-zinc-50/80 py-16 md:py-24">
+<section class="bg-base-200 py-16 md:py-24">
     <div class="container mx-auto px-4 md:px-6">
         <div class="text-center max-w-3xl mx-auto">
             <div class="text-xs uppercase tracking-wider text-zinc-500 mb-4">How the AI insights work</div>
@@ -286,7 +286,7 @@
        annotation callout points at the "Monitoring active" banner from the
        round-4 setup-status surface (TASK-097/100) — that's what the
        screenshot actually leads with. #}
-<twig:SectionContainer bgClass="bg-zinc-50/80">
+<twig:SectionContainer bgClass="bg-base-200">
     <twig:SectionHeader
         eyebrow="Your dashboard, one screen"
         title="Everything for one domain in one view"
@@ -366,7 +366,7 @@
        Once visitor has seen the problem + solution + preview + setup, the
        next question is always "what does it cost?" — answer it before they
        scroll past. PricingTable speaks for itself. #}
-<twig:SectionContainer id="pricing" bgClass="bg-zinc-50/80">
+<twig:SectionContainer id="pricing" bgClass="bg-base-200">
     <twig:SectionHeader
         eyebrow="Pricing"
         title="Simple, transparent pricing"
@@ -416,7 +416,7 @@
        because feature-shopping is a lower-intent activity than price-comparison:
        the visitor who's already committed to "this looks worth $4.99" now wants
        the receipts on what's actually included. #}
-<twig:SectionContainer bgClass="bg-zinc-50/80">
+<twig:SectionContainer bgClass="bg-base-200">
     <twig:SectionHeader
         eyebrow="Capabilities"
         title="Everything you need for email authentication"
@@ -454,7 +454,7 @@
 {# === 11. OPEN SOURCE — Self-host credibility + lock-in defence.
        For visitors who care about vendor lock-in or want to inspect the code
        before trusting their DMARC data to a SaaS. AGPL-3.0 + self-host pitch. #}
-<twig:SectionContainer bgClass="bg-zinc-50/80">
+<twig:SectionContainer bgClass="bg-base-200">
     <div class="max-w-3xl mx-auto text-center">
         <svg class="w-12 h-12 mx-auto mb-4 text-primary" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4" y="11" width="16" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"></rect>
@@ -476,15 +476,11 @@
     </div>
 </twig:SectionContainer>
 
-{# === 12. FOUNDER BIO — Last trust signal before FAQ + close.
-       The human behind the project. The component carries its own zinc-50/80
-       background — fine because it follows the zinc-50/80 Open Source section
-       and reads as one continuous "trust" passage rather than two visually
-       separate sections. #}
+{# === 12. FOUNDER BIO — Last trust signal before FAQ + close. #}
 <twig:FounderBio />
 
 {# === 13. FAQ — Objection handling, standard pre-purchase friction reducer. #}
-<twig:SectionContainer id="faq">
+<twig:SectionContainer id="faq" bgClass="bg-base-200">
     <twig:SectionHeader
         eyebrow="Common questions"
         title="Frequently asked questions"
