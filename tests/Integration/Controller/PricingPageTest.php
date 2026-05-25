@@ -24,7 +24,6 @@ final class PricingPageTest extends WebTestCase
         self::assertGreaterThanOrEqual(1, $crawler->filter('table.table.table-zebra')->count());
     }
 
-
     public function testComparisonTableContainsAllTierNames(): void
     {
         $client = self::createClient();

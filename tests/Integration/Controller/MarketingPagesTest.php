@@ -323,7 +323,6 @@ final class MarketingPagesTest extends WebTestCase
         self::assertStringContainsString('Self-hostable', $heroText);
     }
 
-
     /**
      * TASK-158 — the prior "View on GitHub" secondary CTA took visitors off the
      * conversion path before they'd even understood what Sendvery did. Removed.
