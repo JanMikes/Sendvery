@@ -5376,6 +5376,79 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ---
 
+## TASK-159: Founder contact surface — `/about/contact` page with founder-level framing + Symfony Form submission + DB-persisted inquiries + Symfony Mailer to `jan.mikes@sendvery.com`
+
+- Status: proposed
+- Area: marketing / trust
+- Why: User round-10 ask (verbatim): *"To build some trust and transparency, it is always good to show who is behind the project, who am i paying to. We need some contact section or something with contact form and public email jan.mikes@sendvery.com - some text like 'Talk directly to the founder'."* Sendvery is positioned against the no-reply support-ticket SaaS anti-pattern (open-source + self-hostable + founder-built). Visitors about to enter a credit card on `/pricing` need to see there's a human on the other end — and the founder being publicly reachable is a credibility multiplier that scales WITH the open-source positioning, not against it.
+- Acceptance:
+  - New public route `/about/contact` (architect's call between `/about/contact` vs section-on-existing-About-page; orchestrator's read: dedicated route is cleaner for SEO + visitor URL guess + BreadcrumbList pattern).
+  - Renders for both signed-out + signed-in visitors.
+  - H1 outcome-framed per `feedback-hero-leads-with-user-value` durable memory (e.g. *"Talk directly to the founder."*) — NOT *"Contact us"* or *"Get in touch with our team"*.
+  - Lede paragraph names Jan Mikeš + role (sole founder / maintainer / Czech-based engineer) + what he handles personally (billing, custom plans, partnerships, "is Sendvery right for me?").
+  - Plain visible mailto link to `jan.mikes@sendvery.com` (no obfuscation — premature obfuscation signals "we hide our email").
+  - Symfony Form with fields: name, email, subject, message. CSRF-protected, server-side validated.
+  - Submission persists a `contact_inquiry` row (DB-first audit trail, no `team_id` FK so the Doctrine team-scoping filter never touches it) AND emails the founder via the existing Symfony Mailer transport (same one used by magic-link auth + weekly digest — do NOT introduce a new provider).
+  - Spam-mitigation defence-in-depth: honeypot field (hidden via `style="display:none"` + `tabindex="-1"` + `autocomplete="off"`) + time-trap (rejects submissions arriving < 2 seconds after render — slow human typers DO finish in under a second sometimes, but never under 2s) + per-IP rate-limit via Symfony's `RateLimiterFactory` at 5/hour. NO 3rd-party CAPTCHA (Turnstile / reCAPTCHA / hCaptcha) — positioning conflicts with "open-source + self-hostable + founder-built."
+  - "Thank you" confirmation page or flash message after submit.
+  - Nav: add "Contact" link under existing "About" dropdown (or top-level — architect's call). Visible signed-out + signed-in.
+  - Footer: link to `/about/contact` in the appropriate column.
+  - Sitemap: `/about/contact` entry added to `SitemapController`.
+  - JSON-LD: `BreadcrumbList` (Home > About > Contact) per the TASK-149 pattern + optional `ContactPage` schema.
+  - Tests follow business-behaviour naming (per `feedback-tests-describe-business-behaviour` durable memory): `visitorCanSubmitContactFormAndFounderGetsEmail`, `honeypotFieldSilentlyRejectsBotSubmissions`, `rateLimiterBlocksSixthRequestWithinAnHour`, `formSubmissionPersistsContactInquiryRow`, `timeTrapRejectsSubmissionsArrivingFasterThanHuman`, etc. NO `task159*` prefixes.
+  - 100% coverage on new code (per CLAUDE.md).
+- Notes:
+  - Architect-first because of the multi-decision data-model + form schema + spam-mitigation + route-placement + nav/footer wiring scope.
+  - Ships on the same page as TASK-160 (developer feedback / GitHub-issues card) so visitors see both routing options at once.
+
+---
+
+## TASK-160: Developer feedback surface — GitHub-issues card alongside the founder-contact form on `/about/contact`
+
+- Status: proposed
+- Area: marketing / trust
+- Why: User round-10 ask (verbatim): *"as well incorporate link to github - one card/section for developers 'Product suggestions or bug report - can open issue directly on github, where the code lives.'"* This is the second route of the two-channel trust pattern: business questions → founder email; engineering questions → GitHub Issues. Without GitHub, the founder's inbox becomes the bug tracker. Without the founder channel, non-technical visitors think "I need a GitHub account to ask about billing?" Both routes side-by-side = visitor self-selects the right channel.
+- Acceptance:
+  - Sibling card/section on the `/about/contact` page from TASK-159 (NOT a separate page — visitors see both routes at once).
+  - Developer-framed copy matching the user's verbatim text: *"Product suggestions or bug reports — open an issue directly on GitHub, where the code lives."*
+  - Direct link to `https://github.com/janmikes/Sendvery/issues/new` (NOT repo root — the issues tracker is actionable). Canonical casing `Sendvery` with capital S (lowercase 301-redirects). Opens new tab with `target="_blank" rel="noopener"`.
+  - Visual treatment: left card = Mail glyph + founder copy + form; right card = GitHub glyph + developer copy + button. Two-column at desktop, stacked at mobile. The two cards read as parallel routes, not duplicated content.
+  - Test asserts the page contains the GitHub link pointing at canonical `github.com/janmikes/Sendvery/issues`.
+- Notes:
+  - No architect — single template addition alongside TASK-159's contact page. Ships in the same commit as TASK-159.
+
+---
+
+## TASK-161: Founder bio section on homepage — wire to new `/about/contact` route + ensure credibility hook is actionable
+
+- Status: proposed
+- Area: marketing / trust
+- Why: The homepage already has a founder bio section (TASK-145 narrative arc §12). It's currently a credibility artefact but probably reads "here's who built this" without an actionable next step. Now that `/about/contact` exists, the bio should LINK to it — same pattern as the hero linking to the chip row for open-source credibility. The bio is the most-credible section on the page; the contact CTA needs to be reachable from there.
+- Acceptance:
+  - Audit the existing founder bio section on `/` (in `templates/homepage/index.html.twig` — comment likely tags it as "12. FOUNDER BIO" or similar).
+  - Add a "Get in touch" footer / inline CTA to the bio card linking to `/about/contact` (the new route from TASK-159).
+  - If the bio currently lacks founder name + credentials + role, expand in scope to match the contact page lede — sole founder / maintainer / Czech-based engineer. Don't restructure; tighten if needed.
+  - Test: render `/` + assert the bio section contains a link to `/about/contact`.
+- Notes:
+  - Architect-first only if the bio needs structural changes; otherwise straight to Build.
+
+---
+
+## TASK-162: Footer "Talk to Jan" / "Contact" link on every page — founder channel reachable from every public surface
+
+- Status: proposed
+- Area: marketing / trust
+- Why: The footer currently shows "Built with love by Jan Mikeš · Source on GitHub →" (TASK-141). Adding a contact link makes the founder channel reachable from EVERY page — KB articles, tool pages, pricing, dashboard — not just from the new `/about/contact` route. Visitors who land on a non-About page first still get the contact affordance without a re-architect.
+- Acceptance:
+  - Add a "Talk to Jan →" or similar link in the footer (same row as "Built with love" attribution OR in an existing footer column — wherever it reads most naturally next to Pricing / Open Source / KB links).
+  - Link points to `/about/contact` (TASK-159's route).
+  - Test: render any public page (e.g. `/`) + assert the footer contains the contact link.
+  - Confirm the footer renders coherently on dashboard too (signed-in users) — the founder channel is the right route for them too today (no in-product support channel yet).
+- Notes:
+  - Single template change in the shared layout / footer partial. No architect.
+
+---
+
 ## RUN SUMMARY — 2026-05-25 round 9 autonomous CX loop (homepage hero rewrite + DKIM-selector preference + SEO follow-ups + TASK-144 nice-to-haves)
 
 ### Shipped (10 tasks across 4 code commits)
