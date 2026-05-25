@@ -3767,6 +3767,30 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ---
 
+## Round-9 performance audit (2026-05-25)
+
+**Methodology:** Spot-inspection of the new DB-touching paths. Round-9 shipped one new column read (`monitored_domain.dkim_selector`) and four marketing-side / SEO / refactor changes that don't touch DB at all. No new query introduced on the dashboard hot path.
+
+**New code-path inventory (round 9):**
+
+- **TASK-146** — added `monitored_domain.dkim_selector` column + new `SetDomainDkimSelector` command / handler / controller + `DnsMonitor` passes `$domain->dkimSelector` through to `DkimChecker::check()`. The DKIM selector is on a row that's ALREADY loaded for verification (the `MonitoredDomain` entity is fetched by `MonitoredDomainRepository::get()` before DnsMonitor runs). No new query; the read is a constant-time property access. The new POST endpoint `/app/domains/{id}/dkim-selector` runs synchronously: 1 `findForTeams` query + 1 column UPDATE + 1 invocation of `CheckDomainDnsHandler` (which fires the existing 4-protocol DNS check via `Spatie\Dns` — network-bound, dominates over any DB cost). Cost profile = same as the existing "Re-check now" button.
+- **TASK-148** — added `publishedAt` + `updatedAt` to the `KnowledgeBaseIndexController::GUIDES` const array. Pure-PHP, no DB.
+- **TASK-149** — 4 new `<script type="application/ld+json">` blocks in 4 templates. Twig template render. No DB.
+- **TASK-150** — 1 new JSON-LD block in `templates/homepage/index.html.twig`. Twig render. No DB.
+- **TASK-152** — 4 `<title>` string trims. Pure template, no DB.
+- **TASK-153/154/157** — Stimulus controller JS edits. Client-side only, no server-side cost.
+- **TASK-155** — `SpfProviderRegistry::all()` + `MxPresetRegistry::all()` refactored from `private const` literal to `new SpfProvider(...)` / `new MxPreset(...)` factory expressions on each call. The construction overhead is microseconds (~10 readonly object instantiations per call) and these methods are called exactly twice per `/tools/spf-checker` + `/tools/mx-checker` request (once for the iterator + once for `allAsJson()`). No measurable cost change vs round 8.
+- **TASK-156** — 3 `assertResponseIsSuccessful()` adds in test files. Tests only.
+
+**Watchlist deltas:**
+
+- The TASK-146 form re-submits trigger the synchronous DNS re-verification path. The handler's idempotency guard (early-return when `$domain->dkimSelector === $normalised`) means a double-click on "Save & re-check DNS" doesn't fire a duplicate DNS sweep. Pinned by `resubmittingUnchangedSelectorDoesNotFireRedundantDnsCheck` (asserts `dns_check_result` row count is unchanged).
+- Round 8's `IngestionPathResolver::resolveForTeams` watchlist item — still demo-only at 3-domain scale; no production data to measure against. Carries to round 10.
+
+**Bottom line:** Round-9 perf delta vs round 8 ≈ 0. Largest single addition is the synchronous DNS re-verification fired by the new selector-set endpoint, which is dominated by network I/O to upstream DNS servers (not by Sendvery's PHP or PostgreSQL cost). No new query introduced on the dashboard hot path.
+
+---
+
 ## Round-8 performance audit (2026-05-25)
 
 **Methodology:** No SQL measurements re-run this round. Round 8's user-driven scope was entirely marketing-side (homepage register + how-it-works icons + the four marketing-clutter deletes + footer rewrite + SEO audit + homepage narrative restructure) plus the 4 client-side DNS generators on the public `/tools/*` pages. The TASK-143 dashboard ask was determined to be a missing-feature gap (not a fix-existing-form bug) and was filed as TASK-146 for round 9 with no code shipped — so the dashboard hot path is unchanged from round 7's measurements.
@@ -5270,7 +5294,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-153: 4 generator Stimulus controllers declare unreachable `copyButton` targets
 
-- Status: proposed
+- Status: done
 - Area: dashboard / quality
 - Why: Round-8 reviewer flagged: each of `spf_generator_controller.js`, `dmarc_generator_controller.js`, `dkim_generator_controller.js`, `mx_generator_controller.js` declares `static targets = [..., 'copyButton']` but no template wires `data-*-generator-target="copyButton"`. The `copy()` action uses `event.currentTarget`, so the declaration is dead code that misleads anyone trying to extend the controller.
 - Acceptance:
@@ -5283,7 +5307,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-154: DMARC generator accepts malformed `rua`/`ruf` email input — silently builds broken records
 
-- Status: proposed
+- Status: done
 - Area: dashboard / quality
 - Why: Round-8 reviewer flagged: `dmarc_generator_controller.js` accepts any string and slaps `mailto:` in front. A user who pastes "reports@" (missing the domain) or "reports[at]example.com" gets a `mailto:reports[at]example.com` in the generated record — silently broken. A regex pre-check catches the typo before the user pastes the record into DNS.
 - Acceptance:
@@ -5297,7 +5321,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-155: SpfProviderRegistry + MxPresetRegistry return shape-arrays — violates CLAUDE.md "objects over arrays"
 
-- Status: proposed
+- Status: done
 - Area: dashboard / refactor
 - Why: Round-8 reviewer flagged: both registries return `list<array{key: string, label: string, ...}>` shape arrays. CLAUDE.md mandates "never use associative arrays for structured data; use value objects." Per-entry DTOs (`SpfProvider` + `MxPreset`) make the registries type-safe and self-documenting.
 - Acceptance:
@@ -5312,7 +5336,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-156: 3 generator integration tests in ToolPagesTest missing `assertResponseIsSuccessful()` guard
 
-- Status: proposed
+- Status: done
 - Area: dashboard / quality
 - Why: Round-8 reviewer flagged: `dmarcGeneratorHasPolicies`, `mxGeneratorHasGoogleWorkspacePreset`, `mxGeneratorDataAttributeContainsPresetsJson` in `tests/Integration/Controller/ToolPagesTest.php` request the page and assert on body content — but skip the `assertResponseIsSuccessful()` status-code guard the rest of the file uses. If the page 500s, the test fails on body assertion rather than the clearer status check.
 - Acceptance:
@@ -5324,7 +5348,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-157: DMARC generator emits default `adkim=r`/`aspf=r` tags when both are at relaxed — adds noise without information
 
-- Status: proposed
+- Status: done
 - Area: dashboard / quality
 - Why: Round-8 reviewer flagged: RFC 7489 defaults both `adkim` and `aspf` to `r` (relaxed). Emitting them at their default produces a longer record with identical semantics. Omitting them when both are at default keeps the record concise and matches what DMARC generators ship in the wild (Mxtoolbox, dmarcian).
 - Acceptance:
@@ -5349,3 +5373,60 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
   - Tests use business-behaviour names (per round-8 user feedback).
 - Notes:
   - Shipped commit `1b00869` (round 9). Audit of other marketing-page heroes (`/about/what-is-sendvery`, `/about/open-source`, `/about/pricing`) confirmed they already lead with user value — no in-scope fix needed.
+
+---
+
+## RUN SUMMARY — 2026-05-25 round 9 autonomous CX loop (homepage hero rewrite + DKIM-selector preference + SEO follow-ups + TASK-144 nice-to-haves)
+
+### Shipped (10 tasks across 4 code commits)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 158 | Homepage hero rewrite for user-value framing | `1b00869` | marketing | User round-9 ask: "main priority is the value it brings to the user." H1 rewritten outcome-framed ("Stop your email from quietly landing in spam."), eyebrow duplicate deleted, subhead no longer opens with the open-source pitch (now: "watches your DMARC reports and DNS health 24/7, then tells you in plain English what to fix"), secondary "View on GitHub" CTA removed (single hero CTA = stronger conversion focus), mobile rhythm tightened (`py-10 md:py-24` + `text-3xl md:text-5xl` + `gap-6 md:gap-16` + `p-4 md:p-5` on card) so H1 + subhead + CTA + checker card all fit in one screen at 360px viewport. 5 new business-behaviour-named tests pin the rewrite + mobile rhythm; existing TASK-131 catch-all test updated. Audit of `/about/what-is-sendvery`, `/about/open-source`, `/about/pricing` confirmed they already lead with user value — no in-scope fix needed. |
+| 146 | Per-domain DKIM selector preference | `1456960` | dashboard / dns | Round-8 investigation surfaced: teams whose DKIM selector isn't in `DkimSelectorRegistry::PROVIDER_SELECTORS` silently saw "DKIM not found" forever — there was no surface to teach Sendvery the right selector. v1 ships: new migration adds `monitored_domain.dkim_selector VARCHAR(255) NULL`, `MonitoredDomain` entity gains the nullable field, new CQRS command `SetDomainDkimSelector` + handler (RFC 1035 DNS-label validation + idempotent re-verification + synchronous `CheckDomainDnsHandler` dispatch), new POST `/app/domains/{id}/dkim-selector` controller with CSRF, `DnsMonitor` passes `$domain->dkimSelector` to `DkimChecker::check()` (empty string preserves brute-force fallback), `GetDomainDetail` + `DomainDetailResult` thread the column through, dashboard form on `/app/domains/{id}` under `DomainSetupStatus` with HTML5 pattern + maxlength + pre-fill. 8 new integration tests (pre-fill, set, clear, whitespace-normalise, malformed-rejection, leading-hyphen-rejection, CSRF-missing, idempotent-resubmit) + 1 new test on `CheckDomainDnsHandlerTest` pinning the DnsMonitor → DkimChecker wiring. Reviewer agent caught the missing idempotency test inline — shipped before commit. |
+| 148 + 149 + 150 + 152 | SEO polish bundle (per-article dates, BreadcrumbList, WebSite JSON-LD, title trim) | `7b24194` | marketing / seo | TASK-148: KB articles ship per-article `datePublished` + `dateModified` (was hardcoded `2026-03-25` for all 8 — Google saw one freshness cohort). TASK-149: BreadcrumbList JSON-LD on `/learn` + `/about/what-is-sendvery` + `/about/open-source` + `/pricing` + each KB article. TASK-150: WebSite JSON-LD with SearchAction on `/` (forward-declarative for Sitelinks Searchbox). TASK-152: 4 over-length `<title>` tags trimmed to ≤ 60 chars so Google keeps the brand suffix visible. `publicPagesShipSeoBaseline` extended with 27 new assertions. TASK-147 (Organization logo) + TASK-151 (twitter:site handle) deferred to future-watchlist — both need an asset/account that doesn't exist yet. |
+| 153 + 154 + 155 + 156 + 157 | Round-8 DNS-generator nice-to-haves bundle | `2eea281` | dashboard / quality | TASK-153: dropped unreachable `copyButton` Stimulus targets from all 4 generators. TASK-154: email-format validation on DMARC `rua`/`ruf` inputs (malformed entries excluded + input gets `aria-invalid` + `ring-warning`). TASK-155: `SpfProviderRegistry` + `MxPresetRegistry` refactored to return `list<SpfProvider>` / `list<MxPreset>` DTOs (per CLAUDE.md "objects over arrays"); `JsonSerializable` preserves byte-identical JSON shape the Stimulus controllers consume. TASK-156: `assertResponseIsSuccessful()` guards on 3 generator tests. TASK-157: DMARC generator omits default `adkim=r`/`aspf=r` tags when both at default. 8 new tests pin the DTO refactor + Brevo canonical-domain + Microsoft `your-tenant` placeholder. |
+
+### Deferred to round-10 watchlist (not shipped, with reasons)
+
+- **TASK-147** (Organization JSON-LD logo field) — no logo asset exists at a stable `public/logo.png`. The existing `og-default.webp` is a 1200×630 social card, not a square logo Google would consume. Sub-task once a square logo lands.
+- **TASK-151** (`twitter:site` handle) — no verified `@sendvery` Twitter/X account yet. Shipping with a non-existent handle produces a broken card preview. Sub-task once the brand handle is registered.
+
+### Reviewer-caught must-fixes applied inline during the round
+
+| Task | Finding | Fix |
+|---|---|---|
+| 146 | Missing test for the idempotency / no-op guard on `SetDomainDkimSelectorHandler::__invoke`. The class docblock promised it; the handler had the guard; no test asserted it. | Added `resubmittingUnchangedSelectorDoesNotFireRedundantDnsCheck` — asserts `dns_check_result` row count is unchanged after a same-value re-submit. Shipped in the same `1456960` commit. |
+
+### Self-review findings (every 3 shipped tasks)
+
+- **After 3 tasks (TASK-158, TASK-146, SEO bundle):** clean first pass. No must-fixes. The TASK-146 reviewer pass was the main quality gate.
+- **After all 4 commits:** spot-checked the JSON byte-identical contract for TASK-155 (`jsonOutputStaysByteIdenticalAfterDtoRefactor` pins the canonical entry). Confirmed the Stimulus controllers still receive `{"key":"google","label":"Google Workspace","include":"_spf.google.com"}` shape — unchanged from round 8.
+
+### Suite growth (round-8 baseline → round-9 finish)
+
+| Metric | Round 8 finish | Round 9 finish | Delta |
+|---|---|---|---|
+| Tests | 2284 | 2303 | +19 |
+| Assertions | 6764 | 6913 | +149 |
+
+### Perf audit
+
+Round-9 perf delta vs round 8 ≈ 0. The TASK-146 selector column is on a row that's already loaded — no new query. The synchronous DNS re-verification fired by the new POST endpoint is dominated by upstream DNS network I/O, not by Sendvery's PHP or PostgreSQL cost. Documented in `## Round-9 performance audit (2026-05-25)` above the round-8 section.
+
+### Surfaces reviewed and judged "good enough" without code change
+
+- `/about/what-is-sendvery`, `/about/open-source`, `/about/pricing` heroes — all already lead with user value (no eyebrow-duplication, no open-source-in-subhead, no feature-label H1). No in-scope changes needed for the round-9 hero-rewrite scope.
+- Dashboard `/app/domains/{id}` everything-but-DKIM-selector — the workspace tabs, `DomainSetupStatus`, charts, top-senders table all read coherently after the new DKIM-selector card insertion. No collateral cleanup needed.
+
+### Suggested round-10 seed areas
+
+1. **TASK-147 + TASK-151 follow-through** once the logo asset + Twitter handle land.
+2. **Marketing-page H1 register audit** — `/tools/_tool_layout.html.twig` H1 still ships `font-extrabold` while every homepage H2 is `font-medium`. Visual inconsistency between marketing surfaces. Could unify register page-end-to-end.
+3. **`/app/alerts` empty-state copy** — carried since round 5 with no user signal. If user flags it round 10, ship; otherwise drop from watchlist.
+4. **`IngestionPathResolver::resolveForTeams` re-measure** — still demo-only at 3-domain scale. First production team hitting 50+ monitored domains is the trigger.
+5. **DKIM selector UX expansion** — round 9 v1 is a free-form text input. If users start asking "what selectors should I try?", consider adding a select-with-known-providers (Google, Mailchimp, Postmark, etc.) + free-form override. Don't ship without user signal.
+
+### Stop signal
+
+Backlog drained against the round-9 user-driven scope: TASK-158 (hero rewrite, user-driven) + TASK-146 (the missing-feature gap from round-8 investigation) + the bundled SEO follow-ups + the bundled TASK-144 nice-to-haves all shipped. TASK-147 + TASK-151 deferred to future-watchlist as the only sensible action given missing prerequisites. No `proposed` or `planned` tasks remain for round 9.
