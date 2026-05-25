@@ -3767,6 +3767,215 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ---
 
+## Round-5 performance audit (2026-05-25)
+
+**DB state:** Demo seed (3 domains × 30 days reports + snapshots = 90 reports, 180 records, 90 health snapshots), Postgres 17.7 alpine in dev compose.
+
+**Methodology:** `EXPLAIN ANALYZE` via `docker compose exec database psql -U app -d sendvery` for each query, params bound to the seeded `demo-team` UUID (`019e5df3-8dbd-70e1-adff-76e79495c066`) and the `acme.example` domain (`019e5df3-8de0-7347-a5a3-d8ed2fa5beff`).
+
+**Stop criteria recap:** SAFE = <5ms, WATCH = 5-50ms, BAD = >50ms (file a task). All five queries land SAFE — no code changes shipped, baseline captured for round-6 diff.
+
+### GetDomainOverview::forTeams() — LATERAL join after TASK-098
+
+- **Planning time:** 1.515 ms
+- **Execution time:** 0.609 ms
+- **Plan:** Sort → HashAggregate → Nested Loop Left Join → Hash Right Join chain on dmarc_report/dmarc_record + LATERAL `Index Scan Backward using idx_health_snapshot_domain_date` on `domain_health_snapshot` (1 row, 180 loops covering the 3 domains × 30 reports × 2 records cross-product before grouping).
+- **Smell check:** Seq Scans on `monitored_domain` and `team` because both tables are tiny (3 rows / 2 rows respectively) — optimiser correctly skips index access. The LATERAL pulls exactly one snapshot per domain via the composite `(monitored_domain_id, checked_at)` index. Cardinality estimates underestimate (`rows=1` vs actual=3 on the team Seq Scan) but that's harmless at this scale.
+- **Scaling note:** LATERAL cost is bounded — one index-backed `LIMIT 1` per *grouped* result, not per cross-product row. At 100 domains × 30 reports/domain the LATERAL contributes ~100 × 0.001ms ≈ 0.1ms; the dominant cost will be the dmarc_record aggregation, not the snapshot fetch. The TASK-098 design hypothesis ("LATERAL is cheap; index-backed") holds.
+- **Verdict:** SAFE
+
+### GetDnsHealthOverview::forTeams() — same LATERAL pattern
+
+- **Planning time:** 0.788 ms
+- **Execution time:** 0.106 ms
+- **Plan:** Sort → Nested Loop Left Join → Seq Scan on `monitored_domain` + LATERAL `Index Scan Backward using idx_health_snapshot_domain_date` (1 row, 3 loops).
+- **Smell check:** None. Pure index-backed fetch per domain, no record aggregation overhead (this query is leaner than `GetDomainOverview` — no JOIN to dmarc_report/dmarc_record).
+- **Scaling note:** Linear in domain count via index lookups. At 100 domains projects to ~3-4ms execution. Three call sites multiplexing into this query is fine — single query plan, no fan-out.
+- **Verdict:** SAFE
+
+### NavCountsExtension::getGlobals() — 4 COUNTs per authenticated page
+
+Measured per individual COUNT; reported as sum since they all fire on the same request.
+
+| # | Query | Plan | Exec | Plan time |
+|---|-------|------|------|-----------|
+| 1 | `GetQuarantineList::countForTeam` | Hash Join + hashed SubPlan for monitored_domain/mailbox_connection lookup | 0.101 ms | 1.881 ms |
+| 2 | `GetAlerts::countUnreadForTeams` | `Index Scan using idx_alert_team` on `alert` | 0.063 ms | 0.379 ms |
+| 3 | `GetAlerts::countUnreadCriticalForTeams` | `Index Scan using idx_alert_team` on `alert` | 0.032 ms | 0.040 ms |
+| 4 | `GetDomainOverview::countUnverifiedForTeams` | Seq Scan on `monitored_domain` (3 rows; optimiser skips index) | 0.014 ms | 0.043 ms |
+
+- **Total execution:** ~0.21 ms across all four COUNTs.
+- **Total planning:** ~2.34 ms (the quarantine count is the planning-time bulk — it has two correlated EXISTS rewrites).
+- **Smell check:** None at this scale. The quarantine count's planning time (1.881 ms) is high relative to its execution (0.101 ms) — at higher tenant counts it stays bounded because the subplans are `(hashed SubPlan 2)` / `(hashed SubPlan 4)`, i.e. Postgres memoises the team-scoping lookup once per query. The TASK-061-era hypothesis ("one team-resolve, 4 COUNTs") is borne out; collapsing into a single UNION ALL would save ~1ms of planning but lose readability — not worth it until a query measures BAD.
+- **Verdict:** SAFE (all four; aggregate well under 1ms)
+
+### IngestionPathResolver::resolveForTeams() — N+1 fanout per domain
+
+Two underlying queries fire once per matrix row:
+
+1. **`DnsCheckResultRepository::findLatestForDomainAndType`** (one DMARC check fetch per domain)
+   - Plan: `Limit → Sort → Index Scan using idx_dns_check_domain_type` on `dns_check_result`. Execution 0.105 ms, planning 0.869 ms.
+   - At 20 demo-scale domains: 20 × 0.105ms ≈ 2.1 ms loop cost. At 100 domains: ~10.5 ms.
+
+2. **`MailboxConnectionRepository::get`** (PK fetch, only when `path = Mailbox && lastReportAt != null && scenario = PointsAtExternal`)
+   - Plan: PK index lookup, sub-millisecond. Only fires on the path-vs-scenario flip branch (TASK-114) — typically 0-few domains per team.
+
+3. **Underlying `GetDomainIngestionMatrix::forTeams`** CTE query: Execution 0.408 ms, planning 1.867 ms. Solid CTE shape — `eligible_domain_ids` correctly acts as the optimisation fence the comment claims.
+
+- **Aggregate per request at 20 domains:** ~0.4ms (matrix) + ~2.1ms (DNS check loop) + 0-1ms (mailbox lookups) ≈ **~3.5 ms**.
+- **Aggregate at 100 domains:** ~0.5ms (matrix) + ~10.5ms (DNS check loop) + 0-5ms (mailbox lookups) ≈ **~16 ms**.
+- **Smell check:** Confirmed N+1 — the `findLatestForDomainAndType` loop is the dominant cost as domain count grows. Index-backed (single seek per call) but PHP/Doctrine call overhead amortises poorly. The TASK-100 comment already flags this ("TODO: this introduces one extra query per domain (N+1) — acceptable for a typical team's <20 domains; batch lookup is a future task"). Hydration of `DnsCheckResult` (an entity, not a DTO) adds Doctrine UoW overhead beyond raw SQL time.
+- **Scaling note:** Still SAFE at 100 domains by the <50ms rule. Becomes WATCH around 300 domains, BAD around 500. No team is anywhere close — `PlanLimits::Enterprise` caps domains well below that. Defer the batch lookup until a real customer crosses 50 domains.
+- **Verdict:** SAFE (at every realistic team size — the existing TODO comment correctly predicts where this would tip)
+
+### GetDomainWorkspaceTabCounts::forDomain() — 5 scalar subselects
+
+- **Planning time:** 2.900 ms
+- **Execution time:** 0.304 ms
+- **Plan:** Five InitPlans, all index-backed except #1 (24h dmarc_report count uses Seq Scan because the table has 90 rows — optimiser correctly skips the `idx_d5a5261b2294f766` index at this scale). InitPlan #3 (DNS-failing latest snapshot) uses the same `idx_health_snapshot_domain_date` as the LATERAL queries above. InitPlan #4 (blacklist) does a self-semi-join through `idx_blacklist_check_domain_ip` — never executes the inner branch because the demo team has no blacklist rows.
+- **Smell check:** Mild — InitPlan #1 will switch to the `monitored_domain_id` index automatically at ~1k rows per domain (cost crossover is built-in). Planning time (2.9ms) is higher than execution (0.3ms) because Postgres re-plans five InitPlans; at production volume the ratio inverts. No fix needed.
+- **Scaling note:** Each InitPlan is bounded to its own domain via index. At a domain with 100k reports the 24h InitPlan stays sub-ms (the index narrows to the recent slice).
+- **Verdict:** SAFE
+
+### Conclusions
+
+- **All five queries land SAFE** at demo-seed scale, with comfortable headroom for the largest teams `PlanLimits` permits. No new tasks filed; no code changes shipped.
+- **Two latent observations worth carrying into round 6** (not actionable now):
+  1. `IngestionPathResolver` N+1 — projects to ~16ms at 100 domains, still SAFE but the TODO comment is the right call. Re-measure if a customer crosses 50 domains.
+  2. `dmarc_report` lacks a composite `(monitored_domain_id, processed_at)` index — irrelevant at 90 rows (Seq Scan beats index), but the workspace tab-counts query's InitPlan #1 and the round-4 LATERAL chains will benefit at ~10k+ reports per domain.
+- **Round-6 should compare against these numbers.** A regression is any query crossing the SAFE/WATCH boundary (>5ms execution) at the same demo-seed size — that signals an unintended N+1, missing-index drift, or a join cardinality explosion introduced by a new feature.
+
+---
+
+## TASK-117: Public DMARC checker post-result CTA sells "DNS change alerts" only — never names DMARC report parsing, sender inventory, pass-rate regression alerts, or the scenario-aware setup guidance that ARE the product
+
+- Status: proposed
+- Area: marketing
+- Why: A visitor lands on `/tools/domain-health?domain=their.com`, sees a `D` grade with red SPF / no DKIM / missing DMARC, and the CTA card right under the result reads "Stay ahead of email breakage — SPF and DKIM break silently … Sendvery checks {{domain}} every day and alerts you the moment something changes." That sentence describes a DNS-change monitor. Round 4 shipped a DMARC report ingestion + parsing engine, a sender authorization advisor (TASK-092), a pass-rate regression banner (TASK-093), a unified DomainHealthClassifier with a setup-status panel (TASK-080/098), scenario-aware ingestion recommendations (TASK-100), and a quarantine view (TASK-103). None of that is hinted at on the highest-traffic conversion surface — visitors trying to fix a D grade walk away thinking we're a DNS change watcher when we're a full DMARC ops platform.
+- Acceptance:
+  - Edit `templates/components/_StartMonitoringCta.html.twig`. For the unauthenticated `wide` and `banner` variants, replace the single-paragraph body with a 3-bullet "what you also get" list under the headline. Suggested bullets (must mention the product features by their plain-English names): "Parse every DMARC report automatically — see who's sending as you, with what pass rate", "Get alerted the moment a sender starts failing or your pass rate drops", "Plain-English setup guidance — no XML reading required".
+  - Keep the headline ("Stay ahead of email breakage") and primary CTA button as-is. Body change only.
+  - The `compact` variant on the homepage `HomeDomainChecker` stays untouched — its space is too constrained for a 3-bullet list and the homepage already sells these features in adjacent sections.
+  - Authenticated branch (`isLoggedIn = true`) unchanged — they're already converted; the 3-bullet sell is for first-touch visitors.
+  - Snapshot test in the existing checker test suite asserts the three feature phrases appear inside `#tools/domain-health` and `#tools/dmarc-checker` post-result HTML.
+- Notes:
+  - Follow-up to TASK-006 (round 1 shipped the CTA). The round-4 RUN SUMMARY's "Suggested next moves" explicitly named this revisit.
+  - Don't gold-plate with a screenshot here — the user is already looking at their own grade card; a screenshot of someone else's dashboard would be visual noise. Words are the conversion lever.
+
+---
+
+## TASK-118: Pricing comparison table lists "Reports / month: 100 / 1,000 / 10,000 / 50,000" with zero definition of what counts as a report — a buyer comparing tiers has no anchor
+
+- Status: proposed
+- Area: marketing
+- Why: A visitor on `/pricing` reads "100 reports/mo" on Free and "1,000 reports/mo" on Personal and has no idea whether that means one DMARC XML attachment, one aggregated row inside an XML, or one sender's daily mail volume. Google sends one aggregate XML per day per domain — that's 30/mo per domain. Yahoo sends one. Microsoft sends one. So Free's "100 reports" covers ~3 reporters across one domain — comfortably enough. But the buyer can't compute that from the page. The FAQ has 10 entries (cancel anytime, refunds, switch plans, exceed limits, annual discounts, free trial, payment methods, VAT, why open source, AI Insights) — none of them answers "what IS a report?". This is the single biggest friction point in choosing a paid tier.
+- Acceptance:
+  - Insert a new FAQ entry in `templates/components/PricingFaq.html.twig` as the SECOND entry (right after "Can I cancel anytime?", before "Do you offer refunds?"). Title: "What counts as a 'report'?". Answer body: one DMARC aggregate XML file from one reporter (Google, Yahoo, Microsoft, Mail.ru, etc.) is one report. Most domains receive 1–5 reports per day from the major reporters combined, so a single active domain typically lands between 30 and 150 reports per month. Mention that envelopes failing classification (spam, mis-routed) DON'T count.
+  - Add a tiny inline footnote-link under the "Reports / month" row in `PricingComparisonTable.html.twig` ("What counts? →") that anchors to the new FAQ entry via `#faq`. Pure HTML anchor; no JS.
+  - Mobile card view gets the same inline footnote-link.
+  - Test: `PricingPageTest` asserts the new FAQ entry HTML is present AND that the comparison-table row has an anchor pointing at `#faq`.
+- Notes:
+  - One of the seeded orchestrator hypotheses, confirmed by audit. The other FAQ entries cover billing edge-cases; this fills the gaping product-definition hole.
+
+---
+
+## TASK-119: Pricing FAQ never tells the buyer they can keep their own DMARC inbox — every customer hits the DNS-vs-mailbox ingestion fork in onboarding but has no warning the choice exists
+
+- Status: proposed
+- Area: marketing
+- Why: Round 4's TASK-100 made DMARC report ingestion a binary product choice: (a) publish `rua=reports@sendvery.com` in your DMARC record and we receive reports directly, or (b) connect your existing inbox via IMAP / OAuth and we pull reports out of it. The dashboard now classifies every domain into PointsAtSendvery / PointsAtExternal / NoRecord. But a visitor on `/pricing` reading "DMARC + DNS monitoring" in the comparison table has no way to know this choice exists — and the natural objection ("I already point my reports at my own mailbox, do I have to change DNS?") never gets surfaced. The result: technical buyers email "do I have to change my DNS?" before signing up, or worse, skip past Sendvery thinking they need to. Personal+ plans include both ingestion paths; the FAQ should say so.
+- Acceptance:
+  - Insert a new FAQ entry in `templates/components/PricingFaq.html.twig` between the new "What counts as a report?" entry (TASK-118) and "Do you offer refunds?". Title: "Can I keep my DMARC reports going to my own inbox?". Answer body: yes — Sendvery supports two ingestion paths. Either (a) publish `rua=reports@sendvery.com` in your DMARC record (recommended, zero-touch), OR (b) connect your existing IMAP / Gmail / Outlook mailbox and Sendvery pulls reports out of it. Both paths are on every paid plan including Free. Link "How ingestion works →" pointing at the relevant KB article (target: `/learn/dmarc-report-mailbox`).
+  - No comparison-table changes — the FAQ entry is the right home.
+  - Test: `PricingPageTest` asserts the FAQ entry appears and contains both literal strings `rua=reports@sendvery.com` and "IMAP".
+- Notes:
+  - Mirrors TASK-100's scenario classifier on the marketing side. Without this FAQ entry, the marketing site teaches the wrong mental model relative to the dashboard's recommendations.
+
+---
+
+## TASK-120: Homepage section 4.5 product preview is still a hand-built HTML mock with a TODO comment — first-time visitors never see a real Sendvery surface
+
+- Status: proposed
+- Area: marketing
+- Why: A visitor scrolls past the homepage hero, past the problem statement ("Email authentication is set once and forgotten"), and arrives at section 4.5 titled "Everything for one domain in one view". What they see is a daisyUI mock — a fake browser-chrome frame around a hand-built card with "acme.io", four green badges, a CSS-gradient pass-rate bar, and three fake reporter rows. The template has the literal comment `TODO(placeholder): swap for an <img> of a real screenshot once one exists; the swap is a single <div> replacement, no other template/markup changes needed.` Round 4 shipped multiple production-grade dashboard surfaces that would carry the page far better than the mock: the `/app/domains/{id}` setup-status panel (5-row protocol checklist with scenario-aware copy, TASK-100/101), the `/app` attention-summary line (TASK-062), the unified DomainHealthClassifier severity glyph on `/app/domains` list (TASK-098). The mock honestly undersells what the product looks like.
+- Acceptance:
+  - Use the `sendvery:demo:seed` command (the round-4 ops shipment) to populate the dev DB. Capture a screenshot of `/app/domains/{acme.example-id}` after seeding (or `/app` overview) at 1440×900 viewport, light theme only (dark mode is removed per CLAUDE.md). Crop to the most visually dense 1200×~700 region. Save as `public/images/screenshots/dashboard-domain-detail.webp` and `dashboard-domain-detail@2x.webp` (retina).
+  - In `templates/homepage/index.html.twig` section 4.5, replace the entire daisyUI mock `<div class="bg-base-100 border …">` block (lines ~141–209) with a single `<img>` using `srcset` for 1x/2x and `loading="lazy"`. Keep the annotation callout (`hidden lg:flex absolute -top-2 right-0 …`) and the surrounding SectionContainer.
+  - Update or remove the "TODO(placeholder)" comment at lines ~121–123. The annotation callout's label may need to shift to point at the actual element the screenshot shows.
+  - The "Illustrative — your data, your domains" caption underneath becomes "Acme.example shown — your data, your domains".
+  - Test extension: an integration test asserts the homepage section has at least one `<img>` matching `dashboard-*.webp` and that the old mock's fake-domain string `acme.io` no longer appears.
+- Notes:
+  - TASK-027 (shipped round 2) explicitly deferred the screenshot swap with the in-template TODO. This is that swap.
+  - Founder must run the demo seed + capture; agent can't take screenshots from CLI in this codebase. The PR ships the template diff + asset; founder runs the seed and pushes the WebPs in a follow-up commit if not co-located.
+  - Don't reuse the screenshot on `/what-is-sendvery` section 3 — that page wants a different angle (multi-domain table, not single-domain detail). TASK-122 covers that page.
+
+---
+
+## TASK-121: Homepage FAQ still says AI is "an add-on for $3.99/mo or included in the Team plan" — Team plan doesn't exist and AI is bundled per-tier, not flat-priced
+
+- Status: proposed
+- Area: marketing
+- Why: A visitor scrolls to the homepage FAQ, expands "How does AI analysis work?", and reads: "Available as an add-on for $3.99/mo or included in the Team plan." The Team plan does not exist — the current tiers are Free / Personal / Pro / Business. AI is sold as a per-tier upsell (`Personal+AI = $9.99/mo`, `Pro+AI = $33.99/mo`, `Business+AI = $79.99/mo`) per the PricingTable's data attributes, with on-demand call quotas scaling with the tier (50 / 200 / 500 per month per the Pricing FAQ's "How does AI Insights work?" entry). The homepage FAQ is the highest-traffic place this misinformation is visible — a price-sensitive visitor sees "$3.99 add-on" and feels misled when they hit `/pricing`.
+- Acceptance:
+  - Edit `templates/homepage/index.html.twig` section 12 ("FAQ"). The 6th `FaqAccordion` item's `answer` string currently ends with "Available as an add-on for $3.99/mo or included in the Team plan." Replace with: "Available as an add-on on every paid tier — Personal+AI from $8.99/mo, Pro+AI from $29.99/mo, Business+AI from $69.99/mo (annual billing). Quotas scale with the tier (50 / 200 / 500 on-demand calls per month)."
+  - No other FAQ entries need editing; spot-check the other 5 for similarly-stale claims and fix in the same PR if found.
+  - Test: integration test on `/` asserts that `$3.99` does NOT appear in rendered HTML and that the literal string `Team plan` does NOT appear anywhere on the homepage.
+- Notes:
+  - 5-minute fix. Including it as its own task because the literal numbers must match `PricingTable.html.twig`'s `data-price-ai-annual` values and a careless agent could introduce a different drift. Pin via test.
+
+---
+
+## TASK-122: Open Source page invites visitors to `git clone https://github.com/janmikes/sendvery.git` but the very bottom CTA says "Coming soon — repo opens at launch" — quickstart 404s for a real visitor
+
+- Status: proposed
+- Area: marketing
+- Why: A visitor lands on `/about/open-source` after seeing the homepage's "Open source · AGPL-3.0" pill. The hero says "Self-host Sendvery free, forever". They scroll to the "Self-host in 60 seconds" quickstart, see step 1 with a copy-paste command `git clone https://github.com/janmikes/sendvery.git && cd sendvery`, and hit Copy. They scroll down to the very bottom and see a `btn-disabled` button labelled "Coming soon — repo opens at launch" — because `is_repo_public` is false in this environment. The repo URL the quickstart hands them either 404s or returns "Repository not found" depending on auth state. The page can't simultaneously claim "Self-host in 60 seconds" AND admit "repo opens at launch" — a careful visitor leaves doubting the entire open-source claim.
+- Acceptance:
+  - Edit `templates/about/open-source.html.twig`. Wrap the three quickstart command blocks (lines 71–119) in a single `{% if is_repo_public %}…{% else %}…{% endif %}` branch. The `is_repo_public = true` branch keeps the current commands. The `is_repo_public = false` branch replaces step 1's command + clipboard control with a non-interactive notice card: "Quickstart unlocks the moment the repo opens publicly — drop your email below to be told the second it does." Re-use the existing `MonitorEmailMeMicro`-style turbo-frame notify component (or whatever `tools/_tool_notify_frame.html.twig` exports) with `source="open-source-repo-launch"`. Steps 2 and 3 collapse into a single grey "Then configure your .env and run docker compose up" summary line — no copy buttons, no clipboard controllers.
+  - The hero buttons remain unchanged ("Self-host in 60 seconds" still scrolls to `#quickstart`; the quickstart section now renders the gated content).
+  - The "What's in the repo?" section gets a similar guard: when `is_repo_public = false`, the three `src/` / `docs/` / `tests/` cards collapse into a single "Source preview at launch" callout pointing at the same notify form.
+  - The bottom "Pick your path" CTA's `btn-disabled` "Coming soon — repo opens at launch" stays as-is but moves visually higher (before the `Self-host vs Hosted` comparison table) so a visitor sees the gating BEFORE they read commands they can't run yet.
+  - Test: `OpenSourcePageTest` parameterized on `is_repo_public = false`: assert the quickstart `git clone` command does NOT appear in the rendered HTML, and the notify form WITH `source="open-source-repo-launch"` DOES appear.
+- Notes:
+  - The orchestrator brief framed this as "is the self-host story still accurate?" — the AGPL-3.0 + "self-hosted always free" claims ARE accurate; what's broken is the page makes those claims actionable while the repo's still gated.
+  - Once `SENDVERY_REPO_PUBLIC=1` flips in prod the entire `is_repo_public = true` branch re-activates with no further code change — the gate is one env var.
+
+---
+
+## TASK-123: `/about/what-is-sendvery` is only linked from the footer — the long-form explainer the brief invested in is invisible to most first-time visitors
+
+- Status: proposed
+- Area: marketing
+- Why: A visitor lands on the homepage, sees the hero ("Your domain sends email every day. Do you know who else is?"), and wants the longer answer to "what IS this thing?". The marketing-site top nav (`templates/components/Nav.html.twig`) renders five links: Tools (dropdown), Learn, Pricing, Open Source, and the Dashboard / Get Started CTA. `What is Sendvery` is reachable only from the footer's About column. The page itself (which TASK-010 broke up across 8 sections with persona cards, a competitor comparison, and a founder blockquote) is a strong artefact — it just isn't discoverable. A cold visitor who wants more context before clicking "Get started free" has nowhere to go.
+- Acceptance:
+  - Edit `templates/components/Nav.html.twig`. Insert a "What is this?" link as the FIRST item in the desktop nav (before the Tools dropdown) AND as the first item in the mobile-menu list. Route: `about_what_is_sendvery`. Wording: prefer "What is this?" or "Overview" — must be ≤ 12 characters to fit alongside Tools / Learn / Pricing / Open Source without overflow at 1024px viewport.
+  - Mobile menu treatment matches the existing flat-link style (no dropdown).
+  - CRITICAL: this link gets NO attention badge, NO unread count — TASK-065 + CLAUDE.md note explicitly forbid marketing-nav badges. Just a plain `btn-ghost btn-sm`.
+  - Test: existing nav rendering tests gain an assertion that the link with `path('about_what_is_sendvery')` appears in the rendered nav DOM AND that no badge / unread-marker class adjacent to it appears.
+- Notes:
+  - The label "What is Sendvery" (current footer text) is awkward at nav width. "What is this?" reads natural to a first-touch visitor. "Overview" is the safe alternative if the founder dislikes the question framing.
+  - Don't touch the dashboard sidebar — this is a pure marketing-nav change.
+
+---
+
+## TASK-124: Pricing comparison table lists "Sender inventory", "Blacklist monitoring", "White-label PDF reports" as bare line items — a visitor evaluating Pro at $19.99 has no anchor for what those features ARE
+
+- Status: proposed
+- Area: marketing
+- Why: A visitor on `/pricing` reading the full feature comparison table sees rows like "Sender inventory" (check on Personal/Pro/Business, dash on Free) and "Blacklist monitoring" (same pattern) and "White-label PDF reports" (only Business). For each, they get no definition — just a check mark in a column. Round 4 shipped the sender authorization advisor (TASK-092) and the `/app/domains/{id}/senders` page where this lives; first-time visitors comparing tiers have no way to know that "Sender inventory" means "we list every IP / domain that ever sent mail as you AND let you flag each one as authorized or rogue". Same gap for blacklist monitoring (DNS-based RBL checks) and white-label PDF (custom branding on monthly aggregate reports). A buyer who'd happily pay for sender inventory has no idea what they're buying.
+- Acceptance:
+  - In `templates/components/PricingComparisonTable.html.twig`, add a small inline `tooltip` (daisyUI's `tooltip` class) OR an "ⓘ" link to a glossary FAQ entry on each of the three rows: "Sender inventory", "Blacklist monitoring", "White-label PDF reports". Apply to BOTH the desktop table and the mobile card view.
+  - Add three glossary entries at the BOTTOM of `templates/components/PricingFaq.html.twig` (after the existing 10 entries — or 12 after TASK-118 + TASK-119). Titles: "What is the sender inventory?", "What is blacklist monitoring?", "What is white-label PDF?". Each answer 2–3 sentences, plain-English, no jargon.
+  - Sender inventory answer must mention: list of every IP / SMTP host that sent mail as you, authorize-or-revoke decisions, the `/app/domains/{id}/senders` surface.
+  - Blacklist monitoring answer must mention: continuous DNS-based RBL checks (Spamhaus, Barracuda, etc.), alerts when a sending IP gets listed.
+  - White-label PDF answer must mention: monthly aggregate report exports with your company branding, link to a sample.
+  - Test: `PricingPageTest` asserts the three new FAQ titles AND the comparison-table tooltips / info-links appear in rendered HTML.
+- Notes:
+  - Keep the tooltips light — a single `<span class="tooltip" data-tip="…">` per row with a 1-line label, NOT a full paragraph. The FAQ entry below is the deeper home.
+  - Pricing FAQ would then have 13 entries — still scannable because the accordion collapses.
+
+---
+
 ## RUN SUMMARY — 2026-05-25 round 4 autonomous CX loop (RUA recommendation engine, severity unification, guidance + polish + nav refactor)
 
 ### Shipped (12 commits, 20 effective tasks)
