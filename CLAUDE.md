@@ -15,6 +15,16 @@ docker compose exec app <command>
 2. `docker compose exec app vendor/bin/phpstan` — static analysis
 3. `docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff` — code style
 
+## Local dev bootstrap
+
+A fresh `docker compose up` shows every dashboard surface empty (0 domains, 0 reports, 0 alerts, 0 snapshots), which makes humans onboarding and autonomous CX review runs misread normal empty states as bugs. To populate the dev database with a fully-realised "Demo Team":
+
+```bash
+docker compose exec app bin/console sendvery:demo:seed
+```
+
+The seeder lives at `src/Command/SeedDemoDataCommand.php`. It refuses to run in `prod` (the truncate-then-rebuild step is non-negotiable), is idempotent (each run wipes the existing demo team — identified by slug `demo-team` — and rebuilds from scratch, never touching data outside that team), and adopts the first existing `User` so the dashboard binds to the account you already log in with (or creates `demo@sendvery.test` if none exist). Produces: 1 team, 3 monitored domains (A-grade `acme.example`, C-grade `okay.example`, broken-SPF `broken.example`), 30 days of DMARC reports per domain (~90 total), 30 daily `domain_health_snapshot` rows per domain so trend charts render, and 5 representative `alert` rows across the main `AlertType` cases.
+
 ## Project
 
 Sendvery is an email health & deliverability micro-SaaS. DMARC report parsing with AI-powered insights. Open source (AGPL-3.0), self-hosted always free.

@@ -2592,7 +2592,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-043: Local dev shows empty Alerts + empty Recent Reports because there is no seed dataset — first-look CX of a fresh `make up` is broken
 
-- Status: proposed
+- Status: done
 - Area: ops
 - Why: A fresh developer (or the product owner doing first-look CX review) runs `docker compose up`, logs in, and sees every dashboard surface empty: 0 domains, 0 reports, 0 mailboxes, 0 alerts, 0 snapshots. There is no Czech "demo data" path, so the only way to evaluate the dashboard's IA, charts, and empty-vs-populated states is to manually add a domain → forward DMARC reports to it → wait for the cron. This makes autonomous CX evaluation runs (like this one) repeatedly mis-diagnose normal empty states as bugs. Symptom B in this investigation was exactly that — the alerts pipeline is correct, there is just no data.
 - Acceptance:
