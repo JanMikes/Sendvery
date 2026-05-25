@@ -97,16 +97,39 @@ final class HomepageSectionHeaderTest extends WebTestCase
     #[Test]
     public function productPreviewMockRendersAboveHowItWorks(): void
     {
-        // TASK-027: insert a per-domain dashboard mock between Problem Statement
-        // and How it Works. Distinct from /what-is-sendvery's multi-domain table.
+        // TASK-027 / TASK-120: section 4.5 introduces a per-domain dashboard
+        // preview between Problem Statement and How it Works. TASK-120 swapped
+        // the hand-built daisyUI mock for a real screenshot of
+        // `/app/domains/{acme.example-id}` captured against the demo seed.
         $client = self::createClient();
         $client->request('GET', '/');
 
         $body = (string) $client->getResponse()->getContent();
 
         self::assertStringContainsString('Everything for one domain in one view', $body);
-        self::assertStringContainsString('app.sendvery.com/app/domains/acme.io', $body);
-        self::assertStringContainsString('Illustrative — your data, your domains.', $body);
+
+        // Real-screenshot pivot (TASK-120): the placeholder TODO comment, the
+        // fake-domain string `acme.io`, and the "Illustrative" caption are gone.
+        self::assertStringNotContainsString('TODO(placeholder)', $body);
+        self::assertStringNotContainsString('app.sendvery.com/app/domains/acme.io', $body);
+        self::assertStringNotContainsString('Illustrative — your data, your domains.', $body);
+
+        // The new asset and its retina variant must both be referenced via
+        // `srcset`. The AssetMapper appends a content hash, so match on the
+        // base filename prefix + `.webp` (the hash sits between the base and
+        // the extension: e.g. `dashboard-domain-detail-42KsQmG.webp`).
+        self::assertMatchesRegularExpression(
+            '~dashboard-domain-detail(-[A-Za-z0-9_-]+)?\.webp~',
+            $body,
+            'Homepage section 4.5 must reference the 1x dashboard screenshot.',
+        );
+        self::assertMatchesRegularExpression(
+            '~dashboard-domain-detail@2x(-[A-Za-z0-9_-]+)?\.webp~',
+            $body,
+            'Homepage section 4.5 must reference the 2x (retina) dashboard screenshot for srcset.',
+        );
+        self::assertStringContainsString('loading="lazy"', $body);
+        self::assertStringContainsString('Acme.example shown — your data, your domains.', $body);
 
         // Mock must precede "Three steps to email authentication peace of mind".
         $previewPos = strpos($body, 'Everything for one domain in one view');
