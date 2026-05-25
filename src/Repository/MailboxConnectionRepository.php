@@ -42,4 +42,20 @@ readonly class MailboxConnectionRepository
             'team' => $teamId->toString(),
         ]);
     }
+
+    /**
+     * Mailboxes bound to a specific monitored domain. Used by
+     * {@see \App\Services\Dns\RuaMailboxMatcher} so the 5th RUA destination
+     * row on `/app/domains/{id}` can match the published rua= address against
+     * the connected mailbox login without re-deriving the binding from the
+     * matrix query.
+     *
+     * @return array<MailboxConnection>
+     */
+    public function findByDomain(UuidInterface $domainId): array
+    {
+        return $this->entityManager->getRepository(MailboxConnection::class)->findBy([
+            'monitoredDomain' => $domainId->toString(),
+        ]);
+    }
 }

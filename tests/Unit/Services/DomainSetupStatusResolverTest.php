@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Services;
 
 use App\Results\DnsHealthOverviewResult;
+use App\Services\Dns\RuaMailboxMatcher;
 use App\Services\DomainSetupStatusResolver;
 use App\Value\DomainHealthFilter;
 use App\Value\DomainSetupDisplayMode;
@@ -17,7 +18,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveNullDnsHealthMarksAllUnknownAndPointsAtSpf(): void
     {
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve(null);
 
@@ -39,7 +40,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveAllFieldsNullDtoActsLikeNullInput(): void
     {
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve($this->buildDnsHealth(
             latestSpfScore: null,
@@ -66,7 +67,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveAllFourConfiguredYieldsHealthyWithNoCta(): void
     {
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),
@@ -96,7 +97,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcMissingWithOthersOkYieldsUnverifiedAndPointsAtDmarc(): void
     {
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),
@@ -123,7 +124,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcOkSpfMissingYieldsAttentionWithSpfNextStep(): void
     {
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: null,
@@ -146,7 +147,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcOkDkimMissingMxFailingYieldsAttentionWithBothInHeadline(): void
     {
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),
@@ -174,7 +175,7 @@ final class DomainSetupStatusResolverTest extends TestCase
     #[Test]
     public function resolveDmarcOkSpfInvalidDkimMissingPicksSpfAsMostUrgent(): void
     {
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: null,
@@ -204,7 +205,7 @@ final class DomainSetupStatusResolverTest extends TestCase
         // accidentally fall into BannerOnly (which would hide the row
         // explaining the failing MX) or PanelOnly (which would lose the
         // TL;DR banner the partial state needs).
-        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier());
+        $resolver = new DomainSetupStatusResolver(new \App\Services\ReportAddressProvider('reports@sendvery.com'), new \App\Services\DomainHealthClassifier(), $this->stubMatcher());
 
         $status = $resolver->resolve($this->buildDnsHealth(
             spfVerifiedAt: new \DateTimeImmutable(),
@@ -233,6 +234,18 @@ final class DomainSetupStatusResolverTest extends TestCase
         }
 
         return $result;
+    }
+
+    private function stubMatcher(): RuaMailboxMatcher
+    {
+        // None of the tests in this class exercise the connected-mailbox
+        // branch — the TASK-114 surface is covered by the dedicated RUA
+        // resolver test + the cross-surface integration test. A stub that
+        // always returns false keeps these protocol-checklist cases pure.
+        $matcher = $this->createStub(RuaMailboxMatcher::class);
+        $matcher->method('matchesConnectedMailbox')->willReturn(false);
+
+        return $matcher;
     }
 
     private function buildDnsHealth(

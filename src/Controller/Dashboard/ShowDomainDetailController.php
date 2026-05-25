@@ -115,7 +115,12 @@ final class ShowDomainDetailController extends AbstractController
         // variant of the list query, so the classifier sees the same shape
         // it does on the list page.
         $domainOverview = $this->getDomainOverview->forDomain($id, $teamIds);
-        $domainSetupStatus = $this->domainSetupStatusResolver->resolve($dnsHealth, $ruaScenario, $domainOverview);
+        // TASK-114: pass the domain ID so the resolver can ask
+        // RuaMailboxMatcher whether the published rua= address routes to a
+        // mailbox we're polling. When it does, the 5th RUA destination row
+        // renders in success tone — matching the `/app/mailboxes` matrix's
+        // green badge for the same domain.
+        $domainSetupStatus = $this->domainSetupStatusResolver->resolve($dnsHealth, $ruaScenario, $domainOverview, $id);
 
         // The detail result carries `dmarc_policy` as a raw nullable string
         // straight from DBAL — `tryFrom` (not `from`) protects against a DB

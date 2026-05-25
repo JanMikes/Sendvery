@@ -11,7 +11,7 @@ use App\Query\GetDomainIngestionMatrix;
 use App\Repository\MailboxConnectionRepository;
 use App\Results\Dns\RuaScenarioResult;
 use App\Results\DomainIngestionMatrixResult;
-use App\Services\CredentialEncryptor;
+use App\Services\Dns\RuaMailboxMatcher;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\IngestionPathResolver;
 use App\Value\Dns\RuaScenario;
@@ -29,6 +29,13 @@ use Ramsey\Uuid\Uuid;
  * misconfiguration detection for the template layer, and computes the
  * TASK-105 `allScenarioPointsAtSendvery` aggregator + TASK-106
  * `pathMatchesMailbox` per-row flag.
+ *
+ * TASK-114 extracted the email-matching rule into {@see RuaMailboxMatcher}; the
+ * resolver now injects that matcher. The matching-rule edge cases (mailto:
+ * strip, case-insensitive, non-email username, decrypt failure) are covered
+ * exhaustively in {@see Dns\RuaMailboxMatcherTest}.
+ * This file's `pathMatchesMailbox*` cases pin the resolver-side
+ * preconditions + the delegation contract.
  */
 final class IngestionPathResolverTest extends TestCase
 {
@@ -100,9 +107,9 @@ final class IngestionPathResolverTest extends TestCase
         $scenarioResolver->expects(self::never())->method('resolveForDomainId');
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
-        $encryptor = $this->createStub(CredentialEncryptor::class);
+        $matcher = $this->createStub(RuaMailboxMatcher::class);
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         self::assertSame([], $resolver->resolveForTeams([]));
     }
@@ -128,9 +135,9 @@ final class IngestionPathResolverTest extends TestCase
             ->willReturn($scenario);
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
-        $encryptor = $this->createStub(CredentialEncryptor::class);
+        $matcher = $this->createStub(RuaMailboxMatcher::class);
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -196,13 +203,12 @@ final class IngestionPathResolverTest extends TestCase
     }
 
     #[Test]
-    public function pathMatchesMailboxTrueWhenRuaEmailMatchesMailboxUsername(): void
+    public function pathMatchesMailboxTrueWhenMatcherSaysSo(): void
     {
         // TASK-106 happy path: path=mailbox + scenario=PointsAtExternal +
-        // mailbox login matches the rua email's local-part@domain (case
-        // insensitive). The resolver flips pathMatchesMailbox to true so the
-        // template can render "Ingesting via mailbox" instead of the
-        // "Configured for external inbox" warning.
+        // mailbox login matches the rua email. The resolver delegates the
+        // actual email comparison to RuaMailboxMatcher and surfaces its
+        // verdict on the row.
         $mailboxId = Uuid::uuid7();
         $mailbox = $this->buildMailbox($mailboxId, encryptedUsername: 'enc:dmarc@team.com');
 
@@ -229,13 +235,13 @@ final class IngestionPathResolverTest extends TestCase
             ->with($mailboxId)
             ->willReturn($mailbox);
 
-        $encryptor = $this->createMock(CredentialEncryptor::class);
-        $encryptor->expects(self::once())
-            ->method('decrypt')
-            ->with('enc:dmarc@team.com')
-            ->willReturn('dmarc@team.com');
+        $matcher = $this->createMock(RuaMailboxMatcher::class);
+        $matcher->expects(self::once())
+            ->method('matchesMailbox')
+            ->with($mailbox, 'DMARC@TEAM.COM')
+            ->willReturn(true);
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -244,49 +250,9 @@ final class IngestionPathResolverTest extends TestCase
     }
 
     #[Test]
-    public function pathMatchesMailboxStripsMailtoPrefixDefensively(): void
+    public function pathMatchesMailboxFalseWhenMatcherSaysNo(): void
     {
-        // Although DmarcRecordParser already strips `mailto:`, we run the
-        // belt-and-braces strip again so a future regression upstream can't
-        // silently break this match.
-        $mailboxId = Uuid::uuid7();
-        $mailbox = $this->buildMailbox($mailboxId, encryptedUsername: 'enc:reports@team.com');
-
-        $result = new DomainIngestionMatrixResult(
-            domainId: Uuid::uuid7()->toString(),
-            domainName: 'team.com',
-            path: IngestionPath::Mailbox,
-            lastReportAt: new \DateTimeImmutable('2026-05-01 10:00:00'),
-            mailboxId: $mailboxId->toString(),
-            mailboxHost: 'imap.team.com',
-            mailboxPort: 993,
-        );
-
-        $query = $this->createStub(GetDomainIngestionMatrix::class);
-        $query->method('forTeams')->willReturn([$result]);
-
-        $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'mailto:reports@team.com'));
-
-        $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
-        $mailboxRepo->method('get')->willReturn($mailbox);
-
-        $encryptor = $this->createStub(CredentialEncryptor::class);
-        $encryptor->method('decrypt')->willReturn('reports@team.com');
-
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
-
-        $resolved = $resolver->resolveForTeams(['team-1']);
-
-        self::assertTrue($resolved[0]->pathMatchesMailbox);
-    }
-
-    #[Test]
-    public function pathMatchesMailboxFalseWhenRuaEmailDoesNotMatchMailboxUsername(): void
-    {
-        // Operator connected the wrong inbox — the rua tag says
-        // `dmarc@example.com` but the IMAP login is `notifications@example.com`.
+        // Operator connected the wrong inbox — the matcher returns false.
         // Keep the scenario-aware warning so the operator notices.
         $mailboxId = Uuid::uuid7();
         $mailbox = $this->buildMailbox($mailboxId, encryptedUsername: 'enc:notifications@team.com');
@@ -311,10 +277,10 @@ final class IngestionPathResolverTest extends TestCase
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
         $mailboxRepo->method('get')->willReturn($mailbox);
 
-        $encryptor = $this->createStub(CredentialEncryptor::class);
-        $encryptor->method('decrypt')->willReturn('notifications@team.com');
+        $matcher = $this->createStub(RuaMailboxMatcher::class);
+        $matcher->method('matchesMailbox')->willReturn(false);
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -324,8 +290,8 @@ final class IngestionPathResolverTest extends TestCase
     #[Test]
     public function pathMatchesMailboxFalseWhenPathIsNotMailbox(): void
     {
-        // path=DNS — no mailbox to compare. The flag must stay false even if
-        // the scenario looks like it could match.
+        // path=DNS — no mailbox to compare. The resolver short-circuits
+        // BEFORE touching the matcher or repo.
         $result = $this->buildResult(IngestionPath::Dns);
 
         $query = $this->createStub(GetDomainIngestionMatrix::class);
@@ -338,10 +304,10 @@ final class IngestionPathResolverTest extends TestCase
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::never())->method('get');
 
-        $encryptor = $this->createMock(CredentialEncryptor::class);
-        $encryptor->expects(self::never())->method('decrypt');
+        $matcher = $this->createMock(RuaMailboxMatcher::class);
+        $matcher->expects(self::never())->method('matchesMailbox');
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -365,10 +331,10 @@ final class IngestionPathResolverTest extends TestCase
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::never())->method('get');
 
-        $encryptor = $this->createMock(CredentialEncryptor::class);
-        $encryptor->expects(self::never())->method('decrypt');
+        $matcher = $this->createMock(RuaMailboxMatcher::class);
+        $matcher->expects(self::never())->method('matchesMailbox');
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -381,7 +347,7 @@ final class IngestionPathResolverTest extends TestCase
         // TASK-106 contract: the flag means "reports are physically arriving
         // AND credentials match". Without lastReportAt the path-vs-scenario
         // priority isn't load-bearing, so the resolver must short-circuit
-        // before doing the expensive mailbox lookup + decrypt.
+        // before doing the expensive mailbox lookup + matcher call.
         $result = new DomainIngestionMatrixResult(
             domainId: Uuid::uuid7()->toString(),
             domainName: 'team.com',
@@ -402,10 +368,10 @@ final class IngestionPathResolverTest extends TestCase
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::never())->method('get');
 
-        $encryptor = $this->createMock(CredentialEncryptor::class);
-        $encryptor->expects(self::never())->method('decrypt');
+        $matcher = $this->createMock(RuaMailboxMatcher::class);
+        $matcher->expects(self::never())->method('matchesMailbox');
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -438,10 +404,10 @@ final class IngestionPathResolverTest extends TestCase
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
         $mailboxRepo->method('get')->willThrowException(new MailboxConnectionNotFound('gone'));
 
-        $encryptor = $this->createMock(CredentialEncryptor::class);
-        $encryptor->expects(self::never())->method('decrypt');
+        $matcher = $this->createMock(RuaMailboxMatcher::class);
+        $matcher->expects(self::never())->method('matchesMailbox');
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -449,22 +415,19 @@ final class IngestionPathResolverTest extends TestCase
     }
 
     #[Test]
-    public function pathMatchesMailboxFalseWhenDecryptionFails(): void
+    public function pathMatchesMailboxFalseWhenMailboxIdIsNull(): void
     {
-        // Encryption key rotated, ciphertext corrupted, etc. — must not flip
-        // the badge. The underlying error surfaces elsewhere on the mailbox
-        // row itself; the matrix stays conservative.
-        $mailboxId = Uuid::uuid7();
-        $mailbox = $this->buildMailbox($mailboxId, encryptedUsername: 'enc:bad');
-
+        // Defensive: a `path=mailbox + lastReportAt + scenario=external` row
+        // with NO mailboxId (data race during DELETE, partially-purged team)
+        // must not blow up — bail before the lookup.
         $result = new DomainIngestionMatrixResult(
             domainId: Uuid::uuid7()->toString(),
             domainName: 'team.com',
             path: IngestionPath::Mailbox,
             lastReportAt: new \DateTimeImmutable('2026-05-01 10:00:00'),
-            mailboxId: $mailboxId->toString(),
-            mailboxHost: 'imap.team.com',
-            mailboxPort: 993,
+            mailboxId: null,
+            mailboxHost: null,
+            mailboxPort: null,
         );
 
         $query = $this->createStub(GetDomainIngestionMatrix::class);
@@ -474,51 +437,13 @@ final class IngestionPathResolverTest extends TestCase
         $scenarioResolver->method('resolveForDomainId')
             ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com'));
 
-        $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
-        $mailboxRepo->method('get')->willReturn($mailbox);
+        $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
+        $mailboxRepo->expects(self::never())->method('get');
 
-        $encryptor = $this->createStub(CredentialEncryptor::class);
-        $encryptor->method('decrypt')->willThrowException(new \RuntimeException('decrypt failed'));
+        $matcher = $this->createMock(RuaMailboxMatcher::class);
+        $matcher->expects(self::never())->method('matchesMailbox');
 
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
-
-        $resolved = $resolver->resolveForTeams(['team-1']);
-
-        self::assertFalse($resolved[0]->pathMatchesMailbox);
-    }
-
-    #[Test]
-    public function pathMatchesMailboxFalseWhenMailboxUsernameIsNotAnEmail(): void
-    {
-        // Some IMAP setups use a non-email username (e.g. "u12345"). We can't
-        // safely "match" that against an email address — bail.
-        $mailboxId = Uuid::uuid7();
-        $mailbox = $this->buildMailbox($mailboxId, encryptedUsername: 'enc:u12345');
-
-        $result = new DomainIngestionMatrixResult(
-            domainId: Uuid::uuid7()->toString(),
-            domainName: 'team.com',
-            path: IngestionPath::Mailbox,
-            lastReportAt: new \DateTimeImmutable('2026-05-01 10:00:00'),
-            mailboxId: $mailboxId->toString(),
-            mailboxHost: 'imap.team.com',
-            mailboxPort: 993,
-        );
-
-        $query = $this->createStub(GetDomainIngestionMatrix::class);
-        $query->method('forTeams')->willReturn([$result]);
-
-        $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com'));
-
-        $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
-        $mailboxRepo->method('get')->willReturn($mailbox);
-
-        $encryptor = $this->createStub(CredentialEncryptor::class);
-        $encryptor->method('decrypt')->willReturn('u12345');
-
-        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        $resolver = new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
 
         $resolved = $resolver->resolveForTeams(['team-1']);
 
@@ -587,9 +512,9 @@ final class IngestionPathResolverTest extends TestCase
             ->willReturn(new RuaScenarioResult(RuaScenario::NoRecord, null));
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
-        $encryptor = $this->createStub(CredentialEncryptor::class);
+        $matcher = $this->createStub(RuaMailboxMatcher::class);
 
-        return new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        return new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
     }
 
     private function newResolver(): IngestionPathResolver
@@ -597,8 +522,8 @@ final class IngestionPathResolverTest extends TestCase
         $query = $this->createStub(GetDomainIngestionMatrix::class);
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
-        $encryptor = $this->createStub(CredentialEncryptor::class);
+        $matcher = $this->createStub(RuaMailboxMatcher::class);
 
-        return new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $encryptor);
+        return new IngestionPathResolver($query, $scenarioResolver, $mailboxRepo, $matcher);
     }
 }

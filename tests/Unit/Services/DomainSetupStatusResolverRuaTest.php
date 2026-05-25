@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Services;
 
 use App\Results\Dns\RuaScenarioResult;
 use App\Results\DnsHealthOverviewResult;
+use App\Services\Dns\RuaMailboxMatcher;
 use App\Services\DomainHealthClassifier;
 use App\Services\DomainSetupStatusResolver;
 use App\Services\ReportAddressProvider;
@@ -136,11 +137,101 @@ final class DomainSetupStatusResolverRuaTest extends TestCase
         self::assertSame(DomainSetupDisplayMode::BannerOnly, $status->displayMode);
     }
 
-    private function resolver(): DomainSetupStatusResolver
+    #[Test]
+    public function pointsAtExternalWithMatchingMailboxRoutesRuaRowToSuccessTone(): void
     {
+        // TASK-114 happy path: scenario PointsAtExternal AND the rua= address
+        // routes to a connected mailbox. The 5th row flips from Invalid
+        // (yellow warning) to Configured (green) and the copy names the
+        // mailbox the matcher matched against — matching the green
+        // "Ingesting via mailbox" badge on `/app/mailboxes` for the same
+        // domain so the two surfaces stop telling opposite stories.
+        $status = $this->resolver(matcherReturns: true)->resolve(
+            $this->healthyDns(),
+            new RuaScenarioResult(RuaScenario::PointsAtExternal, 'reports@acme.com'),
+            null,
+            'domain-id',
+        );
+
+        $rua = $this->ruaRow($status->protocols);
+        self::assertSame(ProtocolState::Configured, $rua->state);
+        self::assertStringContainsString('Routed to your connected mailbox', $rua->statusLine);
+        self::assertStringContainsString('reports@acme.com', $rua->statusLine);
+        self::assertNull($rua->nextStep);
+        self::assertTrue($status->ruaRoutedToConnectedMailbox);
+    }
+
+    #[Test]
+    public function pointsAtExternalWithMatchingMailboxOverridesHeadlineAndLede(): void
+    {
+        // Cross-surface consistency: the banner headline AND panel lede both
+        // drop the "external inbox" / "choose where reports land" warnings
+        // when the matcher confirms the rua= address routes to a mailbox
+        // we're polling. Otherwise an operator would see green badges on
+        // `/app/mailboxes` and still get warning copy on `/app/domains/{id}`.
+        $status = $this->resolver(matcherReturns: true)->resolve(
+            $this->healthyDns(),
+            new RuaScenarioResult(RuaScenario::PointsAtExternal, 'reports@acme.com'),
+            null,
+            'domain-id',
+        );
+
+        self::assertSame(DomainSetupDisplayMode::BannerAndPanel, $status->displayMode);
+        self::assertSame('Monitoring active — reports arriving via your connected mailbox', $status->headline);
+        self::assertStringContainsString('your connected mailbox', $status->panelLede);
+        self::assertStringContainsString('reports@acme.com', $status->panelLede);
+        // Regression: the scenario-(c) "external inbox" warning copy must not
+        // leak when the matcher said yes.
+        self::assertStringNotContainsString('Configured for external inbox', $status->panelLede);
+        self::assertStringNotContainsString('choose where reports land', $status->headline);
+    }
+
+    #[Test]
+    public function pointsAtExternalWithoutDomainIdKeepsLegacyWarningCopy(): void
+    {
+        // Legacy call site (no domainId passed) — the matcher is never
+        // consulted and the resolver falls back to the existing scenario-(c)
+        // warning copy. Locks the back-compat path used by snapshot tests
+        // + standalone unit tests.
+        $status = $this->resolver(matcherReturns: true)->resolve(
+            $this->healthyDns(),
+            new RuaScenarioResult(RuaScenario::PointsAtExternal, 'reports@acme.com'),
+        );
+
+        self::assertFalse($status->ruaRoutedToConnectedMailbox);
+        self::assertSame('DNS records in place — choose where reports land', $status->headline);
+        $rua = $this->ruaRow($status->protocols);
+        self::assertSame(ProtocolState::Invalid, $rua->state);
+    }
+
+    #[Test]
+    public function pointsAtExternalWithDomainIdButNoMatchingMailboxKeepsWarningTone(): void
+    {
+        // Operator connected the WRONG inbox — the matcher returns false.
+        // The yellow warning stays so the operator notices that the rua=
+        // target isn't the connected mailbox.
+        $status = $this->resolver(matcherReturns: false)->resolve(
+            $this->healthyDns(),
+            new RuaScenarioResult(RuaScenario::PointsAtExternal, 'reports@acme.com'),
+            null,
+            'domain-id',
+        );
+
+        self::assertFalse($status->ruaRoutedToConnectedMailbox);
+        $rua = $this->ruaRow($status->protocols);
+        self::assertSame(ProtocolState::Invalid, $rua->state);
+        self::assertStringContainsString('Pointing at reports@acme.com', $rua->statusLine);
+    }
+
+    private function resolver(bool $matcherReturns = false): DomainSetupStatusResolver
+    {
+        $matcher = $this->createStub(RuaMailboxMatcher::class);
+        $matcher->method('matchesConnectedMailbox')->willReturn($matcherReturns);
+
         return new DomainSetupStatusResolver(
             new ReportAddressProvider('reports@sendvery.com'),
             new DomainHealthClassifier(),
+            $matcher,
         );
     }
 

@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Query\GetDomainIngestionMatrix;
 use App\Repository\MailboxConnectionRepository;
 use App\Results\DomainIngestionMatrixResult;
+use App\Services\Dns\RuaMailboxMatcher;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Value\Dns\RuaScenario;
 use App\Value\IngestionPath;
@@ -24,7 +25,7 @@ final readonly class IngestionPathResolver
         private GetDomainIngestionMatrix $query,
         private RuaScenarioResolver $ruaScenarioResolver,
         private MailboxConnectionRepository $mailboxConnectionRepository,
-        private CredentialEncryptor $credentialEncryptor,
+        private RuaMailboxMatcher $ruaMailboxMatcher,
     ) {
     }
 
@@ -93,16 +94,24 @@ final readonly class IngestionPathResolver
     }
 
     /**
-     * The three preconditions for TASK-106's path-vs-scenario flip:
+     * The four preconditions for TASK-106's path-vs-scenario flip:
      *   1. The path classifier says reports are physically arriving via the
      *      connected mailbox (not DNS, not nothing).
-     *   2. The RUA scenario says DMARC routes to an external (non-Sendvery)
+     *   2. `lastReportAt` is populated — without it the path-vs-scenario
+     *      priority isn't load-bearing and the template won't render the
+     *      badge anyway. Short-circuiting here also skips the expensive
+     *      mailbox lookup + decrypt for never-polled rows.
+     *   3. The RUA scenario says DMARC routes to an external (non-Sendvery)
      *      address — without this, the regular DNS/mailbox branches handle it.
-     *   3. The connected mailbox's login matches the external rua= address.
+     *   4. The connected mailbox's login matches the external rua= address.
      *      Loose match: strip any `mailto:` prefix (already handled by
      *      DmarcRecordParser), lowercase both sides, exact local-part@domain
      *      equality. Anything looser (alias forwarding, plus-tagging) is
      *      deliberately out of scope for v1.
+     *
+     * Steps 1-3 are this method's guard preconditions; step 4 delegates to
+     * {@see RuaMailboxMatcher} so the DomainSetupStatusResolver shares the
+     * exact same matching rule.
      *
      * Returns false on any missing input — defensive so a partially-populated
      * row never accidentally flips the badge.
@@ -113,9 +122,6 @@ final readonly class IngestionPathResolver
             return false;
         }
 
-        // The DTO contract is "reports are physically arriving AND credentials
-        // match" — without lastReportAt the path-vs-scenario priority isn't
-        // load-bearing and the template won't render the badge anyway.
         if (null === $row->lastReportAt) {
             return false;
         }
@@ -128,51 +134,20 @@ final readonly class IngestionPathResolver
             return false;
         }
 
-        if (null === $row->ruaScenario->ruaEmail || null === $row->mailboxId) {
+        if (null === $row->mailboxId) {
             return false;
         }
 
+        // The matrix row already names the mailbox UUID — go through the
+        // single-mailbox variant on the matcher rather than re-deriving the
+        // binding from $row->domainId. That keeps the per-row work O(1) on
+        // mailbox lookups even when a domain has multiple connected mailboxes.
         try {
             $mailbox = $this->mailboxConnectionRepository->get(Uuid::fromString($row->mailboxId));
         } catch (\App\Exceptions\MailboxConnectionNotFound) {
             return false;
         }
 
-        try {
-            $username = $this->credentialEncryptor->decrypt($mailbox->encryptedUsername);
-        } catch (\RuntimeException) {
-            // Decryption failure (corrupted ciphertext, key rotated, etc.)
-            // shouldn't flip the badge — fall through to the conservative
-            // scenario-warning rendering. The error surfaces elsewhere on the
-            // mailbox row itself.
-            return false;
-        }
-
-        return $this->emailsMatch($username, $row->ruaScenario->ruaEmail);
-    }
-
-    private function emailsMatch(string $a, string $b): bool
-    {
-        $a = strtolower(trim($a));
-        $b = strtolower(trim($b));
-
-        // Strip `mailto:` defensively even though DmarcRecordParser already
-        // removes it — the rua email field on RuaScenarioResult is contractually
-        // clean but it costs nothing to be robust against future regressions.
-        if (str_starts_with($a, 'mailto:')) {
-            $a = substr($a, 7);
-        }
-        if (str_starts_with($b, 'mailto:')) {
-            $b = substr($b, 7);
-        }
-
-        // Both sides must look like an email — bail if either is missing an `@`
-        // so we don't false-match on garbage usernames (e.g. a literal IMAP
-        // username that isn't an email at all).
-        if (false === strpos($a, '@') || false === strpos($b, '@')) {
-            return false;
-        }
-
-        return $a === $b;
+        return $this->ruaMailboxMatcher->matchesMailbox($mailbox, $row->ruaScenario->ruaEmail);
     }
 }

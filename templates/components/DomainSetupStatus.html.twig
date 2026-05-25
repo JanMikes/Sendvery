@@ -19,6 +19,13 @@
     {% if protocol.state.value == 'configured' %}{% set configuredCount = configuredCount + 1 %}{% endif %}
 {% endfor %}
 
+{# TASK-114: even when every row reads Configured, the "Routed to your
+   connected mailbox" branch still wants the checklist to render so the
+   user can see the 5th row's success copy (the headline alone doesn't name
+   the mailbox we matched against). The all-green confirmation card would
+   only repeat the banner. #}
+{% if allConfigured and status.ruaRoutedToConnectedMailbox %}{% set allConfigured = false %}{% endif %}
+
 {% if allConfigured %}
     {# (a) All four checks passing — confirmation card. Matches the same
        rounded-2xl shell as the quarantine warning so it doesn't visually
@@ -64,7 +71,17 @@
     {# (b) Partial setup — the actionable checklist. Each row shows a glyph
        sized to match the alerts list pattern, the precomputed status line,
        and (for failing rows) a one-sentence next-step plus a per-row "Fix
-       this" deep-link to the matching #health-{protocol} anchor. #}
+       this" deep-link to the matching #health-{protocol} anchor.
+
+       TASK-107: the 5th "RUA destination" row uses a routing-arrow glyph
+       instead of the check/cross idiom used by the four DNS protocol rows
+       above it. The four protocol rows answer "is this record published?"
+       (a thing the operator publishes or fixes); the RUA row answers
+       "where do reports go?" (a routing choice the operator made). Mixing
+       check/cross with check/cross for both categories invited the
+       misreading "I need to publish another DNS record"; the arrow + the
+       categorical "WHERE REPORTS GO" pre-label visually peels the row off
+       the publish-this group above. #}
     <div class="card bg-base-100 border border-base-200 shadow-sm mb-6" data-testid="domain-setup-status-checklist">
         <div class="card-body p-5">
             <div class="flex items-start justify-between gap-3 mb-4">
@@ -76,25 +93,48 @@
             </div>
             <ul class="space-y-3">
                 {% for protocol in status.protocols %}
+                    {% set isRuaRow = protocol.name == 'RUA destination' %}
                     {% set rowTone = {
                         'configured': {ring: 'bg-success/15 text-success', label: 'OK'},
                         'missing':    {ring: 'bg-error/15 text-error',     label: 'Missing'},
                         'invalid':    {ring: 'bg-warning/15 text-warning', label: 'Invalid'},
                         'unknown':    {ring: 'bg-base-200 text-base-content/50', label: 'Pending'},
                     }[protocol.state.value] %}
-                    <li class="flex items-start gap-3" data-testid="domain-setup-row-{{ protocol.name|lower }}">
+                    {# TASK-107: the RUA destination row gets a routing-arrow
+                       glyph (data-glyph="route") rather than the check/cross
+                       shared by the four DNS protocol rows above it
+                       (data-glyph="check" / "cross"). The ring tone still
+                       follows the per-state palette so the row reads success
+                       / warning / error appropriately. #}
+                    <li class="flex items-start gap-3{% if isRuaRow %} domain-setup-row-routing{% endif %}" data-testid="domain-setup-row-{{ protocol.name|lower|replace({' ': '-'}) }}">
                         <span class="w-6 h-6 rounded-full {{ rowTone.ring }} flex items-center justify-center shrink-0 mt-0.5" aria-label="{{ rowTone.label }}">
-                            {% if protocol.state.value == 'configured' %}
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            {% if isRuaRow %}
+                                {# Rightward routing arrow with a small target/inbox notch on
+                                   the right edge — visually peels this row off the DNS
+                                   protocol rows above. Shape stays constant across the four
+                                   RUA scenarios; only the ring tone (success / warning /
+                                   error / pending) changes per state. #}
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-glyph="route">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h13m0 0l-4-4m4 4l-4 4M19 6v12"/>
+                                </svg>
+                            {% elseif protocol.state.value == 'configured' %}
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-glyph="check">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
                                 </svg>
                             {% else %}
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-glyph="cross">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
                                 </svg>
                             {% endif %}
                         </span>
                         <div class="flex-1 min-w-0">
+                            {% if isRuaRow %}
+                                {# Categorical pre-label so a first-time user understands
+                                   this row is about a routing choice, not a record to
+                                   publish. The four protocol rows above don't need it —
+                                   "SPF / DKIM / DMARC / MX" are self-identifying. #}
+                                <div class="text-[10px] font-semibold uppercase tracking-wide text-base-content/50 mb-0.5">Where reports go</div>
+                            {% endif %}
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="font-medium text-sm text-base-content">{{ protocol.name }}</span>
                                 <span class="text-sm text-base-content/70">{{ protocol.statusLine }}</span>

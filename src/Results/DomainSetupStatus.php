@@ -23,6 +23,15 @@ use App\Value\DomainSetupDisplayMode;
 final readonly class DomainSetupStatus
 {
     /**
+     * `$ruaRoutedToConnectedMailbox` (TASK-114) is true when the domain's
+     * published `rua=` address matches the login of a connected mailbox the
+     * team is polling — i.e. reports physically arrive via that mailbox even
+     * though the DNS record routes to a "third-party" address. Lets the 5th
+     * RUA destination row + panelLede render in success tone instead of the
+     * yellow "configured for external inbox" warning that would otherwise
+     * contradict the `/app/mailboxes` matrix's green "Ingesting via mailbox"
+     * badge for the same domain.
+     *
      * @param list<ProtocolSetupStatus> $protocols
      */
     public function __construct(
@@ -34,6 +43,7 @@ final readonly class DomainSetupStatus
         public array $protocols,
         public DomainSetupDisplayMode $displayMode,
         public string $panelLede = 'Finish the items below to start receiving DMARC reports for this domain.',
+        public bool $ruaRoutedToConnectedMailbox = false,
     ) {
     }
 }

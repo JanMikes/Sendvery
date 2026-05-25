@@ -9,6 +9,7 @@ use App\Results\DnsHealthOverviewResult;
 use App\Results\DomainOverviewResult;
 use App\Results\DomainSetupStatus;
 use App\Results\ProtocolSetupStatus;
+use App\Services\Dns\RuaMailboxMatcher;
 use App\Value\Dns\RuaScenario;
 use App\Value\DomainHealthFilter;
 use App\Value\DomainSetupDisplayMode;
@@ -38,6 +39,7 @@ final readonly class DomainSetupStatusResolver
     public function __construct(
         private ReportAddressProvider $reportAddressProvider,
         private DomainHealthClassifier $domainHealthClassifier,
+        private RuaMailboxMatcher $ruaMailboxMatcher,
     ) {
     }
 
@@ -51,12 +53,32 @@ final readonly class DomainSetupStatusResolver
      * regardless — they answer a different question ("which record is
      * missing?") than severity ("is the domain healthy?") and have to keep
      * speaking to the SPF/DKIM/DMARC/MX inputs directly.
+     *
+     * `$domainId` (TASK-114) is consulted when scenario is `PointsAtExternal`
+     * to decide whether to render the 5th RUA row in success tone ("Routed to
+     * your connected mailbox") instead of the yellow "Configured for external
+     * inbox" warning that would contradict the `/app/mailboxes` matrix for a
+     * domain whose connected mailbox is the rua= target. Optional so legacy
+     * tests + snapshot fixtures keep working without a connected-mailbox
+     * lookup.
      */
     public function resolve(
         ?DnsHealthOverviewResult $dnsHealth,
         ?RuaScenarioResult $ruaScenario = null,
         ?DomainOverviewResult $overview = null,
+        ?string $domainId = null,
     ): DomainSetupStatus {
+        // The flag is load-bearing only for the PointsAtExternal branch — for
+        // any other scenario the existing rendering already says the right
+        // thing. Computing it eagerly (vs. lazily inside the rua-row builder)
+        // costs one extra mailbox lookup in the common case but keeps the
+        // resolver readable: every downstream consumer of the flag sees a
+        // single source of truth.
+        $ruaRoutedToConnectedMailbox = $this->shouldRouteToConnectedMailbox(
+            $ruaScenario,
+            $domainId,
+        );
+
         // Two paths collapse to "no DNS check has run yet": (a) the query
         // returned null (cross-tenant guard), (b) the query returned a row
         // but the DNS cron hasn't recorded a verification timestamp OR a
@@ -101,7 +123,7 @@ final readonly class DomainSetupStatusResolver
                     kbSlug: null,
                     healthAnchor: 'health-mx',
                 ),
-                $this->buildRuaDestination($ruaScenario, $dnsHealth),
+                $this->buildRuaDestination($ruaScenario, $dnsHealth, $ruaRoutedToConnectedMailbox),
             ];
 
             // PanelOnly: the banner is hidden in this state — the old
@@ -119,6 +141,7 @@ final readonly class DomainSetupStatusResolver
                 ctaFragment: 'health-spf',
                 protocols: $protocols,
                 displayMode: DomainSetupDisplayMode::PanelOnly,
+                ruaRoutedToConnectedMailbox: $ruaRoutedToConnectedMailbox,
             );
         }
 
@@ -126,7 +149,7 @@ final readonly class DomainSetupStatusResolver
         $dkim = $this->buildDkim($dnsHealth);
         $dmarc = $this->buildDmarc($dnsHealth);
         $mx = $this->buildMx($dnsHealth);
-        $rua = $this->buildRuaDestination($ruaScenario, $dnsHealth);
+        $rua = $this->buildRuaDestination($ruaScenario, $dnsHealth, $ruaRoutedToConnectedMailbox);
 
         $protocols = [$spf, $dkim, $dmarc, $mx, $rua];
 
@@ -147,6 +170,29 @@ final readonly class DomainSetupStatusResolver
             // decision row. Severity stays Healthy (DNS itself IS healthy);
             // the panel does the explaining without escalating tone.
             if (RuaScenario::PointsAtExternal === $ruaScenario?->scenario) {
+                // TASK-114: when the rua= target IS a mailbox the team is
+                // polling, the scenario-(c) "external inbox" warning becomes
+                // a wrong-information bug — the matrix on `/app/mailboxes`
+                // already paints this domain green. Headline + lede swap to
+                // success-tone copy that names the mailbox the matcher
+                // matched against.
+                if ($ruaRoutedToConnectedMailbox) {
+                    return new DomainSetupStatus(
+                        severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Healthy),
+                        headline: 'Monitoring active — reports arriving via your connected mailbox',
+                        ctaLabel: null,
+                        ctaRoute: null,
+                        ctaFragment: null,
+                        protocols: $protocols,
+                        displayMode: DomainSetupDisplayMode::BannerAndPanel,
+                        panelLede: sprintf(
+                            "Reports arriving via your connected mailbox at %s. The published rua= address matches the inbox we're polling.",
+                            $ruaScenario->ruaEmail ?? '',
+                        ),
+                        ruaRoutedToConnectedMailbox: true,
+                    );
+                }
+
                 return new DomainSetupStatus(
                     severity: $this->resolveSeverity($overview, $dnsHealth, DomainHealthFilter::Healthy),
                     headline: 'DNS records in place — choose where reports land',
@@ -156,6 +202,7 @@ final readonly class DomainSetupStatusResolver
                     protocols: $protocols,
                     displayMode: DomainSetupDisplayMode::BannerAndPanel,
                     panelLede: 'SPF, DKIM, DMARC and MX are all configured. Pick how you want reports delivered — see the RUA destination row below.',
+                    ruaRoutedToConnectedMailbox: false,
                 );
             }
 
@@ -167,6 +214,7 @@ final readonly class DomainSetupStatusResolver
                 ctaFragment: null,
                 protocols: $protocols,
                 displayMode: DomainSetupDisplayMode::BannerOnly,
+                ruaRoutedToConnectedMailbox: $ruaRoutedToConnectedMailbox,
             );
         }
 
@@ -182,6 +230,7 @@ final readonly class DomainSetupStatusResolver
                 ctaFragment: 'health-dmarc',
                 protocols: $protocols,
                 displayMode: DomainSetupDisplayMode::BannerAndPanel,
+                ruaRoutedToConnectedMailbox: $ruaRoutedToConnectedMailbox,
             );
         }
 
@@ -213,6 +262,7 @@ final readonly class DomainSetupStatusResolver
             ctaFragment: $ctaFragment,
             protocols: $protocols,
             displayMode: DomainSetupDisplayMode::BannerAndPanel,
+            ruaRoutedToConnectedMailbox: $ruaRoutedToConnectedMailbox,
         );
     }
 
@@ -236,14 +286,44 @@ final readonly class DomainSetupStatusResolver
     }
 
     /**
+     * TASK-114 gate: only consult the matcher when the scenario is the one
+     * that would otherwise render the contradictory yellow warning. Other
+     * scenarios already render the right thing — no need to spend a mailbox
+     * lookup deciding "would this flag matter?" when the answer is "no".
+     */
+    private function shouldRouteToConnectedMailbox(
+        ?RuaScenarioResult $ruaScenario,
+        ?string $domainId,
+    ): bool {
+        if (null === $domainId || '' === trim($domainId)) {
+            return false;
+        }
+
+        if (null === $ruaScenario || RuaScenario::PointsAtExternal !== $ruaScenario->scenario) {
+            return false;
+        }
+
+        return $this->ruaMailboxMatcher->matchesConnectedMailbox($domainId, $ruaScenario->ruaEmail);
+    }
+
+    /**
      * Fifth checklist row (TASK-100): where DMARC RUA reports flow today.
      * Distinct from the DMARC row above because that one only answers
      * "is a DMARC record published?", not "is it routing reports somewhere
      * we can ingest?". Three scenarios, plus a null/unchecked fallback so
      * the row stays sensible before the first DNS check has run.
+     *
+     * TASK-114 introduces a fourth render: scenario PointsAtExternal AND the
+     * rua= address matches a connected mailbox login. The row's state shifts
+     * from `Invalid` (yellow) to `Configured` (green) and the copy names the
+     * mailbox we matched against, matching the `/app/mailboxes` matrix's
+     * green "Ingesting via mailbox" badge for the same domain.
      */
-    public function buildRuaDestination(?RuaScenarioResult $ruaScenario, ?DnsHealthOverviewResult $dnsHealth): ProtocolSetupStatus
-    {
+    public function buildRuaDestination(
+        ?RuaScenarioResult $ruaScenario,
+        ?DnsHealthOverviewResult $dnsHealth,
+        bool $ruaRoutedToConnectedMailbox = false,
+    ): ProtocolSetupStatus {
         // Before any DNS check has produced data we shouldn't claim anything
         // about the RUA destination — keep the row Unknown, no nextStep, no
         // KB slug. Treat a null DnsHealthOverviewResult the same way the
@@ -278,21 +358,33 @@ final readonly class DomainSetupStatusResolver
                 kbSlug: null,
                 healthAnchor: 'health-dmarc',
             ),
-            RuaScenario::PointsAtExternal => new ProtocolSetupStatus(
-                name: 'RUA destination',
-                state: ProtocolState::Invalid,
-                statusLine: sprintf(
-                    'Pointing at %s — connect that inbox or repoint to Sendvery',
-                    $ruaScenario->ruaEmail ?? '',
+            RuaScenario::PointsAtExternal => $ruaRoutedToConnectedMailbox
+                ? new ProtocolSetupStatus(
+                    name: 'RUA destination',
+                    state: ProtocolState::Configured,
+                    statusLine: sprintf(
+                        'Routed to your connected mailbox at %s',
+                        $ruaScenario->ruaEmail ?? '',
+                    ),
+                    nextStep: null,
+                    kbSlug: null,
+                    healthAnchor: 'health-dmarc',
+                )
+                : new ProtocolSetupStatus(
+                    name: 'RUA destination',
+                    state: ProtocolState::Invalid,
+                    statusLine: sprintf(
+                        'Pointing at %s — connect that inbox or repoint to Sendvery',
+                        $ruaScenario->ruaEmail ?? '',
+                    ),
+                    nextStep: sprintf(
+                        'Decide: poll the inbox at %s, or replace the rua= target with `mailto:%s`',
+                        $ruaScenario->ruaEmail ?? '',
+                        $reportAddress,
+                    ),
+                    kbSlug: null,
+                    healthAnchor: 'health-dmarc',
                 ),
-                nextStep: sprintf(
-                    'Decide: poll the inbox at %s, or replace the rua= target with `mailto:%s`',
-                    $ruaScenario->ruaEmail ?? '',
-                    $reportAddress,
-                ),
-                kbSlug: null,
-                healthAnchor: 'health-dmarc',
-            ),
         };
     }
 
