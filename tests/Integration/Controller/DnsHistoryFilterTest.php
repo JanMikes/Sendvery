@@ -98,8 +98,16 @@ final class DnsHistoryFilterTest extends WebTestCase
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
 
+        // TASK-125: the first row per (domain, type) is a baseline (INITIAL CHECK),
+        // not a change — even if `hasChanged=true` was persisted on it. The
+        // "Show only changes" filter must therefore see an *earlier* observation
+        // per type before counting the recent row as a real change. We seed
+        // SPF + DKIM with an older baseline + newer changed row, and DMARC with
+        // only one row (which stays an initial check and must NOT appear).
         $now = new \DateTimeImmutable('-1 hour');
+        $this->seedCheck($em, $data['domain'], DnsCheckType::Spf, $now->modify('-2 days'), hasChanged: false);
         $this->seedCheck($em, $data['domain'], DnsCheckType::Spf, $now, hasChanged: true);
+        $this->seedCheck($em, $data['domain'], DnsCheckType::Dkim, $now->modify('-2 days -1 hour'), hasChanged: false);
         $this->seedCheck($em, $data['domain'], DnsCheckType::Dkim, $now->modify('-1 hour'), hasChanged: true);
         $this->seedCheck($em, $data['domain'], DnsCheckType::Dmarc, $now->modify('-2 hours'), hasChanged: false);
         $em->flush();
@@ -108,9 +116,12 @@ final class DnsHistoryFilterTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         $body = (string) $data['client']->getResponse()->getContent();
-        // Each persisted changed row renders one "Changed" badge inside its
-        // row block. Two seeded changed rows = two "Changed" badges.
+        // Two non-initial changed rows (recent SPF + recent DKIM) render
+        // "Changed" badges. Older baseline rows and the DMARC row are excluded
+        // by the changes-only filter (initial checks aren't real changes).
         self::assertSame(2, substr_count($body, '>Changed<'));
+        // Confirm no INITIAL CHECK badge bled through the changes-only filter.
+        self::assertStringNotContainsString('>Initial check<', $body);
     }
 
     #[Test]

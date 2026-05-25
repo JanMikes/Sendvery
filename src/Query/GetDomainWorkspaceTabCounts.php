@@ -67,7 +67,13 @@ final readonly class GetDomainWorkspaceTabCounts
                     FROM dns_check_result dcr
                     WHERE dcr.monitored_domain_id = :domainId
                       AND dcr.has_changed = TRUE
-                      AND dcr.checked_at >= :sevenDaysAgo) AS history_changed_7d
+                      AND dcr.checked_at >= :sevenDaysAgo
+                      AND EXISTS (
+                          SELECT 1 FROM dns_check_result earlier
+                          WHERE earlier.monitored_domain_id = dcr.monitored_domain_id
+                            AND earlier.type = dcr.type
+                            AND earlier.checked_at < dcr.checked_at
+                      )) AS history_changed_7d
             SQL;
 
         /** @var array{reports_24h: int|string|null, unauthorized_senders: int|string|null, dns_failing: int|string|bool|null, blacklist_listed: int|string|null, history_changed_7d: int|string|bool|null}|false $row */

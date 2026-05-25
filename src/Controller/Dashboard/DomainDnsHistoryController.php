@@ -121,7 +121,9 @@ final class DomainDnsHistoryController extends AbstractController
 
             $grouped[$date]['checks'][] = $check;
 
-            if ($check->hasChanged) {
+            // Initial-check rows are baselines, not changes — exclude them
+            // from the day-level "N change(s)" badge.
+            if ($check->isRealChange()) {
                 ++$grouped[$date]['changeCount'];
             }
         }

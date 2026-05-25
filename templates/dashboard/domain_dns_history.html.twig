@@ -142,10 +142,28 @@
 
                         <div class="px-4 pb-4 space-y-3">
                             {% for check in group.checks %}
-                                <div class="border border-base-200 rounded-box p-3 {{ check.hasChanged ? 'bg-warning/5 border-l-4 border-l-warning' : 'bg-base-100' }}">
+                                {# A row is "really" changed only if a prior observation existed.
+                                   The very first row per (domain, record_type) is a baseline, not a change. #}
+                                {% set isRealChange = check.hasChanged and not check.isInitialCheck %}
+                                <div class="border border-base-200 rounded-box p-3 {{ isRealChange ? 'bg-warning/5 border-l-4 border-l-warning' : 'bg-base-100' }}">
                                     <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-                                        <div class="flex items-center gap-2">
-                                            <span class="badge badge-sm {{ check.type == 'spf' ? 'badge-primary' : (check.type == 'dkim' ? 'badge-secondary' : (check.type == 'dmarc' ? 'badge-accent' : 'badge-ghost')) }}">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            {# TASK-126: record-type labels use a single non-semantic tone with a
+                                               protocol icon prefix, so they don't compete with the validity badge. #}
+                                            <span class="badge badge-sm badge-neutral badge-outline gap-1">
+                                                {% if check.type == 'spf' %}
+                                                    {# shield #}
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z" /></svg>
+                                                {% elseif check.type == 'dkim' %}
+                                                    {# key #}
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a4 4 0 11-3.84 5H7l-2 2v3h3v-2h2v-2h2.16A4 4 0 0115 7z" /></svg>
+                                                {% elseif check.type == 'dmarc' %}
+                                                    {# clipboard-check #}
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5h6a1 1 0 011 1v1H8V6a1 1 0 011-1z" /><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h10v12a1 1 0 01-1 1H8a1 1 0 01-1-1V7z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9.5 13l2 2 3.5-4" /></svg>
+                                                {% else %}
+                                                    {# envelope (MX) #}
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16v12H4z" /><path stroke-linecap="round" stroke-linejoin="round" d="M4 6l8 7 8-7" /></svg>
+                                                {% endif %}
                                                 {{ check.type|upper }}
                                             </span>
                                             {% if check.isValid %}
@@ -153,7 +171,11 @@
                                             {% else %}
                                                 <span class="badge badge-sm badge-error badge-outline">Invalid</span>
                                             {% endif %}
-                                            {% if check.hasChanged %}
+                                            {# TASK-125: first observation per protocol is a baseline, not a change.
+                                               INITIAL CHECK reads as informational (info tone), not as a warning. #}
+                                            {% if check.isInitialCheck %}
+                                                <span class="badge badge-sm badge-info badge-outline">Initial check</span>
+                                            {% elseif check.hasChanged %}
                                                 <span class="badge badge-sm badge-warning">Changed</span>
                                             {% endif %}
                                         </div>
@@ -168,7 +190,7 @@
                                         <p class="text-sm text-base-content/50 italic mb-2">No record found</p>
                                     {% endif %}
 
-                                    {% if check.hasChanged and check.previousRawRecord %}
+                                    {% if isRealChange and check.previousRawRecord %}
                                         <div class="text-xs text-base-content/50">
                                             <span class="font-medium">Previous:</span>
                                             <code class="break-all">{{ check.previousRawRecord }}</code>

@@ -20,11 +20,12 @@ final readonly class DnsCheckHistoryResult
         public array $details,
         public ?string $previousRawRecord,
         public bool $hasChanged,
+        public bool $isInitialCheck,
     ) {
     }
 
     /**
-     * @param array{id: string, type: string, checked_at: string, raw_record: string|null, is_valid: bool|string, issues: string, details: string, previous_raw_record: string|null, has_changed: bool|string} $row
+     * @param array{id: string, type: string, checked_at: string, raw_record: string|null, is_valid: bool|string, issues: string, details: string, previous_raw_record: string|null, has_changed: bool|string, is_initial_check: bool|string} $row
      */
     public static function fromDatabaseRow(array $row): self
     {
@@ -38,6 +39,18 @@ final readonly class DnsCheckHistoryResult
             details: json_decode($row['details'], true, 512, JSON_THROW_ON_ERROR),
             previousRawRecord: $row['previous_raw_record'],
             hasChanged: (bool) $row['has_changed'],
+            isInitialCheck: (bool) $row['is_initial_check'],
         );
+    }
+
+    /**
+     * A row counts as a "real" change only when it has flagged a diff against
+     * a prior observation. The baseline (very first) check per protocol shows
+     * up as `INITIAL CHECK`, not `CHANGED`, and must therefore be excluded from
+     * the "Show only changes" filter and day-level change counts.
+     */
+    public function isRealChange(): bool
+    {
+        return $this->hasChanged && !$this->isInitialCheck;
     }
 }

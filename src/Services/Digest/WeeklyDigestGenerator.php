@@ -179,12 +179,22 @@ final readonly class WeeklyDigestGenerator
 
     private function getDnsChangesCount(string $teamId, \DateTimeImmutable $from, \DateTimeImmutable $to): int
     {
+        // Exclude per-protocol baselines so a freshly-added domain doesn't
+        // inflate the digest's "DNS changes" count — same trust-erosion guard
+        // as `GetDomainDnsHistory::countChanges` (TASK-125).
         return (int) $this->database->executeQuery(
             'SELECT COUNT(*) FROM dns_check_result dcr
             JOIN monitored_domain md ON md.id = dcr.monitored_domain_id
             WHERE md.team_id = :teamId
                 AND dcr.has_changed = true
-                AND dcr.checked_at >= :from AND dcr.checked_at < :to',
+                AND dcr.checked_at >= :from AND dcr.checked_at < :to
+                AND EXISTS (
+                    SELECT 1
+                    FROM dns_check_result earlier
+                    WHERE earlier.monitored_domain_id = dcr.monitored_domain_id
+                    AND earlier.type = dcr.type
+                    AND earlier.checked_at < dcr.checked_at
+                )',
             [
                 'teamId' => $teamId,
                 'from' => $from->format('Y-m-d H:i:s'),

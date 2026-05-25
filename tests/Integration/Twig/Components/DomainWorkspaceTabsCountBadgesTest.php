@@ -67,7 +67,11 @@ final class DomainWorkspaceTabsCountBadgesTest extends WebTestCase
         // Distractor: a delisted IP — the DISTINCT-ON-latest filter must drop this.
         $this->persistBlacklistCheck($em, $persona->domain, '198.51.100.2', isListed: false);
 
-        // 1 DNS change in the last 7 days — triggers the History dot.
+        // 1 real DNS change in the last 7 days — triggers the History dot.
+        // TASK-125: the dot must reflect a *real* change, so we seed an older
+        // baseline row first so the recent row registers as a true diff
+        // rather than the per-protocol baseline.
+        $this->persistDnsCheck($em, $persona->domain, hasChanged: false, checkedAt: '-20 days');
         $this->persistDnsCheck($em, $persona->domain, hasChanged: true, checkedAt: '-2 days');
 
         $em->flush();
@@ -165,7 +169,10 @@ final class DomainWorkspaceTabsCountBadgesTest extends WebTestCase
         assert(null !== $persona->domain);
 
         $em = $this->getService(EntityManagerInterface::class);
-        // 1 DNS change in the last 7 days — guarantees the History dot fires.
+        // 1 real DNS change in the last 7 days — guarantees the History dot fires.
+        // Seed an earlier baseline row so the recent row counts as a real diff
+        // (TASK-125: per-protocol baselines aren't real changes).
+        $this->persistDnsCheck($em, $persona->domain, hasChanged: false, checkedAt: '-20 days');
         $this->persistDnsCheck($em, $persona->domain, hasChanged: true, checkedAt: '-2 days');
         $em->flush();
         $em->clear();
