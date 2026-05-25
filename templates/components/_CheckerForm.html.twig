@@ -20,6 +20,7 @@
                placeholder="Enter your domain (e.g. example.com)"
                class="input input-bordered join-item flex-1 bg-base-100 focus:outline-primary"
                aria-label="Domain name"
+               autocomplete="off"
                data-loading="addAttribute(disabled)">
         <button type="button"
                 data-action="live#action"
@@ -46,6 +47,7 @@
                placeholder="DKIM selector (optional — leave empty to try common selectors)"
                class="input input-bordered w-full bg-base-100 focus:outline-primary text-sm"
                aria-label="DKIM selector"
+               autocomplete="off"
                data-loading="addAttribute(disabled)">
     {% endif %}
 </div>
