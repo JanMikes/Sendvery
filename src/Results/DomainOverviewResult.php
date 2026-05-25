@@ -28,6 +28,12 @@ final readonly class DomainOverviewResult
         public ?int $latestDkimScore = null,
         public ?int $latestDmarcScore = null,
         public ?int $latestMxScore = null,
+        // Set once a DMARC report has ever been received for the domain. Distinct
+        // from `totalReports`, which collapses to 0 after retention purge — this
+        // column survives. NextActionResolver uses this (not totalReports) to
+        // detect "domain has never received its first report" vs. "received and
+        // purged."
+        public ?string $firstReportAt = null,
     ) {
     }
 
@@ -46,7 +52,8 @@ final readonly class DomainOverviewResult
      *     latest_spf_score?: int|string|null,
      *     latest_dkim_score?: int|string|null,
      *     latest_dmarc_score?: int|string|null,
-     *     latest_mx_score?: int|string|null
+     *     latest_mx_score?: int|string|null,
+     *     first_report_at?: string|null
      * } $row
      */
     public static function fromDatabaseRow(array $row): self
@@ -66,6 +73,7 @@ final readonly class DomainOverviewResult
             latestDkimScore: self::toNullableInt($row['latest_dkim_score'] ?? null),
             latestDmarcScore: self::toNullableInt($row['latest_dmarc_score'] ?? null),
             latestMxScore: self::toNullableInt($row['latest_mx_score'] ?? null),
+            firstReportAt: $row['first_report_at'] ?? null,
         );
     }
 

@@ -24,9 +24,12 @@ use App\Value\NextAction;
  *  2. DMARC verification Critical → VerifyDns (alerts are noise without DMARC)
  *  3. DMARC Warning / Info    → WaitForReports
  *  4. Unread critical alerts  → ReviewAlerts
- *  5. No central-inbox reports → PublishRuaRecord (DNS-first; TASK-091),
- *                                ConnectMailbox (fallback after 7 days OR
- *                                explicit dismissal)
+ *  5. No central-inbox reports → scenario-aware nudges (TASK-100, TASK-102, TASK-129).
+ *     Within this branch the per-team RUA-scenario priority is
+ *     NoRecord > PointsAtExternal > PointsAtSendvery — the resolver inspects
+ *     every domain in the team, not just the most-recently-added headline,
+ *     so a single mis-configured domain in a multi-domain team still surfaces
+ *     the right CTA.
  *  6. Default                 → AllHealthy
  */
 final readonly class NextActionResolver
@@ -34,6 +37,13 @@ final readonly class NextActionResolver
     /**
      * @param array<DomainOverviewResult>       $domains
      * @param list<DomainIngestionMatrixResult> $ingestionPaths
+     * @param array<string, RuaScenarioResult>  $domainRuaScenarios per-domain
+     *                                                              RUA-scenario classifications, keyed by `DomainOverviewResult::$domainId`.
+     *                                                              TASK-129: lets the resolver pick the highest-attention scenario
+     *                                                              across the team (priority: NoRecord > PointsAtExternal >
+     *                                                              PointsAtSendvery) instead of relying solely on the LIMIT-1
+     *                                                              headline domain. Falls back to `$headlineDomainRuaScenario` when
+     *                                                              empty so older call sites keep working unchanged.
      */
     public function resolve(
         array $domains,
@@ -48,6 +58,7 @@ final readonly class NextActionResolver
         ?\DateTimeImmutable $ingestionRecommendationDismissedAt,
         \DateTimeImmutable $now,
         ?RuaScenarioResult $headlineDomainRuaScenario = null,
+        array $domainRuaScenarios = [],
     ): NextActionResult {
         if (0 === count($domains)) {
             return new NextActionResult(
@@ -123,16 +134,31 @@ final readonly class NextActionResolver
         }
 
         if (!$hasCentralInboxReports) {
+            // TASK-129: pick the highest-attention RUA scenario across every
+            // domain in the team — NoRecord beats PointsAtExternal beats
+            // PointsAtSendvery. Falls back to the headline-only scenario when
+            // the caller didn't supply per-domain data so older call sites
+            // (and the unit tests that pre-date TASK-129) keep behaving the
+            // way they did before.
+            $teamScenario = $this->pickTeamScenario(
+                domains: $domains,
+                domainRuaScenarios: $domainRuaScenarios,
+                headlineDomainRuaScenario: $headlineDomainRuaScenario,
+            );
+
             // TASK-100 scenario (b): DMARC already points at Sendvery — DNS
             // is doing the work. Skip the "publish RUA / connect a mailbox"
             // nudge entirely. But guard against TASK-102's lie: when no
-            // central-inbox reports have arrived AND the team also hasn't
-            // verified yet (verificationStatus null OR firstReportAt null),
-            // saying "reports are flowing" would be false. Emit a
-            // WaitForReports variant instead so the copy matches reality.
-            if (RuaScenario::PointsAtSendvery === $headlineDomainRuaScenario?->scenario) {
-                $firstReportAt = $verificationStatus?->firstReportAt;
-                if (null === $firstReportAt) {
+            // central-inbox reports have arrived AND no domain on this
+            // scenario has a first report yet, saying "reports are flowing"
+            // would be false. Emit a WaitForReports variant instead so the
+            // copy matches reality.
+            if (RuaScenario::PointsAtSendvery === $teamScenario?->scenario) {
+                if ($this->anyPointsAtSendveryDomainHasNoReports(
+                    domains: $domains,
+                    domainRuaScenarios: $domainRuaScenarios,
+                    verificationStatus: $verificationStatus,
+                )) {
                     return new NextActionResult(
                         actionKey: NextAction::WaitForReports,
                         title: 'Waiting for your first report',
@@ -164,8 +190,8 @@ final readonly class NextActionResolver
             // Emitted unconditionally for this scenario (dismissal and the
             // 7-day timer are about the generic "no reports yet" fallback,
             // not about scenario-specific recommendations).
-            if (RuaScenario::PointsAtExternal === $headlineDomainRuaScenario?->scenario) {
-                $ruaEmail = $headlineDomainRuaScenario->ruaEmail ?? '';
+            if (RuaScenario::PointsAtExternal === $teamScenario?->scenario) {
+                $ruaEmail = $teamScenario->ruaEmail ?? '';
 
                 return new NextActionResult(
                     actionKey: NextAction::ConnectExternalMailbox,
@@ -229,5 +255,87 @@ final readonly class NextActionResolver
             ctaRouteParams: [],
             severity: 'success',
         );
+    }
+
+    /**
+     * TASK-129: collapse the per-domain scenario map down to one "team
+     * winner" using the priority order documented on the class
+     * (NoRecord > PointsAtExternal > PointsAtSendvery). Returns the
+     * winning {@see RuaScenarioResult} so the caller still has the
+     * `ruaEmail` for the PointsAtExternal CTA copy.
+     *
+     * Callers that don't supply per-domain data (older tests, command
+     * handlers, etc.) fall back to the single-domain headline scenario
+     * so behaviour pre-TASK-129 stays bit-for-bit identical.
+     *
+     * @param array<DomainOverviewResult>      $domains
+     * @param array<string, RuaScenarioResult> $domainRuaScenarios
+     */
+    private function pickTeamScenario(
+        array $domains,
+        array $domainRuaScenarios,
+        ?RuaScenarioResult $headlineDomainRuaScenario,
+    ): ?RuaScenarioResult {
+        if ([] === $domainRuaScenarios) {
+            return $headlineDomainRuaScenario;
+        }
+
+        $noRecord = null;
+        $pointsAtExternal = null;
+        $pointsAtSendvery = null;
+
+        foreach ($domains as $domain) {
+            $scenario = $domainRuaScenarios[$domain->domainId] ?? null;
+            if (null === $scenario) {
+                continue;
+            }
+
+            match ($scenario->scenario) {
+                RuaScenario::NoRecord => $noRecord ??= $scenario,
+                RuaScenario::PointsAtExternal => $pointsAtExternal ??= $scenario,
+                RuaScenario::PointsAtSendvery => $pointsAtSendvery ??= $scenario,
+            };
+        }
+
+        // NoRecord wins because a missing record blocks ingestion entirely
+        // — fixing that is the only way the other domains' configurations
+        // even start to matter.
+        return $noRecord ?? $pointsAtExternal ?? $pointsAtSendvery ?? $headlineDomainRuaScenario;
+    }
+
+    /**
+     * TASK-129: WaitForReports fires when ANY PointsAtSendvery domain in
+     * the team has yet to receive its first report. We read
+     * `DomainOverviewResult::firstReportAt` (sourced from the entity column)
+     * rather than `totalReports` because totalReports collapses to 0 after
+     * the nightly retention purge — a long-running domain would otherwise
+     * regress into the "waiting for first report" copy. When per-domain data
+     * is missing, fall back to the headline `verificationStatus->firstReportAt`
+     * so the pre-129 single-domain shortcut keeps working.
+     *
+     * @param array<DomainOverviewResult>      $domains
+     * @param array<string, RuaScenarioResult> $domainRuaScenarios
+     */
+    private function anyPointsAtSendveryDomainHasNoReports(
+        array $domains,
+        array $domainRuaScenarios,
+        ?DomainVerificationStatusResult $verificationStatus,
+    ): bool {
+        if ([] === $domainRuaScenarios) {
+            return null === $verificationStatus?->firstReportAt;
+        }
+
+        foreach ($domains as $domain) {
+            $scenario = $domainRuaScenarios[$domain->domainId] ?? null;
+            if (null === $scenario || RuaScenario::PointsAtSendvery !== $scenario->scenario) {
+                continue;
+            }
+
+            if (null === $domain->firstReportAt) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

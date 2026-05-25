@@ -176,10 +176,29 @@ final class DashboardOverviewController extends AbstractController
         // `$verificationStatus` is the single-domain headline used elsewhere
         // on this page, so resolving for its `domainId` keeps the surface
         // consistent.
+        //
+        // TASK-129: in addition to the headline scenario, compute the
+        // per-domain scenario map for every domain in the team so the
+        // resolver can honour the documented priority order
+        // (NoRecord > PointsAtExternal > PointsAtSendvery) across multi-
+        // domain teams. The headline scenario stays in scope because the
+        // SetupChecklistResolver below still consumes the LIMIT-1 headline
+        // value — the two cards intentionally share that headline read.
         $headlineDomainRuaScenario = null;
         if (null !== $verificationStatus) {
             $headlineDomainRuaScenario = $this->ruaScenarioResolver->resolveForDomainId(
                 Uuid::fromString($verificationStatus->domainId),
+            );
+        }
+
+        // Per-domain RUA scenarios for NextActionResolver. Doing the lookups
+        // in the controller (one cached DB hit per domain) keeps the resolver
+        // itself a pure function. Keyed by domainId so the resolver can pair
+        // each `DomainOverviewResult` with its scenario without re-iterating.
+        $domainRuaScenarios = [];
+        foreach ($domains as $domainOverview) {
+            $domainRuaScenarios[$domainOverview->domainId] = $this->ruaScenarioResolver->resolveForDomainId(
+                Uuid::fromString($domainOverview->domainId),
             );
         }
 
@@ -196,6 +215,7 @@ final class DashboardOverviewController extends AbstractController
             ingestionRecommendationDismissedAt: $team->ingestionRecommendationDismissedAt,
             now: $this->clock->now(),
             headlineDomainRuaScenario: $headlineDomainRuaScenario,
+            domainRuaScenarios: $domainRuaScenarios,
         );
 
         $healthSummary = $this->healthSummaryResolver->resolve(
@@ -250,6 +270,18 @@ final class DashboardOverviewController extends AbstractController
             && null !== $verificationStatus->dmarcVerifiedAt;
         $anyDomainHasFirstReport = null !== $verificationStatus
             && null !== $verificationStatus->firstReportAt;
+        // TASK-128: pass the headline domain's RUA scenario into the resolver
+        // so the "Receive your first DMARC report" step swaps its copy/CTA to
+        // match the user's actual published state — telling a PointsAtSendvery
+        // user they could "alternatively connect a mailbox" contradicts the
+        // correctly-configured DNS they just set up. The headline scenario is
+        // already computed above for NextActionResolver; we reuse it here so a
+        // future refactor that changes how the headline domain is picked stays
+        // consistent across both surfaces.
+        // NOTE for TASK-129: this call site shares `$headlineDomainRuaScenario`
+        // with NextActionResolver above. If TASK-129 refactors how that value
+        // is computed, keep BOTH consumers in sync — they intentionally read
+        // the same headline-domain scenario.
         $setupChecklist = $this->setupChecklistResolver->resolve(
             domainCount: count($domains),
             anyDomainHasDmarcVerified: $anyDomainHasDmarcVerified,
@@ -257,6 +289,7 @@ final class DashboardOverviewController extends AbstractController
             hasMailbox: $hasMailbox,
             dismissedAt: $team->setupChecklistDismissedAt,
             hasDmarcRegression: $hasDmarcRegression,
+            headlineDomainRuaScenario: $headlineDomainRuaScenario?->scenario,
         );
 
         return $this->render('dashboard/overview.html.twig', [

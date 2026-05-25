@@ -185,6 +185,62 @@ final class SetupChecklistTest extends WebTestCase
     }
 
     #[Test]
+    public function receiveReportsStepSwapsCopyWhenRuaPointsAtSendvery(): void
+    {
+        // TASK-128: when the user's published DMARC record already points
+        // `rua=` at reports@sendvery.com, the third checklist step must NOT
+        // tell them they could "alternatively connect a mailbox". Instead it
+        // confirms reports flow in automatically and links to the DNS check.
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+
+        $persona = $fixtures->persona()
+            ->emailPrefix('checklist-rua-sendvery-'.substr(uniqid('', true), -6))
+            ->withDomain('rua-sendvery-'.substr(uniqid('', true), -6).'.example')
+            ->build();
+        assert(null !== $persona->domain);
+
+        // Seed the most-recent DMARC check so RuaScenarioResolver classifies
+        // this domain as PointsAtSendvery. Critical: no DmarcReport rows are
+        // created — the "Receive your first DMARC report" step must still be
+        // incomplete so it renders (otherwise the line-through styling hides
+        // the description we're asserting on).
+        $em->persist(new DnsCheckResult(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            type: DnsCheckType::Dmarc,
+            checkedAt: new \DateTimeImmutable('-1 hour'),
+            rawRecord: 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com;',
+            isValid: true,
+            issues: [],
+            details: [],
+            previousRawRecord: null,
+            hasChanged: false,
+            isFirstCheck: true,
+        ));
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        // The new PointsAtSendvery branch copy is present.
+        self::assertStringContainsString('Reports flow in automatically', $body);
+        self::assertStringContainsString('24-48 hours', $body);
+
+        // The misleading mailbox-alternative phrase is gone for this user.
+        // We assert the literal string from the original NoRecord copy so a
+        // regression that restores the old wording fails loudly.
+        self::assertStringNotContainsString('Connect a mailbox if you prefer pulling them yourself', $body);
+        // And the step's CTA is the DNS deep-link, not a "Connect mailbox" button.
+        self::assertStringContainsString('Check DNS setup', $body);
+    }
+
+    #[Test]
     public function dismissedChecklistReSurfacesOnDmarcRegression(): void
     {
         // Once verified, then dismissed, then DMARC regresses → checklist

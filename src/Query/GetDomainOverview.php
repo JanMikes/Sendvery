@@ -80,11 +80,11 @@ final readonly class GetDomainOverview
             null => 'md.domain ASC',
         };
 
-        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null}> $data */
+        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}> $data */
         $data = $this->database->executeQuery(
             $this->buildBaseSelect().'
             WHERE md.team_id IN (:teamIds)'.$whereClause.'
-            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score'.$havingClause.'
+            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, md.first_report_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score'.$havingClause.'
             ORDER BY '.$orderClause,
             [
                 'teamIds' => $teamIds,
@@ -113,11 +113,11 @@ final readonly class GetDomainOverview
             return null;
         }
 
-        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null}|false $row */
+        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}|false $row */
         $row = $this->database->executeQuery(
             $this->buildBaseSelect().'
             WHERE md.id = :domainId AND md.team_id IN (:teamIds)
-            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score',
+            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, md.first_report_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score',
             [
                 'domainId' => $domainId,
                 'teamIds' => $teamIds,
@@ -200,6 +200,7 @@ final readonly class GetDomainOverview
                 md.dmarc_verified_at AS dmarc_verified_at,
                 md.spf_verified_at AS spf_verified_at,
                 md.dkim_verified_at AS dkim_verified_at,
+                md.first_report_at AS first_report_at,
                 t.id::text AS team_id,
                 t.name AS team_name,
                 COUNT(dr.id) AS total_reports,

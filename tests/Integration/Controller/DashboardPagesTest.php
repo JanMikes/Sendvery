@@ -487,12 +487,20 @@ final class DashboardPagesTest extends WebTestCase
         $persona->domain->firstReportAt = $firstReportAt;
 
         foreach ($latestChecks as $check) {
+            // TASK-129: optional explicit rawRecord override lets a caller
+            // seed a DMARC record with a specific `rua=` tag (or omit it)
+            // so the RuaScenarioResolver can classify the scenario the test
+            // is exercising. Defaults to the legacy "valid means generic
+            // p=none" shape so pre-existing callers keep working unchanged.
+            $rawRecord = $check['rawRecord']
+                ?? ($check['isValid'] ? 'v=DMARC1; p=none;' : null);
+
             $em->persist(new DnsCheckResult(
                 id: Uuid::uuid7(),
                 monitoredDomain: $persona->domain,
                 type: DnsCheckType::Dmarc,
                 checkedAt: new \DateTimeImmutable($check['checkedAt']),
-                rawRecord: $check['isValid'] ? 'v=DMARC1; p=none;' : null,
+                rawRecord: $rawRecord,
                 isValid: $check['isValid'],
                 issues: [],
                 details: [],
@@ -595,6 +603,65 @@ final class DashboardPagesTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $body = (string) $client->getResponse()->getContent();
         self::assertStringContainsString('Waiting for your first report', $body);
+    }
+
+    #[Test]
+    public function overviewShowsWaitForReportsWhenRuaPointsAtSendveryAndNoFirstReport(): void
+    {
+        // TASK-129 acceptance #1: a freshly-published DMARC record with
+        // rua= already pointing at Sendvery (PointsAtSendvery scenario) + no
+        // first report yet must render the WaitForReports variant, never the
+        // "Publish a DMARC RUA record" / "Add a `_dmarc` TXT record" nudge
+        // (the user has already done that work).
+        $client = $this->createClientWithDmarcState(
+            dmarcVerifiedAt: new \DateTimeImmutable('-2 hours'),
+            firstReportAt: null,
+            latestChecks: [[
+                'checkedAt' => '-1 hour',
+                'isValid' => true,
+                'rawRecord' => 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com;',
+            ]],
+        );
+
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertStringContainsString('Waiting for your first report', $body);
+        self::assertStringContainsString('24-48 hours', $body);
+        // Regression net: the "publish a record" copy must not surface for
+        // a user who has already published it correctly.
+        self::assertStringNotContainsString('Publish a DMARC RUA record', $body);
+        self::assertStringNotContainsString('Add a `_dmarc` TXT record', $body);
+    }
+
+    #[Test]
+    public function overviewShowsPublishRuaRecordWhenNoDmarcRecordIsPublished(): void
+    {
+        // TASK-129 acceptance #2: a team whose only domain has a verified
+        // DMARC record but no `rua=` tag at all (NoRecord scenario) must
+        // still see the existing PublishRuaRecord nudge so they're guided to
+        // publish the missing tag. dmarcVerifiedAt is set (so we slip past
+        // the Critical-severity VerifyDns branch) — what the user is missing
+        // is the rua= directive that makes ingestion possible.
+        $client = $this->createClientWithDmarcState(
+            dmarcVerifiedAt: new \DateTimeImmutable('-2 hours'),
+            firstReportAt: null,
+            latestChecks: [[
+                'checkedAt' => '-1 hour',
+                'isValid' => true,
+                'rawRecord' => 'v=DMARC1; p=none;',
+            ]],
+        );
+
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertStringContainsString('Publish a DMARC RUA record', $body);
+        self::assertStringContainsString('Add a `_dmarc` TXT record', $body);
     }
 
     #[Test]

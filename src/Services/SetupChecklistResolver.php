@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Results\SetupChecklistResult;
+use App\Value\Dns\RuaScenario;
 use App\Value\SetupChecklistStep;
 
 /**
@@ -19,6 +20,14 @@ use App\Value\SetupChecklistStep;
  *  - The dismissal is overridden ONLY when a previously-completed DMARC step
  *    has regressed (verified at some point + consecutive failures now).
  *    This lets us avoid clearing the dismissal column on every DNS check.
+ *
+ * Scenario branching (TASK-128): the third step ("Receive your first DMARC
+ * report") tailors its copy + CTA to the headline domain's
+ * {@see RuaScenario}. When `rua=` already points at Sendvery, telling the
+ * user to "connect a mailbox if you prefer" contradicts the correctly-
+ * configured state they just published, so the alternative is suppressed
+ * entirely. The branching uses the same headline-domain scenario as
+ * {@see NextActionResolver}, so the two cards stay in lockstep.
  */
 final readonly class SetupChecklistResolver
 {
@@ -29,6 +38,7 @@ final readonly class SetupChecklistResolver
         bool $hasMailbox,
         ?\DateTimeImmutable $dismissedAt,
         bool $hasDmarcRegression,
+        ?RuaScenario $headlineDomainRuaScenario,
     ): SetupChecklistResult {
         $addDomainStep = new SetupChecklistStep(
             id: 'add_domain',
@@ -50,14 +60,10 @@ final readonly class SetupChecklistResolver
             isComplete: $anyDomainHasDmarcVerified,
         );
 
-        $receiveReportsStep = new SetupChecklistStep(
-            id: 'receive_reports',
-            title: 'Receive your first DMARC report',
-            description: 'Reports flow in automatically once DMARC is published. Connect a mailbox if you prefer pulling them yourself.',
-            actionRoute: 'dashboard_dns_health',
-            actionLabel: 'Do it',
-            actionRouteParams: [],
-            isComplete: $anyDomainHasFirstReport || $hasMailbox,
+        $receiveReportsStep = $this->buildReceiveReportsStep(
+            anyDomainHasFirstReport: $anyDomainHasFirstReport,
+            hasMailbox: $hasMailbox,
+            headlineDomainRuaScenario: $headlineDomainRuaScenario,
         );
 
         $steps = [$addDomainStep, $publishDmarcStep, $receiveReportsStep];
@@ -84,5 +90,55 @@ final readonly class SetupChecklistResolver
             isVisible: $isVisible,
             isFullyComplete: $isFullyComplete,
         );
+    }
+
+    /**
+     * TASK-128: branch the third step's copy + CTA on the headline domain's
+     * RUA scenario so the alternative actions match the user's reality.
+     *
+     * - `PointsAtSendvery` — reports flow automatically; no mailbox CTA. The
+     *   primary action becomes a passive "Check DNS setup" deep-link.
+     * - `PointsAtExternal` — DMARC routes elsewhere; surface the matching
+     *   "Connect that mailbox" alternative (the NextAction card carries the
+     *   richer scenario-(c) copy, this is the checklist-row mirror).
+     * - `NoRecord` / null — keep the original generic copy that nudges the
+     *   user toward publishing DMARC + connecting a mailbox as a fallback.
+     */
+    private function buildReceiveReportsStep(
+        bool $anyDomainHasFirstReport,
+        bool $hasMailbox,
+        ?RuaScenario $headlineDomainRuaScenario,
+    ): SetupChecklistStep {
+        $isComplete = $anyDomainHasFirstReport || $hasMailbox;
+
+        return match ($headlineDomainRuaScenario) {
+            RuaScenario::PointsAtSendvery => new SetupChecklistStep(
+                id: 'receive_reports',
+                title: 'Receive your first DMARC report',
+                description: 'Reports flow in automatically. The first one usually arrives within 24-48 hours of rua= publishing — Gmail, Outlook and Yahoo each send one per day per domain.',
+                actionRoute: 'dashboard_dns_health',
+                actionLabel: 'Check DNS setup',
+                actionRouteParams: [],
+                isComplete: $isComplete,
+            ),
+            RuaScenario::PointsAtExternal => new SetupChecklistStep(
+                id: 'receive_reports',
+                title: 'Receive your first DMARC report',
+                description: 'Your DMARC record routes reports to an inbox you own. Connect that inbox so Sendvery can poll it — or repoint DMARC at Sendvery instead.',
+                actionRoute: 'dashboard_mailbox_add',
+                actionLabel: 'Connect that inbox',
+                actionRouteParams: [],
+                isComplete: $isComplete,
+            ),
+            RuaScenario::NoRecord, null => new SetupChecklistStep(
+                id: 'receive_reports',
+                title: 'Receive your first DMARC report',
+                description: 'Reports flow in automatically once DMARC is published. Connect a mailbox if you prefer pulling them yourself.',
+                actionRoute: 'dashboard_dns_health',
+                actionLabel: 'Do it',
+                actionRouteParams: [],
+                isComplete: $isComplete,
+            ),
+        };
     }
 }
