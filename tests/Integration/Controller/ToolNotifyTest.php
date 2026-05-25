@@ -245,6 +245,56 @@ final class ToolNotifyTest extends WebTestCase
         self::assertSelectorTextContains('body', 'Stay ahead of email breakage');
     }
 
+    /**
+     * TASK-117 — the post-result hard CTA for unauthenticated visitors must name
+     * the three round-4 product features by their plain-English phrases. Round 4
+     * shipped DMARC report parsing, sender authorization advisor (TASK-092),
+     * pass-rate regression detection (TASK-093), and scenario-aware setup
+     * guidance (TASK-100) — none of which a public DMARC-record lookup tool
+     * surfaces. A visitor seeing a D grade walking away thinking we're a "DNS
+     * change watcher" is the conversion bug the bullets fix; pin each one.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function ctaBulletsToolPaths(): iterable
+    {
+        yield 'domain-health' => ['/tools/domain-health?domain=example.com'];
+        yield 'dmarc-checker' => ['/tools/dmarc-checker?domain=example.com'];
+    }
+
+    #[Test]
+    #[\PHPUnit\Framework\Attributes\DataProvider('ctaBulletsToolPaths')]
+    public function postResultCtaListsThreeProductFeaturesForAnonymousVisitor(string $url): void
+    {
+        $client = self::createClient();
+        $client->request('GET', $url);
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        // Bullet 1 — DMARC report parsing. The DNS-record lookup tools can't do this;
+        // visitors must learn the product parses real aggregate reports.
+        self::assertStringContainsString(
+            "Parse every DMARC report automatically — see who's sending as you, with what pass rate",
+            $body,
+        );
+
+        // Bullet 2 — pass-rate regression + DNS change alerts. The CTA used to sell only
+        // DNS-change monitoring; pin the broader alert surface (TASK-092 + TASK-093).
+        self::assertStringContainsString(
+            'Get alerted the moment a sender starts failing or your pass rate drops',
+            $body,
+        );
+
+        // Bullet 3 — scenario-aware setup guidance (TASK-100). Visitors fixing a D grade
+        // need to know we hand-hold them through the fix; "no XML reading required" is
+        // the literal benefit.
+        self::assertStringContainsString(
+            'Plain-English setup guidance — no XML reading required',
+            $body,
+        );
+    }
+
     private function fetchCsrfToken(KernelBrowser $client): string
     {
         // Mount the SPF checker with a domain so the result block — and the
