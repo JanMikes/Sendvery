@@ -11,11 +11,13 @@ use PHPUnit\Framework\Attributes\Test;
 /**
  * Guards the homepage GitHub-stats trust strip (TASK-025). The `github_stats`
  * Twig global is registered by `App\Twig\GithubStatsExtension` and the
- * homepage template reads it in three places: the hero trust badges row,
- * the section-9 "Star on GitHub" button label, and the section-11 technical
- * credibility badge row. Every assertion below verifies the null-safe
- * fallback so a missing/failed cron run never renders zeroes or the literal
- * "null" in the rendered HTML.
+ * homepage template reads it in two places now: the hero trust badges row
+ * and the section-9 "Star on GitHub" button label. (The prior section-11
+ * "Built for engineers" tech-credibility badge row was retired in TASK-139,
+ * which is why the AGPL-stars badge assertions live as absence guards rather
+ * than presence ones.) Every assertion below verifies the null-safe fallback
+ * so a missing/failed cron run never renders zeroes or the literal "null"
+ * in the rendered HTML.
  */
 final class HomepageGithubStatsTest extends WebTestCase
 {
@@ -96,8 +98,14 @@ final class HomepageGithubStatsTest extends WebTestCase
         self::assertStringNotContainsString('Star on GitHub (', $body);
     }
 
+    /**
+     * TASK-139 — the section-11 "Built for engineers" tech-stack badge row
+     * (which carried the AGPL-3.0 · {{ stars }} stars badge) was retired.
+     * Pin its absence whether the GitHub-stats snapshot exists or not, so a
+     * future restore would have to retire this guard explicitly.
+     */
     #[Test]
-    public function agplBadgeIsAppendedWithStarCountWhenStatsArePresent(): void
+    public function builtForEngineersAgplBadgeIsRetired(): void
     {
         $client = self::createClient();
         $twig = self::getContainer()->get('twig');
@@ -111,23 +119,8 @@ final class HomepageGithubStatsTest extends WebTestCase
 
         $client->request('GET', '/');
 
-        $body = $client->getResponse()->getContent();
-        self::assertIsString($body);
-        self::assertStringContainsString('AGPL-3.0 · 42 stars', $body);
-    }
-
-    #[Test]
-    public function agplBadgeIsAbsentWhenStatsAreNull(): void
-    {
-        $client = self::createClient();
-        $twig = self::getContainer()->get('twig');
-        \assert($twig instanceof \Twig\Environment);
-        $twig->addGlobal('github_stats', null);
-
-        $client->request('GET', '/');
-
-        $body = $client->getResponse()->getContent();
-        self::assertIsString($body);
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('AGPL-3.0 · 42 stars', $body);
         self::assertStringNotContainsString('AGPL-3.0 · ', $body);
     }
 }

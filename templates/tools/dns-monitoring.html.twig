@@ -136,18 +136,7 @@
     </div>
 </section>
 
-<twig:SectionContainer bgClass="bg-base-200/50">
-    <div class="text-center mb-8">
-        <h2 class="text-xl font-bold">Related tools</h2>
-    </div>
-    <div class="flex flex-wrap justify-center gap-3">
-        <a href="{{ path('tools_spf_checker') }}" class="btn btn-outline btn-sm">SPF Checker</a>
-        <a href="{{ path('tools_dkim_checker') }}" class="btn btn-outline btn-sm">DKIM Checker</a>
-        <a href="{{ path('tools_dmarc_checker') }}" class="btn btn-outline btn-sm">DMARC Checker</a>
-        <a href="{{ path('tools_mx_checker') }}" class="btn btn-outline btn-sm">MX Checker</a>
-        <a href="{{ path('tools_email_auth_checker') }}" class="btn btn-outline btn-sm">Email Auth Checker</a>
-        <a href="{{ path('tools_domain_health') }}" class="btn btn-outline btn-sm">Domain Health</a>
-        <a href="{{ path('tools_blacklist_checker') }}" class="btn btn-outline btn-sm">Blacklist Checker</a>
-    </div>
-</twig:SectionContainer>
+{# TASK-140 — "Related tools" chip strip retired; the footer's Free Tools
+   column is the canonical cross-link surface and the nav Tools dropdown
+   already covers every sibling tool. #}
 {% endblock %}

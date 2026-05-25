@@ -284,41 +284,87 @@ final class MarketingPagesTest extends WebTestCase
         self::assertStringContainsString('Self-hostable', $heroText);
     }
 
+    /**
+     * TASK-136 — the repo is public, the `is_repo_public` env gate + notify-me
+     * mailto fallback are retired. The hero secondary CTA now unconditionally
+     * links at github.com. Pin BOTH the github href AND the absence of the
+     * prior notify-me data-source so a careless revert can't silently re-wire
+     * the env-gated branch back into the hero.
+     */
     #[Test]
-    public function heroSecondaryCtaRespectsRepoPublicGate(): void
+    public function heroSecondaryCtaLinksToGithub(): void
     {
-        // TASK-122 wired the SENDVERY_REPO_PUBLIC env gate; TASK-131 routed the
-        // hero secondary CTA through it. When the repo is public we link to
-        // github.com; when it's private we surface the notify-me CTA. Either
-        // branch must produce exactly one visible secondary CTA — assert the
-        // branch that actually matches the test-env gate value.
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
 
         $secondary = $crawler->filter('section#dns-checker a[data-track="hero-cta-secondary"]');
         self::assertCount(1, $secondary, 'Exactly one hero-cta-secondary anchor must render in the hero.');
 
-        $isRepoPublic = self::getContainer()->get('twig')->getGlobals()['is_repo_public'] ?? false;
         $href = (string) $secondary->attr('href');
+        self::assertStringStartsWith(
+            'https://github.com/',
+            $href,
+            'The hero secondary CTA must link to github.com — the repo is public, no env gate (TASK-136).',
+        );
 
-        if (true === $isRepoPublic) {
-            self::assertStringStartsWith(
-                'https://github.com/',
-                $href,
-                'When the repo is public the hero secondary CTA must link to github.com.',
-            );
-        } else {
-            self::assertStringStartsWith(
-                'mailto:',
-                $href,
-                'When the repo is private the hero secondary CTA must surface the notify-me mailto CTA (TASK-122 gate).',
-            );
-            self::assertSame(
-                'homepage-hero-repo-launch',
-                $secondary->attr('data-notify-source'),
-                'The notify-me CTA must carry data-notify-source for marketing tracking.',
-            );
-        }
+        self::assertNull(
+            $secondary->attr('data-notify-source'),
+            'The hero secondary CTA must not carry the retired notify-me data-notify-source (TASK-136).',
+        );
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('homepage-hero-repo-launch', $body);
+        self::assertStringNotContainsString('Notify me when the source ships', $body);
+    }
+
+    /**
+     * TASK-139 — the homepage "Built for engineers" tech-stack name-drop
+     * section was retired. Symfony 8 / PostgreSQL / FrankenPHP badges read as
+     * AI-aesthetic clutter that doesn't help a human decide whether Sendvery
+     * is the right tool. Pin the absence of every signal so a future restore
+     * has to retire this test explicitly.
+     */
+    #[Test]
+    public function homepageDoesNotShowBuiltForEngineersSection(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertStringNotContainsString('Built for engineers', $body);
+        self::assertStringNotContainsString('Built for developers who care about infrastructure', $body);
+        // The badge labels that lived in the section — each is a tech-stack
+        // name-drop we deliberately strip from user-facing surfaces.
+        self::assertStringNotContainsString('Symfony 8', $body);
+        self::assertStringNotContainsString('FrankenPHP', $body);
+    }
+
+    /**
+     * TASK-141 — the footer attribution was rewritten from "Built with Symfony
+     * & FrankenPHP" (tech-stack name-drop) to "Built with love by Jan Mikeš"
+     * with real links at the maintainer profile + source repo.
+     */
+    #[Test]
+    public function footerAttributionNamesMaintainerAndLinksToGithub(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $footer = $crawler->filter('footer');
+        $footerText = $footer->text();
+
+        self::assertStringContainsString('Built with love by', $footerText);
+        self::assertStringContainsString('Jan Mikeš', $footerText);
+        self::assertStringContainsString('Source on GitHub', $footerText);
+
+        // The retired tech-stack name-drop must not survive.
+        self::assertStringNotContainsString('Built with Symfony', $footerText);
+        self::assertStringNotContainsString('FrankenPHP', $footerText);
+
+        // The attribution surfaces real links — pin both.
+        self::assertGreaterThanOrEqual(1, $footer->filter('a[href="https://github.com/janmikes"]')->count(), 'Footer must link to the maintainer\'s GitHub profile.');
+        self::assertGreaterThanOrEqual(1, $footer->filter('a[href="https://github.com/janmikes/sendvery"]')->count(), 'Footer must link to the Sendvery source repository.');
     }
 
     /**

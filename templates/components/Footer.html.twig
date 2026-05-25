@@ -72,7 +72,9 @@
 
         <div class="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-base-content/50">
             <p>&copy; {{ "now"|date("Y") }} Sendvery. All rights reserved.</p>
-            <p>Built with Symfony &amp; FrankenPHP</p>
+            {# TASK-141 — sentence-case attribution + a real GitHub link in place
+               of the prior "Built with Symfony & FrankenPHP" tech-stack name-drop. #}
+            <p>Built with love by <a href="https://github.com/janmikes" target="_blank" rel="noopener" class="link link-hover">Jan Mikeš</a> &middot; <a href="https://github.com/janmikes/sendvery" target="_blank" rel="noopener" class="link link-hover">Source on GitHub &rarr;</a></p>
         </div>
     </div>
 </footer>

@@ -9,40 +9,20 @@ use PHPUnit\Framework\TestCase;
 
 final class OpenSourceExtensionTest extends TestCase
 {
-    public function testEmptyEnvValueIsTreatedAsRepoPrivate(): void
+    public function testGithubUrlIsExposedAsTwigGlobal(): void
     {
-        $globals = (new OpenSourceExtension(''))->getGlobals();
+        $globals = (new OpenSourceExtension())->getGlobals();
 
-        self::assertFalse($globals['is_repo_public']);
+        self::assertSame('https://github.com/janmikes/sendvery', $globals['github_url']);
     }
 
-    public function testZeroStringEnvValueIsTreatedAsRepoPrivate(): void
+    public function testIsRepoPublicGlobalIsRetired(): void
     {
-        $globals = (new OpenSourceExtension('0'))->getGlobals();
+        // TASK-136 — the repo is public now, every gate around it was a lie.
+        // Pinning the absence so a future restore would have to retire this test
+        // explicitly rather than silently re-introducing the env-gated CTA.
+        $globals = (new OpenSourceExtension())->getGlobals();
 
-        self::assertFalse($globals['is_repo_public']);
-    }
-
-    public function testOneStringEnvValueIsTreatedAsRepoPublic(): void
-    {
-        $globals = (new OpenSourceExtension('1'))->getGlobals();
-
-        self::assertTrue($globals['is_repo_public']);
-    }
-
-    public function testArbitraryTruthyEnvValueIsTreatedAsRepoPublic(): void
-    {
-        $globals = (new OpenSourceExtension('true'))->getGlobals();
-
-        self::assertTrue($globals['is_repo_public']);
-    }
-
-    public function testGithubUrlIsAlwaysExposed(): void
-    {
-        $globalsPrivate = (new OpenSourceExtension('0'))->getGlobals();
-        $globalsPublic = (new OpenSourceExtension('1'))->getGlobals();
-
-        self::assertSame('https://github.com/janmikes/sendvery', $globalsPrivate['github_url']);
-        self::assertSame('https://github.com/janmikes/sendvery', $globalsPublic['github_url']);
+        self::assertArrayNotHasKey('is_repo_public', $globals);
     }
 }

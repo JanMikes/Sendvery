@@ -47,58 +47,28 @@ final class OpenSourcePageTest extends WebTestCase
         self::assertSelectorTextContains('#quickstart h2', 'Self-host in 60 seconds');
     }
 
-    #[Test]
-    public function quickstartContainsThreeCopyableStepsWhenRepoIsPublic(): void
-    {
-        $client = self::createClient();
-        $twig = self::getContainer()->get('twig');
-        \assert($twig instanceof \Twig\Environment);
-        $twig->addGlobal('is_repo_public', true);
-
-        $crawler = $client->request('GET', '/about/open-source');
-
-        $copyControllers = $crawler->filter('#quickstart [data-controller="clipboard-copy"]');
-        self::assertGreaterThanOrEqual(3, $copyControllers->count(), 'Quickstart must have three copyable code blocks when the repo is public.');
-
-        $body = $client->getResponse()->getContent();
-        self::assertIsString($body);
-        self::assertStringContainsString('git clone https://github.com/janmikes/sendvery.git', $body);
-        self::assertStringContainsString('docker compose up -d', $body);
-    }
-
     /**
-     * TASK-122 — when SENDVERY_REPO_PUBLIC=0 the `git clone` step 404s for a
-     * real visitor. The quickstart must hide the command and surface a
-     * notify-me CTA instead. The hero / page heading stay (the AGPL-3.0 claim
-     * is still accurate), only the actionable command swaps for the gating
-     * notice. Test pins both halves: command absent AND notify CTA present
-     * with the agreed `source="open-source-repo-launch"` analytics slug.
+     * TASK-136 — the repo is public, the `is_repo_public` env gate is gone, and
+     * the quickstart unconditionally renders the three copy-paste commands. Pin
+     * the public-branch behaviour AND the absence of the prior notify-me CTA so
+     * a future revert can't silently re-introduce the env-gated fallback.
      */
     #[Test]
-    public function quickstartHidesGitCloneAndShowsNotifyCtaWhenRepoIsPrivate(): void
+    public function quickstartUnconditionallyRendersThreeCopyableSteps(): void
     {
         $client = self::createClient();
-        $twig = self::getContainer()->get('twig');
-        \assert($twig instanceof \Twig\Environment);
-        $twig->addGlobal('is_repo_public', false);
-
         $crawler = $client->request('GET', '/about/open-source');
 
-        $body = (string) $client->getResponse()->getContent();
-
-        // The clone-and-cd command must not render — a visitor who copies it
-        // hits a 404 today.
-        self::assertStringNotContainsString('git clone https://github.com/janmikes/sendvery.git', $body);
-
-        // No clipboard-copy controllers inside #quickstart when private — the
-        // commands disappear entirely, not just visually.
         $copyControllers = $crawler->filter('#quickstart [data-controller="clipboard-copy"]');
-        self::assertCount(0, $copyControllers, 'Quickstart must hide all copyable command blocks when the repo is private.');
+        self::assertGreaterThanOrEqual(3, $copyControllers->count(), 'Quickstart must have three copyable code blocks now the repo is public.');
 
-        // The notify CTA must be present, carrying the agreed source slug so
-        // we can later split conversion analytics for repo-launch waitlist.
-        $notifyLinks = $crawler->filter('#quickstart [data-notify-source="open-source-repo-launch"]');
-        self::assertGreaterThanOrEqual(1, $notifyLinks->count(), 'Notify-me CTA with source="open-source-repo-launch" must replace the quickstart commands when the repo is private.');
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('git clone https://github.com/janmikes/sendvery.git', $body);
+        self::assertStringContainsString('docker compose up -d', $body);
+
+        // The retired notify-me CTA must NOT survive anywhere on the page.
+        self::assertStringNotContainsString('Notify me when the repo goes public', $body);
+        self::assertStringNotContainsString('data-notify-source="open-source-repo-launch"', $body);
     }
 
     #[Test]
@@ -127,24 +97,26 @@ final class OpenSourcePageTest extends WebTestCase
         self::assertContains('Why AGPL-3.0?', $headings);
     }
 
+    /**
+     * TASK-136 — "What's in the repo?" cards are unconditional now that the
+     * repo is public; the env-gated "Source preview at launch" fallback is gone.
+     */
     #[Test]
-    public function pageHasWhatsInTheRepoSectionWhenRepoIsPublic(): void
+    public function pageHasWhatsInTheRepoSection(): void
     {
         $client = self::createClient();
-        $twig = self::getContainer()->get('twig');
-        \assert($twig instanceof \Twig\Environment);
-        $twig->addGlobal('is_repo_public', true);
-
         $crawler = $client->request('GET', '/about/open-source');
 
         $headings = $crawler->filter('h2')->each(static fn ($node): string => $node->text());
         self::assertContains("What's in the repo?", $headings);
 
-        $body = $client->getResponse()->getContent();
-        self::assertIsString($body);
+        $body = (string) $client->getResponse()->getContent();
         self::assertStringContainsString('src/', $body);
         self::assertStringContainsString('docs/', $body);
         self::assertStringContainsString('tests/', $body);
+
+        // The retired "Source preview at launch" fallback must not appear.
+        self::assertStringNotContainsString('Source preview at launch', $body);
     }
 
     #[Test]
@@ -164,44 +136,22 @@ final class OpenSourcePageTest extends WebTestCase
         self::assertGreaterThanOrEqual(1, $hostedButtons->count(), 'Page must have a "Try hosted" CTA pointing at /login');
     }
 
+    /**
+     * TASK-136 — the prior "Coming soon — repo opens at launch" disabled button
+     * is retired. The page-end attribution now unconditionally links at the
+     * canonical github.com/janmikes/sendvery URL.
+     */
     #[Test]
-    public function githubButtonIsDisabledWhenRepoNotPublic(): void
+    public function pageRendersGithubLinkInsteadOfComingSoonPlaceholder(): void
     {
         $client = self::createClient();
-        $twig = self::getContainer()->get('twig');
-        \assert($twig instanceof \Twig\Environment);
-        $twig->addGlobal('is_repo_public', false);
-        $twig->addGlobal('github_url', 'https://github.com/janmikes/sendvery');
-
         $crawler = $client->request('GET', '/about/open-source');
-
-        $disabled = $crawler->filter('main button[disabled]')->reduce(static function ($node): bool {
-            return str_contains($node->text(), 'Coming soon');
-        });
-        self::assertGreaterThanOrEqual(1, $disabled->count(), 'Disabled "Coming soon" button must render when repo is private');
 
         $mainLinks = $crawler->filter('main a[href="https://github.com/janmikes/sendvery"]');
-        self::assertCount(0, $mainLinks, 'Real GitHub link must NOT render inside main while repo is private');
-    }
+        self::assertGreaterThanOrEqual(1, $mainLinks->count(), 'Real GitHub link must render in main now the repo is public.');
 
-    #[Test]
-    public function githubButtonAppearsWhenRepoIsPublic(): void
-    {
-        $client = self::createClient();
-        $twig = self::getContainer()->get('twig');
-        \assert($twig instanceof \Twig\Environment);
-        $twig->addGlobal('is_repo_public', true);
-        $twig->addGlobal('github_url', 'https://github.com/janmikes/sendvery');
-
-        $crawler = $client->request('GET', '/about/open-source');
-
-        $githubLinks = $crawler->filter('main a[href="https://github.com/janmikes/sendvery"]');
-        self::assertGreaterThanOrEqual(1, $githubLinks->count(), 'Real GitHub link must render in main when repo is public');
-
-        $disabled = $crawler->filter('main button[disabled]')->reduce(static function ($node): bool {
-            return str_contains($node->text(), 'Coming soon');
-        });
-        self::assertCount(0, $disabled, '"Coming soon" placeholder must NOT render when repo is public');
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringNotContainsString('Coming soon — repo opens at launch', $body, 'The retired "Coming soon" placeholder must not survive (TASK-136).');
     }
 
     #[Test]

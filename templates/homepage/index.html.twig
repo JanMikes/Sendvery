@@ -56,23 +56,13 @@
                         Get started free
                     </a>
 
-                    {# Secondary CTA — env-gated per TASK-122: link to GitHub when the repo is public,
-                       fall back to the notify-me CTA while it's still private. The visible label changes
-                       so we don't promise a link the visitor can't actually click. #}
-                    {% if is_repo_public %}
-                        <a href="{{ github_url }}" target="_blank" rel="noopener"
-                           class="inline-flex items-center justify-center border border-zinc-300 rounded-md px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
-                           data-track="hero-cta-secondary">
-                            View on GitHub <span aria-hidden="true" class="ml-1">&rarr;</span>
-                        </a>
-                    {% else %}
-                        <a href="mailto:hello@sendvery.com?subject=Notify%20me%20when%20the%20Sendvery%20repo%20opens&amp;body=Please%20notify%20me%20when%20the%20open-source%20repo%20goes%20public."
-                           class="inline-flex items-center justify-center border border-zinc-300 rounded-md px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
-                           data-track="hero-cta-secondary"
-                           data-notify-source="homepage-hero-repo-launch">
-                            Notify me when the source ships
-                        </a>
-                    {% endif %}
+                    {# Secondary CTA — TASK-136: repo is public, link straight at GitHub. The
+                       prior `is_repo_public` env gate + notify-me fallback was retired with the repo. #}
+                    <a href="{{ github_url }}" target="_blank" rel="noopener"
+                       class="inline-flex items-center justify-center border border-zinc-300 rounded-md px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
+                       data-track="hero-cta-secondary">
+                        View on GitHub <span aria-hidden="true" class="ml-1">&rarr;</span>
+                    </a>
                 </div>
 
                 <p class="mt-5 text-xs text-zinc-400">
@@ -465,51 +455,11 @@
     <twig:PricingTable />
 </twig:SectionContainer>
 
-{# === 11. Technical Credibility === #}
-<twig:SectionContainer bgClass="bg-base-200/50">
-    <div class="max-w-3xl mx-auto text-center">
-        <twig:SectionHeader
-            eyebrow="Built for engineers"
-            title="Built for developers who care about infrastructure"
-        />
-        <div class="flex flex-wrap justify-center gap-3">
-            <span class="badge badge-lg badge-outline gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                Symfony 8
-            </span>
-            <span class="badge badge-lg badge-outline gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path></svg>
-                PostgreSQL
-            </span>
-            <span class="badge badge-lg badge-outline gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                FrankenPHP
-            </span>
-            <span class="badge badge-lg badge-outline gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                Encrypted at rest (libsodium)
-            </span>
-            <span class="badge badge-lg badge-outline gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"></path></svg>
-                Docker
-            </span>
-            <span class="badge badge-lg badge-outline gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                AI-Powered
-            </span>
-            {% if github_stats is not null %}
-                <span class="badge badge-lg badge-outline gap-2">
-                    AGPL-3.0 · {{ github_stats.stars }} stars
-                </span>
-            {% endif %}
-        </div>
-        <p class="mt-6 text-base-content/50 text-sm">
-            All data encrypted at rest. IMAP credentials encrypted with XChaCha20-Poly1305 via libsodium. Your data stays yours.
-        </p>
-    </div>
-</twig:SectionContainer>
-
-{# === 12. FAQ === #}
+{# === 11. FAQ ===
+   TASK-139 retired the "Built for engineers" tech-stack name-drop section that
+   used to sit here — humans don't pick a deliverability tool by which router
+   it runs under, and the "Symfony 8 / PostgreSQL / FrankenPHP" badges read as
+   the AI-aesthetic clutter we are deliberately cutting. #}
 <twig:SectionContainer id="faq">
     <twig:SectionHeader
         eyebrow="Common questions"
@@ -525,7 +475,7 @@
     ]" />
 </twig:SectionContainer>
 
-{# === 13. Final CTA — Get Started === #}
+{# === 12. Final CTA — Get Started === #}
 <section class="py-24 lg:py-32 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
     <div class="container mx-auto text-center">
         <h2 class="text-3xl md:text-4xl font-bold">Start monitoring your email health today</h2>
@@ -539,6 +489,6 @@
     </div>
 </section>
 
-{# === 14. Footer is rendered by marketing_layout.html.twig === #}
+{# === 13. Footer is rendered by marketing_layout.html.twig === #}
 
 {% endblock %}

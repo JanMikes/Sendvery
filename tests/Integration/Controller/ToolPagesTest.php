@@ -77,15 +77,24 @@ final class ToolPagesTest extends WebTestCase
         self::assertTrue($hasBreadcrumbs, 'Page should have BreadcrumbList structured data');
     }
 
+    /**
+     * TASK-140 — the per-page "Related tools" chip grid was retired (it
+     * duplicated the footer's Free Tools column + the nav Tools dropdown).
+     * Pin its absence on every tool page so a careless restore would have
+     * to retire this test explicitly.
+     */
     #[Test]
-    #[DataProvider('toolPagesWithCheckers')]
-    public function toolPageHasRelatedToolsLinks(string $url): void
+    #[DataProvider('allToolPages')]
+    public function toolPageDoesNotShowRelatedToolsChipGrid(string $url): void
     {
         $client = self::createClient();
-        $crawler = $client->request('GET', $url);
+        $client->request('GET', $url);
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('body', 'Related tools');
+        $body = (string) $client->getResponse()->getContent();
+        // Case-insensitive guard: a future contributor might re-introduce the
+        // block under "Related Tools" (title case) — catch either spelling.
+        self::assertStringNotContainsStringIgnoringCase('Related tools', $body, sprintf('Tool page %s must not render the retired "Related tools" chip grid (TASK-140).', $url));
     }
 
     #[Test]
