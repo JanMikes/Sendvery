@@ -27,16 +27,11 @@
 
 {% block content %}
 
-{# === 1. Hero (TASK-131) ===
-   Two-column at md+, stacked on mobile. Left column carries eyebrow / H1 / subhead /
-   CTAs / trust line. Right column embeds the existing `HomeDomainChecker` Live Component
-   verbatim — only the visual shell (zinc card, label, sr-only state text on chips) changes.
-   The hero <section> carries `id="dns-checker"` so the marketing-nav "Check your domain"
-   button (which links to /#dns-checker via the scroll-to Stimulus controller) still
-   scrolls here after the standalone checker section was removed.
-   Background: subtle dotted-grid scoped to this section only — no gradients, no blobs. #}
-<section id="dns-checker" class="relative bg-base-100 py-16 md:py-24 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] bg-[length:24px_24px]">
-    <div class="container mx-auto px-4 md:px-6">
+{# === 1. Hero (TASK-131) === #}
+<section id="dns-checker" class="relative overflow-hidden py-16 md:py-24 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] bg-[length:24px_24px]" style="background-color: oklch(98.5% 0.002 247)">
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(49%_0.13_176/.08),transparent_70%)]"></div>
+    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_80%_110%,oklch(49%_0.13_176/.05),transparent_60%)]"></div>
+    <div class="container mx-auto px-4 md:px-6 relative z-10">
         <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
             {# Left column #}
             <div>
@@ -72,17 +67,10 @@
 
             {# Right column — visual shell + existing HomeDomainChecker Live Component reused verbatim. #}
             <div>
-                <div class="bg-zinc-50 border border-zinc-200 rounded-lg p-5">
+                <div class="bg-white rounded-lg p-5 shadow-lg shadow-zinc-900/5 ring-1 ring-zinc-900/5">
                     <div class="text-xs uppercase tracking-wider text-zinc-500 mb-3">Free instant check — no signup</div>
 
-                    {# The HomeDomainChecker Symfony UX LiveComponent (src/Twig/Components/HomeDomainCheckerComponent.php)
-                       is reused VERBATIM. It owns its own `domain` LiveProp + `check` LiveAction; the embedded
-                       `_CheckerForm` partial already wires `data-model`, `data-action="live#action"`, and
-                       `data-live-action-param="check"`. Wrapping it in this visual shell doesn't touch any of
-                       those data attributes — the live behaviour is identical to before.
-                       `aria-live="polite"` is set on the parent so any result text rendered by the component
-                       gets announced to assistive tech. #}
-                    <div aria-live="polite" class="min-h-[110px]">
+                    <div aria-live="polite">
                         <twig:HomeDomainChecker />
                     </div>
                 </div>
