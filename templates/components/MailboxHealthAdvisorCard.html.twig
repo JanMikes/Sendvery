@@ -1,12 +1,17 @@
-{# Per-mailbox health advisory card (TASK-094). Renders above the
+{# Per-mailbox health advisory card (TASK-094 / TASK-108). Renders above the
    connection-details block on `/app/mailboxes/{id}` when the advisor returns
    a non-null result. The single `advice` prop is a {@see \App\Results\MailboxHealthAdvisorResult}
    or null — passing null renders nothing so the controller can pipe the
    advisor output through unconditionally without an `{% if %}` wrapper at
    the call site.
 
-   Severity drives every visual signal: border + tint colour, icon glyph, and
-   the headline copy. Reason text + CTAs come straight from the result DTO.
+   Severity drives every visual signal: border + tint colour, severity icon,
+   and the headline copy. Reason text + CTAs come straight from the result
+   DTO; the primary CTA's BUTTON glyph is picked from `advice.primaryAction.glyph`
+   (TASK-108) — so a "Disconnect this mailbox" silent-branch CTA shows an
+   unlink glyph, "Check DNS" shows a search glyph, "Publish a DMARC record"
+   shows a pencil glyph. The differentiation makes the scenario-aware change
+   visually obvious for a returning operator.
 
    Props:
      - advice (?MailboxHealthAdvisorResult)
@@ -76,31 +81,36 @@
                     </p>
 
                     <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
-                        {% if advice.primaryActionRoute == 'dashboard_mailbox_retest' %}
+                        {% set primaryGlyph = advice.primaryAction.glyph %}
+                        {% if advice.primaryAction.route == 'dashboard_mailbox_retest' %}
                             {# This route only accepts POST (CSRF-guarded), so render it as a form
                                instead of a link — mirrors the existing re-test button in the page
                                heading so re-test is always a real submission, never a GET. #}
-                            <form method="post" action="{{ path(advice.primaryActionRoute, advice.primaryActionRouteParams) }}">
+                            <form method="post" action="{{ path(advice.primaryAction.route, advice.primaryAction.routeParams) }}">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
                                 <button type="submit"
-                                        class="btn btn-sm {{ ctaToneBySeverity[severityValue] }}"
-                                        data-testid="mailbox-health-advisor-primary-cta">
-                                    {{ advice.primaryActionLabel }}
+                                        class="btn btn-sm {{ ctaToneBySeverity[severityValue] }} gap-2"
+                                        data-testid="mailbox-health-advisor-primary-cta"
+                                        data-glyph="{{ primaryGlyph }}">
+                                    {{ include('components/_mailbox_advisor_glyph.html.twig', { glyph: primaryGlyph }, with_context = false) }}
+                                    {{ advice.primaryAction.label }}
                                 </button>
                             </form>
                         {% else %}
-                            <a href="{{ path(advice.primaryActionRoute, advice.primaryActionRouteParams) }}"
-                               class="btn btn-sm {{ ctaToneBySeverity[severityValue] }}"
-                               data-testid="mailbox-health-advisor-primary-cta">
-                                {{ advice.primaryActionLabel }}
+                            <a href="{{ path(advice.primaryAction.route, advice.primaryAction.routeParams) }}"
+                               class="btn btn-sm {{ ctaToneBySeverity[severityValue] }} gap-2"
+                               data-testid="mailbox-health-advisor-primary-cta"
+                               data-glyph="{{ primaryGlyph }}">
+                                {{ include('components/_mailbox_advisor_glyph.html.twig', { glyph: primaryGlyph }, with_context = false) }}
+                                {{ advice.primaryAction.label }}
                             </a>
                         {% endif %}
 
-                        {% if advice.secondaryActionLabel is not null and advice.secondaryActionRoute is not null %}
-                            <a href="{{ path(advice.secondaryActionRoute, advice.secondaryActionRouteParams) }}"
+                        {% if advice.secondaryAction is not null %}
+                            <a href="{{ path(advice.secondaryAction.route, advice.secondaryAction.routeParams) }}"
                                class="link link-hover text-sm text-base-content/70"
                                data-testid="mailbox-health-advisor-secondary-link">
-                                {{ advice.secondaryActionLabel }} →
+                                {{ advice.secondaryAction.label }} →
                             </a>
                         {% endif %}
                     </div>

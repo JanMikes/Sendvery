@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Entity\MailboxConnection;
 use App\Results\Dns\RuaScenarioResult;
 use App\Results\MailboxActivitySummary;
+use App\Results\MailboxHealthAdvisorAction;
 use App\Results\MailboxHealthAdvisorResult;
 use App\Value\Dns\RuaScenario;
 use App\Value\MailboxHealthSeverity;
@@ -40,6 +41,14 @@ use Psr\Clock\ClockInterface;
  *
  * Returns null for the healthy case so the template can render with a single
  * `{% if advice %}` guard instead of branching on a sentinel severity.
+ *
+ * TASK-108: `silentForTooLong()`'s primary CTA now varies by scenario. A
+ * mailbox bound to a scenario-(b) domain (DMARC already routes to Sendvery)
+ * is redundant — the right action is "Disconnect this mailbox", not "Check
+ * DNS". Scenario-(c) (NoRecord) gets "Publish a DMARC record" as the primary.
+ * Scenario-(a) (PointsAtExternal) keeps the existing "Check DNS" primary.
+ * The unbound case (team-shared mailbox, no monitored domain link) also keeps
+ * "Check DNS" because we have no scenario to read.
  */
 final readonly class MailboxHealthAdvisor
 {
@@ -109,9 +118,12 @@ final readonly class MailboxHealthAdvisor
                 $mailbox->lastError ?? '',
                 $this->redundancyHint($mailbox, $ruaScenarioForLinkedDomain),
             ),
-            primaryActionLabel: 'Re-test connection',
-            primaryActionRoute: 'dashboard_mailbox_retest',
-            primaryActionRouteParams: ['id' => $mailbox->id->toString()],
+            primaryAction: new MailboxHealthAdvisorAction(
+                label: 'Re-test connection',
+                route: 'dashboard_mailbox_retest',
+                routeParams: ['id' => $mailbox->id->toString()],
+                glyph: 'retest',
+            ),
         );
     }
 
@@ -135,9 +147,12 @@ final readonly class MailboxHealthAdvisor
                 'More than half of the envelopes this mailbox pulled in the last 30 days landed in quarantine. Usually means receivers are sending reports for domains you haven\'t added yet, or domains that aren\'t verified.%s',
                 $this->redundancyHint($mailbox, $ruaScenarioForLinkedDomain),
             ),
-            primaryActionLabel: 'Open quarantine for this mailbox',
-            primaryActionRoute: 'dashboard_quarantine',
-            primaryActionRouteParams: ['mailbox' => $mailbox->id->toString()],
+            primaryAction: new MailboxHealthAdvisorAction(
+                label: 'Open quarantine for this mailbox',
+                route: 'dashboard_quarantine',
+                routeParams: ['mailbox' => $mailbox->id->toString()],
+                glyph: 'quarantine',
+            ),
         );
     }
 
@@ -176,16 +191,87 @@ final readonly class MailboxHealthAdvisor
             $reportAddress,
         );
 
+        [$primary, $secondary] = $this->silentForTooLongActions($mailbox, $ruaScenarioForLinkedDomain);
+
         return new MailboxHealthAdvisorResult(
             severity: MailboxHealthSeverity::SilentForTooLong,
             reasonText: $reasonText,
-            primaryActionLabel: 'Check DNS',
-            primaryActionRoute: 'dashboard_dns_health',
-            primaryActionRouteParams: [],
-            secondaryActionLabel: 'Use DNS-based ingestion instead',
-            secondaryActionRoute: 'dashboard_mailboxes',
-            secondaryActionRouteParams: [],
+            primaryAction: $primary,
+            secondaryAction: $secondary,
         );
+    }
+
+    /**
+     * TASK-108: pick the silent-branch CTAs from the bound-domain scenario.
+     * Returns [primary, secondary] so the caller assembles the DTO in one go.
+     *
+     * Scenario → primary CTA mapping:
+     *  - PointsAtSendvery + bound domain → "Disconnect this mailbox" (the
+     *    mailbox is redundant because DNS already routes to Sendvery). The
+     *    secondary "Check DNS" link is retained — disconnecting is the right
+     *    answer, but verifying the DNS first is a defensible operator habit.
+     *    Linked to `dashboard_mailboxes` because no dedicated disconnect or
+     *    edit route exists yet; the list page is the closest surface where
+     *    the user manages mailboxes (the per-mailbox detail page is where
+     *    THIS card already renders, so self-linking would be useless).
+     *  - PointsAtExternal → "Check DNS" (existing behaviour). The operator
+     *    genuinely needs to inspect DNS / repoint rua=, so the verb stays. No
+     *    secondary — the silent advisory copy already names the external rua
+     *    address, so a second link would be noise.
+     *  - NoRecord → "Publish a DMARC record". The domain has no DMARC record
+     *    at all, so the only useful action is to publish one via the DNS
+     *    health page. "Check DNS" would be redundant with the primary in this
+     *    branch — same destination, weaker verb — so we drop it.
+     *  - No bound domain (team-shared mailbox) → "Check DNS" default; we have
+     *    no scenario to read from so we cannot recommend any per-domain
+     *    action. Keep the secondary "Use DNS-based ingestion instead" link
+     *    so the operator still has a path to the central inbox flow.
+     *
+     * @return array{0: MailboxHealthAdvisorAction, 1: ?MailboxHealthAdvisorAction}
+     */
+    private function silentForTooLongActions(
+        MailboxConnection $mailbox,
+        ?RuaScenarioResult $ruaScenarioForLinkedDomain,
+    ): array {
+        $checkDns = new MailboxHealthAdvisorAction(
+            label: 'Check DNS',
+            route: 'dashboard_dns_health',
+            routeParams: [],
+            glyph: 'search',
+        );
+
+        $useDnsIngestion = new MailboxHealthAdvisorAction(
+            label: 'Use DNS-based ingestion instead',
+            route: 'dashboard_mailboxes',
+            routeParams: [],
+            glyph: 'search',
+        );
+
+        if (null === $ruaScenarioForLinkedDomain || null === $mailbox->monitoredDomain) {
+            return [$checkDns, $useDnsIngestion];
+        }
+
+        return match ($ruaScenarioForLinkedDomain->scenario) {
+            RuaScenario::PointsAtSendvery => [
+                new MailboxHealthAdvisorAction(
+                    label: 'Disconnect this mailbox',
+                    route: 'dashboard_mailboxes',
+                    routeParams: [],
+                    glyph: 'unlink',
+                ),
+                $checkDns,
+            ],
+            RuaScenario::PointsAtExternal => [$checkDns, null],
+            RuaScenario::NoRecord => [
+                new MailboxHealthAdvisorAction(
+                    label: 'Publish a DMARC record',
+                    route: 'dashboard_dns_health',
+                    routeParams: [],
+                    glyph: 'pencil',
+                ),
+                null,
+            ],
+        };
     }
 
     private function buildScenarioSentence(

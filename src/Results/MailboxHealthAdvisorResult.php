@@ -8,28 +8,25 @@ use App\Value\MailboxHealthSeverity;
 
 /**
  * Advisor output for the per-mailbox health card on `/app/mailboxes/{id}`
- * (TASK-094). Pure render-time DTO — every field is consumed by
- * `<twig:MailboxHealthAdvisorCard>` and nothing else. The two route-name +
- * params pairs let the template build URLs without knowing which advisory
- * branch fired; route-params is `array<string, string>` because every
- * dashboard route Sendvery generates currently takes string-only params
- * (UUIDs or slugs) — keeping the type narrow avoids accidental scalar drift.
+ * (TASK-094 / TASK-108). Pure render-time DTO — every field is consumed by
+ * `<twig:MailboxHealthAdvisorCard>` and nothing else.
+ *
+ * `primaryAction` is required; `secondaryAction` is optional. Both wrap label
+ * + route + params + glyph onto a {@see MailboxHealthAdvisorAction} so the
+ * advisor can vary the WHOLE CTA (including its visual glyph) per scenario
+ * atomically. The earlier shape with parallel `*Label` / `*Route` /
+ * `*RouteParams` scalar fields forced the template to derive the glyph from
+ * the route string, which broke as soon as two different intents (silent
+ * vs. disconnect) shared the same route name — that's exactly what TASK-108
+ * needs to do for the silent-bound-to-scenario-(b) branch.
  */
 final readonly class MailboxHealthAdvisorResult
 {
-    /**
-     * @param array<string, string> $primaryActionRouteParams
-     * @param array<string, string> $secondaryActionRouteParams
-     */
     public function __construct(
         public MailboxHealthSeverity $severity,
         public string $reasonText,
-        public string $primaryActionLabel,
-        public string $primaryActionRoute,
-        public array $primaryActionRouteParams,
-        public ?string $secondaryActionLabel = null,
-        public ?string $secondaryActionRoute = null,
-        public array $secondaryActionRouteParams = [],
+        public MailboxHealthAdvisorAction $primaryAction,
+        public ?MailboxHealthAdvisorAction $secondaryAction = null,
     ) {
     }
 }

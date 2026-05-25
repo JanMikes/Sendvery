@@ -22,10 +22,11 @@ use Symfony\Component\Clock\MockClock;
 
 /**
  * Pure-computation coverage for the {@see MailboxHealthAdvisor} branches
- * (TASK-094). The advisor is the only place that decides which (if any) of
- * the three advisory cards renders on `/app/mailboxes/{id}` — locking the
- * eligibility rules here keeps the dashboard surface deterministic across
- * every "what should this user do?" surface in the app.
+ * (TASK-094 / TASK-108). The advisor is the only place that decides which
+ * (if any) of the three advisory cards renders on `/app/mailboxes/{id}` —
+ * locking the eligibility rules + the per-scenario CTAs here keeps the
+ * dashboard surface deterministic across every "what should this user do?"
+ * surface in the app.
  */
 final class MailboxHealthAdvisorTest extends TestCase
 {
@@ -47,10 +48,11 @@ final class MailboxHealthAdvisorTest extends TestCase
         self::assertSame(MailboxHealthSeverity::BrokenCredentials, $result->severity);
         self::assertStringContainsString('Authentication failed (535)', $result->reasonText);
         self::assertStringContainsString('May 24, 09:30', $result->reasonText);
-        self::assertSame('Re-test connection', $result->primaryActionLabel);
-        self::assertSame('dashboard_mailbox_retest', $result->primaryActionRoute);
-        self::assertSame(['id' => $mailbox->id->toString()], $result->primaryActionRouteParams);
-        self::assertNull($result->secondaryActionLabel);
+        self::assertSame('Re-test connection', $result->primaryAction->label);
+        self::assertSame('dashboard_mailbox_retest', $result->primaryAction->route);
+        self::assertSame(['id' => $mailbox->id->toString()], $result->primaryAction->routeParams);
+        self::assertSame('retest', $result->primaryAction->glyph);
+        self::assertNull($result->secondaryAction);
     }
 
     #[Test]
@@ -110,11 +112,107 @@ final class MailboxHealthAdvisorTest extends TestCase
         self::assertSame(MailboxHealthSeverity::SilentForTooLong, $result->severity);
         self::assertStringContainsString('7+ days', $result->reasonText);
         self::assertStringContainsString('reports@sendvery.test', $result->reasonText);
-        self::assertSame('Check DNS', $result->primaryActionLabel);
-        self::assertSame('dashboard_dns_health', $result->primaryActionRoute);
-        self::assertSame([], $result->primaryActionRouteParams);
-        self::assertSame('Use DNS-based ingestion instead', $result->secondaryActionLabel);
-        self::assertSame('dashboard_mailboxes', $result->secondaryActionRoute);
+        // No bound domain → TASK-108 default branch: keep "Check DNS" primary.
+        self::assertSame('Check DNS', $result->primaryAction->label);
+        self::assertSame('dashboard_dns_health', $result->primaryAction->route);
+        self::assertSame([], $result->primaryAction->routeParams);
+        self::assertSame('search', $result->primaryAction->glyph);
+        self::assertNotNull($result->secondaryAction);
+        self::assertSame('Use DNS-based ingestion instead', $result->secondaryAction->label);
+        self::assertSame('dashboard_mailboxes', $result->secondaryAction->route);
+    }
+
+    #[Test]
+    public function silentForTooLongPrimaryIsDisconnectWhenBoundDomainPointsAtSendvery(): void
+    {
+        // TASK-108 scenario-(b): the mailbox is bound to a domain whose DNS
+        // already routes reports to Sendvery — the right primary action is
+        // "Disconnect this mailbox", not "Check DNS". Secondary stays as
+        // "Check DNS" so an operator who wants to verify DNS first can.
+        $advisor = $this->makeAdvisor();
+        $domain = $this->makeDomain('example.com');
+        $mailbox = $this->makeMailbox(
+            createdAt: new \DateTimeImmutable('2026-05-10 09:00:00'),
+            lastPolledAt: new \DateTimeImmutable('2026-05-24 09:30:00'),
+            lastError: null,
+            monitoredDomain: $domain,
+        );
+
+        $result = $advisor->advise(
+            $mailbox,
+            new MailboxActivitySummary(0, 0, 0),
+            new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com'),
+        );
+
+        self::assertNotNull($result);
+        self::assertSame(MailboxHealthSeverity::SilentForTooLong, $result->severity);
+        self::assertSame('Disconnect this mailbox', $result->primaryAction->label);
+        self::assertSame('dashboard_mailboxes', $result->primaryAction->route);
+        self::assertSame([], $result->primaryAction->routeParams);
+        self::assertSame('unlink', $result->primaryAction->glyph);
+        self::assertNotNull($result->secondaryAction);
+        self::assertSame('Check DNS', $result->secondaryAction->label);
+        self::assertSame('dashboard_dns_health', $result->secondaryAction->route);
+    }
+
+    #[Test]
+    public function silentForTooLongPrimaryStaysCheckDnsForExternalScenario(): void
+    {
+        // TASK-108 scenario-(a) regression check: PointsAtExternal must still
+        // surface "Check DNS" as the primary — the operator genuinely needs
+        // to inspect / repoint DNS. Secondary is suppressed because the
+        // reason copy already names the external rua address.
+        $advisor = $this->makeAdvisor();
+        $domain = $this->makeDomain('example.com');
+        $mailbox = $this->makeMailbox(
+            createdAt: new \DateTimeImmutable('2026-05-10 09:00:00'),
+            lastPolledAt: new \DateTimeImmutable('2026-05-24 09:30:00'),
+            lastError: null,
+            monitoredDomain: $domain,
+        );
+
+        $result = $advisor->advise(
+            $mailbox,
+            new MailboxActivitySummary(0, 0, 0),
+            new RuaScenarioResult(RuaScenario::PointsAtExternal, 'reports@external.example'),
+        );
+
+        self::assertNotNull($result);
+        self::assertSame(MailboxHealthSeverity::SilentForTooLong, $result->severity);
+        self::assertSame('Check DNS', $result->primaryAction->label);
+        self::assertSame('dashboard_dns_health', $result->primaryAction->route);
+        self::assertSame('search', $result->primaryAction->glyph);
+        self::assertNull($result->secondaryAction);
+    }
+
+    #[Test]
+    public function silentForTooLongPrimaryIsPublishDmarcWhenScenarioIsNoRecord(): void
+    {
+        // TASK-108 scenario-(c): the domain has no DMARC record at all, so
+        // "Publish a DMARC record" is the only useful primary action.
+        // Secondary "Check DNS" is dropped because it would land on the
+        // same destination page — redundant with the primary.
+        $advisor = $this->makeAdvisor();
+        $domain = $this->makeDomain('example.com');
+        $mailbox = $this->makeMailbox(
+            createdAt: new \DateTimeImmutable('2026-05-10 09:00:00'),
+            lastPolledAt: new \DateTimeImmutable('2026-05-24 09:30:00'),
+            lastError: null,
+            monitoredDomain: $domain,
+        );
+
+        $result = $advisor->advise(
+            $mailbox,
+            new MailboxActivitySummary(0, 0, 0),
+            new RuaScenarioResult(RuaScenario::NoRecord, null),
+        );
+
+        self::assertNotNull($result);
+        self::assertSame(MailboxHealthSeverity::SilentForTooLong, $result->severity);
+        self::assertSame('Publish a DMARC record', $result->primaryAction->label);
+        self::assertSame('dashboard_dns_health', $result->primaryAction->route);
+        self::assertSame('pencil', $result->primaryAction->glyph);
+        self::assertNull($result->secondaryAction);
     }
 
     #[Test]
@@ -163,6 +261,10 @@ final class MailboxHealthAdvisorTest extends TestCase
 
         self::assertNotNull($result);
         self::assertStringNotContainsString('reports@external.example', $result->reasonText);
+        // CTA defaults must still be the unbound-mailbox pair (Check DNS / Use DNS-based ingestion).
+        self::assertSame('Check DNS', $result->primaryAction->label);
+        self::assertNotNull($result->secondaryAction);
+        self::assertSame('Use DNS-based ingestion instead', $result->secondaryAction->label);
     }
 
     #[Test]
@@ -257,9 +359,10 @@ final class MailboxHealthAdvisorTest extends TestCase
 
         self::assertNotNull($result);
         self::assertSame(MailboxHealthSeverity::QuarantineDominant, $result->severity);
-        self::assertSame('Open quarantine for this mailbox', $result->primaryActionLabel);
-        self::assertSame('dashboard_quarantine', $result->primaryActionRoute);
-        self::assertSame(['mailbox' => $mailbox->id->toString()], $result->primaryActionRouteParams);
+        self::assertSame('Open quarantine for this mailbox', $result->primaryAction->label);
+        self::assertSame('dashboard_quarantine', $result->primaryAction->route);
+        self::assertSame(['mailbox' => $mailbox->id->toString()], $result->primaryAction->routeParams);
+        self::assertSame('quarantine', $result->primaryAction->glyph);
     }
 
     #[Test]

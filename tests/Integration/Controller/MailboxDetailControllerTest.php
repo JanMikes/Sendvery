@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Integration\Controller;
 
 use App\Entity\DmarcReport;
+use App\Entity\DnsCheckResult;
 use App\Entity\MailboxConnection;
 use App\Entity\MonitoredDomain;
 use App\Entity\QuarantinedDmarcReport;
@@ -15,6 +16,7 @@ use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\DnsCheckType;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
 use App\Value\Reports\QuarantineReason;
@@ -273,6 +275,113 @@ final class MailboxDetailControllerTest extends WebTestCase
             0,
             $crawler->filter('form[action="/app/mailboxes/'.$data['mailbox']->id->toString().'/test"]')->count(),
         );
+    }
+
+    #[Test]
+    public function silentScenarioPointsAtSendveryRendersDisconnectAsPrimary(): void
+    {
+        // TASK-108: a silent mailbox bound to a scenario-(b) domain (DMARC
+        // already routes to Sendvery) must render "Disconnect this mailbox"
+        // as the primary CTA — the operator should disconnect a redundant
+        // mailbox rather than chase a DNS issue.
+        $data = $this->buildSilentMailboxForScenario(rawDmarcRecord: 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
+
+        $crawler = $data['client']->request('GET', '/app/mailboxes/'.$data['mailbox']->id->toString());
+
+        self::assertResponseIsSuccessful();
+        $primaryCta = $crawler->filter('[data-testid="mailbox-health-advisor-primary-cta"]');
+        self::assertGreaterThan(0, $primaryCta->count(), 'Primary CTA must render on the advisor card');
+        self::assertStringContainsString('Disconnect this mailbox', trim($primaryCta->text()));
+        self::assertSame('unlink', $primaryCta->attr('data-glyph'));
+    }
+
+    #[Test]
+    public function silentScenarioPointsAtExternalRendersCheckDnsAsPrimary(): void
+    {
+        // TASK-108 regression: a silent mailbox bound to a scenario-(a) domain
+        // (DMARC rua= points at an external address) keeps "Check DNS" as the
+        // primary CTA. The operator needs to inspect / repoint DNS.
+        $data = $this->buildSilentMailboxForScenario(rawDmarcRecord: 'v=DMARC1; p=none; rua=mailto:reports@external.example');
+
+        $crawler = $data['client']->request('GET', '/app/mailboxes/'.$data['mailbox']->id->toString());
+
+        self::assertResponseIsSuccessful();
+        $primaryCta = $crawler->filter('[data-testid="mailbox-health-advisor-primary-cta"]');
+        self::assertGreaterThan(0, $primaryCta->count(), 'Primary CTA must render on the advisor card');
+        self::assertStringContainsString('Check DNS', trim($primaryCta->text()));
+        self::assertSame('search', $primaryCta->attr('data-glyph'));
+    }
+
+    /**
+     * Seeds the database with a mailbox that will trigger the silent_for_too_long
+     * advisor branch (active, polled > 7 days, no envelopes) and binds it to a
+     * domain whose latest DMARC check matches the given `$rawDmarcRecord`. The
+     * `RuaScenarioResolver` parses the stored record to pick the scenario, so
+     * one fixture method handles both scenario-(a) and scenario-(b).
+     *
+     * @return array{client: KernelBrowser, em: EntityManagerInterface, persona: Persona, mailbox: MailboxConnection}
+     */
+    private function buildSilentMailboxForScenario(string $rawDmarcRecord): array
+    {
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+
+        $persona = $fixtures->persona()
+            ->emailPrefix('mb-silent-'.substr(Uuid::uuid7()->toString(), 0, 6))
+            ->withDomain('mb-silent-'.substr(Uuid::uuid7()->toString(), 0, 6).'.example')
+            ->build();
+        assert(null !== $persona->domain);
+
+        $encryptor = self::getContainer()->get(CredentialEncryptor::class);
+        assert($encryptor instanceof CredentialEncryptor);
+
+        // The latest stored DMARC check is what RuaScenarioResolver reads — no
+        // live DNS lookup. Seeding the record drives the scenario branch under test.
+        $em->persist(new DnsCheckResult(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            type: DnsCheckType::Dmarc,
+            checkedAt: new \DateTimeImmutable('-1 hour'),
+            rawRecord: $rawDmarcRecord,
+            isValid: true,
+            issues: [],
+            details: [],
+            previousRawRecord: null,
+            hasChanged: false,
+            isFirstCheck: false,
+        ));
+
+        // Mailbox created >7 days ago, polled recently with no error, no
+        // envelopes ever pulled → silent_for_too_long branch fires.
+        $mailbox = new MailboxConnection(
+            id: Uuid::uuid7(),
+            team: $persona->team,
+            type: MailboxType::ImapUser,
+            host: 'imap.silent.example',
+            port: 993,
+            encryptedUsername: $encryptor->encrypt('user@silent.example'),
+            encryptedPassword: $encryptor->encrypt('s3cret'),
+            encryption: MailboxEncryption::Ssl,
+            createdAt: new \DateTimeImmutable('-30 days'),
+            monitoredDomain: $persona->domain,
+            isActive: true,
+            lastPolledAt: new \DateTimeImmutable('-30 minutes'),
+            lastError: null,
+        );
+        $mailbox->popEvents();
+        $em->persist($mailbox);
+        $em->flush();
+
+        $client->loginUser($persona->user);
+
+        return [
+            'client' => $client,
+            'em' => $em,
+            'persona' => $persona,
+            'mailbox' => $mailbox,
+        ];
     }
 
     private function persistEnvelope(
