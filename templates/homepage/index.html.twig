@@ -294,19 +294,24 @@
     </div>
 </twig:SectionContainer>
 
-{# === 5. How it Works === #}
+{# === 5. How it Works ===
+   TASK-132: Step 1 leads with DNS-first ingestion (publish `rua=mailto:reports@sendvery.com`
+   in your DMARC TXT record) — the same posture the dashboard's IngestionRoutesCallout and
+   the round-6 onboarding card take. The legacy "connect your DMARC report mailbox" framing
+   sat one step ahead of what users actually see in the product within a minute of signing
+   up. Mailbox connection stays NAMED here but as the fallback path, not equal billing. #}
 <twig:SectionContainer bgClass="bg-base-200/50">
     <twig:SectionHeader
         eyebrow="How it works"
         title="Three steps to email authentication peace of mind"
-        lede="Connect your mailbox, let Sendvery monitor your reports and DNS, then act on plain-English alerts."
+        lede="Point your DMARC reports at Sendvery (or connect a mailbox if you can't change DNS), let us monitor your reports and records, then act on plain-English alerts."
     />
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
         <div class="text-center">
-            <img src="{{ asset('images/how-connect.webp') }}" alt="Connect your domain" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
+            <img src="{{ asset('images/how-connect.webp') }}" alt="Add your domain and point DMARC at Sendvery" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
             <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 1</div>
-            <h3 class="text-lg font-bold mb-2">Connect</h3>
-            <p class="text-base-content/60 text-sm">Add your domain and connect your DMARC report mailbox. Takes 2 minutes.</p>
+            <h3 class="text-lg font-bold mb-2">Add your domain. Point DMARC at Sendvery.</h3>
+            <p class="text-base-content/60 text-sm">Point your DMARC <code class="kbd kbd-xs">rua=</code> at <code class="kbd kbd-xs">reports@sendvery.com</code> so email providers send their aggregate reports straight to Sendvery — or connect your own mailbox if you prefer pulling them yourself.</p>
         </div>
         <div class="text-center">
             <img src="{{ asset('images/how-monitor.webp') }}" alt="Monitor your email authentication" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">

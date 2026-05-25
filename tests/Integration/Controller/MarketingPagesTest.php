@@ -402,6 +402,67 @@ final class MarketingPagesTest extends WebTestCase
         );
     }
 
+    /**
+     * TASK-132 — Section 5 "How it works" Step 1 was the last surface still pitching
+     * "Add your domain and connect your DMARC report mailbox" as the primary path.
+     * The dashboard (TASK-091/100, TASK-128/130) leads with DNS-first ingestion:
+     * publish `rua=mailto:reports@sendvery.com` and let providers route reports to
+     * Sendvery centrally — mailbox connection is the fallback for teams that can't
+     * change DNS. The homepage marketing copy must mirror the in-product reality a
+     * visitor sees within a minute of signing up. Pin BOTH the absence of the
+     * legacy Step 1 description AND the presence of the new DNS-first phrasing
+     * (`rua=` literal + sentence-case "Point DMARC at Sendvery." title) so a
+     * careless future edit can't drift the message back.
+     */
+    #[Test]
+    public function task132HowItWorksStep1LeadsWithDnsFirstIngestion(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        // The legacy Step 1 description must not survive anywhere in the rendered
+        // markup (Twig {# #} comments are stripped at compile time, so any match
+        // here would be a real regression in user-facing copy).
+        self::assertStringNotContainsString(
+            'Add your domain and connect your DMARC report mailbox',
+            $body,
+            'Section 5 Step 1 must not pitch mailbox connection as the primary onboarding path — DNS-first is the dashboard reality (TASK-091/100/128).',
+        );
+
+        // Locate Step 1 by its eyebrow + walk to the surrounding column so the
+        // assertions are scoped to the actual step, not the rest of the page.
+        $step1Eyebrow = $crawler->filter('div.text-center:contains("Step 1")')->first();
+        self::assertCount(1, $step1Eyebrow, 'Section 5 must contain exactly one "Step 1" column.');
+
+        $step1Html = $step1Eyebrow->html();
+
+        // New title direction — sentence-case, matches the round-6 hero copy register.
+        self::assertStringContainsString(
+            'Point DMARC at Sendvery.',
+            $step1Html,
+            'Step 1 title must lead with DNS-first ingestion ("Point DMARC at Sendvery.").',
+        );
+
+        // The literal `rua=` token must appear in the body — that's the DNS tag
+        // operators publish, and matching IngestionRoutesCallout / PricingFaq
+        // teaches the same vocabulary across marketing + dashboard.
+        self::assertStringContainsString(
+            'rua=',
+            $step1Html,
+            'Step 1 body must reference the literal `rua=` DMARC tag — same vocabulary as IngestionRoutesCallout + PricingFaq.',
+        );
+
+        // The central inbox address must also appear so the step is
+        // copy-paste-actionable from the marketing page.
+        self::assertStringContainsString(
+            'reports@sendvery.com',
+            $step1Html,
+            'Step 1 must name the central inbox address operators point their `rua=` at.',
+        );
+    }
+
     /** @return iterable<string, array{string}> */
     public static function publicRoutes(): iterable
     {
