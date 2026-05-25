@@ -3,6 +3,20 @@
 {% block title %}Open Source — Self-host Sendvery free, forever{% endblock %}
 {% block meta_description %}Sendvery is open source under AGPL-3.0. Self-host with Docker in under 60 seconds. No domain limits, no feature gates, no telemetry. Hosted plans available when you'd rather not run it yourself.{% endblock %}
 
+{% block structured_data %}
+{# TASK-149: BreadcrumbList JSON-LD for SERP breadcrumb chips. #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Open Source", "item": "{{ url('about_open_source') }}"}
+    ]
+}
+</script>
+{% endblock %}
+
 {% block content %}
     <twig:SectionContainer>
         <div class="max-w-4xl mx-auto text-center">

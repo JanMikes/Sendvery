@@ -21,6 +21,17 @@
     ]
 }
 </script>
+{# TASK-149: BreadcrumbList JSON-LD for SERP breadcrumb chips. #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Pricing", "item": "{{ url('pricing') }}"}
+    ]
+}
+</script>
 {% endblock %}
 
 {% block content %}

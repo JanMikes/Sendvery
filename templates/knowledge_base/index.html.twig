@@ -17,6 +17,17 @@
     }
 }
 </script>
+{# TASK-149: BreadcrumbList for the KB index — Home > Knowledge Base. #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Knowledge Base", "item": "{{ url('knowledge_base_index') }}"}
+    ]
+}
+</script>
 {% endblock %}
 
 {% block content %}

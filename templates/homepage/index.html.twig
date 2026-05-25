@@ -23,6 +23,26 @@
     }
 }
 </script>
+{# TASK-150: WebSite JSON-LD with SearchAction — forward-declarative so Google
+   can pick up the Sitelinks Searchbox eligibility on the next crawl when a
+   search feature ships. The /search?q={search_term_string} endpoint doesn't
+   need to exist yet; this is structured-data plumbing only. #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Sendvery",
+    "url": "{{ url('home') }}",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "{{ url('home') }}search?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+    }
+}
+</script>
 {% endblock %}
 
 {% block content %}

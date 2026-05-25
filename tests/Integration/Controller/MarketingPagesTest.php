@@ -668,6 +668,68 @@ final class MarketingPagesTest extends WebTestCase
         self::assertStringContainsString('"name": "Personal"', $body, 'Pricing JSON-LD must enumerate the Personal tier.');
         self::assertStringContainsString('"name": "Pro"', $body, 'Pricing JSON-LD must enumerate the Pro tier.');
         self::assertStringContainsString('"name": "Business"', $body, 'Pricing JSON-LD must enumerate the Business tier.');
+
+        // TASK-149 — BreadcrumbList JSON-LD on KB index + /about/* pages so
+        // SERPs render the site-hierarchy breadcrumb chips under each result.
+        foreach (['/learn', '/about/what-is-sendvery', '/about/open-source', '/pricing'] as $route) {
+            $client->request('GET', $route);
+            $pageBody = (string) $client->getResponse()->getContent();
+            self::assertStringContainsString(
+                '"@type": "BreadcrumbList"',
+                $pageBody,
+                sprintf('Route %s must emit BreadcrumbList JSON-LD so SERPs render the site-hierarchy breadcrumb chips.', $route),
+            );
+        }
+
+        // TASK-150 — WebSite JSON-LD with SearchAction on the homepage so
+        // Google can light up the Sitelinks Searchbox if/when a search feature
+        // ships. Forward-declarative — the /search endpoint doesn't need to
+        // exist yet for the structured data to be valid.
+        $client->request('GET', '/');
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('"@type": "WebSite"', $body, 'Homepage must declare a WebSite entity with SearchAction so Google can light up Sitelinks Searchbox eligibility.');
+        self::assertStringContainsString('"@type": "SearchAction"', $body, 'Homepage WebSite JSON-LD must include a SearchAction potentialAction.');
+        self::assertStringContainsString('search_term_string', $body, 'SearchAction must declare the search_term_string query-input parameter.');
+
+        // TASK-152 — 4 tool/article pages had `<title>` overages above the
+        // SERP-friendly ~60-char threshold (Google truncates the brand suffix).
+        // Trimmed to ≤ 60 chars so the brand stays visible.
+        $titleTrimRoutes = [
+            '/tools/domain-health',
+            '/tools/email-auth-checker',
+            '/tools/blacklist-checker',
+            '/learn/gmail-yahoo-bulk-sender-requirements-2024',
+        ];
+        foreach ($titleTrimRoutes as $route) {
+            $client->request('GET', $route);
+            $pageBody = (string) $client->getResponse()->getContent();
+            $titleMatched = preg_match('~<title>([^<]+)</title>~', $pageBody, $matches);
+            self::assertSame(1, $titleMatched, sprintf('Route %s must render a <title>.', $route));
+            $title = html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5);
+            self::assertLessThanOrEqual(
+                60,
+                mb_strlen($title),
+                sprintf('Route %s must keep <title> at ≤ 60 chars so Google does not truncate the "— Sendvery" brand suffix in SERPs. Actual: "%s" (%d chars).', $route, $title, mb_strlen($title)),
+            );
+        }
+
+        // TASK-148 — KB articles ship per-article datePublished + dateModified so
+        // Google sees per-article freshness signals. Pin that AT LEAST TWO different
+        // datePublished values exist across the KB corpus — without this, all
+        // articles would share one cohort and updates would lose ranking benefit.
+        $kbDates = [];
+        foreach (['/learn/what-is-dmarc', '/learn/what-is-dkim', '/learn/spf-record-guide'] as $kbRoute) {
+            $client->request('GET', $kbRoute);
+            $kbBody = (string) $client->getResponse()->getContent();
+            $matched = preg_match('~"datePublished":\s*"([^"]+)"~', $kbBody, $matches);
+            self::assertSame(1, $matched, sprintf('Route %s must emit datePublished in JSON-LD.', $kbRoute));
+            $kbDates[] = $matches[1];
+        }
+        self::assertGreaterThan(
+            1,
+            count(array_unique($kbDates)),
+            'KB articles must use per-article datePublished — at least 2 different dates across 3 sampled articles. A single shared date across all articles was the round-8 baseline; the round-9 fix splits the cohort so each article gets its own freshness signal.',
+        );
     }
 
     /**

@@ -3,6 +3,20 @@
 {% block title %}What is Sendvery? — Email Health & Deliverability Platform{% endblock %}
 {% block meta_description %}Sendvery is an open-source email health monitoring platform. DMARC report parsing, DNS monitoring, and AI-powered insights for developers, small businesses, and agencies — from $5.99/mo or self-hosted free forever.{% endblock %}
 
+{% block structured_data %}
+{# TASK-149: BreadcrumbList JSON-LD for SERP breadcrumb chips. #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "What is Sendvery?", "item": "{{ url('about_what_is_sendvery') }}"}
+    ]
+}
+</script>
+{% endblock %}
+
 {% block content %}
     {# 1. HERO #}
     <twig:SectionContainer>

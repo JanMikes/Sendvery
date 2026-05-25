@@ -11,8 +11,8 @@
     "headline": "{{ block('article_title') }}",
     "description": "{{ block('meta_description') }}",
     "url": "{{ url('knowledge_base_article', {slug: guide.slug}) }}",
-    "datePublished": "2026-03-25",
-    "dateModified": "2026-03-25",
+    "datePublished": "{{ guide.publishedAt }}",
+    "dateModified": "{{ guide.updatedAt }}",
     "author": {
         "@type": "Organization",
         "name": "Sendvery"
@@ -25,6 +25,35 @@
         "@type": "WebPage",
         "@id": "{{ url('knowledge_base_article', {slug: guide.slug}) }}"
     }
+}
+</script>
+{# TASK-149: BreadcrumbList JSON-LD for KB articles (Tool pages already emit this; KB
+   articles previously relied only on the Article schema's URL fields, which don't
+   produce SERP breadcrumb chips). #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "{{ url('home') }}"
+        },
+        {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Knowledge Base",
+            "item": "{{ url('knowledge_base_index') }}"
+        },
+        {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "{{ guide.title }}",
+            "item": "{{ url('knowledge_base_article', {slug: guide.slug}) }}"
+        }
+    ]
 }
 </script>
 {% endblock %}

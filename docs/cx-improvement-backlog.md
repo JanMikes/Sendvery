@@ -4690,7 +4690,7 @@ Test contract pinned by new `task142SeoBaselineContract` in `MarketingPagesTest`
 
 ## TASK-146: Per-domain DKIM-selector preference is missing — dashboard brute-forces the registry, ignoring teams whose selector isn't in the canonical list
 
-- Status: proposed
+- Status: done
 - Area: dashboard / dns
 - Why: Round-8 investigation of TASK-143 surfaced that `DkimChecker::check()` runs without a per-domain preference and the dashboard's "Re-check now" path passes `selector: null`, so the only way Sendvery can find a DKIM key is if the team's selector is already in `DkimSelectorRegistry::PROVIDER_SELECTORS`. Teams running custom selectors (rotated keys, niche providers, transactional accounts) silently see "DKIM not found" forever — the dashboard cannot be told the right selector. This is the actual gap behind the TASK-143 user complaint ("I am unable to change my dkim selector once it is saved"). The "saved" they expected to find isn't there at all.
 - Acceptance:
