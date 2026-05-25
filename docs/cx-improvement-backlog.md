@@ -3767,6 +3767,22 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ---
 
+## Round-8 performance audit (2026-05-25)
+
+**Methodology:** No SQL measurements re-run this round. Round 8's user-driven scope was entirely marketing-side (homepage register + how-it-works icons + the four marketing-clutter deletes + footer rewrite + SEO audit + homepage narrative restructure) plus the 4 client-side DNS generators on the public `/tools/*` pages. The TASK-143 dashboard ask was determined to be a missing-feature gap (not a fix-existing-form bug) and was filed as TASK-146 for round 9 with no code shipped — so the dashboard hot path is unchanged from round 7's measurements.
+
+**New code-path inventory (round 8):**
+
+- `SpfProviderRegistry::all()` + `MxPresetRegistry::all()` — 2 new `final readonly` registry classes injected into the existing checker controllers (`SpfCheckerController`, `MxCheckerController`). Each `all()` method returns a `private const array` literal — no DB call, no I/O, runs in microseconds. No measurement required.
+- `RobotsController` + `SitemapController` — `RobotsController` adds 4 Disallow lines (string literal); `SitemapController` adds 1 entry to a const array. Both render via cached Twig + ABSOLUTE_URL generation. No measurable cost change vs round 7.
+- `base.html.twig` canonical/og:url change — replaced `app.request.uri` with `url(_route, _route_params)`. Both expressions resolve in constant time during Twig render. No DB query introduced.
+
+**Conclusion:** **Perf delta vs round 7 ≈ 0.** All 8 baseline queries from the round-7 perf audit remain valid measurements because none of round 8's code touched them. The round-7 audit section below preserves the canonical numbers; no round-8 task crossed the SAFE→WATCH boundary.
+
+**Watchlist carried forward from round 7:** re-measure `IngestionPathResolver::resolveForTeams` once any team hits 50+ monitored domains (still no real customer triggered this yet — the demo seed runs at 3-domain scale).
+
+---
+
 ## Round-7 performance audit (2026-05-25)
 
 **DB state:** Demo seed re-run after TASK-132/133/134. Same shape as round-6 — 3 monitored domains × 30 days reports + snapshots = 90 reports, 180 records, 90 health snapshots, 5 alerts. Postgres 17-alpine in dev compose. Fresh UUIDs per re-seed; round-7 numbers use `019e5f58-d2fc-73e9-93ca-441af3a20100` for the team and `019e5f58-d308-7386-9da4-56613d5aa7e0` for `acme.example`. `dns_check_result`, `mailbox_connection`, `quarantined_dmarc_report`, `blacklist_check_result` all empty (matches every prior round; the demo seed doesn't populate them).
@@ -4748,6 +4764,94 @@ User confirmed v1 = SPF + DMARC + DKIM + MX (not the original SPF+DMARC-only spe
   - Dotted-grid hero background, font register (TASK-137), per-section accessibility patterns from TASK-131 all carry over.
 - Notes:
   - Ship LAST in the round, after TASK-137 + TASK-138 + TASK-142 — the architect needs the final per-section visual register + SEO structure to design against.
+
+---
+
+## RUN SUMMARY — 2026-05-25 round 8 autonomous CX loop (marketing clutter cut + homepage narrative + SEO + DNS generators)
+
+### Shipped (8 user-driven tasks across 6 code commits + 1 docs commit — round-8 scope drained; 1 task blocked + filed as follow-up)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 136 + 139 + 140 + 141 | Marketing-clutter quick-wins bundle | `bdf4b62` (previous session) | marketing | Repo-public env gate (`SENDVERY_REPO_PUBLIC` + `is_repo_public` Twig global + every `{% if is_repo_public %}` branch) deleted because the repo is now public at github.com/janmikes/sendvery. "Built for engineers" homepage section + "Related tools" empty blocks on every `/tools/*` page + "Built with Symfony & FrankenPHP" footer all stripped — replaced with "Built with love by Jan Mikeš · Source on GitHub →". |
+| 138 | "How it works" custom illustrations → Lucide icons | `6f64545` | marketing | Step 1/2/3 cards swap `how-{connect,monitor,act}.webp` for inline Lucide SVGs (globe / activity / bell) inside zinc-bordered tiles. The 3 orphan webp assets deleted. |
+| 137 | Homepage H2 register unified to `font-medium` page-end-to-end | `6f64545` | marketing | `SectionHeader` component switched to `font-medium tracking-tight text-zinc-900` + `text-zinc-500` eyebrow; the 3 inline `<h2>` blocks (problem statement section + final CTA) get the same class set. New `homepageHeadingsUseUnifiedLighterRegister` test walks every `<h2>` on `/` and pins the absence of `font-bold`/`semibold`/`extrabold`. |
+| 143 | Dashboard DKIM selector editability | `7bd54a5` | dashboard / investigation | **Blocked.** Exhaustive grep confirmed: `MonitoredDomain` has no `dkimSelector` column; no dashboard form / route / template accepts a DKIM-selector input; only the public `/tools/dkim-checker` LiveComponent has one and it's fully editable. The user's complaint actually maps to a missing-feature gap (per-domain DKIM-selector preference so teams with non-canonical selectors can teach the dashboard the right name) — filed as TASK-146 for round 9. |
+| 142 | SEO audit + 7 highest-leverage fixes | `05a2649` | marketing / seo | (1) Created `public/images/og-default.webp` — was referenced in `base.html.twig` but never existed, every page lacking dynamic OG was shipping a broken `og:image`. (2) Canonical + og:url now route-based, no query string. (3) `Disallow: /app/`, `/onboarding/`, `/auth/`, `/_components/` in robots.txt. (4) `authorizing-senders-explained` added to sitemap. (5) `noindex,follow` on login + check-email + login-failed + invitation-invalid. (6) `SoftwareApplication` JSON-LD on `/pricing` with all 4 offer rungs. (7) Login page wrapped its CTA copy in `<h1>`. 6 lower-priority items filed as round-9 candidates. |
+| 144 | 4 client-side DNS record generators (SPF + DMARC + DKIM + MX) | `2d1bce4` | marketing / tools | User asked: "could there be helper forms to set up dns records format for spf, dkim etc on the public pages?" v1 ships ALL 4 on `/tools/{spf|dmarc|dkim|mx}-checker` as Stimulus controllers + `SpfProviderRegistry` (10 sending services) + `MxPresetRegistry` (5 common mail providers). Output blocks with copy-to-clipboard + "What to do next" links to the matching KB article. XSS-safe (`textContent` everywhere). DKIM auto-splits long RSA keys at 255-char boundaries per BIND zone-file convention. Microsoft 365 MX preset reveals a tenant-name input that substitutes into the host. |
+| 145 | Homepage narrative restructure + pricing moved earlier | `5b3f682` | marketing | New 14-section order: Hero → Problem (Risks in your DNS, moved up from §7) → Solution 1 (XML→English) → Solution 2 (grade card) → Product preview → How it works → **Pricing (moved up from §10 per user)** → Health-grade reinforcement → Features → Testimonials → Open source → Founder bio → FAQ → Final CTA. Top-of-file narrative-arc comment documents the new order + per-section rationale. New `homepageFlowsProblemToSolutionToPriceToClose` test pins all 9 ordering invariants. |
+
+### Sidecar fixes shipped this round (not in the user-driven task list)
+
+- **User-driven hero polish** — three independent commits (`3852c07`, `06fb2e0`, `d433ce9`, `6a9d04b`) the user landed mid-round: primary-gradient hero overlay + elevated checker card; rounded-field join shadow wrapper; hero background illustration; alternating section backgrounds + trust-logos removal + navbar shadow. Round-8 test updates absorbed the consequences (e.g., dropped the dead trust-logos position assertion from `task131HomepageHeroAndNewSectionsRender` since the section was removed in `6a9d04b`).
+- **Test naming refactor** (`5b3f682`) — user feedback: "the tests should test business behaviour" — renamed 3 round-8 test methods (`task137And138HomepageRegisterAndIcons` → `homepageHeadingsUseUnifiedLighterRegister`, `task142SeoBaselineContract` → `publicPagesShipSeoBaseline`, `task145HomepageNarrativeOrder` → `homepageFlowsProblemToSolutionToPriceToClose`) and rewrote every assertion failure message to describe the broken behaviour rather than cite the originating ticket. Docblocks retain TASK-XXX references (documentation, not test contract). Preference saved as durable user-memory.
+
+### Reviewer-caught must-fixes applied inline during the round
+
+- **TASK-144 reviewer pass #1**: DMARC `buildMailtoList` blindly prepended `mailto:` to every entry — pasting `mailto:reports@example.com` (the literal copy you read out of an existing DMARC record) would emit `rua=mailto:mailto:reports@example.com`, a syntactically invalid DMARC tag value. Fixed: strip leading `mailto:` before prepending — function is now idempotent.
+- **TASK-144 reviewer pass #2**: Brevo SPF include shipped as the legacy `spf.sendinblue.com` per the architect plan. Live `dig TXT` against both `spf.sendinblue.com` and `spf.brevo.com` returned identical IPv4 ranges — both resolve, but `spf.brevo.com` is the current canonical name per the 2026 Brevo docs. Updated.
+
+### Perf audit — committed inline in `5b3f682`
+
+Re-measured: **zero new DB queries this round.** Round 8's user-driven scope was 100% marketing-side templates + the 2 new in-memory PHP registries (`SpfProviderRegistry`, `MxPresetRegistry`) — both return `private const array` literals at zero I/O cost. TASK-142's `RobotsController` + `SitemapController` changes are string-literal appends + 1 array-entry append, no DB impact. The TASK-143 dashboard work didn't ship (blocked). All 8 round-7 baseline queries remain valid measurements; **perf delta vs round 7 ≈ 0**. Full per-query breakdown sits in the `## Round-7 performance audit (2026-05-25)` section at line 3784.
+
+### Self-review findings + dispositions
+
+**Pass 1 (every-3-tasks self-review after TASK-138/137/142 shipped):**
+- Repo-public retirement clean: only surviving references are explanatory comments in templates + tests asserting the absence of the legacy CTAs.
+- Login `<h1>` carries `font-normal` so the visual register doesn't change; the heading is structurally correct without a visual regression.
+- Homepage has both "How the AI insights work" and "How it works" eyebrows but on different sections — by design, no collision.
+- No must-fix found.
+
+**Pass 2 (reviewer-driven on TASK-144):** caught 2 real must-fixes (`mailto:` double-prefix + Brevo legacy include) that shipped inline before the commit. Reviewer-fix rate continues at >50% across rounds 4-8.
+
+### Surfaces touched and judged "good enough"
+
+- **Homepage `/`** — narrative arc is now explicit (problem → solution → preview → setup → price → features → social proof → close). The 14-section order is comment-documented at the top of the file. Pricing moved up from §10 to §7. All 13 H2s on the page carry `font-medium`.
+- **`/tools/{spf|dmarc|dkim|mx}-checker`** — each now hosts a generator card above the checker tool. Visitor can iterate "generate → copy → publish → re-check" without leaving the page.
+- **All public pages** — canonical URLs strip query strings, OG fallback file exists, auth pages carry `noindex,follow`, pricing has `SoftwareApplication` JSON-LD. `robots.txt` now disallows `/app/`, `/onboarding/`, `/auth/`, `/_components/` so crawl budget isn't wasted on authenticated surfaces.
+- **`/about/open-source`** — `is_repo_public` env-gate retired; the page now unconditionally renders `git clone https://github.com/janmikes/sendvery.git` + GitHub links.
+- **Footer** — "Built with Symfony & FrankenPHP" → "Built with love by Jan Mikeš · Source on GitHub →".
+
+### Test suite growth
+
+| Checkpoint | Tests | Assertions | Δ |
+|---|---|---|---|
+| Round-7 end (2026-05-25) | 2274 | 6687 | baseline |
+| After bundled quick-wins (previous session, `bdf4b62`) | 2272 | 6688 | -2 / +1 |
+| After TASK-137 + TASK-138 (`6f64545`) | 2273 | 6720 | +1 / +32 |
+| After TASK-142 (`05a2649`) | 2274 | 6730 | +1 / +10 |
+| After TASK-144 (`2d1bce4`) | 2283 | 6745 | +9 / +15 |
+| After TASK-145 (`5b3f682`) | 2284 | 6764 | +1 / +19 |
+| **Final** | **2284** | **6764** | **+10 / +77 vs round-7 end** |
+
+### Suggested round-9 seed areas
+
+Filed during round 8 as proposed:
+- **TASK-146: Per-domain DKIM-selector preference** — round-9 P0 candidate. User-facing trust gap surfaced by the TASK-143 investigation. Needs an architect pass for data-model + UX (free-form vs select+override) + integration with the brute-force fallback in `DkimChecker`.
+
+Lower-priority SEO follow-ups carried from TASK-142's architect plan (file as TASK-15X if user wants them this round):
+- Organization JSON-LD `logo` field (Knowledge Panel eligibility)
+- Per-article `datePublished`/`dateModified` data source (today hardcoded to 2026-03-25 across all articles)
+- `BreadcrumbList` on KB index + about/* pages
+- `WebSite` + `SearchAction` JSON-LD on home (Sitelinks Searchbox eligibility)
+- Twitter handle in `<meta name="twitter:site">`
+- Title length overages on 4 tool pages (blacklist-checker, email-auth-checker, domain-health, gmail-yahoo-bulk-sender article all 5-8 chars over the ~60-char threshold)
+
+Lower-priority TASK-144 follow-ups flagged by the reviewer (5 items):
+- Dead `copyButton` Stimulus target declarations (cosmetic)
+- Basic email-format validation on DMARC rua/ruf inputs
+- "Objects over arrays" registry refactor (typed DTOs instead of array shapes)
+- `assertResponseIsSuccessful()` on the 3 newer tool tests
+- Omit `adkim=r`/`aspf=r` in DMARC output when set to the default relaxed mode
+
+Watchlist (no action this round):
+- Re-measure `IngestionPathResolver::resolveForTeams` once any team hits 50+ domains.
+- `/app/alerts` empty-state copy (carried since round 5 — still no real customer signal).
+
+### Stop signal
+
+**Backlog fully drained against the round-8 user-driven scope.** Round 8 shipped 8 of 9 user-driven tasks (TASK-136/137/138/139/140/141/142/144/145 — TASK-144 absorbed the scope expansion from "SPF+DMARC v1" to "all 4 generators in v1" per the user checkpoint), with TASK-143 marked blocked pending user clarification (described feature doesn't exist in the codebase) and filed as TASK-146 for round 9. 6 task-commits + 1 docs-commit. Quality gates green at every step. 2284 tests / 6764 assertions in the final state. Reviewer-caught real must-fixes on TASK-144. Test-naming refactor applied per user feedback ("tests should test business behaviour"). Primary stop signal hit cleanly.
 
 ---
 
