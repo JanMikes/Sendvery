@@ -8,8 +8,10 @@ use App\Query\GetDomainDetail;
 use App\Query\GetDomainDnsHistory;
 use App\Query\GetDomainWorkspaceTabCounts;
 use App\Repository\DnsCheckResultRepository;
+use App\Results\Dns\DnsRecordDiff;
 use App\Results\DnsCheckHistoryResult;
 use App\Services\DashboardContext;
+use App\Services\Dns\DnsRecordDiffer;
 use App\Services\ReportAddressProvider;
 use App\Value\Dns\DmarcRuaInstruction;
 use App\Value\DnsCheckType;
@@ -33,6 +35,7 @@ final class DomainDnsHistoryController extends AbstractController
         private readonly ReportAddressProvider $reportAddressProvider,
         private readonly ClockInterface $clock,
         private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
+        private readonly DnsRecordDiffer $dnsRecordDiffer,
     ) {
     }
 
@@ -74,6 +77,7 @@ final class DomainDnsHistoryController extends AbstractController
 
         $groupedHistory = $this->groupByDate($history);
         $openDays = $this->computeOpenDays($groupedHistory, $activeType);
+        $diffsById = $this->buildDiffs($history);
 
         $latestDmarcCheck = $this->dnsCheckResultRepository->findLatestForDomainAndType(
             Uuid::fromString($id),
@@ -98,7 +102,41 @@ final class DomainDnsHistoryController extends AbstractController
             'hasAnyHistory' => $hasAnyHistory,
             'ruaInstruction' => $ruaInstruction,
             'tabCounts' => $tabCounts,
+            'diffsById' => $diffsById,
         ]);
+    }
+
+    /**
+     * Pre-compute the token-level diff for every CHANGED row up front so the
+     * template doesn't need a Twig extension just to call the differ.
+     * Initial-check rows (no prior observation) are excluded — the template
+     * already gates the diff rendering on `isRealChange`.
+     *
+     * @param array<DnsCheckHistoryResult> $history
+     *
+     * @return array<string, DnsRecordDiff>
+     */
+    private function buildDiffs(array $history): array
+    {
+        $diffs = [];
+        foreach ($history as $check) {
+            if (!$check->isRealChange()) {
+                continue;
+            }
+
+            $type = DnsCheckType::tryFrom($check->type);
+            if (null === $type) {
+                continue;
+            }
+
+            $diffs[$check->id] = $this->dnsRecordDiffer->diff(
+                $type,
+                $check->previousRawRecord,
+                $check->rawRecord,
+            );
+        }
+
+        return $diffs;
     }
 
     /**

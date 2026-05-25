@@ -1,5 +1,7 @@
 {% extends 'dashboard/layout.html.twig' %}
 
+{% import 'components/_dns_record_diff.html.twig' as record_diff %}
+
 {% block page_title %}DNS History — {{ domain.domainName }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -143,8 +145,9 @@
                         <div class="px-4 pb-4 space-y-3">
                             {% for check in group.checks %}
                                 {# A row is "really" changed only if a prior observation existed.
-                                   The very first row per (domain, record_type) is a baseline, not a change. #}
-                                {% set isRealChange = check.hasChanged and not check.isInitialCheck %}
+                                   The very first row per (domain, record_type) is a baseline, not a change.
+                                   isRealChange() is the single source of truth (DnsCheckHistoryResult). #}
+                                {% set isRealChange = check.isRealChange %}
                                 <div class="border border-base-200 rounded-box p-3 {{ isRealChange ? 'bg-warning/5 border-l-4 border-l-warning' : 'bg-base-100' }}">
                                     <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                                         <div class="flex items-center gap-2 flex-wrap">
@@ -182,19 +185,20 @@
                                         <span class="text-xs text-base-content/50">{{ check.checkedAt|date('H:i') }}</span>
                                     </div>
 
-                                    {% if check.rawRecord %}
+                                    {% if isRealChange and diffsById[check.id] is defined %}
+                                        {# TASK-127: render inline token-level diff for CHANGED rows
+                                           so the user reads "what flipped" at a glance instead of
+                                           eyeballing two opaque before/after blobs. #}
+                                        <div class="bg-base-200 rounded-btn px-3 py-2 mb-2">
+                                            {{ record_diff.render(diffsById[check.id]) }}
+                                        </div>
+                                        {{ record_diff.expander(diffsById[check.id]) }}
+                                    {% elseif check.rawRecord %}
                                         <div class="bg-base-200 rounded-btn px-3 py-2 mb-2">
                                             <code class="text-xs break-all">{{ check.rawRecord }}</code>
                                         </div>
                                     {% else %}
                                         <p class="text-sm text-base-content/50 italic mb-2">No record found</p>
-                                    {% endif %}
-
-                                    {% if isRealChange and check.previousRawRecord %}
-                                        <div class="text-xs text-base-content/50">
-                                            <span class="font-medium">Previous:</span>
-                                            <code class="break-all">{{ check.previousRawRecord }}</code>
-                                        </div>
                                     {% endif %}
 
                                     {% if check.issues is not empty %}
