@@ -384,7 +384,11 @@ final class ReportIngestionPageTest extends WebTestCase
 
         // The TASK-106 winning branch.
         self::assertStringContainsString('Ingesting via mailbox', $body);
-        self::assertStringContainsString('DMARC routes here via your connected mailbox.', $body);
+        // TASK-116: the sub-line names the rua= address (monospace pill) so
+        // the user can verify the assertion, matching surrounding branches.
+        self::assertStringContainsString('DMARC routes here via', $body);
+        self::assertStringContainsString('dmarc@'.$persona->domain->domain, $body);
+        self::assertStringContainsString('— your connected mailbox.', $body);
 
         // The OLD branch must NOT render for this row — verify against a
         // matrix-scoped substring so it doesn't false-positive on, say, a

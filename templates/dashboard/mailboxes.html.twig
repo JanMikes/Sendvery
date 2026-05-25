@@ -73,7 +73,7 @@
                                             {% elseif row.path.value == 'mailbox' and row.lastReportAt is not null and row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_external' and row.pathMatchesMailbox %}
                                                 <span class="badge badge-success">Ingesting via mailbox</span>
                                                 <div class="text-xs text-base-content/60 mt-1">
-                                                    DMARC routes here via your connected mailbox.
+                                                    DMARC routes here via <span class="font-mono">{{ row.ruaScenario.ruaEmail }}</span> — your connected mailbox.
                                                 </div>
                                             {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_sendvery' %}
                                                 <span class="badge badge-success">Ingesting via DNS (Sendvery)</span>
