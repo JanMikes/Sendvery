@@ -52,47 +52,50 @@
    reading as one undifferentiated wall of content.
    =========================================================================== #}
 
-{# === 1. HERO — Hook + free instant check (TASK-131) === #}
-<section id="dns-checker" class="relative overflow-hidden py-16 md:py-24" style="background-color: oklch(98.5% 0.002 247)">
+{# === 1. HERO — Hook + free instant check (TASK-158 rewrite for user-value framing).
+       The hero used to lead with a feature-label H1 ("DMARC, DNS, deliverability —
+       monitored and explained"), an eyebrow that duplicated the H1 keywords, an
+       open-source pitch in the subhead, and a secondary "View on GitHub" CTA
+       that took visitors off the conversion path. Every visitor sees this surface
+       first — a broken value prop here costs more than any other gap. New shape:
+         - Outcome-framed H1 ("Stop your email from quietly landing in spam.")
+         - Subhead leads with what the visitor gets, not what we're built with
+         - Single primary CTA only (open-source still lives in the chip row below
+           and in the dedicated Open Source section deeper down)
+         - Mobile vertical rhythm tightened so H1 + subhead + CTA + checker card
+           land in one screen at 360px (the prior `py-16` + `text-4xl` + `gap-10`
+           pushed the checker card below the fold on phones).
+       === #}
+<section id="dns-checker" class="relative overflow-hidden py-10 md:py-24" style="background-color: oklch(98.5% 0.002 247)">
     <div class="pointer-events-none absolute inset-0 bg-cover bg-center opacity-60" style="background-image: url('/images/hero-bg.png')"></div>
     <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(49%_0.13_176/.06),transparent_70%)]"></div>
     <div class="container mx-auto px-4 md:px-6 relative z-10">
-        <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
+        <div class="grid md:grid-cols-2 gap-6 md:gap-16 items-center">
             {# Left column #}
             <div>
-                <div class="text-xs uppercase tracking-wider text-zinc-500 mb-4">DMARC &middot; DNS &middot; deliverability</div>
+                <h1 class="text-3xl md:text-5xl font-medium tracking-tight leading-[1.1] text-zinc-900">Stop your email from quietly landing in spam.</h1>
 
-                <h1 class="text-4xl md:text-5xl font-medium tracking-tight leading-[1.1] text-zinc-900">DMARC, DNS, deliverability — monitored and explained.</h1>
-
-                <p class="mt-5 text-base md:text-lg text-zinc-500 max-w-xl leading-relaxed">
-                    Sendvery is the open-source email deliverability platform that watches your DNS 24/7, parses your DMARC reports, and translates the XML into plain English. Free for 1 domain.
+                <p class="mt-4 text-base md:text-lg text-zinc-500 max-w-xl leading-relaxed">
+                    Sendvery watches your DMARC reports and DNS health 24/7, then tells you in plain English what to fix &mdash; before a customer ever tells you the invoice never arrived.
                 </p>
 
                 {# TODO TASK-003: analytics event for hero CTA clicks once event infra is wired (data-track attrs are already present). #}
-                <div class="mt-8 flex flex-col sm:flex-row gap-3">
+                <div class="mt-6 flex flex-col sm:flex-row gap-3">
                     <a href="{{ path('auth_login') }}"
                        class="btn btn-primary inline-flex items-center justify-center bg-zinc-900 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
                        data-track="hero-cta-primary">
                         Get started free
                     </a>
-
-                    {# Secondary CTA — TASK-136: repo is public, link straight at GitHub. The
-                       prior `is_repo_public` env gate + notify-me fallback was retired with the repo. #}
-                    <a href="{{ github_url }}" target="_blank" rel="noopener"
-                       class="inline-flex items-center justify-center border border-zinc-300 rounded-md px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
-                       data-track="hero-cta-secondary">
-                        View on GitHub <span aria-hidden="true" class="ml-1">&rarr;</span>
-                    </a>
                 </div>
 
-                <p class="mt-5 text-xs text-zinc-400">
+                <p class="mt-4 text-xs text-zinc-400">
                     Open source &middot; AGPL-3.0 &middot; 1 domain free forever &middot; Self-hostable{% if github_stats is not null %} &middot; {{ github_stats.stars|number_format }} ★ on GitHub &middot; last commit {{ github_stats.lastCommitAt|date('M j') }}{% endif %}
                 </p>
             </div>
 
             {# Right column — visual shell + existing HomeDomainChecker Live Component reused verbatim. #}
             <div>
-                <div class="bg-white rounded-lg p-5 shadow-xl shadow-zinc-900/10 ring-1 ring-zinc-900/5">
+                <div class="bg-white rounded-lg p-4 md:p-5 shadow-xl shadow-zinc-900/10 ring-1 ring-zinc-900/5">
                     <div class="text-xs uppercase tracking-wider text-zinc-500 mb-3">Free instant check — no signup</div>
 
                     <div aria-live="polite">

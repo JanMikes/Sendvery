@@ -36,15 +36,21 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function homepageContainsHeroSection(): void
+    public function homepageHeroH1IsOutcomeFramedNotFeatureLabeled(): void
     {
-        // TASK-131 — new hero H1. The old "Do you know who else is?" copy belonged to
-        // the pre-TASK-131 hero that has been removed; the new H1 is the literal sentence
-        // documented in the spec.
+        // TASK-158 — the prior H1 ("DMARC, DNS, deliverability — monitored and explained.")
+        // labelled features instead of promising an outcome. The rewrite leads with the
+        // visitor's payoff: their email reaching the inbox rather than spam. Pin the
+        // outcome framing (the word "spam" + the verb "Stop") and the absence of the
+        // old feature-label phrasing so a careless revert can't drift back to the
+        // pre-TASK-158 register.
         $client = self::createClient();
-        $client->request('GET', '/');
+        $crawler = $client->request('GET', '/');
 
-        self::assertSelectorTextContains('h1', 'DMARC, DNS, deliverability — monitored and explained.');
+        $h1Text = $crawler->filter('h1')->text();
+        self::assertStringContainsString('spam', $h1Text, 'The hero H1 must promise an outcome the visitor recognises (their email reaching the inbox vs. landing in spam) rather than label features.');
+        self::assertStringNotContainsString('explained', $h1Text, 'The hero H1 must not lead with "explained" — that describes what the product does, not what the visitor gets.');
+        self::assertStringNotContainsString('DMARC, DNS, deliverability', $h1Text, 'The hero H1 must no longer be the feature-label triad — feature-labels belong in deeper sections, not in the H1.');
     }
 
     #[Test]
@@ -179,16 +185,29 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function heroKickerContainsProductCategory(): void
+    public function heroHasNoEyebrowDuplicatingTheHeadlineKeywords(): void
     {
-        // TASK-131 — eyebrow is now "DMARC · DNS · deliverability" (lowercase, mid-dot separated)
-        // rather than the old "DMARC Monitoring · AI Insights · Open Source" pill.
+        // TASK-158 — the prior eyebrow ("DMARC · DNS · deliverability") simply
+        // repeated the H1's own keywords above it, adding visual chrome without
+        // information. Removed. Pin the absence so a future template restore
+        // can't quietly bring it back, and verify the H1 is the first heading-
+        // class element in the hero column (no eyebrow text rendered above it).
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
 
-        $hero = $crawler->filter('section')->first();
+        $hero = $crawler->filter('section#dns-checker');
+        self::assertCount(1, $hero, 'Hero section must exist.');
+
+        // The literal "DMARC · DNS · deliverability" mid-dot triad must not render
+        // anywhere inside the hero block — neither as the deleted eyebrow nor as
+        // a reintroduced label by some other path.
+        $heroHtml = $hero->html();
+        self::assertStringNotContainsString('DMARC &middot; DNS &middot; deliverability', $heroHtml, 'The duplicate eyebrow above the H1 must not return — it repeats the H1 keywords without adding information.');
+        self::assertStringNotContainsString('DMARC · DNS · deliverability', $heroHtml);
+
+        // The hero still mentions "DMARC" and "deliverability" — just inside the
+        // subhead / chip row, not as a standalone eyebrow chrome above the H1.
         self::assertStringContainsString('DMARC', $hero->text());
-        self::assertStringContainsString('deliverability', $hero->text());
     }
 
     #[Test]
@@ -218,26 +237,27 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     #[Test]
-    public function heroSubheadMentionsDnsHealth(): void
+    public function heroSubheadMentionsContinuousMonitoring(): void
     {
-        // TASK-131 — the new subhead reads "...watches your DNS 24/7, parses your DMARC reports,
-        // and translates the XML into plain English." Phrase changed from "DNS health" to "watches
-        // your DNS"; the assertion now binds to the new continuous-monitoring phrasing.
+        // TASK-158 — the subhead still promises continuous monitoring of DNS +
+        // DMARC reports, but now the lead clause is the user outcome ("Sendvery
+        // watches your DMARC reports and DNS health 24/7") rather than the
+        // open-source pitch the prior subhead opened with.
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
 
         $hero = $crawler->filter('section')->first();
         $subhead = $hero->filter('p')->first();
 
-        self::assertStringContainsString('watches your DNS', $subhead->text());
+        self::assertStringContainsString('watches your DMARC reports and DNS health', $subhead->text());
     }
 
     #[Test]
-    public function heroSubheadMentionsAiInsights(): void
+    public function heroSubheadPromisesPlainEnglishExplanation(): void
     {
-        // TASK-131 — the new subhead doesn't use the phrase "AI-powered insights" in the hero copy
-        // (the literal AI-vs-XML pitch lives in section 2). What the hero subhead promises instead
-        // is the XML-to-plain-English translation. Bind to that phrasing.
+        // TASK-158 — the subhead's payoff for the visitor is the plain-English
+        // explanation of what to fix. The literal AI-vs-XML pitch still lives
+        // in section 2; the hero just promises the outcome.
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
 
@@ -245,6 +265,25 @@ final class MarketingPagesTest extends WebTestCase
         $subhead = $hero->filter('p')->first();
 
         self::assertStringContainsString('plain English', $subhead->text());
+    }
+
+    #[Test]
+    public function heroSubheadDoesNotLeadWithOpenSourcePitch(): void
+    {
+        // TASK-158 — the prior subhead opened with "Sendvery is the open-source
+        // email deliverability platform that..." which made the licence the
+        // first thing a visitor read. Open source is a credibility signal for
+        // a subset of visitors — it belongs in the chip row below the CTA, or
+        // in the dedicated Open Source section deeper down. The new subhead
+        // leads with the visitor's outcome.
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section')->first();
+        $subhead = $hero->filter('p')->first();
+
+        self::assertStringNotContainsString('open-source', $subhead->text(), 'The hero subhead must not lead with the open-source pitch — it belongs in the chip row or a deeper section.');
+        self::assertStringNotContainsString('open source', $subhead->text(), 'The hero subhead must not lead with the open-source pitch — it belongs in the chip row or a deeper section.');
     }
 
     #[Test]
@@ -285,33 +324,65 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     /**
-     * TASK-136 — the repo is public, the `is_repo_public` env gate + notify-me
-     * mailto fallback are retired. The hero secondary CTA now unconditionally
-     * links at github.com. Pin BOTH the github href AND the absence of the
-     * prior notify-me data-source so a careless revert can't silently re-wire
-     * the env-gated branch back into the hero.
+     * TASK-158 — mobile vertical rhythm contract. The prior `py-16` + `text-4xl`
+     * + `gap-10` pushed the checker card below the fold on phones; visitors at
+     * 360px viewport never saw "Free instant check — no signup" without
+     * scrolling. Pin the mobile-tighter class strings so a careless revert
+     * to the desktop-only rhythm fails fast.
      */
     #[Test]
-    public function heroSecondaryCtaLinksToGithub(): void
+    public function heroUsesMobileTighterVerticalRhythm(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/');
 
-        $secondary = $crawler->filter('section#dns-checker a[data-track="hero-cta-secondary"]');
-        self::assertCount(1, $secondary, 'Exactly one hero-cta-secondary anchor must render in the hero.');
+        $hero = $crawler->filter('section#dns-checker');
+        $heroOuter = (string) $hero->outerHtml();
 
-        $href = (string) $secondary->attr('href');
-        self::assertStringStartsWith(
-            'https://github.com/',
-            $href,
-            'The hero secondary CTA must link to github.com — the repo is public, no env gate (TASK-136).',
+        // The hero <section> itself uses py-10 on mobile (was py-16), keeping py-24 on md+.
+        self::assertStringContainsString('py-10 md:py-24', $heroOuter, 'The hero must use mobile-tighter vertical padding (py-10) so the checker card fits in the 360px viewport without scrolling.');
+
+        // The H1 starts smaller on mobile (text-3xl) but scales to text-5xl on md+.
+        self::assertMatchesRegularExpression(
+            '~<h1[^>]*\btext-3xl\b[^>]*\bmd:text-5xl\b~',
+            $heroOuter,
+            'The hero H1 must use text-3xl on mobile (was text-4xl) so it doesn\'t consume the whole viewport before the subhead + CTA + card render.',
         );
 
-        self::assertNull(
-            $secondary->attr('data-notify-source'),
-            'The hero secondary CTA must not carry the retired notify-me data-notify-source (TASK-136).',
-        );
+        // The grid gap drops on mobile so the right-column card sits closer to the CTA.
+        self::assertStringContainsString('gap-6 md:gap-16', $heroOuter, 'The hero grid must use gap-6 on mobile (was gap-10) so the checker card sits closer to the CTA.');
+    }
 
+    /**
+     * TASK-158 — the prior "View on GitHub" secondary CTA took visitors off the
+     * conversion path before they'd even understood what Sendvery did. Removed.
+     * The hero now carries exactly one CTA: "Get started free" → /login.
+     * GitHub still lives in the footer + the dedicated Open Source section
+     * deeper on the page, so visitors who care about the source code still
+     * have a path to it — just not at the cost of the primary conversion goal.
+     *
+     * Also pins the absence of the retired TASK-136 notify-me fallback so a
+     * future restore can't quietly re-wire the env-gated branch.
+     */
+    #[Test]
+    public function heroHasExactlyOneCtaAndItGoesToSignup(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $hero = $crawler->filter('section#dns-checker');
+
+        $allHeroCtas = $hero->filter('a[data-track^="hero-cta-"]');
+        self::assertCount(1, $allHeroCtas, 'The hero must carry exactly one CTA — the prior secondary GitHub CTA took visitors off the conversion path before they\'d understood the value prop.');
+
+        $primary = $hero->filter('a[data-track="hero-cta-primary"]');
+        self::assertCount(1, $primary, 'The single hero CTA must be the primary signup CTA.');
+        self::assertStringContainsString('/login', (string) $primary->attr('href'), 'The single hero CTA must point at /login (Get started free).');
+
+        $secondary = $hero->filter('a[data-track="hero-cta-secondary"]');
+        self::assertCount(0, $secondary, 'The hero must not carry a secondary CTA — single-CTA focus shipped in TASK-158.');
+
+        // TASK-136 carryover — the retired notify-me data-source must not return.
         $body = (string) $client->getResponse()->getContent();
         self::assertStringNotContainsString('homepage-hero-repo-launch', $body);
         self::assertStringNotContainsString('Notify me when the source ships', $body);
@@ -385,8 +456,11 @@ final class MarketingPagesTest extends WebTestCase
 
         $body = (string) $client->getResponse()->getContent();
 
-        // 1. New H1 copy.
-        self::assertStringContainsString('DMARC, DNS, deliverability — monitored and explained.', $body);
+        // 1. New H1 copy (rewritten in TASK-158 to lead with the visitor's outcome
+        //    — "Stop your email from quietly landing in spam." — rather than the
+        //    feature-label triad ("DMARC, DNS, deliverability — monitored and explained.").
+        self::assertStringContainsString('Stop your email from quietly landing in spam.', $body);
+        self::assertStringNotContainsString('DMARC, DNS, deliverability — monitored and explained.', $body);
 
         // 2. Old "Email authentication is set once and forgotten" hero/problem-statement copy is gone.
         self::assertStringNotContainsString('Email authentication is set once and forgotten', $body);
