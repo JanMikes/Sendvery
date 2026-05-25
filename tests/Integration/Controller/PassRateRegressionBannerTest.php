@@ -136,21 +136,33 @@ final class PassRateRegressionBannerTest extends WebTestCase
     public function regressionBannerRendersWhenRecentPassRateDroppedTenPercentagePoints(): void
     {
         $boot = $this->bootClient();
-        // Older history (8-29 days ago): 22 reports of mostly-passing traffic.
+        // Older history (8-29 days ago): 88 reports (22 days × 4 calls/day).
+        // Together with the recent window below this puts the 30-day baseline
+        // well above the TASK-109 MIN_SAMPLE_SIZE = 50 floor AND keeps the
+        // 30-day baseline pass rate above the 70% REGRESSION_MIN_BASELINE
+        // even after the recent heavy-failure traffic is folded in (the
+        // baseline query is a true rolling 30d, not "30d excluding 7d").
         for ($d = 8; $d <= 29; ++$d) {
-            $this->persistReport($boot['em'], $boot['domain'], $d, '192.0.2.1', 95, true);
-            $this->persistReport($boot['em'], $boot['domain'], $d, '192.0.2.1', 5, false);
+            // Two records per day to push enough passing volume in.
+            $this->persistReport($boot['em'], $boot['domain'], $d, '192.0.2.1', 950, true);
+            $this->persistReport($boot['em'], $boot['domain'], $d, '192.0.2.1', 50, false);
+            $this->persistReport($boot['em'], $boot['domain'], $d, '192.0.2.2', 950, true);
+            $this->persistReport($boot['em'], $boot['domain'], $d, '192.0.2.2', 50, false);
         }
-        // Last 6 days: 24 reports (4 per day × 6 days). The 7-day window
-        // ends at the current second when the controller queries; keeping
-        // the latest fixture day at d=0 and the oldest at d=5 gives us a
-        // full second of slack against wall-clock drift (test runtime
-        // typically << 1s) before the floor query trims a row.
+        // Last 6 days: 72 reports (12 per day × 6 days = 3 inner copies of
+        // the 4-row scheme). The 7-day window ends at the current second
+        // when the controller queries; keeping the latest fixture day at
+        // d=0 and the oldest at d=5 gives a full second of slack against
+        // wall-clock drift (test runtime typically << 1s) before the floor
+        // query trims a row. Volume is intentionally above the TASK-109
+        // 50-report floor on the current 7-day window.
         for ($d = 0; $d <= 5; ++$d) {
-            $this->persistReport($boot['em'], $boot['domain'], $d, '198.51.100.50', 20, true);
-            $this->persistReport($boot['em'], $boot['domain'], $d, '198.51.100.50', 80, false);
-            $this->persistReport($boot['em'], $boot['domain'], $d, '203.0.113.50', 1, true);
-            $this->persistReport($boot['em'], $boot['domain'], $d, '203.0.113.51', 1, false);
+            for ($copy = 0; $copy < 3; ++$copy) {
+                $this->persistReport($boot['em'], $boot['domain'], $d, '198.51.100.50', 20, true);
+                $this->persistReport($boot['em'], $boot['domain'], $d, '198.51.100.50', 80, false);
+                $this->persistReport($boot['em'], $boot['domain'], $d, '203.0.113.50', 1, true);
+                $this->persistReport($boot['em'], $boot['domain'], $d, '203.0.113.51', 1, false);
+            }
         }
 
         $crawler = $boot['client']->request('GET', '/app/reports');
@@ -180,9 +192,14 @@ final class PassRateRegressionBannerTest extends WebTestCase
     public function noBannerForHealthyTeamWithSteadyPassRate(): void
     {
         $boot = $this->bootClient();
-        // 30 reports across the last 30 days, all healthy.
+        // 4 reports per day for the last 30 days = 120 total, 28 in the
+        // last 7 days... bump to 8/day so both windows clear the
+        // TASK-109 MIN_SAMPLE_SIZE=50 floor and the test exercises the
+        // healthy → Stable branch rather than the small-sample suppression.
         for ($d = 0; $d <= 29; ++$d) {
-            $this->persistReport($boot['em'], $boot['domain'], $d, '192.0.2.1', 100, true);
+            for ($i = 0; $i < 8; ++$i) {
+                $this->persistReport($boot['em'], $boot['domain'], $d, sprintf('192.0.2.%d', ($i % 250) + 1), 100, true);
+            }
         }
 
         $crawler = $boot['client']->request('GET', '/app/reports');

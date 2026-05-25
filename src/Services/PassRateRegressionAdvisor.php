@@ -19,10 +19,13 @@ use App\Value\PassRateRegressionSeverity;
  *  - Regression fires when 7d pass rate dropped by at least 10 percentage
  *    points from the 30d baseline AND the baseline was at least 70% (we
  *    don't want to compound the bad-news for already-broken setups) AND
- *    we have at least 20 reports in the 7d window (small-sample noise floor).
+ *    we have at least 20 reports in the 7d window (small-sample noise floor)
+ *    AND BOTH windows clear the {@see self::MIN_SAMPLE_SIZE} minimum-volume
+ *    floor introduced by TASK-109.
  *  - Improvement fires when 7d pass rate climbed by at least 10pp from a
  *    baseline below 90% (we don't want "celebrate" copy when the user was
- *    already at 99% and crawled to 99.5%) AND the same 20-report floor.
+ *    already at 99% and crawled to 99.5%) AND the same 20-report floor AND
+ *    the same {@see self::MIN_SAMPLE_SIZE} floor on BOTH windows.
  *  - Stable otherwise — no banner.
  *
  * Hard rule explicitly preserved: this advisor reads pass rates and surfaces
@@ -36,6 +39,23 @@ final readonly class PassRateRegressionAdvisor
     private const float REGRESSION_MIN_BASELINE = 70.0;
     private const float IMPROVEMENT_MAX_BASELINE = 90.0;
     private const int MIN_REPORTS_7D = 20;
+
+    /**
+     * Minimum-volume floor applied to BOTH the current 7-day window AND the
+     * prior baseline window (TASK-109). The pre-existing
+     * {@see self::MIN_REPORTS_7D} = 20 floor only guarded against a literal
+     * handful of reports; this larger floor guards against the wider band
+     * where a 10pp swing is still within random variance for typical
+     * pass-rate distributions.
+     *
+     * A 10pp swing on <50 reports is within random variance for typical
+     * pass-rate distributions. 50 is a round-number floor — safer than 20
+     * (which still allows e.g. 8 of 50 fails → 16% baseline pass rate to
+     * look like a regression), more permissive than 100 (which would
+     * suppress the banner for many real low-volume teams). Re-evaluate if
+     * low-volume false positives or high-volume late-fires become a pattern.
+     */
+    private const int MIN_SAMPLE_SIZE = 50;
 
     public function advise(
         PassRateAggregate $window7d,
@@ -57,6 +77,25 @@ final readonly class PassRateRegressionAdvisor
         // enough history to call something a "baseline", every comparison is
         // suspect. Skip the verdict.
         if ($baseline30d->reportCount < self::MIN_REPORTS_7D) {
+            return PassRateRegressionResult::stable(
+                currentRate7d: $window7d->passRate,
+                baselineRate30d: $baseline30d->passRate,
+            );
+        }
+
+        // TASK-109 minimum-volume floor: ADDITIONAL to the ≥10pp delta rule,
+        // not a replacement. Suppress when EITHER window has fewer than
+        // MIN_SAMPLE_SIZE reports — random variance at that volume swallows
+        // the 10pp signal and the banner would be a false positive on a
+        // low-traffic domain.
+        if ($window7d->reportCount < self::MIN_SAMPLE_SIZE) {
+            return PassRateRegressionResult::stable(
+                currentRate7d: $window7d->passRate,
+                baselineRate30d: $baseline30d->passRate,
+            );
+        }
+
+        if ($baseline30d->reportCount < self::MIN_SAMPLE_SIZE) {
             return PassRateRegressionResult::stable(
                 currentRate7d: $window7d->passRate,
                 baselineRate30d: $baseline30d->passRate,
