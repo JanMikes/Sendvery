@@ -105,6 +105,96 @@ final class DomainWorkspaceTabsCountBadgesTest extends WebTestCase
         self::assertCount(0, $overviewTab->filter('span.badge'), 'Overview tab is the catch-all and must never carry a badge.');
     }
 
+    /**
+     * TASK-115: when the DNS tab is itself active, the warning-amber dot is
+     * almost invisible against the dark `tab-active` background unless it
+     * carries an additional contrast affordance. Option A from the spec:
+     * `ring-1 ring-base-100` punches the dot out of either background.
+     *
+     * The pair (active-with-ring vs inactive-without-ring) is asserted with
+     * the same fixture to lock the symmetry: a regression that drops the
+     * ring under active OR leaks it under inactive breaks one of the two.
+     */
+    #[Test]
+    public function activeDnsTabAddsContrastRingToDotBadge(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = $this->getService(EntityManagerInterface::class);
+        // All-failing DNS snapshot — guarantees the dot is rendered.
+        $this->persistHealthSnapshot($em, $persona->domain, spf: 10, dkim: 20, dmarc: 30, mx: 40);
+        $em->flush();
+        $em->clear();
+
+        $domainId = $persona->domain->id->toString();
+
+        // Active DNS tab → ring punch-out present, dot still rendered.
+        $crawler = $client->request('GET', '/app/domains/'.$domainId.'/health');
+        self::assertResponseIsSuccessful();
+        $tablist = $crawler->filter('[role="tablist"]');
+        $dnsTab = $this->tabAnchor($tablist, '/app/domains/'.$domainId.'/health');
+        self::assertStringContainsString('tab-active', $dnsTab->attr('class') ?? '', 'Sanity: DNS tab must carry tab-active on its own route.');
+        $dnsBadges = $dnsTab->filter('span.badge');
+        self::assertCount(1, $dnsBadges, 'Active DNS tab must still render the dot — the ring is additive, not a replacement.');
+        $dnsBadgeClasses = $dnsBadges->attr('class') ?? '';
+        self::assertStringContainsString('ring-1', $dnsBadgeClasses, 'Active DNS dot badge must carry ring-1 to punch out of the dark tab-active background.');
+        self::assertStringContainsString('ring-base-100', $dnsBadgeClasses, 'Active DNS dot ring must use ring-base-100 (the punch-out tone from TASK-115 option A).');
+
+        // Inactive DNS tab (rendered via Overview) → no ring on the dot.
+        $crawler = $client->request('GET', '/app/domains/'.$domainId);
+        self::assertResponseIsSuccessful();
+        $tablist = $crawler->filter('[role="tablist"]');
+        $dnsTab = $this->tabAnchor($tablist, '/app/domains/'.$domainId.'/health');
+        self::assertStringNotContainsString('tab-active', $dnsTab->attr('class') ?? '', 'Sanity: DNS tab must not be active on the overview route.');
+        $dnsBadges = $dnsTab->filter('span.badge');
+        self::assertCount(1, $dnsBadges, 'Inactive DNS tab still renders the dot — only the ring is conditional.');
+        self::assertStringNotContainsString('ring-1', $dnsBadges->attr('class') ?? '', 'Inactive DNS dot badge must NOT carry the ring — amber on light tab reads fine without the punch-out.');
+    }
+
+    #[Test]
+    public function activeHistoryTabAddsContrastRingToDotBadge(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = $this->getService(EntityManagerInterface::class);
+        // 1 DNS change in the last 7 days — guarantees the History dot fires.
+        $this->persistDnsCheck($em, $persona->domain, hasChanged: true, checkedAt: '-2 days');
+        $em->flush();
+        $em->clear();
+
+        $domainId = $persona->domain->id->toString();
+
+        // Active History tab → ring punch-out present.
+        $crawler = $client->request('GET', '/app/domains/'.$domainId.'/dns-history');
+        self::assertResponseIsSuccessful();
+        $tablist = $crawler->filter('[role="tablist"]');
+        $historyTab = $this->tabAnchor($tablist, '/app/domains/'.$domainId.'/dns-history');
+        self::assertStringContainsString('tab-active', $historyTab->attr('class') ?? '', 'Sanity: History tab must carry tab-active on its own route.');
+        $historyBadges = $historyTab->filter('span.badge');
+        self::assertCount(1, $historyBadges, 'Active History tab must still render the dot — the ring is additive.');
+        $historyBadgeClasses = $historyBadges->attr('class') ?? '';
+        self::assertStringContainsString('ring-1', $historyBadgeClasses, 'Active History dot badge must carry ring-1 (TASK-115 option A).');
+        self::assertStringContainsString('ring-base-100', $historyBadgeClasses, 'Active History dot ring must use ring-base-100.');
+
+        // Inactive History tab (rendered via Overview) → no ring on the dot.
+        $crawler = $client->request('GET', '/app/domains/'.$domainId);
+        self::assertResponseIsSuccessful();
+        $tablist = $crawler->filter('[role="tablist"]');
+        $historyTab = $this->tabAnchor($tablist, '/app/domains/'.$domainId.'/dns-history');
+        self::assertStringNotContainsString('tab-active', $historyTab->attr('class') ?? '', 'Sanity: History tab must not be active on the overview route.');
+        $historyBadges = $historyTab->filter('span.badge');
+        self::assertCount(1, $historyBadges, 'Inactive History tab still renders the dot — only the ring is conditional.');
+        self::assertStringNotContainsString('ring-1', $historyBadges->attr('class') ?? '', 'Inactive History dot badge must NOT carry the ring.');
+    }
+
     #[Test]
     public function cleanDomainRendersNoBadges(): void
     {

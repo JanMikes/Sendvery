@@ -12,7 +12,16 @@
    "something's failing"). `overview` is always null — the overview is the
    catch-all, never carries a badge. When `tabCounts` is null (the default)
    no badges render at all and the component degrades to its pre-TASK-084
-   nav-only behaviour. #}
+   nav-only behaviour.
+
+   TASK-115: the DNS / History dot badges (`w-2 h-2 p-0`) used to disappear
+   against the dark `tab-active` background — the amber dot blended into the
+   active-tab fill exactly when the operator needed the signal most (they're
+   on the page the badge advertised, but the badge has gone faint). On the
+   active tab the dot gains `ring-1 ring-base-100` so it punches out of
+   either background (light inactive OR dark active) without shifting tone.
+   Number badges (Reports / Senders / Blacklist) carry enough digit mass to
+   stay legible against the active fill, so they are intentionally untouched. #}
 {% props domain, active, tabCounts = null %}
 
 <div role="tablist" class="tabs tabs-bordered mb-6 overflow-x-auto">
@@ -23,9 +32,9 @@
     <a role="tab" href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
        class="tab {{ active == 'senders' ? 'tab-active' : '' }}"{{ active == 'senders' ? ' aria-current="page"' : '' }}>Senders{% if tabCounts is not null and tabCounts.senders is defined and tabCounts.senders %} <span class="badge badge-xs badge-warning ml-1" aria-label="{{ tabCounts.senders }} unauthorized senders waiting for triage">{{ tabCounts.senders }}</span>{% endif %}</a>
     <a role="tab" href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}"
-       class="tab {{ active == 'dns' ? 'tab-active' : '' }}"{{ active == 'dns' ? ' aria-current="page"' : '' }}>DNS{% if tabCounts is not null and tabCounts.dns is defined and tabCounts.dns %} <span class="badge badge-xs badge-warning ml-1 w-2 h-2 p-0" aria-label="DNS check failing"></span>{% endif %}</a>
+       class="tab {{ active == 'dns' ? 'tab-active' : '' }}"{{ active == 'dns' ? ' aria-current="page"' : '' }}>DNS{% if tabCounts is not null and tabCounts.dns is defined and tabCounts.dns %} <span class="badge badge-xs badge-warning ml-1 w-2 h-2 p-0{{ active == 'dns' ? ' ring-1 ring-base-100' : '' }}" aria-label="DNS check failing"></span>{% endif %}</a>
     <a role="tab" href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}"
        class="tab {{ active == 'blacklist' ? 'tab-active' : '' }}"{{ active == 'blacklist' ? ' aria-current="page"' : '' }}>Blacklist{% if tabCounts is not null and tabCounts.blacklist is defined and tabCounts.blacklist %} <span class="badge badge-xs badge-warning ml-1" aria-label="{{ tabCounts.blacklist }} IP addresses currently listed on a DNSBL">{{ tabCounts.blacklist }}</span>{% endif %}</a>
     <a role="tab" href="{{ path('dashboard_domain_dns_history', {id: domain.domainId}) }}"
-       class="tab {{ active == 'history' ? 'tab-active' : '' }}"{{ active == 'history' ? ' aria-current="page"' : '' }}>History{% if tabCounts is not null and tabCounts.history is defined and tabCounts.history %} <span class="badge badge-xs badge-warning ml-1 w-2 h-2 p-0" aria-label="DNS records changed in the last 7 days"></span>{% endif %}</a>
+       class="tab {{ active == 'history' ? 'tab-active' : '' }}"{{ active == 'history' ? ' aria-current="page"' : '' }}>History{% if tabCounts is not null and tabCounts.history is defined and tabCounts.history %} <span class="badge badge-xs badge-warning ml-1 w-2 h-2 p-0{{ active == 'history' ? ' ring-1 ring-base-100' : '' }}" aria-label="DNS records changed in the last 7 days"></span>{% endif %}</a>
 </div>
