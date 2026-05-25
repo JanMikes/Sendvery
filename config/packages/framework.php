@@ -31,6 +31,20 @@ return App::config([
         'csrf_protection' => [
             'check_header' => true,
         ],
+        // TASK-159: per-IP rate-limit for the founder contact form. Five
+        // submissions/hour is generous for legitimate humans (a person
+        // typing slowly takes minutes per message, not seconds) but
+        // forecloses scripted-form-fill abuse. Autowires as
+        // RateLimiterFactory $contactFormLimiter (camelCase + Limiter).
+        // NO 3rd-party CAPTCHA — defence is layered: honeypot field +
+        // time-trap + this rate-limiter, all in-house.
+        'rate_limiter' => [
+            'contact_form' => [
+                'policy' => 'token_bucket',
+                'limit' => 5,
+                'rate' => ['interval' => '1 hour', 'amount' => 5],
+            ],
+        ],
     ],
     'when@test' => [
         'framework' => [
@@ -39,6 +53,22 @@ return App::config([
             // don't escape DAMA DoctrineTestBundle's rollback.
             'session' => [
                 'handler_id' => null,
+            ],
+            // TASK-159: rate-limiter token-bucket state needs to survive
+            // services_resetter->reset() so a single test method can verify
+            // that 5 submissions exhaust the bucket and the 6th is blocked.
+            // Symfony's default cache.adapter.array is tagged kernel.reset
+            // and wipes itself between requests, making rate-limit verification
+            // impossible. Filesystem pool persists between requests within a
+            // test; each test method's createClient() boots a fresh kernel
+            // in a fresh cache namespace so leakage between tests stays nil.
+            'cache' => [
+                'pools' => [
+                    'cache.rate_limiter' => [
+                        'adapter' => 'cache.adapter.filesystem',
+                        'public' => true,
+                    ],
+                ],
             ],
         ],
     ],

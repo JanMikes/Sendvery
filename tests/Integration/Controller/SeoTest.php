@@ -45,6 +45,7 @@ final class SeoTest extends WebTestCase
         self::assertStringContainsString('/pricing', $content);
         self::assertStringContainsString('/about/what-is-sendvery', $content);
         self::assertStringContainsString('/about/open-source', $content);
+        self::assertStringContainsString('/about/contact', $content);
         self::assertStringContainsString('/learn', $content);
         self::assertStringContainsString('/learn/what-is-dmarc', $content);
         self::assertStringContainsString('/learn/spf-record-guide', $content);

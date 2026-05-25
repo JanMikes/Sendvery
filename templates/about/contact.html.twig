@@ -1,0 +1,177 @@
+{% extends 'marketing_layout.html.twig' %}
+
+{% block title %}Talk directly to the founder — Sendvery{% endblock %}
+{% block meta_description %}Contact Jan Mikeš, the founder of Sendvery. Billing questions, custom plans, partnerships, and "is Sendvery right for me?" — Jan handles these personally.{% endblock %}
+
+{% block structured_data %}
+{# TASK-159: BreadcrumbList JSON-LD. Two-item chain (Home → Contact) —
+   we deliberately do NOT invent a phantom /about intermediate because no
+   such route exists; SERP chips would 404 if Google followed them. #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{ url('home') }}"},
+        {"@type": "ListItem", "position": 2, "name": "Contact", "item": "{{ url('about_contact') }}"}
+    ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+    <twig:SectionContainer>
+        <div class="max-w-3xl mx-auto text-center">
+            <h1 class="text-3xl md:text-5xl font-bold">Talk directly to the founder.</h1>
+            <p class="mt-6 text-lg text-base-content/70">
+                Jan Mikeš is the sole founder and maintainer of Sendvery — a Czech-based software engineer who built and operates this platform.
+                Billing questions, custom plan requests, agency partnerships, or simply "is Sendvery right for my setup?" — Jan handles these personally.
+                Email him directly at <a href="mailto:jan.mikes@sendvery.com" class="link link-primary">jan.mikes@sendvery.com</a> or use the form below.
+            </p>
+        </div>
+
+        {% if sent %}
+            <div class="max-w-3xl mx-auto mt-10">
+                <div class="alert alert-success" role="status">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                        <h3 class="font-semibold">Thanks — your message is on its way to Jan.</h3>
+                        <p class="text-sm">He reads every email personally. Expect a reply within a working day.</p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="max-w-5xl mx-auto mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+            {# LEFT: founder contact form #}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary">
+                            {# Mail glyph #}
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5 12 13l9-5.5" />
+                                <rect x="3" y="5" width="18" height="13" rx="2" />
+                            </svg>
+                        </span>
+                        <h2 class="text-lg font-semibold">Send a message</h2>
+                    </div>
+                    <p class="text-sm text-base-content/60 mb-6">
+                        Goes straight to Jan's inbox. No support ticket queue, no auto-reply.
+                    </p>
+
+                    {% if errors is not empty %}
+                        <div class="alert alert-error mb-4" role="alert">
+                            <ul class="text-sm list-disc list-inside">
+                                {% for error in errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <form method="POST" action="{{ path('about_contact') }}" autocomplete="off">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('contact_form') }}">
+                        <input type="hidden" name="renderedAt" value="{{ data.renderedAt }}">
+
+                        {# Honeypot. Hidden from sighted users (display:none), from
+                           keyboard nav (tabindex=-1), from screen readers
+                           (aria-hidden), and from password managers
+                           (autocomplete=off). Bots fill every input they see. #}
+                        <div style="display:none" aria-hidden="true">
+                            <label for="contact-website">Website (leave empty)</label>
+                            <input type="text" id="contact-website" name="website" tabindex="-1" autocomplete="off" value="">
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label" for="contact-name">
+                                <span class="label-text">Your name</span>
+                            </label>
+                            <input id="contact-name"
+                                   type="text"
+                                   name="name"
+                                   class="input input-bordered w-full"
+                                   maxlength="255"
+                                   required
+                                   value="{{ data.name }}">
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label" for="contact-email">
+                                <span class="label-text">Your email</span>
+                            </label>
+                            <input id="contact-email"
+                                   type="email"
+                                   name="email"
+                                   class="input input-bordered w-full"
+                                   maxlength="255"
+                                   required
+                                   value="{{ data.email }}">
+                        </div>
+
+                        <div class="form-control mb-4">
+                            <label class="label" for="contact-subject">
+                                <span class="label-text">Subject</span>
+                            </label>
+                            <input id="contact-subject"
+                                   type="text"
+                                   name="subject"
+                                   class="input input-bordered w-full"
+                                   maxlength="255"
+                                   required
+                                   value="{{ data.subject }}">
+                        </div>
+
+                        <div class="form-control mb-6">
+                            <label class="label" for="contact-message">
+                                <span class="label-text">Message</span>
+                            </label>
+                            <textarea id="contact-message"
+                                      name="message"
+                                      class="textarea textarea-bordered w-full min-h-32"
+                                      maxlength="5000"
+                                      required>{{ data.message }}</textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-full">Send to Jan</button>
+                    </form>
+                </div>
+            </div>
+
+            {# RIGHT: GitHub-issues card (TASK-160). Sibling, not duplicate —
+               business questions go left, engineering questions go right. #}
+            <div class="card bg-base-100 border border-base-200 shadow-sm">
+                <div class="card-body p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-neutral/10 text-neutral-content">
+                            {# GitHub glyph (Octocat silhouette, simplified) #}
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-base-content" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.27-1.68-1.27-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.67 1.24 3.32.95.1-.74.4-1.24.73-1.53-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.47.11-3.06 0 0 .96-.31 3.15 1.18a10.93 10.93 0 015.74 0c2.18-1.49 3.14-1.18 3.14-1.18.63 1.59.23 2.77.12 3.06.74.81 1.18 1.84 1.18 3.1 0 4.43-2.7 5.4-5.26 5.69.41.36.77 1.07.77 2.16v3.2c0 .31.21.67.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/>
+                            </svg>
+                        </span>
+                        <h2 class="text-lg font-semibold">Open an issue on GitHub</h2>
+                    </div>
+                    <p class="text-sm text-base-content/60 mb-6">
+                        Product suggestions or bug reports — open an issue directly on GitHub, where the code lives.
+                    </p>
+                    <ul class="space-y-2 text-sm text-base-content/70 mb-6">
+                        <li class="flex gap-2"><span class="text-success">✓</span> Searchable history — your suggestion may already be tracked.</li>
+                        <li class="flex gap-2"><span class="text-success">✓</span> Public discussion — other users can chime in.</li>
+                        <li class="flex gap-2"><span class="text-success">✓</span> Tied to commits — you see exactly when your fix ships.</li>
+                    </ul>
+                    {# Canonical casing `Sendvery` with capital S. The lowercase
+                       URL 301-redirects, which adds an extra hop GitHub doesn't
+                       need users (or crawlers) to walk through. #}
+                    <a href="https://github.com/janmikes/Sendvery/issues/new" target="_blank" rel="noopener" class="btn btn-outline w-full">
+                        Open an issue
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </twig:SectionContainer>
+{% endblock %}

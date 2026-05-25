@@ -60,6 +60,7 @@
             <a href="{{ path('knowledge_base_index') }}" class="btn btn-ghost btn-sm">Learn</a>
             <a href="{{ path('pricing') }}" class="btn btn-ghost btn-sm">Pricing</a>
             <a href="{{ path('about_open_source') }}" class="btn btn-ghost btn-sm">Open Source</a>
+            <a href="{{ path('about_contact') }}" class="btn btn-ghost btn-sm">Contact</a>
 
             {% if app.user %}
                 <a href="{{ path('dashboard_overview') }}" class="btn btn-primary btn-sm">Dashboard</a>
@@ -101,6 +102,7 @@
             <a href="{{ path('knowledge_base_index') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">Learn</a>
             <a href="{{ path('pricing') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">Pricing</a>
             <a href="{{ path('about_open_source') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">Open Source</a>
+            <a href="{{ path('about_contact') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">Contact</a>
             {% if app.user %}
                 <a href="{{ path('dashboard_overview') }}" class="btn btn-primary btn-sm mt-3">Dashboard</a>
             {% else %}
