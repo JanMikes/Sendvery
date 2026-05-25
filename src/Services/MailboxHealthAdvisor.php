@@ -235,7 +235,7 @@ final readonly class MailboxHealthAdvisor
     ): array {
         $checkDns = new MailboxHealthAdvisorAction(
             label: 'Check DNS',
-            route: 'dashboard_dns_health',
+            route: 'dashboard_domains',
             routeParams: [],
             glyph: 'search',
         );
@@ -265,7 +265,7 @@ final readonly class MailboxHealthAdvisor
             RuaScenario::NoRecord => [
                 new MailboxHealthAdvisorAction(
                     label: 'Publish a DMARC record',
-                    route: 'dashboard_dns_health',
+                    route: 'dashboard_domains',
                     routeParams: [],
                     glyph: 'pencil',
                 ),

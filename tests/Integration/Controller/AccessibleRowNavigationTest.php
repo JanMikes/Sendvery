@@ -219,7 +219,6 @@ final class AccessibleRowNavigationTest extends WebTestCase
             '/app/domains',
             '/app/reports',
             '/app/alerts',
-            '/app/dns-health',
             '/app/mailboxes',
             '/app/settings/billing',
             '/app/settings/preferences',
@@ -250,8 +249,6 @@ final class AccessibleRowNavigationTest extends WebTestCase
     {
         // The sidebar Domains item uses `current_route starts with 'dashboard_domain'`
         // which legitimately covers dashboard_domain_detail / _health / _reports.
-        // The in-app DNS Health page lives under 'dashboard_dns_health' (no
-        // 'dashboard_domain' prefix) so it does NOT collide.
         $data = $this->createAuthenticatedClientWithReport();
         $client = $data['client'];
 
@@ -273,33 +270,5 @@ final class AccessibleRowNavigationTest extends WebTestCase
                 sprintf('Domains nav link should be highlighted on %s', $page),
             );
         }
-    }
-
-    #[Test]
-    public function sidebarDomainsNotHighlightedOnDnsHealthOverview(): void
-    {
-        // On /app/dns-health the DNS Health nav item is highlighted; the
-        // Domains nav item must NOT be highlighted (regression guard against
-        // a future router rename that collides the two prefixes).
-        $data = $this->createAuthenticatedClientWithReport();
-
-        $crawler = $data['client']->request('GET', '/app/dns-health');
-        self::assertResponseIsSuccessful();
-
-        $domainsNav = $crawler->filter('aside nav a:contains("Domains")');
-        self::assertGreaterThan(0, $domainsNav->count(), 'Domains nav link missing on /app/dns-health');
-        self::assertStringNotContainsString(
-            'bg-primary',
-            (string) $domainsNav->first()->attr('class'),
-            'Domains nav link must NOT be highlighted on the DNS Health overview page.',
-        );
-
-        $dnsHealthNav = $crawler->filter('aside nav a:contains("DNS Health")');
-        self::assertGreaterThan(0, $dnsHealthNav->count(), 'DNS Health nav link missing on /app/dns-health');
-        self::assertStringContainsString(
-            'bg-primary',
-            (string) $dnsHealthNav->first()->attr('class'),
-            'DNS Health nav link must be highlighted on /app/dns-health.',
-        );
     }
 }

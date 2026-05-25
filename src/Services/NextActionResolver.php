@@ -98,7 +98,7 @@ final readonly class NextActionResolver
                     $reportAddress,
                 ),
                 ctaLabel: 'Check DNS setup',
-                ctaRoute: 'dashboard_dns_health',
+                ctaRoute: 'dashboard_domains',
                 ctaRouteParams: [],
                 severity: 'warning',
             );
@@ -167,7 +167,7 @@ final readonly class NextActionResolver
                             $reportAddress,
                         ),
                         ctaLabel: 'Check DNS setup',
-                        ctaRoute: 'dashboard_dns_health',
+                        ctaRoute: 'dashboard_domains',
                         ctaRouteParams: [],
                         severity: 'info',
                     );
@@ -206,7 +206,7 @@ final readonly class NextActionResolver
                     ctaRouteParams: [],
                     severity: 'info',
                     secondaryCtaLabel: 'Or repoint DMARC to Sendvery',
-                    secondaryCtaRoute: 'dashboard_dns_health',
+                    secondaryCtaRoute: 'dashboard_domains',
                 );
             }
 
@@ -223,7 +223,7 @@ final readonly class NextActionResolver
                         $reportAddress,
                     ),
                     ctaLabel: 'How to publish RUA',
-                    ctaRoute: 'dashboard_dns_health',
+                    ctaRoute: 'dashboard_domains',
                     ctaRouteParams: [],
                     severity: 'info',
                     secondaryCtaLabel: 'Prefer to connect a mailbox instead? (fallback)',

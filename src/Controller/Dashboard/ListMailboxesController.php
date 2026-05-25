@@ -91,6 +91,6 @@ final class ListMailboxesController extends AbstractController
             return $this->generateUrl('dashboard_domain_health', ['id' => $matrix[0]->domainId]);
         }
 
-        return $this->generateUrl('dashboard_dns_health');
+        return $this->generateUrl('dashboard_domains');
     }
 }

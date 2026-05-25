@@ -158,7 +158,7 @@ final class NextActionResolverRuaScenarioTest extends TestCase
         self::assertSame('Connect this inbox', $result->ctaLabel);
         self::assertSame('dashboard_mailbox_add', $result->ctaRoute);
         self::assertSame('Or repoint DMARC to Sendvery', $result->secondaryCtaLabel);
-        self::assertSame('dashboard_dns_health', $result->secondaryCtaRoute);
+        self::assertSame('dashboard_domains', $result->secondaryCtaRoute);
         self::assertSame('info', $result->severity);
     }
 

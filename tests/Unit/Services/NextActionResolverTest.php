@@ -144,7 +144,7 @@ final class NextActionResolverTest extends TestCase
         );
 
         self::assertSame(NextAction::WaitForReports, $result->actionKey);
-        self::assertSame('dashboard_dns_health', $result->ctaRoute);
+        self::assertSame('dashboard_domains', $result->ctaRoute);
         self::assertSame('warning', $result->severity);
     }
 
@@ -284,7 +284,7 @@ final class NextActionResolverTest extends TestCase
         );
 
         self::assertSame(NextAction::PublishRuaRecord, $result->actionKey);
-        self::assertSame('dashboard_dns_health', $result->ctaRoute);
+        self::assertSame('dashboard_domains', $result->ctaRoute);
         self::assertSame('info', $result->severity);
         self::assertStringContainsString('reports@sendvery.com', $result->description);
         self::assertSame('Prefer to connect a mailbox instead? (fallback)', $result->secondaryCtaLabel);

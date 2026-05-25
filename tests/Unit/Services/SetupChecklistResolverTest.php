@@ -296,7 +296,7 @@ final class SetupChecklistResolverTest extends TestCase
 
         self::assertSame('dashboard_domain_add', $result->steps[0]->actionRoute);
         self::assertSame('dashboard_domains', $result->steps[1]->actionRoute);
-        self::assertSame('dashboard_dns_health', $result->steps[2]->actionRoute);
+        self::assertSame('dashboard_domains', $result->steps[2]->actionRoute);
         self::assertSame([], $result->steps[0]->actionRouteParams);
         self::assertSame([], $result->steps[1]->actionRouteParams);
         self::assertSame([], $result->steps[2]->actionRouteParams);
@@ -329,7 +329,7 @@ final class SetupChecklistResolverTest extends TestCase
         self::assertStringNotContainsString('Connect a mailbox', $receiveReports->description);
         self::assertStringNotContainsString('Connect a mailbox', $receiveReports->actionLabel);
         self::assertSame('Check DNS setup', $receiveReports->actionLabel);
-        self::assertSame('dashboard_dns_health', $receiveReports->actionRoute);
+        self::assertSame('dashboard_domains', $receiveReports->actionRoute);
     }
 
     #[Test]
@@ -380,7 +380,7 @@ final class SetupChecklistResolverTest extends TestCase
         $receiveReports = $result->steps[2];
         self::assertStringContainsString('Connect a mailbox if you prefer', $receiveReports->description);
         self::assertSame('Do it', $receiveReports->actionLabel);
-        self::assertSame('dashboard_dns_health', $receiveReports->actionRoute);
+        self::assertSame('dashboard_domains', $receiveReports->actionRoute);
     }
 
     #[Test]

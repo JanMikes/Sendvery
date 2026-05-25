@@ -4066,7 +4066,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-130: /app/domains and /app/dns-health are two separate pages rendering two views of the same underlying data — paying customers should not have to learn two surfaces for "my domains" vs "my domains' DNS health"
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: User said: "Why do I have a `/domains` page AND a `/dns-health` page? They're the same domains, just rendered differently. Merge them." The user explicitly added: "We do not need to keep backward compatibility, just migrate the functionality." This round's biggest single dashboard task — collapse `/app/dns-health` into `/app/domains` as one canonical "domains overview" surface, no shims.
 - Acceptance:
@@ -4089,6 +4089,62 @@ Two underlying queries fire once per matrix row:
 - Notes:
   - Biggest task this round (~3-4 hours). Architect first — the deletion cascade needs careful sequencing so deletions don't break tests mid-flight.
   - Round-5 perf audit noted `GetDnsHealthOverview` "feeds three call sites" — confirm each call site is now either `/app/domains` (merged) or `/app/domains/{id}/health` (drill-down). Any third call site is suspect.
+
+### Architect plan (2026-05-25)
+
+**Files to delete (3):**
+- `src/Controller/Dashboard/DnsHealthOverviewController.php`
+- `templates/dashboard/dns_health_overview.html.twig`
+- `tests/Integration/Controller/DnsHealthOverviewTest.php`
+
+**Files to modify (17):** controllers/services keeping the merged data flow + every test that asserted the deleted route name. Full list in step list below.
+
+**Files to create (2):**
+- `tests/Integration/Controller/DomainsWithDnsHealthTest.php`
+- `tests/Integration/Query/GetDnsHealthOverviewTest.php` (extracts the surviving `forDomain()` assertions from the deleted controller test)
+
+**Data wiring:** Keep both `GetDomainOverview` and `GetDnsHealthOverview`. `GetDnsHealthOverview::forTeams()` is added as a SECOND query in `ListDomainsController` to build a `domainId → DnsHealthOverviewResult` map (`$dnsHealthByDomain`) passed to the template. Round-5 perf audit clocked `GetDnsHealthOverview::forTeams` at 0.11ms exec / 0.79ms plan — cheap. Collapsing the two into a single SQL would expand `DomainOverviewResult` with `grade`/`score`/`checked_at` columns that the existing detail-page caller would carry unused — net loss.
+
+**4-card summary:** `DomainHealthClassifier::isFullyHealthy(DnsHealthOverviewResult)` is the exact method `DnsHealthOverviewController` already uses (line 44). Move the same loop into `ListDomainsController`. Filters: `?status=healthy`, `?status=attention`, `?status=unverified` already exist; ADD `?status=unchecked` for the "Awaiting first check" chip (domains where `$dnsHealthByDomain[domainId]` is absent or `!hasSnapshot()`).
+
+**Per-card grade + badges:** Extend `templates/components/DomainCard.html.twig` with 7 optional props (default null): `dnsGrade`, `dnsGradeColor`, `spfPass`, `dkimPass`, `dmarcPass`, `mxScore`, `domainHealthUrl`. **Important HTML-validity note:** the existing `DomainCard` IS an `<a>` tag at its root (clicking the card goes to `dashboard_domain_detail`). Wrapping badges in nested `<a>` tags would be invalid HTML. The spec's "clicking the letter grade or badge deep-links to /health" therefore becomes: render grade chip + protocol badges as NON-INTERACTIVE styled spans, plus a single "DNS Health →" `btn btn-ghost btn-xs` in the card-actions footer linking to `domainHealthUrl`. Single navigation destination per card from the badge area; click anywhere else on the card still goes to detail.
+
+**Badge tone single source of truth:** the SPF/DKIM/DMARC/MX threshold logic lives in the template (same thresholds as `dns_health_overview.html.twig` lines 69-82 today). After merge it lives ONLY in `DomainCard.html.twig`. The per-domain detail page (`templates/dashboard/domain_health.html.twig`) renders its own protocol badges using identical thresholds — they'll agree by construction. Don't extract to a service yet; the thresholds are simple, both surfaces read from the same underlying `domain_health_snapshot` columns.
+
+**Sidebar nav cleanup:** `templates/dashboard/layout.html.twig` lines 101-105 (DNS Health entry between "Domains" and the "Data" section label). Delete the block entirely — no visual gap (the section structure absorbs cleanly). Do NOT rename "Domains" → "Domains & DNS health"; update the page heading at `templates/dashboard/domains.html.twig` line 9 instead to "Every domain your team is monitoring — DNS health grade, DMARC pass rate, and sender breakdown in one view." The sidebar `current_route starts with 'dashboard_domain'` active-class expression already activates for `dashboard_domains` — no change.
+
+**Sequencing — 4 phases to avoid mid-flight test breakage:**
+
+**Phase 1 — Enrich `/app/domains` (both pages live, all tests green)**
+1. Inject `GetDnsHealthOverview` into `ListDomainsController`; build `$dnsHealthByDomain` map + the 4 counts (`totalDnsCount`, `healthyCount`, `attentionCount`, `awaitingCount`) using `DomainHealthClassifier::isFullyHealthy()`. Add `?status=unchecked` filter branch.
+2. Extend `templates/components/DomainCard.html.twig` with the 7 props + badge block (grade chip + SPF/DKIM/DMARC/MX badges + DNS Health → link in card-actions).
+3. Insert 4-card stat summary into `templates/dashboard/domains.html.twig` between line 13 and the filter-chip row (line 15), inside `{% if totalDomainCount > 0 %}`. Pass the new props into `<twig:DomainCard>` at lines 51-59.
+4. Create `tests/Integration/Controller/DomainsWithDnsHealthTest.php` — 7 tests covering: 4-card summary, grade chip presence/absence, protocol badges, DNS Health link href, `?status=unchecked` filter, no-public-domain-health-tool link.
+5. Create `tests/Integration/Query/GetDnsHealthOverviewTest.php` — extract the `forDomain()` assertions surviving the controller test deletion.
+6. Run full suite → green.
+
+**Phase 2 — Migrate route references in src/ and unit tests (page still live)**
+7. `src/Services/NextActionResolver.php` lines 101, 170, 209, 226 → `'dashboard_domains'`
+8. `src/Services/SetupChecklistResolver.php` lines 119, 137 → `'dashboard_domains'`
+9. `src/Services/MailboxHealthAdvisor.php` lines 238, 268 → `'dashboard_domains'`
+10. `src/Controller/Dashboard/ListMailboxesController.php` line 94 → `'dashboard_domains'`
+11. Update 10 unit-test assertion strings across `NextActionResolverTest`, `NextActionResolverRuaScenarioTest`, `SetupChecklistResolverTest`, `MailboxHealthAdvisorTest`.
+12. Update 2 integration URL assertions: `ReportIngestionPageTest` line 149, `MailboxHealthAdvisorCardTest` line 111.
+13. Run full suite → green.
+
+**Phase 3 — Delete /app/dns-health artifacts and sidebar entry**
+14. Delete `DnsHealthOverviewController.php`, `dns_health_overview.html.twig`, `DnsHealthOverviewTest.php`.
+15. `templates/dashboard/layout.html.twig` lines 101-105 → remove DNS Health `<a>` block.
+16. `AccessibleRowNavigationTest.php`: remove `/app/dns-health` from sweep array (line 222), delete `sidebarDomainsNotHighlightedOnDnsHealthOverview` test (lines 278-304).
+17. `DashboardPageHeadingsTest.php`: delete `dnsHealthOverviewRendersDnsHealthHeading` (lines 124-133), remove `/app/dns-health` from sweep (line 176).
+18. Run full suite → green.
+
+**Phase 4 — Codified no-reference guard + docs cleanup**
+19. Add a static codification test (in `DomainsWithDnsHealthTest` or a sibling) asserting NO file in `templates/` contains the string `dashboard_dns_health`.
+20. Update `docs/autonomous-run-prompt.md` references to the deleted route (lines 322, 341, 343, 788, 812, 868) for honesty.
+21. Final run → green → commit.
+
+**Complete reference migration table:** every `dashboard_dns_health` callsite resolves to `dashboard_domains`. None target the per-domain `dashboard_domain_health` drill-down route, which stays intact.
 
 ---
 

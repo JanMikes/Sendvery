@@ -146,7 +146,7 @@ final class ReportIngestionPageTest extends WebTestCase
         $body = (string) $data['client']->getResponse()->getContent();
 
         self::assertStringContainsString('data-testid="recommended-callout"', $body);
-        self::assertStringContainsString('href="/app/dns-health"', $body);
+        self::assertStringContainsString('href="/app/domains"', $body);
         // No per-domain deep link to /app/domains/{uuid}/health for the
         // recommended callout in this state.
         self::assertDoesNotMatchRegularExpression(

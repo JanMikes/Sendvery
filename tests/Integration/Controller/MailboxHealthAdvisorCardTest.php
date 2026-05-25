@@ -105,10 +105,10 @@ final class MailboxHealthAdvisorCardTest extends WebTestCase
             (string) $crawler->filter('[data-testid="mailbox-health-advisor-headline"]')->text(),
         );
 
-        // Primary CTA → DNS health overview.
+        // Primary CTA → domains overview (TASK-130: dns-health merged into domains).
         $primary = $crawler->filter('a[data-testid="mailbox-health-advisor-primary-cta"]');
         self::assertGreaterThan(0, $primary->count());
-        self::assertStringContainsString('/app/dns-health', (string) $primary->attr('href'));
+        self::assertStringContainsString('/app/domains', (string) $primary->attr('href'));
 
         // Secondary link → mailboxes landing (TASK-090 callout).
         $secondary = $crawler->filter('[data-testid="mailbox-health-advisor-secondary-link"]');

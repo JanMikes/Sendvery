@@ -6,28 +6,51 @@
 {% block page_heading %}
     <div class="mb-6">
         <h1 class="text-2xl font-bold">Domains</h1>
-        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">Every domain your team is monitoring. Tap a card to see DNS health, recent reports and the sender breakdown.</p>
+        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">Every domain your team is monitoring — DNS health grade, DMARC pass rate, and sender breakdown in one view.</p>
     </div>
 {% endblock %}
 
 {% block content %}
+    {% if totalDomainCount > 0 %}
+        {# TASK-130: 4-card summary row absorbed from the deleted /app/dns-health
+           page. Counts always reflect the unfiltered set so the chips link to
+           a known target; the cards below show whichever subset the active
+           filter matches. #}
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <twig:StatCard title="Domains monitored" value="{{ totalDnsCount }}" />
+            <a href="{{ path('dashboard_domains', { status: 'healthy' }) }}" class="block">
+                <twig:StatCard title="Fully healthy" value="{{ healthyCount }}" variant="{{ healthyCount > 0 ? 'success' : 'default' }}" />
+            </a>
+            <a href="{{ path('dashboard_domains', { status: 'attention' }) }}" class="block">
+                <twig:StatCard title="Need attention" value="{{ attentionCount }}" variant="{{ attentionCount > 0 ? 'warning' : 'default' }}" />
+            </a>
+            <a href="{{ path('dashboard_domains', { status: 'unchecked' }) }}" class="block">
+                <twig:StatCard title="Awaiting first check" value="{{ awaitingCount }}" variant="default" />
+            </a>
+        </div>
+    {% endif %}
+
     {# Filter chips — URL-driven state via ?status=. Mirrors alerts.html.twig pattern. #}
     <div class="flex flex-wrap gap-2 mb-4">
         <a href="{{ path('dashboard_domains') }}"
-           class="btn btn-sm {{ activeFilter is null ? 'btn-primary' : 'btn-ghost' }}">
+           class="btn btn-sm {{ activeFilterRaw == '' ? 'btn-primary' : 'btn-ghost' }}">
             All
         </a>
         <a href="{{ path('dashboard_domains', { status: 'healthy' }) }}"
-           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'healthy' ? 'btn-primary' : 'btn-ghost' }}">
+           class="btn btn-sm {{ activeFilterRaw == 'healthy' ? 'btn-primary' : 'btn-ghost' }}">
             Healthy
         </a>
         <a href="{{ path('dashboard_domains', { status: 'attention' }) }}"
-           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'attention' ? 'btn-warning' : 'btn-ghost' }}">
+           class="btn btn-sm {{ activeFilterRaw == 'attention' ? 'btn-warning' : 'btn-ghost' }}">
             Need attention
         </a>
         <a href="{{ path('dashboard_domains', { status: 'unverified' }) }}"
-           class="btn btn-sm {{ activeFilter is not null and activeFilter.value == 'unverified' ? 'btn-error' : 'btn-ghost' }}">
+           class="btn btn-sm {{ activeFilterRaw == 'unverified' ? 'btn-error' : 'btn-ghost' }}">
             Unverified
+        </a>
+        <a href="{{ path('dashboard_domains', { status: 'unchecked' }) }}"
+           class="btn btn-sm {{ activeFilterRaw == 'unchecked' ? 'btn-info' : 'btn-ghost' }}">
+            Awaiting first check
         </a>
     </div>
 
@@ -48,6 +71,7 @@
     {% else %}
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {% for domain in domains %}
+                {% set dnsHealth = dnsHealthByDomain[domain.domainId] ?? null %}
                 <twig:DomainCard
                     domainId="{{ domain.domainId }}"
                     domainName="{{ domain.domainName }}"
@@ -56,6 +80,13 @@
                     latestReportDate="{{ domain.latestReportDate }}"
                     teamName="{{ showTeamColumn ? domain.teamName : null }}"
                     severity="{{ severityByDomain[domain.domainId].value }}"
+                    :dnsGrade="dnsHealth and dnsHealth.hasSnapshot() ? dnsHealth.latestSnapshotGrade : null"
+                    :dnsGradeColor="dnsHealth and dnsHealth.hasSnapshot() ? dnsHealth.snapshotGradeColor() : null"
+                    :spfPass="dnsHealth ? dnsHealth.isSpfVerified() : null"
+                    :dkimPass="dnsHealth ? dnsHealth.isDkimVerified() : null"
+                    :dmarcPass="dnsHealth ? dnsHealth.isDmarcVerified() : null"
+                    :mxScore="dnsHealth ? dnsHealth.latestMxScore : null"
+                    domainHealthUrl="{{ path('dashboard_domain_health', { id: domain.domainId }) }}"
                 />
             {% endfor %}
         </div>

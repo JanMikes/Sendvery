@@ -114,7 +114,7 @@ final class MailboxHealthAdvisorTest extends TestCase
         self::assertStringContainsString('reports@sendvery.test', $result->reasonText);
         // No bound domain → TASK-108 default branch: keep "Check DNS" primary.
         self::assertSame('Check DNS', $result->primaryAction->label);
-        self::assertSame('dashboard_dns_health', $result->primaryAction->route);
+        self::assertSame('dashboard_domains', $result->primaryAction->route);
         self::assertSame([], $result->primaryAction->routeParams);
         self::assertSame('search', $result->primaryAction->glyph);
         self::assertNotNull($result->secondaryAction);
@@ -152,7 +152,7 @@ final class MailboxHealthAdvisorTest extends TestCase
         self::assertSame('unlink', $result->primaryAction->glyph);
         self::assertNotNull($result->secondaryAction);
         self::assertSame('Check DNS', $result->secondaryAction->label);
-        self::assertSame('dashboard_dns_health', $result->secondaryAction->route);
+        self::assertSame('dashboard_domains', $result->secondaryAction->route);
     }
 
     #[Test]
@@ -180,7 +180,7 @@ final class MailboxHealthAdvisorTest extends TestCase
         self::assertNotNull($result);
         self::assertSame(MailboxHealthSeverity::SilentForTooLong, $result->severity);
         self::assertSame('Check DNS', $result->primaryAction->label);
-        self::assertSame('dashboard_dns_health', $result->primaryAction->route);
+        self::assertSame('dashboard_domains', $result->primaryAction->route);
         self::assertSame('search', $result->primaryAction->glyph);
         self::assertNull($result->secondaryAction);
     }
@@ -210,7 +210,7 @@ final class MailboxHealthAdvisorTest extends TestCase
         self::assertNotNull($result);
         self::assertSame(MailboxHealthSeverity::SilentForTooLong, $result->severity);
         self::assertSame('Publish a DMARC record', $result->primaryAction->label);
-        self::assertSame('dashboard_dns_health', $result->primaryAction->route);
+        self::assertSame('dashboard_domains', $result->primaryAction->route);
         self::assertSame('pencil', $result->primaryAction->glyph);
         self::assertNull($result->secondaryAction);
     }

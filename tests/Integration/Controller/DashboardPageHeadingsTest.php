@@ -122,17 +122,6 @@ final class DashboardPageHeadingsTest extends WebTestCase
     }
 
     #[Test]
-    public function dnsHealthOverviewRendersDnsHealthHeading(): void
-    {
-        $data = $this->createAuthenticatedClientWithData();
-
-        $data['client']->request('GET', '/app/dns-health');
-
-        self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h1', 'DNS Health');
-    }
-
-    #[Test]
     public function domainReportsRendersHeadingWithDomainName(): void
     {
         $data = $this->createAuthenticatedClientWithData();
@@ -173,7 +162,6 @@ final class DashboardPageHeadingsTest extends WebTestCase
             '/app/domains/'.$data['domainId'].'/senders',
             '/app/domains/'.$data['domainId'].'/blacklist',
             '/app/domains/'.$data['domainId'].'/dns-history',
-            '/app/dns-health',
             '/app/reports',
             '/app/reports/'.$data['reportId'],
             '/app/alerts',

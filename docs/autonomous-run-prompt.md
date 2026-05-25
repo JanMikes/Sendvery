@@ -59,19 +59,15 @@ team and flagged seven issues. The work splits into four threads:
      highlighted within the DMARC record) WITH a "view full records"
      expander that toggles to the old before/after-block view.
 
-3. **IA merge (one refactor).** `/app/domains` and `/app/dns-health`
-   render two views of the same underlying data — a paying customer
-   should not have to learn two separate pages for "list of my domains"
-   vs "DNS health of my domains". Merge into one canonical surface.
-   - **TASK-130**: collapse `/app/dns-health`'s 4-card summary
-     (TASK-083) + the per-domain DNS health cards into the existing
-     `/app/domains` list. Each domain card grows the DNS health score
-     + per-protocol badges. NO backwards-compat redirect — find every
-     route reference / template link / sidebar entry / KB article
-     pointing at `/app/dns-health` and migrate it to `/app/domains`.
-     Delete the now-orphaned controller + template + test files
-     cleanly. CLAUDE.md says no shims, no fallbacks, no feature flags —
-     do the migration as a single cohesive deletion.
+3. **IA merge (one refactor — SHIPPED in TASK-130).** `/app/domains`
+   now absorbs the former `/app/dns-health` surface. The 4-card summary
+   (Domains monitored / Fully healthy / Need attention / Awaiting first
+   check), the per-card letter grade, and the SPF/DKIM/DMARC/MX
+   protocol badges all live on the merged `/app/domains` page. The
+   `/app/dns-health` route is gone (returns 404); the sidebar lost its
+   standalone "DNS Health" entry. The per-domain drill-down at
+   `/app/domains/{id}/health` stays — different scope (overview vs
+   detail). No backwards-compat redirect was introduced.
 
 4. **Homepage hero rework (visual polish).** The current hero copy
    ("Email authentication is set once and forgotten") + the standalone
@@ -291,66 +287,25 @@ is the dashboard refactor, bucket 4 is the marketing hero rework.
        new value within the same record line, AND the `<details>`
        expander markup is present (default-collapsed).
 
-3. **IA MERGE — /app/dns-health into /app/domains** (TASK-130)
+3. **IA MERGE — /app/dns-health into /app/domains** (TASK-130 — SHIPPED)
 
-   **TASK-130** — Collapse `/app/dns-health` into `/app/domains` as
-   one canonical "domains overview" surface. NO backwards-compat
-   redirect — find every reference to the old route and migrate it.
-
-   Acceptance:
-   - `/app/domains` list page absorbs the DNS Health page's signals:
-     - The 4-card summary row from TASK-083 (Domains monitored /
-       Fully healthy / Need attention / Awaiting first check) renders
-       at the top of `/app/domains` (above the existing chip filters
-       and domain cards).
-     - The `?status=` filter chips already on `/app/domains` keep
-       working — they're the same classifier-driven chips as TASK-083.
-     - Each domain card in the list grows: the DNS health letter
-       grade (A/B/C/D/F) as a chip, plus per-protocol badges
-       (SPF / DKIM / DMARC / MX) showing pass/fail at a glance —
-       reuse the badge-rendering pattern already in
-       `templates/dashboard/dns_health.html.twig`.
-     - Clicking the letter grade or any protocol badge on a card
-       deep-links to `/app/domains/{id}/health` (the per-domain DNS
-       drill-down stays, since that's a different scope — overview
-       vs detail).
-   - `/app/dns-health` route deleted:
-     - Delete the controller (`DnsHealthOverviewController.php`).
-     - Delete the template (`templates/dashboard/dns_health_overview.html.twig`).
-     - Delete the integration test (`DnsHealthOverviewTest.php` or
-       similar).
-     - Find every link to `path('dashboard_dns_health')` in templates,
-       controllers, KB articles, fixtures — migrate all to
-       `path('dashboard_domains')`.
-     - The sidebar nav loses its standalone "DNS Health" entry. If
-       its position in the sidebar is load-bearing for some IA reason,
-       check the existing sidebar layout to ensure removal doesn't
-       leave an obvious gap.
-   - The `GetDnsHealthOverview` query stays (TASK-001 + TASK-098
-     work) but now feeds the merged `/app/domains` page directly
-     rather than its own controller. If `GetDomainOverview` already
-     returns the per-protocol scores (via TASK-098's LATERAL join),
-     prefer that single query over running both — collapse data
-     access to a single round-trip if practical.
-   - Tests:
-     - `tests/Integration/Controller/ListDomainsTest.php` (or extend
-       the existing list test) asserts: the 4-card summary renders at
-       the top, each domain card renders the letter grade + 4
-       per-protocol badges, the existing chip filters still work.
-     - A grep test or codified check confirms NO surviving reference
-       to `path('dashboard_dns_health')` or
-       `/app/dns-health` in templates / controllers / KB.
-     - All previously-existing tests for `/app/dns-health` removed
-       cleanly (no orphan asserts referencing a deleted controller).
-
-   Notes:
-   - This is the biggest single dashboard task this round (~3-4 hours
-     of work). Pick an Architect agent here — the merge needs careful
-     sequencing so the deletions don't break tests mid-flight.
-   - Watch for `GetDnsHealthOverview` callers: round-5 perf audit
-     noted "feeds three call sites instead of one" — confirm each
-     call site is now either `/app/domains` (merged) or `/app/domains/{id}/health`
-     (drill-down). Any third call site is suspect.
+   **TASK-130** — done. `/app/domains` now carries the 4-card summary
+   (Domains monitored / Fully healthy / Need attention / Awaiting first
+   check), the per-card grade chip, the SPF/DKIM/DMARC/MX protocol
+   badges, the `?status=unchecked` filter, and a single "DNS Health →"
+   footer link per card deep-linking to `/app/domains/{id}/health`.
+   The `/app/dns-health` route, controller (`DnsHealthOverviewController`),
+   template (`dns_health_overview.html.twig`), integration test
+   (`DnsHealthOverviewTest`), and sidebar entry are all deleted. Two
+   codified regression guards in `DomainsWithDnsHealthTest` sweep
+   `templates/` and `src/` for any surviving `dashboard_dns_health`
+   reference. Badges render as NON-INTERACTIVE styled spans (HTML-validity
+   call: card root is a stretched-link `<a>` so nested anchors would be
+   invalid) — only the footer "DNS Health" button is a real anchor,
+   carrying `relative z-10` so the stretched-link does not eat its
+   click. `GetDnsHealthOverview` stays alive feeding both the merged
+   `/app/domains` page (`forTeams()`) and the per-domain detail header
+   badge row (`forDomain()`).
 
 4. **HOMEPAGE HERO REWORK** (TASK-131)
 
@@ -601,9 +556,11 @@ is the dashboard refactor, bucket 4 is the marketing hero rework.
      If they share a code path, a single bug could miss both. Are
      they exercising INDEPENDENT scenario reads, or coupled through
      a shared decision point? Verify the tests genuinely cover both.
-   - **TASK-130**: deleting `/app/dns-health` is a sharp edge — if
-     ANY KB article, marketing page, or onboarding flow links there,
-     it 404s. Grep is the friend.
+   - **TASK-130**: DONE. The `/app/dns-health` route is gone (404s
+     by design); the two codified guards in `DomainsWithDnsHealthTest`
+     keep templates/ and src/ free of stale `dashboard_dns_health`
+     references. KB articles / marketing pages / onboarding flows
+     should be re-grepped if changed.
    - **TASK-131**: the `font-medium` ceiling fights against daisyUI's
      default heading weights — verify the rendered HTML actually uses
      400/500 weights by inspecting class lists, not just by reading
@@ -785,10 +742,11 @@ issues (correctness, security, multi-tenancy, missing tests, broken
 responsive behaviour, convention violation, ClockInterface bypass,
 orphan code from deletions) separately from nice-to-haves. Be
 specific: file:line + what to change. If clean, say so explicitly.
-For TASK-130 specifically: verify every `path('dashboard_dns_health')`
-reference is migrated, no orphan controller/template/test files
-survive, and the merged /app/domains list page renders the
-4-card summary + per-card grade + protocol badges per spec.
+For TASK-130 (shipped): verify the codified guards in
+`DomainsWithDnsHealthTest::noTemplateReferencesDashboardDnsHealthRoute`
++ `noControllerOrServiceReferencesDashboardDnsHealthRoute` remain
+green — any new template/controller introducing
+`path('dashboard_dns_health')` would be caught there.
 For TASK-131 specifically: verify the standalone `#dns-checker`
 section has been REMOVED (not just hidden), the new hero uses
 explicit `font-medium` on H1/H2 (not inherited heavier weights),
@@ -809,9 +767,9 @@ All must pass — no skipping, no --no-verify:
 - 100% coverage on new code (per CLAUDE.md)
 - `ClockInterface::now()` used everywhere — never `new \DateTimeImmutable()`
   in production code paths
-- For TASK-130 deletion cascade: `grep -r "dashboard_dns_health" templates/ src/ config/`
-  returns nothing (or only `// removed in TASK-130` markers that are
-  themselves about to be deleted — CLAUDE.md prefers actual deletion
+- For TASK-130 (already shipped): `grep -r "dashboard_dns_health" templates/ src/ config/`
+  returns nothing. The codified guards in `DomainsWithDnsHealthTest`
+  enforce this — any new offender fails the test run. CLAUDE.md prefers actual deletion
   over removal comments)
 - **After each successful commit**, `git push origin main` runs and
   succeeds before moving to the next task. `git status` shows the
@@ -865,9 +823,11 @@ DO NOT (ask first if tempted)
   production code.
 - Reintroduce the marketing-nav Dashboard CTA badge (TASK-065 +
   CLAUDE.md note explicitly locks this).
-- Keep `/app/dns-health` alive as an alias (the user explicitly said
-  "we do not need keep backward compatibility, just migrate the
-  functionality" — honor it).
+- Re-introduce `/app/dns-health` — the route was deleted in TASK-130
+  per the user's explicit "we do not need keep backward compatibility,
+  just migrate the functionality" instruction. Adding a redirect or an
+  alias controller would also fail the codified guards in
+  `DomainsWithDnsHealthTest`.
 
 ================================================================
 STOP CONDITIONS

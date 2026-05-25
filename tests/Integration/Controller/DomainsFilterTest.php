@@ -223,7 +223,14 @@ final class DomainsFilterTest extends WebTestCase
             'domains' => [],
             'showTeamColumn' => false,
             'activeFilter' => null,
+            'activeFilterRaw' => '',
             'totalDomainCount' => 0,
+            'severityByDomain' => [],
+            'dnsHealthByDomain' => [],
+            'totalDnsCount' => 0,
+            'healthyCount' => 0,
+            'attentionCount' => 0,
+            'awaitingCount' => 0,
         ]);
 
         self::assertStringContainsString('No domains yet', $body);
@@ -258,5 +265,7 @@ final class DomainsFilterTest extends WebTestCase
         self::assertStringContainsString('href="/app/domains?status=healthy"', $body);
         self::assertStringContainsString('href="/app/domains?status=attention"', $body);
         self::assertStringContainsString('href="/app/domains?status=unverified"', $body);
+        // TASK-130: new "Awaiting first check" chip absorbed from /app/dns-health.
+        self::assertStringContainsString('href="/app/domains?status=unchecked"', $body);
     }
 }
