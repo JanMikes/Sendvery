@@ -3657,7 +3657,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-107: `ProtocolSetupStatus` renders RUA destination row with the same idiom as SPF/DKIM/DMARC/MX — user reads it as "another DNS record to publish" when it's actually a logical choice about ingestion path
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `a75d20d`, bundled with TASK-114)
 - Area: dashboard / domains / clarity-of-intent
 - Why: Round-4 self-review observation. TASK-100 added a 5th row to `templates/components/ProtocolSetupStatus.html.twig` (or its equivalent on `/app/domains/{id}`) for the RUA destination — `Sendvery`, `External (your inbox)`, or `Missing`. It uses the same row idiom as the 4 DNS protocol rows above it: a check/cross glyph + status label + optional sub-line. A first-time user scanning the panel sees five rows of the same shape and reads them all as "DNS records I need to publish". But the 5th row is different in kind — SPF/DKIM/DMARC/MX are "publish this record or you're broken"; RUA destination is "you chose where reports go; we just verified that choice". Mixing these two row kinds inside one visual grid invites the misreading "I need to publish RUA = Sendvery" when the actual state is "your DMARC record's rua= tag points at an external address — that's a valid choice, but we want you to know we're not the inbox".
 - Acceptance:
@@ -3715,7 +3716,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-114: `/app/mailboxes` "Ingesting via mailbox" success badge contradicts `/app/domains/{id}` 5th RUA row "Configured for external inbox" warning — two surfaces tell opposite stories about the same domain
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `a75d20d`, bundled with TASK-107)
 - Area: dashboard / cross-surface consistency
 - Why: Round-5 self-review of TASK-106 found this. The TASK-106 matrix row promotes path=mailbox + recent lastReportAt + matching rua= to a green "Ingesting via mailbox" success badge. But the per-domain DMARC panel on `/app/domains/{id}` (the 5th RUA destination row that TASK-100 added and TASK-101 lede-fixed) is rendered by `DomainSetupStatusResolver`, which only consumes `ruaScenario` and doesn't know about the `pathMatchesMailbox` flag. So for the SAME domain, the mailboxes table says "green, ingesting fine via your connected mailbox" and the per-domain panel says "yellow, configured for external inbox" alongside a `panelLede` that warns about it. A first-time operator who scans `/app/mailboxes`, then clicks through to a specific domain, sees opposite stories. This is the round-3-style "two surfaces disagree" regression — the per-surface fix in TASK-106 didn't propagate to the surface it visibly contradicts.
 - Acceptance:
@@ -3733,7 +3735,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-115: Domain workspace tab dot badges (DNS / History) are `badge-warning` amber against a dark `tab-active` background — the signal that drew the user to the tab visually disappears the moment they land on it
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `2ced6c7`)
 - Area: dashboard / visual
 - Why: Round-5 self-review of TASK-084 found this. The `DomainWorkspaceTabs.html.twig` component renders DNS and History dot badges with `badge badge-xs badge-warning w-2 h-2 p-0`. daisyUI v5's `badge-warning` is high-luminance amber; the active-tab background is near-`base-content` (dark). When DNS or History is the ACTIVE tab AND has a dot, the 2px-tall amber dot reads as a faint artefact against the dark background — exactly when the operator needs the signal most (they're on the page that has work, but the signal that brought them there has gone faint). Number badges suffer a milder version of the same problem but the digit gives them enough mass to read.
 - Acceptance:
@@ -3751,7 +3754,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-116: TASK-106 success row's sub-line drops the rua= address that the path detection actually hinges on — the only matrix branch that hides the evidence
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `b52d71b`)
 - Area: dashboard / mailboxes / clarity
 - Why: Round-5 self-review of TASK-106 found this nice-to-have. The TASK-106 "Ingesting via mailbox" sub-line reads `"DMARC routes here via your connected mailbox."` Every other matrix branch shows the rua email in a monospace pill (`<span class="font-mono">{{ row.ruaScenario.ruaEmail }}</span>`) so the operator can verify the assertion. The TASK-106 branch is the ONLY branch that hides the address — and it's the branch that depends on rua-email-vs-mailbox-login matching being correct. The asymmetry reads as "trust me, this is fine" exactly where the user most wants to verify "yes, that's the inbox I connected." A 10-row table where 7 rows match TASK-106 (very common for an all-mailbox team) reads as 7 unexplained green rows next to 3 transparent yellow/red rows.
 - Acceptance:
