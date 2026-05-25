@@ -1,4 +1,4 @@
-# Autonomous CX/Product Improvement Run — Sendvery (Round 8: Marketing polish + dashboard DKIM editability + SEO + DNS helper forms)
+# Autonomous CX/Product Improvement Run — Sendvery (Round 8 continuation: homepage visual polish + DKIM editability + SEO + DNS helper forms + marketing narrative)
 
 You are the ORCHESTRATOR. Your job is to autonomously improve Sendvery's
 marketing surfaces + dashboard by running a continuous loop of
@@ -8,6 +8,45 @@ the backlog is genuinely empty (Product agent confirms nothing more is
 worth doing) or you hit a real blocker in "Stop conditions".
 
 ================================================================
+CHECKPOINT — WHAT THE PREVIOUS SESSION SHIPPED (read this first)
+================================================================
+Round 8 was started in a previous session and **partially drained**.
+The four mechanical quick-wins shipped under one commit
+(`bdf4b62`):
+
+- **TASK-136** — Repo-public env gate retired EVERYWHERE.
+  `SENDVERY_REPO_PUBLIC` deleted from `.env` + `.env.test`;
+  `is_repo_public` Twig global deleted from `OpenSourceExtension`;
+  every `{% if is_repo_public %}` branch collapsed to just the
+  github-link branch; "Notify me when source ships" CTA + the
+  `homepage-hero-repo-launch` / `open-source-repo-launch` tracking
+  strings deleted. `/about/open-source` quickstart unconditionally
+  shows `git clone`. Homepage hero secondary CTA = "View on GitHub →".
+- **TASK-139** — "Built for engineers" homepage section deleted
+  entirely (+ the AGPL/stars badge that lived in it).
+- **TASK-140** — Empty "Related tools" chip strip stripped from
+  every `/tools/*` page (8 pages). Case-insensitive regression pin
+  in `ToolPagesTest`.
+- **TASK-141** — Footer "Built with Symfony & FrankenPHP" replaced
+  with "Built with love by Jan Mikeš · Source on GitHub →". Scope-
+  creep scrub also rewrote `/about/open-source` "PHP 8.5 + Symfony 8
+  application" → "Application code — CQRS commands and queries…"
+  (genuine improvement, not whitewashing).
+
+Suite at session-pause: **2272 tests / 6688 assertions**, all gates
+green, all commits pushed to `origin/main`.
+
+The user paused the session after the quick-wins bundle landed and
+asked for the rest of round 8 to be picked up by a future invocation
+of this doc. They also confirmed an open scope question:
+
+- **TASK-144 v1 scope = ALL 4 GENERATORS** (SPF + DMARC + DKIM + MX),
+  NOT the spec's original "SPF + DMARC only, defer DKIM + MX".
+  Rationale: DKIM has the highest "help me set this up" demand
+  despite the awkward UX (selector + public-key bytes), and MX is
+  cheap to throw in alongside.
+
+================================================================
 MISSION
 ================================================================
 Round 7 closed cleanly with the round-6 follow-through (TASK-132 →
@@ -15,8 +54,10 @@ TASK-135) all shipped and all-green at 2274 tests / 6687 assertions
 (see the round-7 RUN SUMMARY in `docs/cx-improvement-backlog.md` for
 detail). Round 8 is **another user-driven round** — same account holder
 ([j.mikes@me.com](mailto:j.mikes@me.com)) opened the live site + dashboard
-after round 7 and surfaced ten things that still feel off. The work
-splits into five threads:
+after round 7 and surfaced ten things that still feel off. Four of
+those ten shipped in the previous session (see CHECKPOINT above);
+this invocation picks up the remaining six. The work splits into five
+threads:
 
 1. **Stop apologising for things that are already done.** The
    open-source repo is PUBLIC at github.com/janmikes/sendvery. Every
@@ -161,15 +202,18 @@ Round 7 test suite growth: 2256 → 2274 (+18 tests / +72 assertions).
 Build on top — don't duplicate.
 
 ================================================================
-SEED FOCUS AREAS (priority order — SHIP ALL IN ONE ROUND)
+SEED FOCUS AREAS (priority order — SHIP ALL IN THIS ROUND CONTINUATION)
 ================================================================
-Five buckets. The order below is the SHIP ORDER. Bucket 1 is the
-quick-wins bundle (4 small deletes/edits), bucket 2 is the marketing
-visual polish, bucket 3 is the dashboard bug fix, bucket 4 is the
-strategic SEO + narrative pass, bucket 5 is the v1 helper-form
-feature.
+Five buckets. The order below is the SHIP ORDER. Bucket 1 (quick-wins)
+**already shipped in the previous session** (see CHECKPOINT) — start
+at bucket 2.
 
-1. **QUICK-WINS BUNDLE — repo gate retired + 3 small deletes** (TASK-136 / 139 / 140 / 141)
+1. **QUICK-WINS BUNDLE — repo gate retired + 3 small deletes** (TASK-136 / 139 / 140 / 141) — **DONE, commit `bdf4b62`**
+
+   Section kept here for context. Below is the spec as it ran; all
+   four are now `done` in the backlog. Skip to bucket 2.
+
+
 
    Ship ALL four under ONE dev agent — they're each small, low-risk
    text edits across the marketing site. Bundled commit makes the
@@ -444,64 +488,98 @@ feature.
    - The dotted-grid hero background, font register (TASK-137), and
      all per-section accessibility patterns from TASK-131 carry over.
 
-5. **DNS HELPER-FORM FEATURE — v1** (TASK-144)
+5. **DNS HELPER-FORM FEATURE — v1 (ALL 4 GENERATORS)** (TASK-144)
 
-   **TASK-144** — generators for SPF + DMARC records (v1 scope).
+   **TASK-144** — generators for SPF + DMARC + DKIM + MX records.
 
    User asked: "could there be helper forms to set up dns records
    format for spf, dkim etc on the public pages?" — phrased as a
-   question. Ship a v1 that proves the pattern; if it lands well,
-   extend to DKIM + MX in a follow-up.
+   question. **User's confirmed v1 scope (round-8 checkpoint): ALL
+   FOUR generators.** Rationale: DKIM has the highest "help me set
+   this up" demand despite the awkward UX (selector + public-key
+   bytes); MX is cheap to throw in alongside.
 
-   v1 scope:
+   v1 scope (all four):
    - **SPF generator** on `/tools/spf-checker` (or a sibling page if
      the checker page is the wrong home). Toggle/checkbox UI for
      common sending services: Google Workspace, Microsoft 365,
      Mailchimp, Postmark, SendGrid, Mailgun, Amazon SES, Brevo,
      Resend, Loops. Plus a free-form "Additional IPs / includes"
-     textarea. Plus the `~all` / `-all` mechanism choice. Output the
-     generated TXT record string in a `<code>` block + a
-     copy-to-clipboard button. Note that this is the STRING to put in
-     DNS — Sendvery doesn't publish for the user.
+     textarea. Plus the `~all` / `-all` mechanism choice. Output:
+     generated TXT record string in a `<code>` block + copy button.
    - **DMARC generator** on `/tools/dmarc-checker`. Inputs: policy
      (none / quarantine / reject), subdomain policy (sp=), pct=,
      reporting email (rua= — defaults to `reports@sendvery.com`),
      forensic email (ruf= — optional), DKIM/SPF alignment mode
-     (relaxed/strict). Output the generated TXT record string.
-   - Both forms are PURELY client-side (Stimulus controller). No
-     server round-trip. The user can use them while logged out.
-   - Output is a `<code>` block with copy-to-clipboard. Below the
-     code block, a short "What to do next" paragraph linking to
-     /learn/* for the relevant record-type explainer.
+     (relaxed/strict). Output: generated TXT record string.
+   - **DKIM generator** on `/tools/dkim-checker`. Inputs: selector
+     name (text input — e.g. `default`, `mailchimp`, `selector1`),
+     public-key bytes (textarea — paste the base64 from
+     `openssl rsa -in private.key -pubout`), key type (RSA / Ed25519).
+     Output: the generated TXT record string AND the host-name
+     fragment the user needs to publish it at (`<selector>._domainkey`).
+     Include a short note that Sendvery cannot generate the private
+     key for them — they generate the keypair themselves and paste
+     only the public part. (DKIM is the awkward generator: emphasise
+     in the UI that the public key has to be split across multiple
+     quoted strings if it exceeds 255 chars — the generator should
+     handle the splitting automatically.)
+   - **MX generator** on `/tools/mx-checker`. Inputs: rows of
+     `priority` + `hostname` pairs (default: one row for Google
+     Workspace [`1 ASPMX.L.GOOGLE.COM`], add/remove buttons to add
+     more rows). Output: the MX record strings ready to paste.
+     Optional preset toggles for common providers (Google Workspace,
+     Microsoft 365, ProtonMail, Fastmail, Zoho) that auto-fill the
+     standard hostname + priority pairs.
+   - All four PURELY client-side (Stimulus controller). No server
+     round-trip. The user can use them while logged out.
+   - Each output is a `<code>` block + a copy-to-clipboard button.
+     Below the code block: a short "What to do next" paragraph
+     linking to `/learn/*` for the record-type explainer.
+   - One-line caveat per generator ("Test in DNS before making this
+     your live record. We don't publish for you.").
 
    Architect first — needs to confirm:
    - Which existing tool pages host the generators (checker page vs
-     separate generator page).
+     separate generator page). Default: same page as the checker, so
+     the user can iterate "generate → copy → publish → re-check"
+     without switching pages.
    - The Stimulus controller pattern matching the existing
      `HomeDomainCheckerComponent` register (Symfony UX LiveComponent
      vs vanilla Stimulus).
    - The exact provider list for SPF + the canonical `include:`
-     strings.
-   - The output formatting (single-line vs multi-line; quoted vs
-     unquoted).
+     strings (cross-check against major-provider docs as of 2026).
+   - The DKIM long-key splitting strategy (255-char chunks wrapped
+     in adjacent quoted strings — verify the BIND-format vs
+     name=value-format conventions for the user's DNS host).
+   - The MX preset list (5 common email providers; same shape as
+     SPF presets).
+   - Output formatting (single-line vs multi-line; quoted vs
+     unquoted; trailing-period on hostnames).
 
    Acceptance:
-   - SPF generator renders on the SPF checker page (or a clearly-
-     labelled sibling). Toggling providers regenerates the output in
-     real time. Copy button works (`navigator.clipboard`).
-   - DMARC generator renders on the DMARC checker page. Same UX.
-   - Both generators carry a one-line caveat ("Test in DNS before
-     making this your live record" or similar).
-   - SEO: the new generator content adds H2-level structure on the
-     page (good for keyword targeting — "SPF record generator").
-   - Tests: render the page + assert the generator markup is
+   - SPF generator renders on `/tools/spf-checker`. Toggling
+     providers regenerates the output in real time. Copy button
+     works (`navigator.clipboard`).
+   - DMARC generator renders on `/tools/dmarc-checker`. Same UX.
+   - DKIM generator renders on `/tools/dkim-checker`. Long-key
+     splitting visible in the output (e.g. `"v=DKIM1;…p=AAA" "BBB"`).
+     UI tells the user "publish at `<selector>._domainkey.<your-domain>`".
+   - MX generator renders on `/tools/mx-checker`. Add/remove row UX
+     for priority+hostname pairs. Preset toggles auto-fill the
+     common providers.
+   - All four carry the one-line caveat.
+   - SEO: new generator content adds H2-level structure on each
+     page (good for keyword targeting — "SPF record generator",
+     "DKIM record generator", etc.).
+   - Tests: render each page + assert the generator markup is
      present. Stimulus integration tests aren't required for v1.
-     Provider list lives in a config file or PHP constant so it's
-     easy to extend without touching the template.
-   - DKIM + MX generators are NOT shipped in v1 (DKIM needs the
-     selector + public key as inputs, which is non-trivial UX; MX
-     is rarely auth-related). File as TASK-15X follow-ups if v1
-     lands well.
+     Provider lists live in config files or PHP constants so they
+     extend without touching the template.
+   - XSS guard: Stimulus controllers MUST escape user input before
+     injecting into output code blocks (free-form "additional IPs"
+     textarea on SPF, the public-key paste on DKIM, the hostname
+     fields on MX are the attack surfaces).
 
 6. **PERFORMANCE AUDIT** (round-8 baseline diff)
 
@@ -741,7 +819,7 @@ For TASK-144: verify the Stimulus controller escapes user input before injecting
 QUALITY GATES (run before every commit)
 ================================================================
 All must pass — no skipping, no --no-verify:
-- docker compose exec app vendor/bin/phpunit (2274 tests at round-8 start)
+- docker compose exec app vendor/bin/phpunit (2272 tests at round-8 continuation start, post-quick-wins bundle)
 - docker compose exec app vendor/bin/phpstan
 - docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes
 - For UI tasks: read the page, confirm desktop AND 360px mobile render
@@ -844,51 +922,51 @@ perf-audit measurements (even null results), and suggested round-9
 seed areas.
 
 ================================================================
-KICKOFF
+KICKOFF (round-8 continuation — skip bucket 1, it's done)
 ================================================================
-1. Read `docs/cx-improvement-backlog.md`, skim the SEVEN RUN SUMMARY
-   sections to understand what's shipped. Note the highest existing
-   TASK-NNN (TASK-135) so any newly-proposed tasks start at TASK-136.
+1. Read `docs/cx-improvement-backlog.md` for the latest state. The
+   quick-wins bundle (TASK-136/139/140/141) is already `done`; six
+   round-8 tasks remain at `proposed`: TASK-137, TASK-138, TASK-142,
+   TASK-143, TASK-144, TASK-145.
 2. CLAUDE.md is already loaded. Skim `docs/` for reference; pull in
    specific files only when the current task needs them.
-3. **File the round-8 user-driven tasks** (TASK-136 / 137 / 138 / 139 /
-   140 / 141 / 142 / 143 / 144 / 145) into the backlog using the
-   acceptance criteria from §SEED FOCUS AREAS. Each must include the
-   user-supplied moment of confusion in the Why field — the user's own
-   words from the feedback when possible.
-4. **Ship the quick-wins bundle first** (TASK-136 + 139 + 140 + 141)
-   under ONE dev agent. They're each small and bundled commit makes
-   the "killed marketing clutter" change reviewable as one. Verify
-   the grep guards (`is_repo_public`, `Notify me when`, `Built for
-   engineers`, `Related tools`, `Symfony & FrankenPHP`) return zero
-   hits at end of bundle.
-5. **Ship TASK-138 (How-it-works icons) and TASK-137 (font register)
+3. **Ship TASK-138 (How-it-works icons) and TASK-137 (font register)
    sequentially** — both touch `templates/homepage/index.html.twig`.
-   TASK-138 first (delete assets + insert icons), TASK-137 second
-   (normalise headings).
-6. **Ship TASK-143 (DKIM editability)** in parallel with the marketing
+   TASK-138 first (delete `how-*.webp` assets + insert Lucide icons),
+   TASK-137 second (normalise every `<h2>` to `font-medium` + zinc
+   register). These are small (~30min each), skip Architect — straight
+   to Build.
+4. **Ship TASK-143 (DKIM editability)** in parallel with the marketing
    work — different file surface (dashboard form vs marketing
-   templates).
-7. **Spawn Architect for TASK-142 (SEO audit)** — needs scoping before
+   templates). Likely needs a brief Architect plan if the existing
+   DKIM-selector form has edge cases (multi-step wizard, separate
+   edit endpoint); otherwise straight to Build.
+5. **Spawn Architect for TASK-142 (SEO audit)** — needs scoping before
    committing to fixes. Then ship the highest-leverage 5-10 punch-list
-   items in the round; file lower-priority items as TASK-15X.
-8. **Spawn Architect for TASK-144 (DNS generators v1)** — confirm
-   provider list + page placement + Stimulus pattern before build.
-   Ship SPF + DMARC generators; defer DKIM + MX.
-9. **Spawn Architect for TASK-145 (homepage narrative)** — must run
+   items in this round; file lower-priority items as TASK-15X
+   follow-ups.
+6. **Spawn Architect for TASK-144 (DNS generators v1 — ALL 4)** —
+   confirm provider lists + page placement + Stimulus pattern + DKIM
+   long-key splitting strategy + MX preset list before build. **User
+   confirmed scope: SPF + DMARC + DKIM + MX all in v1** (NOT just
+   SPF+DMARC). Ship all four generators.
+7. **Spawn Architect for TASK-145 (homepage narrative)** — must run
    AFTER TASK-137/138/142 land so the architect designs against the
    final per-section visual register + SEO structure. Ship the
-   restructure.
-10. **Run the round-8 perf audit** after all tasks land. Document the
-    numbers in a new `## Round-8 performance audit (YYYY-MM-DD)`
-    section above the round-7 perf section.
-11. After every 3 shipped tasks, run a self-review pass.
-12. Final Product-agent sweep across all buckets as the
+   restructure (pricing moves earlier per user direction).
+8. **Run the round-8 perf audit** after all tasks land. Document the
+   numbers in a new `## Round-8 performance audit (YYYY-MM-DD)`
+   section above the round-7 perf section.
+9. After every 3 shipped tasks, run a self-review pass.
+10. Final Product-agent sweep across all buckets as the
     stop-condition check.
-13. Write the RUN SUMMARY when the backlog is truly empty. Cover:
-    every task shipped, any blocked + why, self-review findings +
-    dispositions, suite growth, perf-audit measurements (round-8 vs
-    round-7 diff), suggested round-9 seed areas.
+11. Write the RUN SUMMARY when the backlog is truly empty. Cover:
+    every task shipped (INCLUDING the quick-wins bundle from the
+    previous session — `bdf4b62` — for completeness of the round-8
+    summary), any blocked + why, self-review findings + dispositions,
+    suite growth (from 2272 baseline post-quick-wins), perf-audit
+    measurements (round-8 vs round-7 diff), suggested round-9 seed
+    areas.
 
 ================================================================
 LESSONS FROM ROUNDS 4 + 5 + 6 + 7 — APPLY HERE

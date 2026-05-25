@@ -4517,7 +4517,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-136: Repo is public — every "Notify me when the source ships" / "Coming soon" / `is_repo_public` env gate is now lying
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: The Sendvery repo is now PUBLIC at `github.com/janmikes/sendvery`. User: "anywhere is mentioned 'notify me when the repo goes public' etc on /about/open-source on it was on homepage maybe too, the repo is already public, no waiting. we are all ready. […] Even in hero on homepage 'Notify me when the source ships' -> remove this." Every CTA still wrapped in `is_repo_public` / surfacing the notify-me mailto is contradicting the actual state. The only genuine "coming soon" left is AI Insights (waits for an Anthropic API key + final test pass — DEC-057 stub-first posture stays for the AI surface, NOT the repo).
 - Acceptance:
@@ -4570,7 +4570,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-139: "Built for engineers" section on homepage adds zero conversion value — remove it
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: User: "We might remove the 'Built for engineers' from homepage completely i think." The section presumably tries to signal technical credibility but doesn't convert visitors who aren't already pre-sold; the visitors who ARE technical can see the open-source GitHub link + the dashboard screenshot, which already proves credibility better than a copy block.
 - Acceptance:
@@ -4584,7 +4584,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-140: "Related tools" sections on /tools/* pages are empty (e.g. /tools/spf-checker) — strip them rather than populate
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: User: "on many public pages there are 'Related tools' on bottom for example /tools/spf-checker where is nothing? We might remove it completely." An empty section is worse than no section — looks broken and signals neglect. The footer's "Tools" column already lists every tool, so the per-page Related-tools block is redundant.
 - Acceptance:
@@ -4598,7 +4598,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-141: Footer "Built with Symfony & FrankenPHP" name-drops the tech stack — replace with human attribution + GitHub link
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: User: "'Built with Symfony & FrankenPHP' -> do not mention this. Built with love by Jan Mikeš and link to github etc or something, but not symfony & Frankenphp this is not what we want to communicate." End users care about VALUE, not stack. Tech stack name-drops belong in CLAUDE.md, not on user-facing marketing.
 - Acceptance:
