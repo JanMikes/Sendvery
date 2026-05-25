@@ -3675,7 +3675,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-108: `MailboxHealthAdvisor::silentForTooLong()` primary action is "Check DNS" regardless of scenario — a scenario-(b) silent mailbox should primary-CTA "Disconnect this redundant mailbox", not "Check DNS"
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `8a819ab`)
 - Area: dashboard / mailboxes / guidance
 - Why: Round-4 self-review observation. TASK-094 + TASK-104 made the advisor card scenario-aware in its COPY (the `redundancyHint` appends "this mailbox is redundant" wording when the bound domain is scenario PointsAtSendvery) but the primary BUTTON stays the same — "Check DNS" — across all scenarios for the silent_for_too_long branch. So an operator who reads "this mailbox is redundant — disconnect it instead of fixing it" still sees a "Check DNS" CTA as the primary action, undercutting the advice. The correct primary action depends on scenario: for PointsAtSendvery (the mailbox is genuinely redundant), the user wants "Disconnect this mailbox"; for PointsAtExternal (the operator genuinely needs to verify the rua= target), "Check DNS" stays correct; for NoRecord (no DMARC record at all), the user wants to "Publish a DMARC record" deep-linked to the domain health page.
 - Acceptance:
@@ -3695,7 +3696,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-109: `PassRateRegressionAdvisor` fires on any 10pp pass-rate drop — for a low-volume domain (a few reports per week) random variance hits that threshold easily; needs a minimum-sample-size floor
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `65dc804`)
 - Area: dashboard / reports / guidance
 - Why: Round-4 self-review observation. TASK-093 shipped `PassRateRegressionAdvisor` on `/app/reports` that compares the current 7-day pass rate vs the prior 7-day pass rate and surfaces a banner when the drop is ≥ 10 percentage points, naming the top failing sender as the likely culprit. The threshold is fine for high-volume domains (hundreds of reports/week) but a low-volume domain (5-20 reports/week) can swing 10pp on random variance — one extra failing report out of seven can move the rate by 14pp. Operators on small domains will see the banner fire and chase a "regression" that's just noise, eroding trust in the system's opinions.
 - Acceptance:
@@ -3708,6 +3710,56 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 - Notes:
   - Round-4 self-review's #3 finding. This is a "false positives erode trust" fix — the kind of guardrail that doesn't show up in a happy-path demo but matters for the median paying customer whose domains are small.
   - 50 is a heuristic; if a follow-up round finds it's too conservative for high-volume teams or too generous for tiny ones, tune it then. Start with the round number, document the rationale, ship.
+
+---
+
+## TASK-114: `/app/mailboxes` "Ingesting via mailbox" success badge contradicts `/app/domains/{id}` 5th RUA row "Configured for external inbox" warning — two surfaces tell opposite stories about the same domain
+
+- Status: proposed
+- Area: dashboard / cross-surface consistency
+- Why: Round-5 self-review of TASK-106 found this. The TASK-106 matrix row promotes path=mailbox + recent lastReportAt + matching rua= to a green "Ingesting via mailbox" success badge. But the per-domain DMARC panel on `/app/domains/{id}` (the 5th RUA destination row that TASK-100 added and TASK-101 lede-fixed) is rendered by `DomainSetupStatusResolver`, which only consumes `ruaScenario` and doesn't know about the `pathMatchesMailbox` flag. So for the SAME domain, the mailboxes table says "green, ingesting fine via your connected mailbox" and the per-domain panel says "yellow, configured for external inbox" alongside a `panelLede` that warns about it. A first-time operator who scans `/app/mailboxes`, then clicks through to a specific domain, sees opposite stories. This is the round-3-style "two surfaces disagree" regression — the per-surface fix in TASK-106 didn't propagate to the surface it visibly contradicts.
+- Acceptance:
+  - `DomainSetupStatusResolver` (or whatever resolves the 5th RUA row) consumes the same `pathMatchesMailbox` signal that `IngestionPathResolver` already computes. Two options:
+    - Option A — extract the matching helper into a shared service `RuaPathMatcher` that both resolvers inject. Keeps `RuaScenarioResolver` focused on DNS-only scenario classification (the right thing — `RuaScenarioResolver` shouldn't care about mailbox connections).
+    - Option B — `DomainSetupStatusResolver` calls `IngestionPathResolver` for the domain in question and uses the returned `pathMatchesMailbox` flag.
+  - When the flag is true, the 5th RUA row renders in success tone (`text-success` / `bg-success/5`) with copy `"Routed to your connected mailbox ({mailbox.host or rua email})"` instead of the yellow `"Configured for external inbox"` warning.
+  - Setup-status banner / panel lede (`DomainSetupStatusResolver::panelLede` from TASK-101) matches — for a scenario-(c) domain whose mailbox is also receiving reports, the lede should NOT warn about external-inbox configuration; it should say something like "Reports are arriving via your connected mailbox at {host}. The published rua= address points at the same inbox."
+  - New regression test `SurfaceConsistencyTest::mailboxIngestionRowAgreesWithRuaPanelTone` (or extend the existing `SeverityConsistencyTest`) pins: for a domain with `path=mailbox + lastReportAt=recent + scenario=PointsAtExternal + pathMatchesMailbox=true`, the mailboxes row tone == the per-domain panel's RUA row tone (both success).
+- Notes:
+  - This is round-5 self-review's #1 must-fix finding — the kind of cross-surface contradiction TASK-101 caught for scenario (c) in round 4. Same risk class: TASK-106 shipped per-surface but the user crosses surfaces by clicking through, and the system has to agree with itself.
+  - Option A is the cleaner factoring but Option B ships faster. Pick A if the helper is small enough to extract cleanly, B otherwise.
+
+---
+
+## TASK-115: Domain workspace tab dot badges (DNS / History) are `badge-warning` amber against a dark `tab-active` background — the signal that drew the user to the tab visually disappears the moment they land on it
+
+- Status: proposed
+- Area: dashboard / visual
+- Why: Round-5 self-review of TASK-084 found this. The `DomainWorkspaceTabs.html.twig` component renders DNS and History dot badges with `badge badge-xs badge-warning w-2 h-2 p-0`. daisyUI v5's `badge-warning` is high-luminance amber; the active-tab background is near-`base-content` (dark). When DNS or History is the ACTIVE tab AND has a dot, the 2px-tall amber dot reads as a faint artefact against the dark background — exactly when the operator needs the signal most (they're on the page that has work, but the signal that brought them there has gone faint). Number badges suffer a milder version of the same problem but the digit gives them enough mass to read.
+- Acceptance:
+  - When a dot-badge tab is the active tab, the dot uses a tone or affordance that contrasts with the dark active background:
+    - Option A — add `ring-1 ring-base-100` to the dot when its parent tab is active, so the amber dot punches out of either background.
+    - Option B — when active, swap `badge-warning` to `badge-error` (red is more contrasting against the dark active background than amber). Simpler markup but tone-shifts the meaning slightly.
+    - Option C — invert the dot to an outline-only style (`bg-base-100`) so it reads as a marker rather than a fill.
+  - Number badges (Reports / Senders / Blacklist) are NOT in scope — they read OK at active because of digit mass. Verify by inspection.
+  - Functional test extension: in `DomainWorkspaceTabsTest` or `DomainWorkspaceTabsCountBadgesTest`, add an assertion that when `active == 'dns'` AND `tabCounts.dns` is truthy, the rendered DNS dot has the active-contrast affordance (the ring class, OR `badge-error`, OR the bg-base-100, whichever option ships).
+  - At 360px mobile, the dot remains 2x2 — don't grow it.
+- Notes:
+  - Round-5 self-review's #2 must-fix finding. The badge bundle works at every tab EXCEPT the active one — fix the regression without breaking the inactive case.
+
+---
+
+## TASK-116: TASK-106 success row's sub-line drops the rua= address that the path detection actually hinges on — the only matrix branch that hides the evidence
+
+- Status: proposed
+- Area: dashboard / mailboxes / clarity
+- Why: Round-5 self-review of TASK-106 found this nice-to-have. The TASK-106 "Ingesting via mailbox" sub-line reads `"DMARC routes here via your connected mailbox."` Every other matrix branch shows the rua email in a monospace pill (`<span class="font-mono">{{ row.ruaScenario.ruaEmail }}</span>`) so the operator can verify the assertion. The TASK-106 branch is the ONLY branch that hides the address — and it's the branch that depends on rua-email-vs-mailbox-login matching being correct. The asymmetry reads as "trust me, this is fine" exactly where the user most wants to verify "yes, that's the inbox I connected." A 10-row table where 7 rows match TASK-106 (very common for an all-mailbox team) reads as 7 unexplained green rows next to 3 transparent yellow/red rows.
+- Acceptance:
+  - The TASK-106 winning branch's sub-line renders the rua email in the same monospace style used by surrounding branches. Suggested copy: `"DMARC routes here via <span class=\"font-mono\">{{ row.ruaScenario.ruaEmail }}</span> — your connected mailbox."`
+  - Test extension in `ReportIngestionPageTest`: assert that the rua email string appears inside the TASK-106 row when it fires.
+  - No tone or layout changes — purely copy-level.
+- Notes:
+  - Round-5 self-review's #3 nice-to-have. Lower priority than TASK-114 (contradiction) and TASK-115 (invisible signal) but the same self-review run found it, so file and pick up alongside if scope allows.
 
 ---
 
