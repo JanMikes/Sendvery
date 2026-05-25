@@ -2,7 +2,7 @@
 
 <div class="space-y-3 max-w-3xl mx-auto">
     {% for item in items %}
-        <div class="collapse collapse-arrow bg-base-200/50 border border-base-300">
+        <div class="collapse collapse-arrow bg-base-100 border border-base-300 shadow-sm">
             <input type="radio" name="faq" {% if loop.first %}checked="checked"{% endif %}>
             <div class="collapse-title font-semibold">{{ item.question }}</div>
             <div class="collapse-content text-base-content/70 text-sm">
