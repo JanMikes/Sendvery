@@ -166,6 +166,84 @@ final class MailboxHealthAdvisorTest extends TestCase
     }
 
     #[Test]
+    public function brokenCredentialsAppendsRedundancyHintWhenDomainPointsAtSendvery(): void
+    {
+        // TASK-104: when the mailbox is bound to a domain that already routes
+        // reports to Sendvery via DNS, the credentials issue is moot — the
+        // mailbox can be disconnected rather than fixed. Surface that.
+        $advisor = $this->makeAdvisor();
+        $domain = $this->makeDomain('example.com');
+        $mailbox = $this->makeMailbox(
+            createdAt: new \DateTimeImmutable('2026-05-01 09:00:00'),
+            lastPolledAt: new \DateTimeImmutable('2026-05-24 09:30:00'),
+            lastError: 'authentication failed',
+            monitoredDomain: $domain,
+        );
+
+        $result = $advisor->advise(
+            $mailbox,
+            MailboxActivitySummary::empty(),
+            new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com'),
+        );
+
+        self::assertNotNull($result);
+        self::assertSame(MailboxHealthSeverity::BrokenCredentials, $result->severity);
+        self::assertStringContainsString('redundant', $result->reasonText);
+        self::assertStringContainsString('example.com', $result->reasonText);
+    }
+
+    #[Test]
+    public function brokenCredentialsSkipsRedundancyHintForExternalScenario(): void
+    {
+        // External rua= means the user genuinely needs THIS mailbox polling
+        // (or a DNS repoint). The credentials fix isn't redundant — don't
+        // mislead the operator.
+        $advisor = $this->makeAdvisor();
+        $domain = $this->makeDomain('example.com');
+        $mailbox = $this->makeMailbox(
+            createdAt: new \DateTimeImmutable('2026-05-01 09:00:00'),
+            lastPolledAt: new \DateTimeImmutable('2026-05-24 09:30:00'),
+            lastError: 'authentication failed',
+            monitoredDomain: $domain,
+        );
+
+        $result = $advisor->advise(
+            $mailbox,
+            MailboxActivitySummary::empty(),
+            new RuaScenarioResult(RuaScenario::PointsAtExternal, 'reports@external.example'),
+        );
+
+        self::assertNotNull($result);
+        self::assertStringNotContainsString('redundant', $result->reasonText);
+    }
+
+    #[Test]
+    public function quarantineDominantAppendsRedundancyHintWhenDomainPointsAtSendvery(): void
+    {
+        // TASK-104: same redundancy hint on the quarantine-dominant branch
+        // for a mailbox bound to a scenario-(b) domain.
+        $advisor = $this->makeAdvisor();
+        $domain = $this->makeDomain('acme.test');
+        $mailbox = $this->makeMailbox(
+            createdAt: new \DateTimeImmutable('2026-05-01 09:00:00'),
+            lastPolledAt: new \DateTimeImmutable('2026-05-24 09:30:00'),
+            lastError: null,
+            monitoredDomain: $domain,
+        );
+
+        $result = $advisor->advise(
+            $mailbox,
+            new MailboxActivitySummary(20, 8, 12),
+            new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com'),
+        );
+
+        self::assertNotNull($result);
+        self::assertSame(MailboxHealthSeverity::QuarantineDominant, $result->severity);
+        self::assertStringContainsString('redundant', $result->reasonText);
+        self::assertStringContainsString('acme.test', $result->reasonText);
+    }
+
+    #[Test]
     public function quarantineDominantWhenOverHalfOfTenPlusEnvelopesAreQuarantined(): void
     {
         $advisor = $this->makeAdvisor();

@@ -3609,7 +3609,7 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-104: `MailboxHealthAdvisor` silentForTooLong copy speaks scenario-aware language but the `broken_credentials` and `quarantine_dominant` branches don't — operator fixes credentials on a redundant mailbox without being told the mailbox is no longer needed
 
-- Status: proposed
+- Status: done
 - Area: dashboard / mailboxes / recommendations
 - Why: TASK-094 wired `ruaScenarioForLinkedDomain` into `MailboxHealthAdvisor::silentForTooLong()` so the copy for a silent mailbox bound to a scenario-(b) domain correctly says `"Your domain X already routes reports to Sendvery's central inbox — this private mailbox is redundant and can be disconnected."` But the other two branches (`brokenCredentials` and `quarantineDominant`) never receive the scenario at all — so for a scenario-(b) domain whose mailbox is throwing a credentials error, the operator sees `"Sendvery couldn't log into this mailbox at {polledAt}: {error}. Re-test the connection or update credentials."` with no hint that the mailbox is actually redundant. The operator does the credential-rotation dance, the mailbox starts polling cleanly again, and now they have a working mailbox they didn't need. Same trap for `quarantine_dominant` on a scenario-(b) domain — operator investigates quarantine reasons on an inbox that shouldn't be polled at all.
 - Acceptance:

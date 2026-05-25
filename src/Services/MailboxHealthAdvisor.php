@@ -55,11 +55,11 @@ final readonly class MailboxHealthAdvisor
         ?RuaScenarioResult $ruaScenarioForLinkedDomain = null,
     ): ?MailboxHealthAdvisorResult {
         if (null !== $mailbox->lastError) {
-            return $this->brokenCredentials($mailbox);
+            return $this->brokenCredentials($mailbox, $ruaScenarioForLinkedDomain);
         }
 
         if ($this->isQuarantineDominant($activity)) {
-            return $this->quarantineDominant($mailbox);
+            return $this->quarantineDominant($mailbox, $ruaScenarioForLinkedDomain);
         }
 
         if ($this->isSilentForTooLong($mailbox, $activity)) {
@@ -69,7 +69,30 @@ final readonly class MailboxHealthAdvisor
         return null;
     }
 
-    private function brokenCredentials(MailboxConnection $mailbox): MailboxHealthAdvisorResult
+    /**
+     * Returns a "this mailbox is redundant" sentence to append to the reason
+     * text when the linked domain's DMARC already routes to Sendvery (TASK-104).
+     * The operator should know they don't need to spend time fixing this
+     * mailbox at all — the credentials/quarantine issue here is moot since
+     * reports flow via DNS. Empty string when no scenario / not redundant.
+     */
+    private function redundancyHint(MailboxConnection $mailbox, ?RuaScenarioResult $ruaScenarioForLinkedDomain): string
+    {
+        if (null === $ruaScenarioForLinkedDomain || null === $mailbox->monitoredDomain) {
+            return '';
+        }
+
+        if (RuaScenario::PointsAtSendvery !== $ruaScenarioForLinkedDomain->scenario) {
+            return '';
+        }
+
+        return sprintf(
+            ' Heads-up: %s already routes reports to Sendvery via DNS, so this mailbox is redundant — you can disconnect it instead of fixing it.',
+            $mailbox->monitoredDomain->domain,
+        );
+    }
+
+    private function brokenCredentials(MailboxConnection $mailbox, ?RuaScenarioResult $ruaScenarioForLinkedDomain): MailboxHealthAdvisorResult
     {
         // lastPolledAt CAN be null if the very first poll attempt errored out
         // before stamping it — fall back to "recently" copy in that case so
@@ -81,9 +104,10 @@ final readonly class MailboxHealthAdvisor
         return new MailboxHealthAdvisorResult(
             severity: MailboxHealthSeverity::BrokenCredentials,
             reasonText: sprintf(
-                "Sendvery couldn't log into this mailbox at %s: %s. Re-test the connection or update credentials.",
+                "Sendvery couldn't log into this mailbox at %s: %s. Re-test the connection or update credentials.%s",
                 $polledAtLabel,
                 $mailbox->lastError ?? '',
+                $this->redundancyHint($mailbox, $ruaScenarioForLinkedDomain),
             ),
             primaryActionLabel: 'Re-test connection',
             primaryActionRoute: 'dashboard_mailbox_retest',
@@ -103,11 +127,14 @@ final readonly class MailboxHealthAdvisor
         return $activity->quarantined30d > $activity->envelopes30d * 0.5;
     }
 
-    private function quarantineDominant(MailboxConnection $mailbox): MailboxHealthAdvisorResult
+    private function quarantineDominant(MailboxConnection $mailbox, ?RuaScenarioResult $ruaScenarioForLinkedDomain): MailboxHealthAdvisorResult
     {
         return new MailboxHealthAdvisorResult(
             severity: MailboxHealthSeverity::QuarantineDominant,
-            reasonText: 'More than half of the envelopes this mailbox pulled in the last 30 days landed in quarantine. Usually means receivers are sending reports for domains you haven\'t added yet, or domains that aren\'t verified.',
+            reasonText: sprintf(
+                'More than half of the envelopes this mailbox pulled in the last 30 days landed in quarantine. Usually means receivers are sending reports for domains you haven\'t added yet, or domains that aren\'t verified.%s',
+                $this->redundancyHint($mailbox, $ruaScenarioForLinkedDomain),
+            ),
             primaryActionLabel: 'Open quarantine for this mailbox',
             primaryActionRoute: 'dashboard_quarantine',
             primaryActionRouteParams: ['mailbox' => $mailbox->id->toString()],
