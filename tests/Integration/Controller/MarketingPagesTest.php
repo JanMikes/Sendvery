@@ -62,6 +62,33 @@ final class MarketingPagesTest extends WebTestCase
         self::assertSelectorTextContains('#faq h2', 'Frequently asked questions');
     }
 
+    /**
+     * TASK-121 — homepage AI FAQ used to claim "Available as an add-on for
+     * $3.99/mo or included in the Team plan." The Team plan does not exist and
+     * the AI add-on is per-tier (Personal+AI $8.99, Pro+AI $29.99, Business+AI
+     * $69.99). Pin BOTH the absence of the stale numbers AND the presence of
+     * the corrected per-tier copy so a careless future edit can't drift again.
+     */
+    #[Test]
+    public function homepageFaqDoesNotPromiseStaleAiBundlePricing(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        // The stale $3.99 add-on claim and the non-existent "Team plan" must
+        // not appear anywhere on the homepage.
+        self::assertStringNotContainsString('$3.99', $body);
+        self::assertStringNotContainsString('Team plan', $body);
+
+        // The corrected per-tier AI add-on numbers MUST appear — they have to
+        // match `PricingTable.html.twig`'s data-price-ai-annual values exactly.
+        self::assertStringContainsString('Personal+AI from $8.99/mo', $body);
+        self::assertStringContainsString('Pro+AI from $29.99/mo', $body);
+        self::assertStringContainsString('Business+AI from $69.99/mo', $body);
+    }
+
     #[Test]
     public function homepageContainsCta(): void
     {
@@ -97,6 +124,37 @@ final class MarketingPagesTest extends WebTestCase
         self::assertSelectorExists('a[href="/tools/dmarc-checker"]');
         self::assertSelectorExists('a[href="/tools/domain-health"]');
         self::assertSelectorExists('a[href="/learn"]');
+    }
+
+    /**
+     * TASK-123 — `/about/what-is-sendvery` was previously only reachable from
+     * the footer's About column. Cold visitors wanting a long-form explainer
+     * before clicking "Get started" had no top-nav entry. The marketing nav now
+     * surfaces it as the FIRST link (before Tools / Learn / Pricing). NO badge
+     * per TASK-065 / CLAUDE.md — marketing nav is intentionally badge-free so
+     * session state doesn't leak to over-the-shoulder onlookers.
+     */
+    #[Test]
+    public function marketingNavLinksToWhatIsSendveryExplainer(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $explainerLinks = $crawler->filter('nav a[href="/about/what-is-sendvery"]');
+        self::assertGreaterThanOrEqual(
+            1,
+            $explainerLinks->count(),
+            'Marketing nav must link to /about/what-is-sendvery so cold visitors can reach the long-form explainer without scrolling to the footer.',
+        );
+
+        // The link must NOT carry any attention-badge classes (TASK-065 forbids
+        // badges on the marketing nav). Walk every match and assert the badge
+        // markers are absent on the link itself and on its immediate children.
+        $explainerLinks->each(static function ($node): void {
+            $html = $node->outerHtml();
+            self::assertStringNotContainsString('badge', $html, 'Marketing-nav explainer link must not render any badge — TASK-065 + CLAUDE.md forbid attention badges on marketing nav.');
+            self::assertStringNotContainsString('NavBadge', $html);
+        });
     }
 
     #[Test]
