@@ -3849,7 +3849,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-117: Public DMARC checker post-result CTA sells "DNS change alerts" only — never names DMARC report parsing, sender inventory, pass-rate regression alerts, or the scenario-aware setup guidance that ARE the product
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `39bd3e5`)
 - Area: marketing
 - Why: A visitor lands on `/tools/domain-health?domain=their.com`, sees a `D` grade with red SPF / no DKIM / missing DMARC, and the CTA card right under the result reads "Stay ahead of email breakage — SPF and DKIM break silently … Sendvery checks {{domain}} every day and alerts you the moment something changes." That sentence describes a DNS-change monitor. Round 4 shipped a DMARC report ingestion + parsing engine, a sender authorization advisor (TASK-092), a pass-rate regression banner (TASK-093), a unified DomainHealthClassifier with a setup-status panel (TASK-080/098), scenario-aware ingestion recommendations (TASK-100), and a quarantine view (TASK-103). None of that is hinted at on the highest-traffic conversion surface — visitors trying to fix a D grade walk away thinking we're a DNS change watcher when we're a full DMARC ops platform.
 - Acceptance:
@@ -3866,7 +3867,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-118: Pricing comparison table lists "Reports / month: 100 / 1,000 / 10,000 / 50,000" with zero definition of what counts as a report — a buyer comparing tiers has no anchor
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `26c05f2 (bundled with TASK-119+124)`)
 - Area: marketing
 - Why: A visitor on `/pricing` reads "100 reports/mo" on Free and "1,000 reports/mo" on Personal and has no idea whether that means one DMARC XML attachment, one aggregated row inside an XML, or one sender's daily mail volume. Google sends one aggregate XML per day per domain — that's 30/mo per domain. Yahoo sends one. Microsoft sends one. So Free's "100 reports" covers ~3 reporters across one domain — comfortably enough. But the buyer can't compute that from the page. The FAQ has 10 entries (cancel anytime, refunds, switch plans, exceed limits, annual discounts, free trial, payment methods, VAT, why open source, AI Insights) — none of them answers "what IS a report?". This is the single biggest friction point in choosing a paid tier.
 - Acceptance:
@@ -3881,7 +3883,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-119: Pricing FAQ never tells the buyer they can keep their own DMARC inbox — every customer hits the DNS-vs-mailbox ingestion fork in onboarding but has no warning the choice exists
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `26c05f2 (bundled with TASK-118+124)`)
 - Area: marketing
 - Why: Round 4's TASK-100 made DMARC report ingestion a binary product choice: (a) publish `rua=reports@sendvery.com` in your DMARC record and we receive reports directly, or (b) connect your existing inbox via IMAP / OAuth and we pull reports out of it. The dashboard now classifies every domain into PointsAtSendvery / PointsAtExternal / NoRecord. But a visitor on `/pricing` reading "DMARC + DNS monitoring" in the comparison table has no way to know this choice exists — and the natural objection ("I already point my reports at my own mailbox, do I have to change DNS?") never gets surfaced. The result: technical buyers email "do I have to change my DNS?" before signing up, or worse, skip past Sendvery thinking they need to. Personal+ plans include both ingestion paths; the FAQ should say so.
 - Acceptance:
@@ -3895,7 +3898,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-120: Homepage section 4.5 product preview is still a hand-built HTML mock with a TODO comment — first-time visitors never see a real Sendvery surface
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `0bc2c7d`)
 - Area: marketing
 - Why: A visitor scrolls past the homepage hero, past the problem statement ("Email authentication is set once and forgotten"), and arrives at section 4.5 titled "Everything for one domain in one view". What they see is a daisyUI mock — a fake browser-chrome frame around a hand-built card with "acme.io", four green badges, a CSS-gradient pass-rate bar, and three fake reporter rows. The template has the literal comment `TODO(placeholder): swap for an <img> of a real screenshot once one exists; the swap is a single <div> replacement, no other template/markup changes needed.` Round 4 shipped multiple production-grade dashboard surfaces that would carry the page far better than the mock: the `/app/domains/{id}` setup-status panel (5-row protocol checklist with scenario-aware copy, TASK-100/101), the `/app` attention-summary line (TASK-062), the unified DomainHealthClassifier severity glyph on `/app/domains` list (TASK-098). The mock honestly undersells what the product looks like.
 - Acceptance:
@@ -3913,7 +3917,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-121: Homepage FAQ still says AI is "an add-on for $3.99/mo or included in the Team plan" — Team plan doesn't exist and AI is bundled per-tier, not flat-priced
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `8cf4b1e (bundled with TASK-123)`)
 - Area: marketing
 - Why: A visitor scrolls to the homepage FAQ, expands "How does AI analysis work?", and reads: "Available as an add-on for $3.99/mo or included in the Team plan." The Team plan does not exist — the current tiers are Free / Personal / Pro / Business. AI is sold as a per-tier upsell (`Personal+AI = $9.99/mo`, `Pro+AI = $33.99/mo`, `Business+AI = $79.99/mo`) per the PricingTable's data attributes, with on-demand call quotas scaling with the tier (50 / 200 / 500 per month per the Pricing FAQ's "How does AI Insights work?" entry). The homepage FAQ is the highest-traffic place this misinformation is visible — a price-sensitive visitor sees "$3.99 add-on" and feels misled when they hit `/pricing`.
 - Acceptance:
@@ -3927,7 +3932,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-122: Open Source page invites visitors to `git clone https://github.com/janmikes/sendvery.git` but the very bottom CTA says "Coming soon — repo opens at launch" — quickstart 404s for a real visitor
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `e8d8d52`)
 - Area: marketing
 - Why: A visitor lands on `/about/open-source` after seeing the homepage's "Open source · AGPL-3.0" pill. The hero says "Self-host Sendvery free, forever". They scroll to the "Self-host in 60 seconds" quickstart, see step 1 with a copy-paste command `git clone https://github.com/janmikes/sendvery.git && cd sendvery`, and hit Copy. They scroll down to the very bottom and see a `btn-disabled` button labelled "Coming soon — repo opens at launch" — because `is_repo_public` is false in this environment. The repo URL the quickstart hands them either 404s or returns "Repository not found" depending on auth state. The page can't simultaneously claim "Self-host in 60 seconds" AND admit "repo opens at launch" — a careful visitor leaves doubting the entire open-source claim.
 - Acceptance:
@@ -3944,7 +3950,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-123: `/about/what-is-sendvery` is only linked from the footer — the long-form explainer the brief invested in is invisible to most first-time visitors
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `8cf4b1e + 0662b88`)
 - Area: marketing
 - Why: A visitor lands on the homepage, sees the hero ("Your domain sends email every day. Do you know who else is?"), and wants the longer answer to "what IS this thing?". The marketing-site top nav (`templates/components/Nav.html.twig`) renders five links: Tools (dropdown), Learn, Pricing, Open Source, and the Dashboard / Get Started CTA. `What is Sendvery` is reachable only from the footer's About column. The page itself (which TASK-010 broke up across 8 sections with persona cards, a competitor comparison, and a founder blockquote) is a strong artefact — it just isn't discoverable. A cold visitor who wants more context before clicking "Get started free" has nowhere to go.
 - Acceptance:
@@ -3960,7 +3967,8 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-124: Pricing comparison table lists "Sender inventory", "Blacklist monitoring", "White-label PDF reports" as bare line items — a visitor evaluating Pro at $19.99 has no anchor for what those features ARE
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `26c05f2 (bundled with TASK-118+119)`)
 - Area: marketing
 - Why: A visitor on `/pricing` reading the full feature comparison table sees rows like "Sender inventory" (check on Personal/Pro/Business, dash on Free) and "Blacklist monitoring" (same pattern) and "White-label PDF reports" (only Business). For each, they get no definition — just a check mark in a column. Round 4 shipped the sender authorization advisor (TASK-092) and the `/app/domains/{id}/senders` page where this lives; first-time visitors comparing tiers have no way to know that "Sender inventory" means "we list every IP / domain that ever sent mail as you AND let you flag each one as authorized or rogue". Same gap for blacklist monitoring (DNS-based RBL checks) and white-label PDF (custom branding on monthly aggregate reports). A buyer who'd happily pay for sender inventory has no idea what they're buying.
 - Acceptance:
