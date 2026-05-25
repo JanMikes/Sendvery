@@ -3102,7 +3102,8 @@ Precedence: `Unverified` beats `Attention`. CTA for `Attention`: most-urgent fai
 
 ## TASK-084: Domain workspace tabs render six tabs with NO indication of which surfaces have new data or unread content — the only visual differentiation is the active state
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `ea58b0c`)
 - Area: dashboard
 - Why: First-impression IA gap. The `<twig:DomainWorkspaceTabs>` component (`templates/components/DomainWorkspaceTabs.html.twig`) renders six tabs — Overview / Reports / Senders / DNS / Blacklist / History — with identical visual weight. Once a user lands on a domain workspace, they have NO signal that tells them "there's new stuff in the Reports tab since you last looked" OR "you have 3 unauthorized senders waiting for triage in the Senders tab" OR "the Blacklist tab has an IP listed today". The tabs are pure navigation, not status. A first-time-this-week user has to click each tab to find out what changed — six round-trips. The dashboard pattern in other apps (GitHub Issues count, Linear unread, etc.) is well-established: route-scoped count badges on tabs. This becomes the in-tab equivalent of the unread alert count in the sidebar (the broader sidebar-badge effort is happening on TASK-060/TASK-061; this task is the per-domain-workspace counterpart — together they form one consistent badge language across the app).
 - Acceptance:
@@ -3624,7 +3625,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-105: `IngestionRoutesCallout` renders the "Connect a mailbox (fallback)" card unconditionally — for a team where every domain is already scenario (b), the entire right-hand card is noise the matrix below contradicts row-by-row
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `6a812a1`)
 - Area: dashboard / mailboxes / clarity-of-intent
 - Why: The callout at the top of `/app/mailboxes` is two equal-weight cards: left = DNS recommended, right = mailbox fallback. The right card's body copy `"Already receiving DMARC reports at a private inbox — e.g. you can't change DNS, or you want a local copy? Connect that mailbox if you can't change DNS..."` is written for a user who hasn't yet decided. But a team whose every domain in the matrix below already shows `badge-success "Ingesting via DNS (Sendvery)"` has already decided — they're on scenario (b) for every row. The fallback card sits there as visual noise, occupying half the above-the-fold space with a CTA whose recommended alternative is already in effect everywhere. This is the round-3-style "redundant card" regression — the user's actual state has moved past the call-to-action but the call-to-action stays.
 - Acceptance:
@@ -3639,7 +3641,8 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ## TASK-106: Per-domain matrix row prioritises `ruaScenario` over `path` — a row where `path = mailbox` (reports actually arriving via connector) and `ruaScenario = PointsAtExternal` renders as "Configured for external inbox" instead of "Ingesting via mailbox", contradicting the lastReportAt column
 
-- Status: proposed
+- Status: done
+- Shipped: 2026-05-25 (commit `6a812a1`)
 - Area: dashboard / mailboxes / matrix
 - Why: The matrix template (`mailboxes.html.twig:62-97`) checks `ruaScenario` branches FIRST and only falls through to `path` branches when the scenario is null. So a domain whose published DMARC record points at an external address (e.g. legacy `dmarc@team.com`) but whose Sendvery-connected mailbox is ACTUALLY pulling reports renders with a `badge-warning "Configured for external inbox"` badge AND a populated `lastReportAt` column showing real recent reports. The user sees "configured for external inbox" alongside "last report received: 2h ago" — confusing, because both are true but the badge implies setup-incomplete-no-reports while the timestamp proves the opposite. The path classifier (`path.value === 'mailbox'`) has the more honest signal in this case — reports are physically arriving via the mailbox connector.
 - Acceptance:
@@ -3649,6 +3652,62 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
   - Test: fixture for `path = mailbox`, `lastReportAt = recent`, `scenario = PointsAtExternal` with matching rua email. Assert "Ingesting via mailbox" badge renders.
 - Notes:
   - The matching test ("close enough rua email vs mailbox login") needs to be slightly loose — many operators connect `dmarc@team.com` as IMAP while the rua tag says `mailto:dmarc@team.com`. A direct lowercase equality on the local-part+domain is sufficient for v1; advanced cases (alias forwarding, etc.) can be deferred.
+
+---
+
+## TASK-107: `ProtocolSetupStatus` renders RUA destination row with the same idiom as SPF/DKIM/DMARC/MX — user reads it as "another DNS record to publish" when it's actually a logical choice about ingestion path
+
+- Status: proposed
+- Area: dashboard / domains / clarity-of-intent
+- Why: Round-4 self-review observation. TASK-100 added a 5th row to `templates/components/ProtocolSetupStatus.html.twig` (or its equivalent on `/app/domains/{id}`) for the RUA destination — `Sendvery`, `External (your inbox)`, or `Missing`. It uses the same row idiom as the 4 DNS protocol rows above it: a check/cross glyph + status label + optional sub-line. A first-time user scanning the panel sees five rows of the same shape and reads them all as "DNS records I need to publish". But the 5th row is different in kind — SPF/DKIM/DMARC/MX are "publish this record or you're broken"; RUA destination is "you chose where reports go; we just verified that choice". Mixing these two row kinds inside one visual grid invites the misreading "I need to publish RUA = Sendvery" when the actual state is "your DMARC record's rua= tag points at an external address — that's a valid choice, but we want you to know we're not the inbox".
+- Acceptance:
+  - The RUA destination row gains visual differentiation from the 4 protocol rows above it. Two acceptable approaches (pick whichever fits the existing component structure better):
+    - Option A — add a small `divider` element (daisyUI `divider`) above the RUA row with a quiet sub-heading text like `"INGESTION CHOICE"` or `"WHERE REPORTS GO"` so the row visually separates from the "DNS records" group above.
+    - Option B — change the leading glyph shape for the RUA row from a check/cross to a routing-arrow / inbox-arrow SVG so the row's visual idiom diverges from the 4 above; pair with a slightly different background tone (e.g. `bg-base-200/40`) so the row reads as a different category.
+  - Whichever option ships, the row keeps its existing scenario-aware copy from TASK-100 (NoRecord / PointsAtSendvery / PointsAtExternal branches). Only the visual framing changes.
+  - Renders at 360px mobile without overflowing or hiding the new sub-heading / glyph.
+  - Functional test: render `/app/domains/{id}` for a scenario-(c) domain. Assert the new differentiator (divider text OR distinct glyph class) is present in the DOM AND that all 4 DNS protocol rows still render with the original idiom unchanged.
+- Notes:
+  - This is the round-4 self-review's #1 cosmetic finding. Round 4's reviewer asked: "is the 5th row visually distinct enough that a user won't try to publish a 'RUA destination' DNS record?" The answer was "probably not — they look identical". This task closes that loop.
+  - Watch for collision with TASK-084 (workspace tab badges land on the same page header area). TASK-107 changes happen INSIDE the protocol panel; TASK-084 changes happen ABOVE it in the tab strip. They shouldn't conflict but verify.
+
+---
+
+## TASK-108: `MailboxHealthAdvisor::silentForTooLong()` primary action is "Check DNS" regardless of scenario — a scenario-(b) silent mailbox should primary-CTA "Disconnect this redundant mailbox", not "Check DNS"
+
+- Status: proposed
+- Area: dashboard / mailboxes / guidance
+- Why: Round-4 self-review observation. TASK-094 + TASK-104 made the advisor card scenario-aware in its COPY (the `redundancyHint` appends "this mailbox is redundant" wording when the bound domain is scenario PointsAtSendvery) but the primary BUTTON stays the same — "Check DNS" — across all scenarios for the silent_for_too_long branch. So an operator who reads "this mailbox is redundant — disconnect it instead of fixing it" still sees a "Check DNS" CTA as the primary action, undercutting the advice. The correct primary action depends on scenario: for PointsAtSendvery (the mailbox is genuinely redundant), the user wants "Disconnect this mailbox"; for PointsAtExternal (the operator genuinely needs to verify the rua= target), "Check DNS" stays correct; for NoRecord (no DMARC record at all), the user wants to "Publish a DMARC record" deep-linked to the domain health page.
+- Acceptance:
+  - `MailboxHealthAdvisor::silentForTooLong()` (or its result DTO) gains a `primaryAction` property whose value depends on the bound-domain scenario:
+    - `PointsAtSendvery` + bound domain exists → primary CTA `"Disconnect this mailbox"` posting to an existing disconnect/delete route OR linking to the mailbox edit page if a delete flow isn't reachable yet; secondary CTA `"Check DNS"` linking to `/app/domains/{id}/health`.
+    - `PointsAtExternal` → primary CTA stays `"Check DNS"` (existing behaviour) linking to `/app/domains/{id}/health`; no secondary CTA needed.
+    - `NoRecord` → primary CTA `"Publish a DMARC record"` linking to `/app/domains/{id}/health`; secondary `"Check DNS"` redundant — drop it.
+    - No bound domain → keep current `"Check DNS"` primary CTA (no scenario to read from).
+  - The button glyph differs per primary CTA so the change is visually obvious for a returning operator: `"Disconnect"` uses a `unlink` / `power-off` icon, `"Check DNS"` uses a `search` / `wifi` icon, `"Publish"` uses a `pencil` / `plus` icon.
+  - Unit tests cover all four scenario branches (PointsAtSendvery / PointsAtExternal / NoRecord / no-bound-domain) and assert the correct `primaryAction.label` + `primaryAction.url` per branch.
+  - Functional test: load `/app/mailboxes/{id}` for a silent scenario-(b) mailbox and assert "Disconnect this mailbox" is the primary button text; load for a silent scenario-(c) mailbox and assert "Check DNS" is still primary.
+- Notes:
+  - The "Disconnect this mailbox" action wires into whatever delete/disconnect route already exists for mailboxes — check `src/Controller/Dashboard/Mailbox*Controller.php` for an existing disconnect/delete endpoint. If none exists, the v1 button can link to the mailbox edit page where the user can delete from there; a new `dashboard_mailbox_disconnect` POST route can be a follow-up task.
+  - Round-4 self-review's #2 finding. The redundancy HINT shipped in TASK-104; this completes the loop by making the ACTION match the hint.
+
+---
+
+## TASK-109: `PassRateRegressionAdvisor` fires on any 10pp pass-rate drop — for a low-volume domain (a few reports per week) random variance hits that threshold easily; needs a minimum-sample-size floor
+
+- Status: proposed
+- Area: dashboard / reports / guidance
+- Why: Round-4 self-review observation. TASK-093 shipped `PassRateRegressionAdvisor` on `/app/reports` that compares the current 7-day pass rate vs the prior 7-day pass rate and surfaces a banner when the drop is ≥ 10 percentage points, naming the top failing sender as the likely culprit. The threshold is fine for high-volume domains (hundreds of reports/week) but a low-volume domain (5-20 reports/week) can swing 10pp on random variance — one extra failing report out of seven can move the rate by 14pp. Operators on small domains will see the banner fire and chase a "regression" that's just noise, eroding trust in the system's opinions.
+- Acceptance:
+  - `PassRateRegressionAdvisor` gains a `MIN_SAMPLE_SIZE = 50` constant (private/protected). The banner suppresses (returns null) when EITHER the current 7-day window count OR the prior 7-day window count has fewer than 50 reports.
+  - The constant is documented in the service class docblock: rationale ("a 10pp swing on <50 reports is within random variance for typical pass-rate distributions") and the threshold reasoning (50 = round number; safer than 20; reduces false positives for low-volume teams).
+  - Unit test: fixture seeds 30 reports in the current 7-day window + 80 in the prior 7-day window with a 15pp drop. Assert advisor returns null.
+  - Unit test: fixture seeds 80 reports in current + 30 in prior with a 15pp drop. Assert advisor returns null.
+  - Unit test: fixture seeds 80 reports in current + 80 in prior with a 15pp drop. Assert advisor returns the banner (existing behaviour preserved at threshold).
+  - The banner copy itself doesn't change. Only the suppression condition changes.
+- Notes:
+  - Round-4 self-review's #3 finding. This is a "false positives erode trust" fix — the kind of guardrail that doesn't show up in a happy-path demo but matters for the median paying customer whose domains are small.
+  - 50 is a heuristic; if a follow-up round finds it's too conservative for high-volume teams or too generous for tiny ones, tune it then. Start with the round number, document the rationale, ship.
 
 ---
 
