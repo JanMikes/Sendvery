@@ -1,575 +1,557 @@
-# Autonomous CX/Product Improvement Run — Sendvery (Round 6: Truthful Dashboard + DNS History Depth + Domains/DNS-Health Merge)
+# Autonomous CX/Product Improvement Run — Sendvery (Round 8: Marketing polish + dashboard DKIM editability + SEO + DNS helper forms)
 
 You are the ORCHESTRATOR. Your job is to autonomously improve Sendvery's
-dashboard by running a continuous loop of specialised subagents. You
-self-pace. You DO NOT stop to ask the user for permission on anything
-covered by "Autonomy". You DO NOT stop until the backlog is genuinely
-empty (Product agent confirms nothing more is worth doing) or you hit a
-real blocker in "Stop conditions".
+marketing surfaces + dashboard by running a continuous loop of
+specialised subagents. You self-pace. You DO NOT stop to ask the user
+for permission on anything covered by "Autonomy". You DO NOT stop until
+the backlog is genuinely empty (Product agent confirms nothing more is
+worth doing) or you hit a real blocker in "Stop conditions".
 
 ================================================================
 MISSION
 ================================================================
-Earlier rounds (TASK-001 through TASK-124 — see the SIX RUN SUMMARY
-sections at the bottom of `docs/cx-improvement-backlog.md`) made the
-marketing site look professional, gave the dashboard real IA, covered
-every named pain across clarity / guidance / visual status / attention
-signals (round 3), shipped DMARC RUA parsing as a scenario-aware
-recommendation engine + unified the severity calculator + extended
-advisor cards + cleaned row-level visual status (round 4), drained the
-round-4 carryover + filed-and-shipped two self-review cycles + executed
-a marketing-site refresh including a real dashboard screenshot on the
-homepage + ran a measurement-validated perf audit (round 5).
+Round 7 closed cleanly with the round-6 follow-through (TASK-132 →
+TASK-135) all shipped and all-green at 2274 tests / 6687 assertions
+(see the round-7 RUN SUMMARY in `docs/cx-improvement-backlog.md` for
+detail). Round 8 is **another user-driven round** — same account holder
+([j.mikes@me.com](mailto:j.mikes@me.com)) opened the live site + dashboard
+after round 7 and surfaced ten things that still feel off. The work
+splits into five threads:
 
-This round (6) is **user-driven** — every task below comes from a real
-account holder ([j.mikes@me.com](mailto:j.mikes@me.com)) who looked at
-the live dashboard with their own correctly-configured single-domain
-team and flagged seven issues. The work splits into four threads:
+1. **Stop apologising for things that are already done.** The
+   open-source repo is PUBLIC at github.com/janmikes/sendvery. Every
+   page that still says "Notify me when the source ships" / "Coming
+   soon — repo opens at launch" / wraps GitHub links behind the
+   `is_repo_public` env gate is now lying — those CTAs have to point at
+   the real GitHub URL. The ONLY genuine "coming soon" item left is
+   **AI Insights**, which only waits for an Anthropic API key + a
+   final test pass. DEC-057's stub-first posture still applies to the
+   AI feature, but NOT to the repo-public claim.
+   - **TASK-136**: retire the repo-public gate entirely. The
+     `SENDVERY_REPO_PUBLIC` env-var + `OpenSourceExtension`
+     `is_repo_public` Twig global + every `{% if is_repo_public %}`
+     branch in templates can go. The Open Source page (`/about/open-source`)
+     + the homepage hero secondary CTA + any other notify-me CTAs
+     pointing at the repo all switch to the unconditional GitHub
+     link. The notify-me mailto and `homepage-hero-repo-launch`
+     tracking-source string are deleted.
 
-1. **Truthful dashboard (false-positive bug fixes).** The system is
-   currently telling the user to do things they've already done, OR
-   marking initial state as a change, OR styling record-type labels
-   so they look like warnings. Each is a "system has the wrong opinion"
-   bug that erodes trust:
-   - **TASK-125**: DNS history reports `CHANGED` on the very first
-     check (transition from no-prior-state to current-state). A first
-     check is not a change.
-   - **TASK-126**: DNS history record-type labels (DKIM / DMARC / SPF /
-     MX) are styled in tones (`badge-warning`, etc.) that overlap the
-     validity-state tones. A yellow "DMARC" label looks like a warning
-     when it's just the record name.
-   - **TASK-128**: `/app` "Receive your first DMARC report" card says
-     "Connect a mailbox if you prefer pulling them yourself" even when
-     the user's DMARC `rua=` already points at `reports@sendvery.com`.
-     The alternative CTA contradicts the user's correctly-configured
-     state. Copy should be scenario-aware (no connect-mailbox alt when
-     scenario is `PointsAtSendvery`).
-   - **TASK-129**: `/app` NEXT STEP card says "Publish a DMARC RUA
-     record" when the user's DMARC RUA record IS published and points
-     at Sendvery's central inbox. The check that drives this card is
-     missing the "RUA already at Sendvery" branch (or has it but isn't
-     reading the right state).
+2. **The most-seen surface (homepage hero) has a font register
+   mismatch with the sections below it.** TASK-131 introduced the
+   zinc-palette + explicit `font-medium` ceiling on the first three
+   sections; sections 4+ kept daisyUI's heavier default headings.
+   First-impression visitors see the seam. Fix the inconsistency.
+   - **TASK-137**: pick ONE register and apply it page-end-to-end on
+     `/`. Either continue zinc-palette + `font-medium` for every
+     section heading, OR retire the zinc-palette override and pick a
+     consistent daisyUI register top-to-bottom. The user explicitly
+     called this out: "this is the most important part of the marketing
+     page because everyone sees this on first sight." Recommend
+     continuing TASK-131's lighter register for visual coherence with
+     the dashboard polish.
+   - **TASK-138**: the "How it works" section uses custom illustration
+     assets (`how-connect.webp`, etc.). Drop the custom illustrations
+     and replace with consistent Lucide icons or daisyUI-styled icon
+     tiles so the section visually agrees with the hero's zinc
+     register. Asset files can be deleted if no other surface uses
+     them.
 
-2. **DNS history depth (one feature).** When DNS records change, the
-   user wants to see the diff — what was the value before and what is
-   the value now — so they can tell "is this an error or did I want
-   this change?" Currently the history page just shows two states
-   side by side as opaque text blobs.
-   - **TASK-127**: token-level inline diff (e.g. `p=none` → `p=quarantine`
-     highlighted within the DMARC record) WITH a "view full records"
-     expander that toggles to the old before/after-block view.
+3. **Kill clutter that adds no value.** Three small deletions:
+   - **TASK-139**: remove the "Built for engineers" section from the
+     homepage completely. User: "We might remove the 'Built for
+     engineers' from homepage completely i think."
+   - **TASK-140**: every `/tools/*` page has a "Related tools"
+     section at the bottom — and the user reports it's empty on
+     `/tools/spf-checker` and others. Either populate it correctly OR
+     remove it (user preference: remove). Audit every public tool
+     page and strip the empty block.
+   - **TASK-141**: the footer says "Built with Symfony & FrankenPHP".
+     End users don't care about the tech stack and exposing it is bad
+     marketing posture. Replace with "Built with love by Jan Mikeš"
+     + a link to GitHub (and/or personal site if applicable). Verify
+     there's no other "Built with <tech>" copy lingering anywhere
+     (Symfony, FrankenPHP, daisyUI, Tailwind, Postgres, etc.) — strip
+     all such tech-stack name-drops from user-facing surfaces.
 
-3. **IA merge (one refactor — SHIPPED in TASK-130).** `/app/domains`
-   now absorbs the former `/app/dns-health` surface. The 4-card summary
-   (Domains monitored / Fully healthy / Need attention / Awaiting first
-   check), the per-card letter grade, and the SPF/DKIM/DMARC/MX
-   protocol badges all live on the merged `/app/domains` page. The
-   `/app/dns-health` route is gone (returns 404); the sidebar lost its
-   standalone "DNS Health" entry. The per-domain drill-down at
-   `/app/domains/{id}/health` stays — different scope (overview vs
-   detail). No backwards-compat redirect was introduced.
+4. **SEO and narrative.** Two strategic threads:
+   - **TASK-142**: SEO audit + improvements. Look at every public
+     page and verify: meta `<title>` + `<meta description>` per page
+     (not just one global copy), Open Graph image per page (or a
+     sensible default), structured data per page-type (Organization
+     on home, Product on pricing, Article on /learn/*, SoftwareTool
+     on /tools/*), internal linking density (every page should link
+     out to related public pages within ~2 clicks), `robots.txt` +
+     `sitemap.xml`, canonical URLs, heading hierarchy (one H1 per
+     page, proper H2-H6 nesting). File specific fixes inline; ship
+     the highest-leverage wins. Skip anything that needs marketing
+     copy decisions — surface those as follow-ups.
+   - **TASK-145**: homepage narrative pass. User said the section
+     order should "make sense, maybe put pricing slightly higher, but
+     there should be clear story / flow from top to bottom reasoning
+     why the sections are in such order — follow best practices."
+     Re-sequence the homepage with explicit per-section rationale.
+     Suggested skeleton (final order is the orchestrator's call after
+     reading the current page): hero → trust → problem framing →
+     solution (XML→English + grade card) → social-proof (dashboard
+     screenshot from TASK-120) → pricing → FAQ → final CTA. Audit
+     surrounding pages (`/pricing`, `/about/what-is-sendvery`,
+     `/learn`, `/tools/*`, `/open-source`) for the same narrative
+     coherence — if a page's flow contradicts the homepage story, fix
+     in scope.
 
-4. **Homepage hero rework (visual polish).** The current hero copy
-   ("Email authentication is set once and forgotten") + the standalone
-   DNS-checker section feel boring next to the dashboard polish round
-   4-5 added. The user wants a designed hero that lives up to the
-   product the screenshot below it shows.
-   - **TASK-131**: rebuild the top of `/` as three sequential sections
-     — a two-column hero that ABSORBS the standalone DNS checker, a
-     centered "XML → plain English" explainer, and an A–F grade
-     showcase. Monochrome zinc palette + semantic state colors,
-     `font-medium` ceiling, sentence case throughout, no gradients /
-     shadows / blobs. Reuse the existing Stimulus DNS-checker
-     controller verbatim — only the visual shell changes.
+5. **Dashboard bug.** One trust-eroding bug surfaced by real use:
+   - **TASK-143**: in the dashboard, the user cannot change a domain's
+     DKIM selector once it's been saved the first time. The form
+     locks the field. User: "this is important!" Find the read-only
+     branch in the DKIM-selector form/controller (likely
+     `src/Controller/Dashboard/*` + a `templates/dashboard/*` form
+     template), add an edit path that re-runs the existing DNS
+     verification trigger so changing the selector immediately
+     re-verifies DKIM against the new selector value.
 
-5. **Performance audit (round-6 baseline diff).** Round 5 captured a
-   perf-audit snapshot — every round-4/round-5 query landed SAFE
-   (<5ms) on the demo-seeded dev DB. Round 6 should re-run the same
-   `EXPLAIN ANALYZE` measurements after TASK-130's merge lands (the
-   `/app/domains` list page will gain DNS-health-snapshot lookups it
-   didn't have before) and confirm the merged surface stays within
-   the SAFE band. Compare against the round-5 numbers documented in
-   the backlog. Same rules: pure measurement, only ship code changes
-   if a regression is confirmed.
+6. **DNS helper-form feature (v1 scoped — exploratory).** User asked:
+   "could there be helper forms to set up dns records format for spf,
+   dkim etc on the public pages?" — phrased as a question, not a
+   directive. Ship a v1.
+   - **TASK-144**: on the relevant `/tools/*` pages (SPF / DKIM /
+     DMARC), add a "Generate the record" helper form. The user enters
+     the high-level config (for SPF: their sending services as
+     toggles like Google Workspace / Mailchimp / Postmark / etc., or
+     a free-form list; for DMARC: policy choice + reporting email;
+     for DKIM: selector + public key; for MX: priority + host
+     pairs), and the tool generates the canonical TXT/MX record
+     string they paste into DNS. Output a `<code>` block + a
+     copy-to-clipboard button. v1 covers SPF + DMARC; DKIM and MX
+     can be follow-ups if v1 lands well. PURELY client-side
+     (Stimulus controller — no API calls). Do not over-engineer
+     the include: list — start with ~6 common providers + free-form.
 
-A paying customer should trust the dashboard's opinions — "the system
-told me to publish a DMARC record that I already published" is exactly
-the failure mode round-4 and round-5 worked to eliminate, and round 6
-catches the cases that slipped through. Where round 5 unified surfaces
-that disagreed (TASK-114 cross-surface tone), round 6 unifies surfaces
-that DUPLICATE (TASK-130 merge), stops the dashboard lying about the
-user's state (TASK-125 / 126 / 128 / 129), gives the user the inline
-diff they need to read history confidently (TASK-127), and brings the
-homepage's visual register up to match the dashboard screenshot it
-already carries (TASK-131).
+7. **Round-8 performance audit + self-review.** Same rules as rounds
+   5-7: re-measure the round-7 baseline queries after marketing-only
+   changes (perf delta expected ≈ 0; verify and document). Self-review
+   every 3 ships.
 
 ================================================================
 WHAT IS ALREADY DONE — DO NOT RE-PROPOSE
 ================================================================
-Skim `docs/cx-improvement-backlog.md` first. TASK-001 through TASK-124
-with status `done` are shipped. Don't re-propose anything in the six
-run-summary tables. Round 5 specifically shipped:
+Skim `docs/cx-improvement-backlog.md` first. TASK-001 through TASK-135
+with status `done` are shipped. Don't re-propose anything in the seven
+run-summary tables. Round 7 specifically shipped:
 
-- **TASK-084** — Domain workspace tab count badges (round-4 carryover).
-- **TASK-105 + TASK-106** — Mailboxes matrix polish: collapsed callout
-  for all-scenario-b teams + path-vs-scenario priority for connected
-  mailboxes receiving reports.
-- **TASK-107 + TASK-114** — RUA destination row visual differentiation
-  + cross-surface fix via new `RuaMailboxMatcher`. Both
-  `/app/mailboxes` and `/app/domains/{id}` now agree on tone for the
-  same domain.
-- **TASK-108** — `MailboxHealthAdvisor::silentForTooLong()` primary
-  CTA is scenario-aware (Disconnect / Publish / Check DNS).
-- **TASK-109** — `PassRateRegressionAdvisor` minimum-sample-size floor
-  (MIN_SAMPLE_SIZE = 50) suppresses false alarms on low-volume domains.
-- **TASK-115** — Active workspace tab dot badges gain a contrast ring
-  so the signal doesn't disappear on the dark active background.
-- **TASK-116** — TASK-106 success sub-line names the rua= address.
-- **TASK-117 / 118 / 119 / 120 / 121 / 122 / 123 / 124** — marketing
-  refresh: public DMARC checker CTA, pricing FAQ bundle (report
-  definition + ingestion paths + glossary tooltips), real dashboard
-  screenshot on the homepage, AI-bundle copy accuracy, open-source
-  quickstart repo-public gate, marketing nav "What is this?" link.
-- **Round-5 perf audit** — all 5 round-4/round-5 queries land SAFE
-  on demo-seed. Baseline documented in the backlog for round-6 diff.
+- **TASK-132** — homepage section 5 Step 1 leads with DNS-first
+  ingestion (rua= at Sendvery; mailbox demoted to fallback line).
+- **TASK-133** — disconnect-mailbox POST endpoint + soft-delete via
+  new `disconnected_at` column + daisyUI confirmation modal.
+- **TASK-134** — batch `RuaScenarioResolver::resolveForDomainIds`
+  retires the N+1 on the dashboard overview hot path. New
+  `InMemoryQueryLogger` middleware (when@test) provides the
+  one-query regression net.
+- **TASK-135** — self-review-found must-fix:
+  `RuaMailboxMatcher::matchesMailbox()` now skips
+  disconnected/inactive mailboxes.
+- Sidecar de-flake fix for `NextActionResolverTest::resolveConnect
+  MailboxWhenNoMailboxAndNoReports` (relative-vs-fixed-date timing
+  drift on 7-day boundary).
+- Round-7 perf audit: all 8 measured queries SAFE. TASK-134's batch
+  query clocks 0.083ms exec at 3-domain demo scale (strict
+  improvement over the N+1 it retired).
 
-Round 5 test suite growth: 2158 → 2226 (+68 tests / +286 assertions).
+Round 7 test suite growth: 2256 → 2274 (+18 tests / +72 assertions).
 
 Build on top — don't duplicate.
 
 ================================================================
 SEED FOCUS AREAS (priority order — SHIP ALL IN ONE ROUND)
 ================================================================
-Four buckets. The order below is the SHIP ORDER. Bucket 1 is the
-small mechanical wins (4 bug fixes), bucket 2 is one feature, bucket 3
-is the dashboard refactor, bucket 4 is the marketing hero rework.
+Five buckets. The order below is the SHIP ORDER. Bucket 1 is the
+quick-wins bundle (4 small deletes/edits), bucket 2 is the marketing
+visual polish, bucket 3 is the dashboard bug fix, bucket 4 is the
+strategic SEO + narrative pass, bucket 5 is the v1 helper-form
+feature.
 
-1. **TRUTHFUL DASHBOARD — false-positive fixes** (TASK-125 / 126 / 128 / 129)
+1. **QUICK-WINS BUNDLE — repo gate retired + 3 small deletes** (TASK-136 / 139 / 140 / 141)
 
-   **TASK-125** — DNS history initial check is not a change. When a
-   domain is added and the first `sendvery:dns:check-all` run captures
-   its DNS state, the resulting `dns_check_result` row should NOT
-   render as `CHANGED` in the history view. It's a baseline, not a
-   change.
+   Ship ALL four under ONE dev agent — they're each small, low-risk
+   text edits across the marketing site. Bundled commit makes the
+   "killed marketing clutter" change reviewable as one.
 
-   Acceptance:
-   - The first `dns_check_result` row per domain renders with an
-     `INITIAL CHECK` label (use the existing severity-glyph badge
-     pattern, distinct tone — e.g. `badge-info` or `badge-ghost`)
-     instead of the `CHANGED` chip.
-   - The label must be visually distinct from both `CHANGED` (which
-     stays for subsequent real diffs) AND from the protocol-row
-     validity badges (which TASK-126 also clarifies).
-   - History page still shows the baseline state under the INITIAL
-     CHECK row (SPF / DKIM / DMARC / MX values as they were when
-     first observed), so the user sees what was originally there.
-   - Detection: a row is an "initial check" when there is no prior
-     `dns_check_result` for the same `(monitored_domain_id, record_type)`
-     OR when the `has_changed` column is true but the row is the
-     oldest for that protocol. Use the cleaner of the two — query
-     the schema to decide.
-   - Test: integration test seeds 2 days of dns_check_result for a
-     fresh domain (Day 0 = initial, Day 1 = a real DMARC `p` change).
-     Renders `/app/domains/{id}/dns-history` and asserts the Day 0
-     row has `INITIAL CHECK` label and the Day 1 row has `CHANGED`.
+   **TASK-136** — retire repo-public gate everywhere.
 
-   **TASK-126** — DNS history record-type labels need their own visual
-   identity, distinct from validity-state tones. Currently "DMARC" is
-   styled `badge-warning` which reads as "DMARC is broken" — but it's
-   just the record name. The validity state is rendered separately
-   ("Valid" / "Invalid" / etc.) and should own the warning/error tones.
+   The `SENDVERY_REPO_PUBLIC` env-var was a TASK-122-era gate while
+   the repo was private. The repo is now PUBLIC at
+   `github.com/janmikes/sendvery`. Everything gated on
+   `is_repo_public` is lying.
 
    Acceptance:
-   - Record-type labels (SPF / DKIM / DMARC / MX) render in a SINGLE
-     unified non-semantic tone (e.g. all `badge-neutral` or all
-     `badge-ghost` with a small fixed-width icon prefix per protocol).
-     User identifies the record by name/icon, not by color.
-   - Validity badges (`Valid` / `Invalid` / `Not found` / etc.) keep
-     their existing tone palette (success/error/warning) — those colors
-     own the meaning.
-   - At a glance, a row reads as `[icon] DMARC | [badge-success] Valid`
-     — record name has no color baggage, validity carries the tone.
-   - Test: render the DNS history page for a fixture with all 4
-     protocols in different validity states. Assert each protocol
-     label has the same non-semantic class set, and each validity
-     badge has the expected semantic class.
+   - Delete `SENDVERY_REPO_PUBLIC` from `.env` (default), `.env.test`,
+     anywhere else it appears. Default behaviour is "repo is public".
+   - Delete the `is_repo_public` Twig global. `OpenSourceExtension`
+     either keeps just the `github_url` global (still needed for the
+     link target) OR is deleted entirely if `github_url` can be a
+     plain Twig constant / parameter.
+   - Find every `{% if is_repo_public %}` / `{% else %}` branch in
+     templates and collapse to just the github-link branch. The
+     notify-me mailto CTA and the `data-notify-source="homepage-
+     hero-repo-launch"` / `open-source-repo-launch` tracking strings
+     are deleted.
+   - `/about/open-source` page — every "Coming soon" / "Notify me"
+     copy gets replaced with the active GitHub link. Quickstart can
+     unconditionally render `git clone https://github.com/janmikes/sendvery.git`.
+   - Homepage hero secondary CTA renders as "View on GitHub →"
+     unconditionally (no env branching, no hidden anchor either —
+     that fallback shim was already deleted in round 7).
+   - Grep guard: `grep -rn "Notify me when" templates/ src/` returns
+     ZERO hits. `grep -rn "is_repo_public\|SENDVERY_REPO_PUBLIC"`
+     returns zero hits. `grep -rn "Coming soon" templates/` returns
+     zero hits EXCEPT where the surface genuinely is coming soon
+     (the AI Insights stub — those mentions stay, gated on DEC-057's
+     placeholder marker).
+   - Test: update existing tests pinning the env-gated branches —
+     `heroSecondaryCtaRespectsRepoPublicGate` (TASK-131-era) and any
+     `/about/open-source` test that asserts the notify-me variant.
+     Replace with assertions that the GitHub URL renders
+     unconditionally.
 
-   **TASK-128** — `/app` "Receive your first DMARC report" card on the
-   onboarding strip drops the "Connect a mailbox if you prefer pulling
-   them yourself" alternative when the user's DMARC `rua=` is already
-   correctly configured at `reports@sendvery.com`. For that user, the
-   alternative is misleading — they've already chosen DNS ingestion;
-   suggesting they connect a mailbox contradicts their state.
-
-   Acceptance:
-   - The card's body copy branches on `RuaScenarioResolver` (same
-     pattern as TASK-091 / TASK-100):
-     - `PointsAtSendvery` → "Reports flow in automatically. The first
-       one usually arrives within 24-48 hours of `rua=` publishing —
-       Gmail / Outlook / Yahoo each send one per day per domain."
-       NO mailbox alternative.
-     - `PointsAtExternal` → existing copy explaining the user's rua=
-       routes elsewhere + suggesting they either change DNS or
-       connect THAT inbox (matching TASK-100's external-inbox flow).
-     - `NoRecord` → existing copy pointing the user at publishing a
-       DMARC record (deep-link to domain health).
-   - The card's CTA respects the same branching (no "Connect a
-     mailbox" button when scenario is PointsAtSendvery).
-   - Test: integration test seeds a team with one domain whose rua=
-     points at sendvery's reports email and no reports yet received.
-     Asserts the card renders the new "Reports flow in automatically"
-     copy and does NOT contain the literal "Connect a mailbox" string.
-
-   **TASK-129** — `/app` NEXT STEP card stops recommending "Publish a
-   DMARC RUA record" when the user already has one pointing at
-   Sendvery. Currently the resolver returns the publish-RUA action
-   regardless of the actual rua= state. The bug likely lives in
-   `NextActionResolver` (or whichever service drives the NEXT STEP
-   card) — it isn't reading the `RuaScenarioResolver` output when
-   computing the "what should the user do next" decision.
+   **TASK-139** — remove "Built for engineers" section from homepage
+   completely.
 
    Acceptance:
-   - When the user's team has at least one domain with
-     `RuaScenario::PointsAtSendvery` AND `firstReportAt is null`, the
-     NEXT STEP card resolves to `WaitForReports` (the existing branch
-     TASK-102 added for the "fresh scenario-b settling window" case)
-     INSTEAD of `PublishDmarcRua`.
-   - When the team has at least one domain with `RuaScenario::NoRecord`,
-     the existing `PublishDmarcRua` branch still fires for THAT
-     domain.
-   - When the user has multiple domains with different scenarios, the
-     resolver picks the highest-attention scenario per the existing
-     priority order (NoRecord > misconfigured > waiting > healthy).
-   - Test: integration test seeds a one-domain team with rua= at
-     sendvery + no reports. Renders `/app` and asserts the NEXT STEP
-     card text matches the WaitForReports variant ("Reports start
-     flowing within 24-48 hours...") and does NOT contain "Publish a
-     DMARC RUA record" or "Add a `_dmarc` TXT record".
-   - Test: integration test seeds a one-domain team with NO DMARC
-     record. Renders `/app` and asserts the existing PublishDmarcRua
-     copy still renders for that team.
+   - `templates/homepage/index.html.twig` — find the "Built for
+     engineers" section (grep the file for that literal string), delete
+     the entire `<section>` block.
+   - If the section had its own assets (illustrations, structured
+     data), delete those too.
+   - Update tests that asserted the section's H2 / body copy — delete
+     them outright, NOT comment them out.
 
-2. **DNS HISTORY DEPTH** (TASK-127)
+   **TASK-140** — strip empty "Related tools" sections from /tools/*
+   pages.
 
-   **TASK-127** — When a `dns_check_result` row is a real change
-   (`has_changed = true` AND NOT the initial check from TASK-125),
-   the history page renders a token-level inline diff highlighting
-   the specific tags that changed within the record, WITH an expander
-   to view the full before/after records side-by-side.
+   The user reports `/tools/spf-checker` has a "Related tools" block
+   with nothing in it. Audit every public tool page and strip the
+   block.
 
    Acceptance:
-   - For each changed protocol on a CHANGED row, render two views:
-     - **Default (token diff)**: an inline rendering of the record
-       text with the tags that differ highlighted — `p=` value
-       changes get the old tag in `bg-error/20 line-through` and the
-       new tag in `bg-success/20 font-bold`. Other tags render in
-       neutral tone. For SPF, each `include:` / `ip4:` / `~all` token
-       diffs independently. For DMARC, each `key=value` tag diffs
-       independently. For DKIM, the public-key body diff is treated
-       as one opaque block (don't try to diff inside `p=<base64>`).
-     - **Expanded (full records)**: a `details`/`summary` (or daisyUI
-       `collapse`) toggle reveals two full code blocks — `Before`
-       and `After` — with each record's raw value. Useful for
-       longer records where the token diff gets noisy.
-   - Implementation: a new `src/Services/Dns/DnsRecordDiffer.php`
-     (`readonly final`) takes a previous `DnsRecord` value object and
-     a current one, returns a `DnsRecordDiff` result with a list of
-     `DnsRecordDiffSegment` items (each = `text`, `kind: unchanged|added|removed`).
-     Template-level rendering of the segments is a Twig macro or
-     small component.
-   - Tests:
-     - Unit test for `DnsRecordDiffer` covering: SPF token diff
-       (added include), DMARC tag diff (p= flip), DKIM (one opaque
-       block — the entire record changed), MX (priority change).
-     - Integration test renders `/app/domains/{id}/dns-history` for a
-       fixture with a DMARC `p=` flip; asserts the rendered HTML
-       contains both the strike-through old value AND the highlighted
-       new value within the same record line, AND the `<details>`
-       expander markup is present (default-collapsed).
+   - Find every `templates/tools/*.html.twig` (and any shared
+     "RelatedTools" component). Identify pages where "Related tools"
+     either renders empty OR with a stale/duplicate set.
+   - Delete the "Related tools" markup from those pages (user
+     preference is REMOVE, not populate).
+   - If the "Related tools" component is itself only used by tool
+     pages and is now orphaned, delete the component.
+   - The footer's "Tools" column already lists every tool, so the
+     per-page Related-tools block is redundant anyway.
 
-3. **IA MERGE — /app/dns-health into /app/domains** (TASK-130 — SHIPPED)
+   **TASK-141** — footer attribution rewrite.
 
-   **TASK-130** — done. `/app/domains` now carries the 4-card summary
-   (Domains monitored / Fully healthy / Need attention / Awaiting first
-   check), the per-card grade chip, the SPF/DKIM/DMARC/MX protocol
-   badges, the `?status=unchecked` filter, and a single "DNS Health →"
-   footer link per card deep-linking to `/app/domains/{id}/health`.
-   The `/app/dns-health` route, controller (`DnsHealthOverviewController`),
-   template (`dns_health_overview.html.twig`), integration test
-   (`DnsHealthOverviewTest`), and sidebar entry are all deleted. Two
-   codified regression guards in `DomainsWithDnsHealthTest` sweep
-   `templates/` and `src/` for any surviving `dashboard_dns_health`
-   reference. Badges render as NON-INTERACTIVE styled spans (HTML-validity
-   call: card root is a stretched-link `<a>` so nested anchors would be
-   invalid) — only the footer "DNS Health" button is a real anchor,
-   carrying `relative z-10` so the stretched-link does not eat its
-   click. `GetDnsHealthOverview` stays alive feeding both the merged
-   `/app/domains` page (`forTeams()`) and the per-domain detail header
-   badge row (`forDomain()`).
+   The footer says "Built with Symfony & FrankenPHP". User: "do not
+   mention this. Built with love by Jan Mikeš and link to github etc
+   or something, but not symfony & Frankenphp this is not what we
+   want to communicate."
 
-4. **HOMEPAGE HERO REWORK** (TASK-131)
+   Acceptance:
+   - `templates/components/Footer.html.twig` (or wherever the line
+     lives — `grep -rn "Symfony & FrankenPHP" templates/`) — replace
+     with: `Built with love by <a href="https://github.com/janmikes">Jan
+     Mikeš</a> · <a href="https://github.com/janmikes/sendvery">Source
+     on GitHub →</a>` (or similar — sentence case, no shouting).
+   - Grep for any other "Built with <tech>" / "Powered by <tech>"
+     copy elsewhere on user-facing surfaces — strip them too. Tech
+     stack name-drops belong in CLAUDE.md, not on the marketing
+     site.
+   - Test: update the footer test (likely in `MarketingPagesTest`)
+     asserting the new attribution string.
 
-   **TASK-131** — Rebuild the top of the homepage as three sequential
-   sections (hero with embedded DNS checker, "XML → plain English"
-   explainer, A–F grade showcase). The standalone "Check your domain"
-   section is ABSORBED into the hero — there's no more separate checker
-   block. The existing trust-logos row stays between hero and explainer.
-   Everything below "What Sendvery catches that nobody else does"
-   stays untouched.
+2. **MARKETING VISUAL POLISH** (TASK-137 + TASK-138)
 
-   **Discovery first** (the dev agent's first step):
-   Locate the homepage template (`templates/homepage/index.html.twig`
-   per round-5 work, but verify) and the existing DNS-checker form +
-   Stimulus controller (currently at `#dns-checker`). Reuse the
-   checker's endpoint, response handling, and result logic VERBATIM —
-   only the visual shell changes. Confirm file paths before editing.
+   **TASK-137** — homepage font register page-end-to-end.
 
-   **Section 1 — Hero (replaces current hero AND absorbs the standalone
-   domain-check section).** Two-column at `md+`, stacked on mobile.
+   Acceptance:
+   - Read `templates/homepage/index.html.twig` end-to-end. Identify
+     EVERY section heading (`<h2>`) and note its current class set.
+   - The first 3 sections (TASK-131) use explicit `font-medium
+     tracking-tight text-zinc-900` + zinc-palette eyebrows. Sections
+     4+ use daisyUI's default heading weights (usually `font-bold`
+     via the theme).
+   - Pick ONE register. **Default recommendation: continue the
+     TASK-131 zinc-palette + `font-medium` register page-end-to-end.**
+     It's the lighter / more modern register and the user explicitly
+     liked it ("this is the most important part of the marketing
+     page because everyone sees this on first sight" — interpret as
+     "don't downgrade the first 3 sections; bring the rest up").
+   - Apply the consistent class set to every H2 on the page. If a
+     section uses daisyUI components (cards, badges) that have their
+     own font conventions, leave the COMPONENT styling but normalise
+     the SECTION heading.
+   - The `font-medium` ceiling rule from TASK-131 still applies (no
+     `font-bold` / `font-semibold` / `font-extrabold` on section
+     headings). Body text + button labels can stay as-is.
+   - Eyebrow + subhead patterns from TASK-131 (`text-xs uppercase
+     tracking-wider text-zinc-500` for eyebrows, `text-zinc-500
+     leading-relaxed` for subheads) can be applied to the lower
+     sections for unified register.
+   - Test: extend `task131HomepageHeroAndNewSectionsRender` (or add a
+     companion test) that asserts EVERY `<h2>` on `/` carries
+     `font-medium` — fails if any future edit introduces
+     `font-bold`/`font-semibold` on a section heading.
 
-   Left column:
-   - Eyebrow: `text-xs uppercase tracking-wider text-zinc-500` —
-     "DMARC · DNS · deliverability"
-   - Headline `<h1>`: `text-4xl md:text-5xl font-medium tracking-tight
-     leading-[1.1] text-zinc-900` — "DMARC, DNS, deliverability —
-     monitored and explained."
-   - Subhead: `text-base md:text-lg text-zinc-500 max-w-xl
-     leading-relaxed` — "Sendvery is the open-source email
-     deliverability platform that watches your DNS 24/7, parses your
-     DMARC reports, and translates the XML into plain English. Free
-     for 1 domain."
-   - CTAs (row, `gap-3`):
-     - Primary: "Get started free" → `/login`. `bg-zinc-900 text-white
-       rounded-md px-4 py-2 text-sm font-medium hover:bg-zinc-800`
-     - Secondary: "View on GitHub →" → use the existing
-       `SENDVERY_GITHUB_*` env-driven URL (verify the Twig global
-       name — it's wired through `OpenSourceExtension` per TASK-122).
-       Class: `border border-zinc-300 rounded-md px-4 py-2 text-sm
-       font-medium hover:bg-zinc-50`
-   - Trust line below CTAs: `text-xs text-zinc-400` — "Open source ·
-     AGPL-3.0 · 1 domain free forever · Self-hostable"
+   **TASK-138** — replace "How it works" custom images with icons.
 
-   Right column — live checker visually integrated:
-   - Card: `bg-zinc-50 border border-zinc-200 rounded-lg p-5`
-   - Label: `text-xs uppercase tracking-wider text-zinc-500` —
-     "Free instant check — no signup"
-   - Input + button row (`flex gap-2 mt-3`): monospace input
-     (`font-mono text-sm`, placeholder `yourdomain.com`), primary
-     "Check" button
-   - Result area (`mt-4`, `aria-live="polite"`): four chips in a row
-     — SPF / DKIM / DMARC / MX. Pass = `bg-emerald-50 text-emerald-700`,
-     warn = `bg-amber-50 text-amber-700`, fail = `bg-red-50
-     text-red-700`. Each chip: `inline-flex items-center gap-1
-     rounded-md px-2 py-0.5 text-xs font-medium`. Lucide check/alert
-     icon at `w-3 h-3`. Include `<span class="sr-only">` text naming
-     the state for screen readers.
-   - One-line plain-English summary below chips (`text-xs text-zinc-600
-     mt-3`) using whatever the API returns. Fallback example: "Grade
-     C — DMARC is on `p=none`. Anyone can spoof you."
-   - **Reuse the existing Stimulus controller** — wire it to this
-     new markup, DO NOT rebuild it.
+   The Step 1 / 2 / 3 cards use `how-connect.webp` / `how-monitor.webp`
+   / `how-act.webp` (or similar). User: "remove custom images and
+   replace with some icons or something."
 
-   Background: subtle dotted grid only on the hero container —
-   `bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)]
-   bg-[length:24px_24px]`. No gradients, blobs, or imagery anywhere.
+   Acceptance:
+   - Find the assets via grep + Symfony AssetMapper conventions
+     (`assets/images/how-*.webp` likely).
+   - Replace each `<img>` with an inline Lucide SVG icon at the same
+     size (~`w-16 h-16` or `w-20 h-20`). Pick per-step icons that
+     match the action: Step 1 (DMARC publish) → globe / dns icon,
+     Step 2 (Monitor) → activity / pulse / line-chart icon, Step 3
+     (Act) → bell / mail-check / shield-check icon.
+   - Icon container styling matches the zinc palette: e.g.
+     `bg-zinc-50 border border-zinc-200 rounded-lg p-4` with the
+     SVG `text-zinc-700`. NO emerald/blue tint unless it carries
+     state meaning.
+   - Delete the orphaned `.webp` asset files from `assets/images/`
+     if no other surface references them — grep first.
+   - The Step 1 image alt text was updated in TASK-132 — verify the
+     new icon-based markup carries equivalent `aria-label` or visible
+     text per icon.
+   - Test: extend the homepage test to assert the icon SVG markers
+     render and the `<img>` tags for `how-*.webp` are gone.
 
-   **Section 2 — From XML to plain English.** Centered, narrow column.
-   Replaces the current "Email authentication is set once and forgotten"
-   section.
+3. **DASHBOARD DKIM SELECTOR EDITABILITY** (TASK-143)
 
-   - Eyebrow (centered): "How the AI insights work"
-   - Headline `<h2>` (centered, `text-3xl md:text-4xl font-medium
-     tracking-tight max-w-2xl mx-auto`): "DMARC reports are written
-     for machines. We translate them for you."
-   - Sub (centered, `text-zinc-500 max-w-xl mx-auto mt-3`): "Sendvery
-     parses the XML, watches DNS continuously, and gives you one
-     sentence that tells you exactly what to fix."
-   - 3-column transformation visual at `md+` (`grid
-     md:grid-cols-[1fr_auto_1fr] gap-4 mt-10 max-w-3xl mx-auto`):
-     - Left card: raw DMARC XML in `bg-zinc-50 border border-zinc-200
-       rounded-lg p-4 font-mono text-xs text-zinc-500 leading-relaxed`.
-       Sample content (a small `<record>` snippet showing
-       `<policy_evaluated>` with `disposition=none`, `dkim=fail`,
-       `spf=pass`).
-     - Middle: Lucide `ArrowRight` icon, `w-5 h-5 text-zinc-400`,
-       centered.
-     - Right card: `bg-blue-50 border border-blue-200 rounded-lg p-4`.
-       Label row with sparkles icon (`w-3 h-3`) + "AI summary" in
-       `text-xs font-medium text-blue-700`. Below: `text-sm
-       text-blue-900` — "A Mailchimp send from your marketing
-       subdomain failed DKIM. SPF alone won't pass alignment — add
-       the Mailchimp selector to fix it."
-   - Mobile (`< md`): stack vertically, swap right-arrow for
-     `ArrowDown`.
+   **TASK-143** — DKIM selector must be editable post-save.
 
-   **AI placeholder note**: per DEC-057 (AI stub-first launch
-   posture — see `~/.claude/projects/-Users-janmikes-www-dmarc/memory/ai-stub-first-launch-posture.md`),
-   the "AI summary" example here is illustrative copy. The visual
-   commits to the AI value proposition without claiming AI insights
-   are live — the real `AnthropicAiInsightsService` ships post-launch.
-   That's fine for marketing-side hero copy as long as it doesn't
-   contradict the gated state elsewhere on the site. Add the dual
-   marker (`// TODO(placeholder)` + `config/placeholders.php` entry)
-   per the TASK-023 convention if the sample copy is hardcoded in the
-   template.
+   User reports: once they save a DKIM selector on a domain, the
+   field becomes read-only. They can't change it (e.g., when rotating
+   keys + selectors). This is a trust-eroding bug — "the dashboard
+   trapped my input."
 
-   **Section 3 — Your domain, one letter.** Two-column at `md+`,
-   stacked on mobile. Pairs naturally with the existing A–F legend
-   already on the page (keep that legend either inside section 3 or
-   directly below — orchestrator/dev's judgment).
+   Acceptance:
+   - Find the DKIM-selector form. Likely candidates: `src/FormData/`
+     for the form-data class, `src/Form/` for the form type,
+     `src/Controller/Dashboard/Domain*` for the controller,
+     `templates/dashboard/*` for the template. Grep for `dkimSelector`
+     or `dkim_selector`.
+   - Identify the read-only branch — probably a `{% if domain.dkimSelector
+     is not null %}render as plain text{% else %}render input{% endif %}`
+     pattern, or a `disabled: true` on the form field when the column
+     is set.
+   - Add an edit path: the field is always an editable `<input>`.
+     Submitting a changed selector triggers the same DNS re-verification
+     command that was used on first save (probably
+     `App\Message\VerifyDomainDns` or similar — find via grep).
+   - Validation: same as first save (selector must be a valid DNS
+     label, can't be empty, etc.).
+   - The selector change should NOT silently invalidate historical
+     DMARC reports — just update the column + re-run the DKIM check.
+   - Edge case: a domain with a soft-deleted-mailbox case from
+     TASK-133 should still allow selector edit (no coupling).
+   - Test: integration test seeds a domain with an existing DKIM
+     selector ("default"), POSTs a change to ("mailchimp"), asserts
+     the column was updated AND a DNS re-verification was dispatched.
+     Second test asserts validation errors render the field
+     editable (not stuck on the old value).
 
-   Left:
-   - Eyebrow: "Email authentication, scored"
-   - Headline `<h2>`: "One letter tells you if your email is at risk."
-   - Sub: "DMARC reports, DNS health, and AI insights rolled into a
-     single A–F score per domain. No XML, no guesswork."
-   - CTAs: "Check your domain's grade" → `/tools/domain-health`
-     (primary), "How grading works" → existing relevant `/learn`
-     article (secondary)
+4. **STRATEGIC SEO + NARRATIVE PASS** (TASK-142 + TASK-145)
 
-   Right — grade card mockup (`bg-white border border-zinc-200
-   rounded-lg p-5 max-w-sm`):
-   - Top row (`flex items-center gap-3`): grade tile (`w-14 h-14
-     bg-emerald-50 text-emerald-700 rounded-md flex items-center
-     justify-center text-3xl font-medium` containing `A`) next to a
-     column with `font-mono text-zinc-500 text-sm` `acme.io`, `text-sm
-     font-medium mt-0.5` "98.4% pass rate", `text-xs text-zinc-400
-     mt-0.5` "last 30 days · 12 reports"
-   - Below (`mt-4 flex gap-1.5 flex-wrap`): four emerald pass chips —
-     SPF, DKIM, DMARC, MX.
+   These two are interconnected (narrative restructure affects SEO
+   structured data + internal linking), but the user described them
+   separately. Ship TASK-142 first (audit + identify the highest-
+   leverage fixes), then TASK-145 (restructure with SEO learnings in
+   mind). Architect agent for TASK-142 — needs to scope the audit
+   before committing to fixes. TASK-145 also benefits from architect
+   given the user-flow narrative work.
 
-   **Design constraints — apply everywhere in the three new sections:**
-   - Monochrome zinc palette (`50, 100, 200, 300, 400, 500, 700, 900`).
-     Semantic colors (`emerald`, `amber`, `red`, `blue`) only for
-     state chips and the AI summary card.
-   - Font weights: `400` and `500` only — never `600`/`700`/`800`.
-     This is a deliberate departure from daisyUI's heavier default
-     headings; the dev agent should override theme-driven heading
-     weights with explicit `font-medium` on the H1/H2 elements.
-   - Sentence case in all copy, including buttons.
-   - No gradients, shadows, blur, decorative SVG blobs.
-   - Radii: `rounded-md` for buttons and chips, `rounded-lg` for
-     cards.
-   - Section vertical rhythm: `py-16 md:py-24`. Outer container:
-     `container mx-auto px-4 md:px-6`.
+   **TASK-142** — SEO audit + improvements.
 
-   **Accessibility:**
-   - All interactive elements have visible focus rings:
-     `focus-visible:ring-2 focus-visible:ring-zinc-900
-     focus-visible:ring-offset-2`.
-   - Result chips include screen-reader text naming the state.
-   - Live checker result area has `aria-live="polite"`.
-   - Hero is `<h1>`; sections 2 and 3 use `<h2>`.
+   The architect agent should produce a punch list per page-type
+   (homepage, /pricing, /about/*, /learn/*, /tools/*, /open-source).
+   For each page audit:
+   - `<title>` — unique per page, ~50-60 chars, primary keyword
+     present (e.g. "DMARC Monitoring — Sendvery", "SPF Record
+     Checker — Free Online Tool — Sendvery").
+   - `<meta name="description">` — unique per page, ~150-160 chars,
+     compelling for SERP click-through.
+   - Open Graph (`og:title`, `og:description`, `og:image`,
+     `og:url`) — per page if possible, sensible default if not.
+   - Twitter Card meta tags (`twitter:card`, `twitter:title`,
+     `twitter:image`).
+   - Canonical URL (`<link rel="canonical">`) per page.
+   - Structured data (JSON-LD): Organization on home, Product on
+     pricing, Article + breadcrumbs on /learn/*, SoftwareTool on
+     /tools/*. The homepage already has Organization (TASK-031-era).
+   - Heading hierarchy: ONE H1 per page, proper H2-H6 nesting.
+   - Internal linking density: every page should reach related
+     public pages within ~2 clicks (e.g. /tools/spf-checker links
+     to /learn/spf-explained etc.).
+   - `robots.txt` and `sitemap.xml` — exist + current? File one to
+     fix if missing.
+   - Image `alt` attributes — every meaningful image carries a
+     description; decorative SVGs use `aria-hidden="true"`.
+   - Mobile / page-speed baseline — verify CSS isn't render-blocking
+     unnecessarily; lazy-load below-the-fold images.
 
-   **What stays untouched:**
-   - The existing trust-logos row (TheDevs.cz / SpeedPuzzling.com /
-     FajneSklady.cz) — keep it, place it between hero and section 2
-     with `text-xs text-zinc-400` styling.
-   - The "What Sendvery catches that nobody else does" section and
-     everything below it.
-   - Meta tags / OG image — current copy still aligns.
-   - The round-5 dashboard screenshot at the homepage's section 4.5
-     (TASK-120) — stays as-is, it's already a strong product preview.
+   Ship the punch-list as a single architect plan, then ship the
+   highest-leverage 5-10 fixes in this round. Lower-priority items
+   filed as TASK-15X follow-ups (round 9 candidates).
 
-   **Acceptance:**
-   - Renders correctly at 320 / 768 / 1024 / 1440 px widths. Verify
-     via curl + HTML inspection at multiple viewports if possible,
-     or via responsive-snapshot test if the project has one.
-   - Live checker behaves IDENTICALLY to before — only the shell is
-     new. Reusing the existing Stimulus controller means the existing
-     checker integration tests should pass unmodified.
-   - No layout shift when checker results render — reserve space or
-     use `min-h-*` on the result area.
-   - Old hero markup AND the standalone `#dns-checker` section are
-     REMOVED from the template. The checker now lives inside the hero.
-     Grep confirms no surviving `id="dns-checker"` outside the hero.
-   - Functional test asserts: the new `<h1>` text "DMARC, DNS,
-     deliverability — monitored and explained." renders; the live
-     checker form is INSIDE the hero `<section>` element; the trust
-     logos row sits between hero and section 2; section 2's eyebrow
-     "How the AI insights work" renders; section 3's headline "One
-     letter tells you if your email is at risk." renders; the grade
-     card mockup contains "acme.io" and "98.4% pass rate".
-   - Lighthouse / axe accessibility check ≥ 95 (the dev agent should
-     verify if tooling is reachable; otherwise rely on the manual
-     accessibility-rules checklist above).
-   - Existing homepage tests that asserted the OLD hero copy ("Email
-     authentication is set once and forgotten") get UPDATED to assert
-     the new copy. No orphan tests asserting deleted markup.
+   **TASK-145** — homepage narrative + section order pass.
 
-   **Visual-snapshot output for the user:**
-   The user explicitly asked: "Show me the diff and the rendered HTML
-   of all three new sections before considering it done." The
-   orchestrator honors this by including in the commit message a
-   brief markdown excerpt of the rendered output of each new section
-   (curl the deployed local dev → strip down to the three section
-   blocks → paste in the commit body). This lets the user review the
-   HTML without leaving git.
+   User: "Completely go through the design of the public and
+   marketing pages — the user story on the homepage should make
+   sense, maybe put pricing slightly higher, but there should be
+   clear story / flow from top the bottom reasoning why the sections
+   are in such order — follow best practices."
 
-   Notes:
-   - TASK-131 is the second-biggest task this round (~2-3 hours).
-     Spec is detailed enough to SKIP Architect — straight to Build.
-   - The "AI summary" card in section 2 lives next to DEC-057's
-     stub-first AI launch posture. Don't add real AI calls; the
-     example copy is illustrative only.
-   - The "View on GitHub →" CTA links to whatever env-driven URL
-     `OpenSourceExtension` exposes (TASK-122 wired this). If the
-     repo isn't public yet, the same gate applies — link to the
-     notify CTA instead.
+   Architect proposes the section order with explicit rationale per
+   transition. Suggested skeleton (NOT prescriptive — architect's
+   judgment):
+   - **Hero** (TASK-131): big visual claim + free instant check
+   - **Trust** (logos): "Already running on real production
+     domains" social proof
+   - **Problem framing** (NEW or restructured): "Email auth breaks
+     silently and you only notice when deliverability drops." Hook
+     the reader on the WHY.
+   - **Solution** (TASK-131 sections 2 + 3): XML → English + grade
+     card. THIS is what we do.
+   - **Product preview** (TASK-120 dashboard screenshot): "Here's
+     what it looks like in the dashboard."
+   - **Pricing** (moved higher per user direction): once the visitor
+     has seen the problem + solution + preview, "how much does it
+     cost?" is the next logical question. Put PRICING here BEFORE
+     deep-dive features.
+   - **FAQ** (existing) — addresses purchase friction.
+   - **Final CTA** — close.
 
-5. **PERFORMANCE AUDIT** (round-6 baseline diff)
+   Acceptance:
+   - Architect produces the section-order proposal with the
+     rationale per transition. Append to TASK-145 in the backlog.
+   - Dev re-sequences `templates/homepage/index.html.twig`. Section
+     boundaries clear, narrative-comment per section explaining what
+     it does for the visitor.
+   - Pricing section moves earlier per user direction.
+   - Verify each `/pricing`, `/about/what-is-sendvery`, `/learn`,
+     `/tools/*`, `/open-source` page still flows coherently — if any
+     page's flow contradicts the new homepage story, fix in scope.
+     Don't restructure those pages just for parallelism — only fix
+     where coherence is broken.
+   - All existing functional tests still pass (assertions on H1
+     copy + presence of pricing/FAQ should survive a re-sequence).
+   - The dotted-grid hero background, font register (TASK-137), and
+     all per-section accessibility patterns from TASK-131 carry over.
 
-   Round 5 captured a perf-audit snapshot. After TASK-130 + TASK-131
-   ship, re-run the same `EXPLAIN ANALYZE` measurements:
-   - `GetDomainOverview::forTeams()` (post-TASK-130: may now JOIN on
-     `domain_health_snapshot` more aggressively, or the merge may
-     keep things separate — measure either way).
-   - `GetDnsHealthOverview::forTeams()` (if the query survives the
-     merge — if not, it should be deleted).
-   - `NavCountsExtension::getGlobals()` (4 COUNTs, unchanged).
-   - `IngestionPathResolver::resolveForTeams()` (post-TASK-114 went
-     through `RuaMailboxMatcher` — recheck the per-row cost).
-   - `GetDomainWorkspaceTabCounts::forDomain()` (unchanged).
+5. **DNS HELPER-FORM FEATURE — v1** (TASK-144)
 
-   Compare each query's execution + planning time against the
-   round-5 numbers in `docs/cx-improvement-backlog.md`. If anything
-   regresses by >5ms, file a TASK-13X optimization. Document the
-   round-6 numbers in a new section so round 7 can diff against them.
+   **TASK-144** — generators for SPF + DMARC records (v1 scope).
 
-6. **ROUND-6 SELF-REVIEW** (every 3 shipped tasks)
+   User asked: "could there be helper forms to set up dns records
+   format for spf, dkim etc on the public pages?" — phrased as a
+   question. Ship a v1 that proves the pattern; if it lands well,
+   extend to DKIM + MX in a follow-up.
 
-   Same pattern as rounds 3-5. Step back after every 3 ships, read
-   the affected templates with fresh eyes, ask "what is this for?
-   what should I do? is anything wrong?". Round 3 caught 3, round 4
-   caught 6, round 5 caught 3 — assume your work has similar blind
-   spots.
+   v1 scope:
+   - **SPF generator** on `/tools/spf-checker` (or a sibling page if
+     the checker page is the wrong home). Toggle/checkbox UI for
+     common sending services: Google Workspace, Microsoft 365,
+     Mailchimp, Postmark, SendGrid, Mailgun, Amazon SES, Brevo,
+     Resend, Loops. Plus a free-form "Additional IPs / includes"
+     textarea. Plus the `~all` / `-all` mechanism choice. Output the
+     generated TXT record string in a `<code>` block + a
+     copy-to-clipboard button. Note that this is the STRING to put in
+     DNS — Sendvery doesn't publish for the user.
+   - **DMARC generator** on `/tools/dmarc-checker`. Inputs: policy
+     (none / quarantine / reject), subdomain policy (sp=), pct=,
+     reporting email (rua= — defaults to `reports@sendvery.com`),
+     forensic email (ruf= — optional), DKIM/SPF alignment mode
+     (relaxed/strict). Output the generated TXT record string.
+   - Both forms are PURELY client-side (Stimulus controller). No
+     server round-trip. The user can use them while logged out.
+   - Output is a `<code>` block with copy-to-clipboard. Below the
+     code block, a short "What to do next" paragraph linking to
+     /learn/* for the relevant record-type explainer.
 
-   Round-6-specific things to watch for:
-   - **TASK-126**: when record-type labels become tonally neutral, do
-     they still read clearly at 360px mobile? Or do they get lost
-     against the validity badge next to them?
-   - **TASK-127**: the token diff highlights tags individually — for
-     a DMARC record with 6+ tags that all changed (rare but possible),
-     does the inline rendering get visually noisy? Is the expander
-     discoverable enough?
-   - **TASK-128 + TASK-129**: both branch on `RuaScenarioResolver`.
-     If they share a code path, a single bug could miss both. Are
-     they exercising INDEPENDENT scenario reads, or coupled through
-     a shared decision point? Verify the tests genuinely cover both.
-   - **TASK-130**: DONE. The `/app/dns-health` route is gone (404s
-     by design); the two codified guards in `DomainsWithDnsHealthTest`
-     keep templates/ and src/ free of stale `dashboard_dns_health`
-     references. KB articles / marketing pages / onboarding flows
-     should be re-grepped if changed.
-   - **TASK-131**: the `font-medium` ceiling fights against daisyUI's
-     default heading weights — verify the rendered HTML actually uses
-     400/500 weights by inspecting class lists, not just by reading
-     the template. The dotted-grid background should not bleed into
-     adjacent sections — check the section boundaries.
-   - **TASK-131** AI-summary card: contains marketing claim about AI
-     translating XML. Verify this doesn't contradict the gated state
-     elsewhere — if AI is stub-only per DEC-057, the homepage shouldn't
-     promise it's already running.
+   Architect first — needs to confirm:
+   - Which existing tool pages host the generators (checker page vs
+     separate generator page).
+   - The Stimulus controller pattern matching the existing
+     `HomeDomainCheckerComponent` register (Symfony UX LiveComponent
+     vs vanilla Stimulus).
+   - The exact provider list for SPF + the canonical `include:`
+     strings.
+   - The output formatting (single-line vs multi-line; quoted vs
+     unquoted).
+
+   Acceptance:
+   - SPF generator renders on the SPF checker page (or a clearly-
+     labelled sibling). Toggling providers regenerates the output in
+     real time. Copy button works (`navigator.clipboard`).
+   - DMARC generator renders on the DMARC checker page. Same UX.
+   - Both generators carry a one-line caveat ("Test in DNS before
+     making this your live record" or similar).
+   - SEO: the new generator content adds H2-level structure on the
+     page (good for keyword targeting — "SPF record generator").
+   - Tests: render the page + assert the generator markup is
+     present. Stimulus integration tests aren't required for v1.
+     Provider list lives in a config file or PHP constant so it's
+     easy to extend without touching the template.
+   - DKIM + MX generators are NOT shipped in v1 (DKIM needs the
+     selector + public key as inputs, which is non-trivial UX; MX
+     is rarely auth-related). File as TASK-15X follow-ups if v1
+     lands well.
+
+6. **PERFORMANCE AUDIT** (round-8 baseline diff)
+
+   Round 7 captured a perf-audit snapshot. Round 8's changes are
+   mostly marketing-side (templates, copy, assets) — perf delta is
+   expected ≈ 0. The DKIM-editability fix (TASK-143) and DNS
+   helper-form feature (TASK-144) might touch new queries — measure
+   if they do.
+
+   Re-run the 8 round-7 queries + any new ones:
+   - GetDomainOverview::forTeams
+   - GetDnsHealthOverview::forTeams
+   - NavCountsExtension::getGlobals (4 COUNTs)
+   - IngestionPathResolver::resolveForTeams (now batch-routed)
+   - GetDomainWorkspaceTabCounts::forDomain
+   - Combined /app/domains two-query pattern
+   - RuaScenarioResolver::resolveForDomainIds (batch)
+   - MailboxConnection repo methods (with disconnected_at filter)
+
+   If TASK-143 (DKIM editability) adds a new write path, no perf
+   measurement needed (writes aren't on the hot path). Document the
+   round-8 numbers in a new `## Round-8 performance audit (YYYY-MM-DD)`
+   section above the round-7 perf section.
+
+7. **ROUND-8 SELF-REVIEW** (every 3 shipped tasks)
+
+   Same pattern as rounds 3-7. Round-8-specific things to watch for:
+   - **TASK-136**: did the `is_repo_public` retire leave any orphan
+     env var docs / Symfony container parameter / CI secret reference?
+     Grep `~/www/spare.srv/deployment/` (don't EDIT it — user only;
+     just sanity-check no production env is mis-configured).
+   - **TASK-137**: the `font-medium` regression-test is the regression
+     net — verify it pins EVERY H2 on the page, not just the new ones.
+   - **TASK-139 + TASK-140**: deleting "Built for engineers" and
+     "Related tools" should leave NO orphan tests asserting the
+     deleted copy. Grep `tests/` for the strings.
+   - **TASK-143**: editing the DKIM selector triggers a re-verification.
+     Does the dashboard correctly show "Re-checking..." state, or does
+     the old verified-at timestamp stay stale until the next cron run?
+     Look at the existing re-test pattern (TASK-108-era `dashboard_mailbox_retest`)
+     as the comparison — DNS re-verification should behave similarly.
+   - **TASK-144**: client-side generators must not introduce XSS via
+     the free-form "additional IPs" input. Verify the Stimulus
+     controller escapes user input before injecting into the output
+     code block.
+   - **TASK-145**: re-sequencing the homepage might break the
+     `task131HomepageHeroAndNewSectionsRender` test's position-based
+     assertions (which use `strpos($body, X) > strpos($body, Y)`).
+     Update those if needed but PRESERVE the spirit — the new order
+     must still pin the rationale.
 
 ================================================================
 DURABLE STATE — backlog.md
@@ -585,18 +567,16 @@ truth. Schema (one block per task):
   - Notes: <architect plan, decisions, follow-ups>
 
 Task numbering CONTINUES from the highest existing TASK-NNN. The
-highest at run start is TASK-124. Round-6 user-driven tasks claim
-TASK-125 through TASK-131. Self-review findings or post-TASK-131
-perf-audit follow-ups start at TASK-132.
+highest at run start is TASK-135. Round-8 user-driven tasks claim
+TASK-136 through TASK-145. Self-review findings or post-shipping
+follow-ups start at TASK-146.
 
 This file survives compaction; ALWAYS read it before deciding what to
 do next and ALWAYS update it after each phase transition.
 
-Round 6's seed tasks are NOT yet filed at run start — you (or a
-Product agent) MUST file TASK-125 through TASK-131 into the backlog
-using the acceptance criteria from §SEED FOCUS AREAS above BEFORE
-shipping them. The orchestrator brief itself is the source; the
-backlog is the durable contract.
+Round 8's seed tasks must be filed into the backlog before shipping
+them. The orchestrator brief itself is the source; the backlog is the
+durable contract.
 
 Mirror only the currently-active task's sub-steps in TaskCreate /
 TaskUpdate. Do not put the whole backlog there.
@@ -608,11 +588,7 @@ Repeat until "Stop conditions" are met:
 
 1. PLAN PHASE (if backlog has <3 `proposed` tasks for the current
    bucket): file the next seed tasks from §SEED FOCUS AREAS using the
-   acceptance criteria. For round 6, this means: file TASK-125 / 126 /
-   128 / 129 in one pass (the 4-bug bundle), then TASK-127, then
-   TASK-130, then TASK-131. The Product agent is only needed for the
-   stop-condition sweep at the end — the round-6 seed work is already
-   specified.
+   acceptance criteria.
 
 2. PICK PHASE:
    Read backlog.md. Pick the highest-value `proposed` or `planned`
@@ -621,11 +597,14 @@ Repeat until "Stop conditions" are met:
 
 3. DESIGN PHASE:
    If the task already has a detailed architect plan in its Notes
-   field, skip this phase. Otherwise, for non-trivial tasks (TASK-130
-   especially), spawn Architect agent; it appends `### Architect plan
-   (YYYY-MM-DD)` to the task's Notes. Promote to `in-progress`. For
-   the 4 small bug fixes (TASK-125/126/128/129) the spec is already
-   detailed — skip Architect, go straight to Build.
+   field, skip this phase. Otherwise, for non-trivial tasks (TASK-142
+   SEO audit, TASK-144 DNS generators, TASK-145 narrative pass,
+   possibly TASK-143 DKIM edit if the existing form is complex), spawn
+   Architect agent; it appends `### Architect plan (YYYY-MM-DD)` to
+   the task's Notes. Promote to `in-progress`. For the quick-wins
+   bundle (TASK-136/139/140/141), TASK-137 (font register), TASK-138
+   (icon swap) the spec is detailed — skip Architect, go straight
+   to Build.
 
 4. BUILD PHASE:
    Spawn Developer agent. Pass the architect plan if one exists,
@@ -636,7 +615,7 @@ Repeat until "Stop conditions" are met:
    parallel runs. Heredoc-via-bash is another safe fallback.
 
 5. REVIEW PHASE:
-   Spawn Reviewer agent. Promote to `in-review`. Rounds 4 + 5 both
+   Spawn Reviewer agent. Promote to `in-review`. Rounds 4-7 all
    showed Reviewer agents netting real findings on >50% of bundles —
    keep the rhythm.
 
@@ -650,33 +629,43 @@ Repeat until "Stop conditions" are met:
 7. SHIP PHASE:
    Run quality gates. If green: **commit AND push to `origin/main`**,
    then mark `done`. Commit per task (or per coherent bundle) —
-   round-5 shipped 12 task-commits + 5 docs-commits = 17 total, which
-   made the git log readable and `git revert <task>` safe.
+   round-7 shipped 6 task-commits + 2 docs-commits = 8 total, which
+   made the git log readable.
 
    **Push continuously, not at the end.** After every successful
    commit, run `git push origin main` before moving to the next task.
-   Round 5 ended with 32 unpushed local commits — the user had to
-   push them manually at the end. Don't repeat that. The flow is:
-   `git commit` → `git push origin main` → mark backlog status `done`
-   → next task. If a push fails (network blip, remote moved ahead),
-   investigate before continuing: `git pull --rebase origin main`
-   first when remote diverged, then re-push. Never `--force` to
-   resolve a divergence — investigate the conflict.
+   The flow is: `git commit` → `git push origin main` → mark backlog
+   status `done` → next task. If a push fails (network blip, remote
+   moved ahead), investigate before continuing: `git pull --rebase
+   origin main` first when remote diverged, then re-push. Never
+   `--force` to resolve a divergence — investigate the conflict.
+
+   **Push-auth note**: the macOS keychain-backed SSH agent sometimes
+   loses `SENDVERY`-relevant identity between Bash invocations in
+   this session. If `git push` errors with "Permission denied
+   (publickey)", prepend `SSH_AUTH_SOCK=/private/tmp/com.apple.launchd.<id>/Listeners`
+   (look it up via `echo $SSH_AUTH_SOCK` in a fresh Bash). Don't ask
+   the user — this is a known shell-env issue, not a real auth
+   failure.
 
 8. SELF-REVIEW PHASE (every 3 shipped tasks):
    Step back. Audit the affected pages by reading the post-shipping
    templates and asking: "what is this for? what should I do? is
-   anything wrong?". Round 5's self-review caught 3 real issues
-   (TASK-114 cross-surface contradiction, TASK-115 dot-badge contrast,
-   TASK-116 missing rua= address). Assume your work has similar
-   blind spots.
+   anything wrong?". Round 7's self-review caught 1 must-fix
+   (TASK-135 — RuaMailboxMatcher disconnect guard) — assume round
+   8 has similar blind spots, especially around marketing-page
+   consistency.
 
 9. Go to step 1.
 
 Run independent agents in parallel where the work doesn't depend on
-each other. Agents that touch the same file MUST serialise. Rounds 4
-+ 5 each ran up to 3 concurrent agents successfully — that remains the
-sweet spot.
+each other. Agents that touch the same file MUST serialise. Rounds 4-7
+each ran up to 3 concurrent agents successfully — that remains the
+sweet spot. Round 8 has several non-overlapping file sets:
+- TASK-136/139/140/141 (marketing templates, footer) | TASK-143 (dashboard form)
+- TASK-137/138 (homepage template) AFTER quick-wins bundle so file collisions don't happen
+- TASK-142 (SEO meta + structured data — affects every public page) — serialise with TASK-145 (homepage restructure)
+- TASK-144 (new tool-page generators) — independent of everything except possibly TASK-140 (related-tools deletion on the same templates)
 
 ================================================================
 AGENT CONTRACTS
@@ -687,16 +676,16 @@ Brief: "You are the product owner for Sendvery, an email
 deliverability + DNS monitoring SaaS. Read CLAUDE.md, the orchestrator
 brief, and the existing tasks in `docs/cx-improvement-backlog.md` so
 you do not re-propose work that's already done (TASK-001 through
-TASK-130 are shipped or planned by the time you run). Your job in
-round 6 is the FINAL stop-condition sweep across all seed buckets
+TASK-145 are shipped or planned by the time you run). Your job in
+round 8 is the FINAL stop-condition sweep across all seed buckets
 once the user-driven work has shipped. Form an honest first-impression
-critique against the round-6 scope (truthful dashboard / DNS history
-depth / IA merge) and surface any 'we forgot' gaps the user hasn't
-named yet. Append proposals to docs/cx-improvement-backlog.md using
-the schema. Continue numbering from the highest existing TASK-NNN.
-Each proposal must include why a real user cares — name the moment
-of confusion the change resolves, not just what changes. Do NOT
-write code."
+critique against the round-8 scope (marketing polish / dashboard
+DKIM editability / SEO / DNS helper forms) and surface any 'we forgot'
+gaps the user hasn't named yet. Append proposals to docs/cx-
+improvement-backlog.md using the schema. Continue numbering from the
+highest existing TASK-NNN. Each proposal must include why a real user
+cares — name the moment of confusion the change resolves, not just
+what changes. Do NOT write code."
 
 ### Architect agent (subagent_type: feature-dev:code-architect)
 Brief: "Design implementation for TASK-NNN. Read the Acceptance.
@@ -713,9 +702,10 @@ if the orchestrator says 'this task has no architect plan yet but the
 spec is detailed', the orchestrator may skip the Architect phase
 entirely — your job is to produce a plan that's MORE specific than
 the spec, not to restate it. If the spec is already implementable,
-say so and exit. Round 6's only Architect candidate is TASK-130
-(IA merge with deletion cascade) — the four bug fixes + TASK-127's
-diff feature are detailed enough to skip straight to Build."
+say so and exit. Round 8's Architect candidates are TASK-142 (SEO
+audit punch-list), TASK-143 (DKIM-editability if existing form has
+edge cases), TASK-144 (DNS generators v1), and TASK-145 (homepage
+narrative restructure)."
 
 ### Developer agent (subagent_type: general-purpose)
 Brief: "Implement TASK-NNN per the Architect's plan (or the
@@ -742,39 +732,27 @@ issues (correctness, security, multi-tenancy, missing tests, broken
 responsive behaviour, convention violation, ClockInterface bypass,
 orphan code from deletions) separately from nice-to-haves. Be
 specific: file:line + what to change. If clean, say so explicitly.
-For TASK-130 (shipped): verify the codified guards in
-`DomainsWithDnsHealthTest::noTemplateReferencesDashboardDnsHealthRoute`
-+ `noControllerOrServiceReferencesDashboardDnsHealthRoute` remain
-green — any new template/controller introducing
-`path('dashboard_dns_health')` would be caught there.
-For TASK-131 specifically: verify the standalone `#dns-checker`
-section has been REMOVED (not just hidden), the new hero uses
-explicit `font-medium` on H1/H2 (not inherited heavier weights),
-the dotted-grid background is scoped to the hero container only,
-the AI-summary card copy doesn't contradict DEC-057's stub-first AI
-posture, and the existing Stimulus controller hasn't been rebuilt
-(grep for new Stimulus controllers — only template + result-shell
-changes are allowed)."
+For TASK-136 specifically: verify `grep -rn 'is_repo_public\|SENDVERY_REPO_PUBLIC\|Notify me when'` returns ZERO hits across src/, templates/, and tests/.
+For TASK-137: verify every `<h2>` on the homepage carries `font-medium` (not `font-bold`/`font-semibold`/`font-extrabold`).
+For TASK-143: verify the DKIM selector edit triggers the same DNS re-verification command the first-save did, and that the form no longer disables the field once a selector is saved.
+For TASK-144: verify the Stimulus controller escapes user input before injecting into the output `<code>` block (no XSS via the 'additional IPs' textarea)."
 
 ================================================================
 QUALITY GATES (run before every commit)
 ================================================================
 All must pass — no skipping, no --no-verify:
-- docker compose exec app vendor/bin/phpunit (2226 tests at run start)
+- docker compose exec app vendor/bin/phpunit (2274 tests at round-8 start)
 - docker compose exec app vendor/bin/phpstan
 - docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes
 - For UI tasks: read the page, confirm desktop AND 360px mobile render
 - 100% coverage on new code (per CLAUDE.md)
 - `ClockInterface::now()` used everywhere — never `new \DateTimeImmutable()`
   in production code paths
-- For TASK-130 (already shipped): `grep -r "dashboard_dns_health" templates/ src/ config/`
-  returns nothing. The codified guards in `DomainsWithDnsHealthTest`
-  enforce this — any new offender fails the test run. CLAUDE.md prefers actual deletion
-  over removal comments)
+- For TASK-136: `grep -rn 'is_repo_public\|SENDVERY_REPO_PUBLIC' src/ templates/ tests/ config/` returns zero hits.
+- For TASK-141: `grep -rn 'Symfony\|FrankenPHP\|Tailwind\|daisyUI\|Postgres' templates/components/Footer.html.twig` returns zero hits.
 - **After each successful commit**, `git push origin main` runs and
   succeeds before moving to the next task. `git status` shows the
-  branch at parity with `origin/main` (NOT ahead). Round 5 violated
-  this — round 6 enforces it as a quality gate.
+  branch at parity with `origin/main` (NOT ahead).
 
 ================================================================
 AUTONOMY (do these without asking)
@@ -792,13 +770,15 @@ AUTONOMY (do these without asking)
 - Add placeholder content where the brief explicitly permits it.
   Continues TASK-023's convention: same-line
   `// TODO(placeholder): replace before launch` AND an entry in
-  `config/placeholders.php`.
+  `config/placeholders.php`. The AI feature is the ONLY genuine
+  placeholder remaining — repo-public is NOT a placeholder anymore
+  per the user's round-8 direction.
 - Apply small reviewer-flagged fixes directly via Edit/Bash without
   spawning another Developer agent (e.g. a one-line clock-injection
   fix, a test rename) when the change is mechanical.
-- **Delete files and routes cleanly** as part of TASK-130 (no
-  backwards-compat shims per CLAUDE.md). This is the user-blessed
-  scope for round 6.
+- **Delete env vars + Twig globals + orphaned assets** as part of
+  TASK-136 + TASK-138 + TASK-139 + TASK-140 (no backwards-compat shims
+  per CLAUDE.md). This is the user-blessed scope for round 8.
 
 ================================================================
 DO NOT (ask first if tempted)
@@ -809,13 +789,17 @@ DO NOT (ask first if tempted)
   `~/www/spare.srv/deployment/`.
 - Introduce dark mode / sendvery-dark theme (explicitly out of scope
   per CLAUDE.md).
-- Ship placeholder content without the dual marker.
-- Refactor outside the current task's scope. EXCEPTION: if the
-  performance audit reveals a hot-path query that needs batch
-  optimisation, ship the optimisation as its own task with a measured
-  baseline + new measurement.
-- Add backwards-compat shims, fallbacks, or feature flags. TASK-130
-  is EXPLICITLY a no-redirect migration per user direction.
+- Ship placeholder content without the dual marker. The AI feature
+  is the only genuine "coming soon" surface remaining — repo-public
+  is NOT a placeholder anymore.
+- Re-introduce `SENDVERY_REPO_PUBLIC` env-gate / `is_repo_public`
+  Twig global / "Notify me when source ships" CTA — all removed per
+  TASK-136. The repo is public.
+- Refactor outside the current task's scope. EXCEPTION: if TASK-145's
+  homepage narrative restructure reveals incoherence on
+  `/about/what-is-sendvery` or `/pricing`, fix in scope rather than
+  filing a follow-up.
+- Add backwards-compat shims, fallbacks, or feature flags.
 - Skip tests or quality gates.
 - Couple "ingest via DNS" and "ingest via mailbox" into a single
   config — they are mutually exclusive per domain.
@@ -823,11 +807,10 @@ DO NOT (ask first if tempted)
   production code.
 - Reintroduce the marketing-nav Dashboard CTA badge (TASK-065 +
   CLAUDE.md note explicitly locks this).
-- Re-introduce `/app/dns-health` — the route was deleted in TASK-130
-  per the user's explicit "we do not need keep backward compatibility,
-  just migrate the functionality" instruction. Adding a redirect or an
-  alias controller would also fail the codified guards in
-  `DomainsWithDnsHealthTest`.
+- Reintroduce `/app/dns-health` — the route was deleted in TASK-130.
+- Re-introduce tech-stack name-drops ("Built with Symfony &
+  FrankenPHP", "Powered by Tailwind", etc.) on user-facing surfaces.
+  Tech stack lives in CLAUDE.md only.
 
 ================================================================
 STOP CONDITIONS
@@ -849,101 +832,107 @@ Stop and report to the user only if:
   SUMMARY, stop. This is a graceful-degradation case, not a
   preferred path.
 
-Round 5 hit the primary stop signal (backlog drained). Round 6
-should do the same — the scope is tighter (7 user-driven tasks +
-perf audit + self-review) than round 5's 17-task drain.
+Round 7 hit the primary stop signal (backlog drained). Round 8
+should aim to do the same — the scope is larger than round 7's 3
+tasks but smaller than round 5's 17, sitting closer to round 6's
+7 in size.
 
 When you stop, append a final summary to
 docs/cx-improvement-backlog.md: tasks shipped, tasks blocked + why,
 self-review findings, surfaces you reviewed and judged "good enough",
-perf-audit measurements (even null results), and suggested next
-moves for a future run.
+perf-audit measurements (even null results), and suggested round-9
+seed areas.
 
 ================================================================
 KICKOFF
 ================================================================
-1. Read `docs/cx-improvement-backlog.md`, skim the SIX RUN SUMMARY
+1. Read `docs/cx-improvement-backlog.md`, skim the SEVEN RUN SUMMARY
    sections to understand what's shipped. Note the highest existing
-   TASK-NNN (TASK-124) so any newly-proposed tasks start at TASK-125.
+   TASK-NNN (TASK-135) so any newly-proposed tasks start at TASK-136.
 2. CLAUDE.md is already loaded. Skim `docs/` for reference; pull in
    specific files only when the current task needs them.
-3. **File the round-6 user-driven tasks** (TASK-125 / 126 / 127 / 128 /
-   129 / 130 / 131) into the backlog using the acceptance criteria
-   from §SEED FOCUS AREAS. Each must include the user-supplied moment
-   of confusion in the Why field — the user's own words from the
-   feedback when possible (these are the most authentic descriptions
-   of the bug). Order in the file: TASK-125 → 126 → 127 → 128 → 129
-   → 130 → 131 (numeric, matches their natural narrative).
-4. **Ship the bug-fix bundle first** (TASK-125 / 126 / 128 / 129).
-   Three of the four touch different surfaces (dns history vs onboarding
-   card vs next-step card) so they can ship in parallel. TASK-126 + 125
-   both touch the DNS history page — bundle them under ONE agent
-   to avoid edit collisions.
-5. **Ship TASK-127 (DNS history diff)** next. Touches the same page
-   as 125 + 126 but adds a new service + new rendering branch — no
-   collision if shipped sequentially.
-6. **Spawn Architect agent for TASK-130 (IA merge)** — biggest single
-   dashboard task this round, deletion cascade needs careful
-   sequencing. Then ship.
-7. **Ship TASK-131 (homepage hero rework)** — can run in parallel with
-   TASK-130 (entirely different files: homepage template + Stimulus
-   wiring vs domains controller + DNS-health deletion). Spec is
-   detailed enough to skip Architect — straight to Build. The dev
-   agent should report rendered HTML excerpts of all three new
-   sections in their final report; the orchestrator passes those
-   through into the commit message so the user can review the diff
-   without leaving git.
-8. **Run the round-6 perf audit** after TASK-130 + TASK-131 land.
-   Document the numbers in a new `## Round-6 performance audit
-   (YYYY-MM-DD)` section above the round-5 perf section. Compare
-   against round-5 baseline — flag any >5ms regression.
-9. After every 3 shipped tasks, run a self-review pass.
-10. Final Product-agent sweep across all buckets as the
+3. **File the round-8 user-driven tasks** (TASK-136 / 137 / 138 / 139 /
+   140 / 141 / 142 / 143 / 144 / 145) into the backlog using the
+   acceptance criteria from §SEED FOCUS AREAS. Each must include the
+   user-supplied moment of confusion in the Why field — the user's own
+   words from the feedback when possible.
+4. **Ship the quick-wins bundle first** (TASK-136 + 139 + 140 + 141)
+   under ONE dev agent. They're each small and bundled commit makes
+   the "killed marketing clutter" change reviewable as one. Verify
+   the grep guards (`is_repo_public`, `Notify me when`, `Built for
+   engineers`, `Related tools`, `Symfony & FrankenPHP`) return zero
+   hits at end of bundle.
+5. **Ship TASK-138 (How-it-works icons) and TASK-137 (font register)
+   sequentially** — both touch `templates/homepage/index.html.twig`.
+   TASK-138 first (delete assets + insert icons), TASK-137 second
+   (normalise headings).
+6. **Ship TASK-143 (DKIM editability)** in parallel with the marketing
+   work — different file surface (dashboard form vs marketing
+   templates).
+7. **Spawn Architect for TASK-142 (SEO audit)** — needs scoping before
+   committing to fixes. Then ship the highest-leverage 5-10 punch-list
+   items in the round; file lower-priority items as TASK-15X.
+8. **Spawn Architect for TASK-144 (DNS generators v1)** — confirm
+   provider list + page placement + Stimulus pattern before build.
+   Ship SPF + DMARC generators; defer DKIM + MX.
+9. **Spawn Architect for TASK-145 (homepage narrative)** — must run
+   AFTER TASK-137/138/142 land so the architect designs against the
+   final per-section visual register + SEO structure. Ship the
+   restructure.
+10. **Run the round-8 perf audit** after all tasks land. Document the
+    numbers in a new `## Round-8 performance audit (YYYY-MM-DD)`
+    section above the round-7 perf section.
+11. After every 3 shipped tasks, run a self-review pass.
+12. Final Product-agent sweep across all buckets as the
     stop-condition check.
-11. Write the RUN SUMMARY when the backlog is truly empty. Cover:
+13. Write the RUN SUMMARY when the backlog is truly empty. Cover:
     every task shipped, any blocked + why, self-review findings +
-    dispositions, suite growth, perf-audit measurements (round-6 vs
-    round-5 diff), suggested round-7 seed areas.
+    dispositions, suite growth, perf-audit measurements (round-8 vs
+    round-7 diff), suggested round-9 seed areas.
 
 ================================================================
-LESSONS FROM ROUNDS 4 + 5 — APPLY HERE
+LESSONS FROM ROUNDS 4 + 5 + 6 + 7 — APPLY HERE
 ================================================================
 - **Editor-revert race** (round 4): prefer `Write` (full file
   content) or heredoc-via-bash when modifying files that might be
-  open in an editor / under linter watch. Round 5 used this
+  open in an editor / under linter watch. Rounds 5-7 used this
   defensively and lost zero edits.
-- **Parallel agents**: 3 concurrent is the sweet spot. Round 5 hit
-  this consistently.
+- **Parallel agents**: 3 concurrent is the sweet spot. Round 7 hit
+  this consistently (TASK-133 + TASK-134 in parallel).
 - **Self-review payoff**: round-3 caught 3, round-4 caught 6, round-5
-  caught 3. Run the self-review every 3 ships without exception.
-- **Don't over-architect small tasks**: round-5 skipped Architect for
-  every bug-fix bundle and only used it where the deletion/refactor
-  scope demanded it. Round 6 should do the same — Architect only
-  for TASK-130.
-- **Commit per task or per coherent bundle**: round-5 made 12
-  task-commits across 17 tasks (some bundled like TASK-118/119/124).
-  Readable git log, safe `git revert <task>`. Don't pile multiple
-  unrelated tasks into one commit.
+  caught 3, round-6 caught 0 (drained on first pass), round-7 caught
+  1 (TASK-135 — the matchesMailbox guard). Run the self-review every
+  3 ships without exception.
+- **Don't over-architect small tasks**: round-7 skipped Architect for
+  TASK-132 (single-template edit). Round 8 should do the same —
+  Architect only for TASK-142 / 143 / 144 / 145; the rest go straight
+  to Build.
+- **Commit per task or per coherent bundle**: round-7 shipped 6
+  task-commits across 4 user-driven tasks + 1 sidecar + 1 self-review
+  must-fix. Readable git log. Round 8's quick-wins bundle is the
+  exception that proves the rule — bundling 4 marketing-clutter
+  deletes into ONE commit is the right grain because the user
+  expressed them as a single "clean this up" thread.
 - **Reviewer agents net real findings on >50% of bundles**: round 4
-  + 5 both confirmed this. Keep the review step even when the dev
-  agent reports "all green".
+  + 5 + 6 + 7 all confirmed this. Keep the review step even when the
+  dev agent reports "all green".
 - **Cross-surface consistency tests pay off**: round 5's
-  `SurfaceConsistencyTest` for TASK-114 caught the
-  `/app/mailboxes` vs `/app/domains/{id}` tone disagreement at the
-  test layer rather than user-report layer. For TASK-130's merge,
-  consider whether the same pin pattern applies — the merged
-  `/app/domains` page should agree with `/app/domains/{id}/health`
-  on protocol badge tones for the same domain.
-- **User-driven tasks have the highest signal**: round 6's entire
-  scope comes from a real user looking at the real product. The Why
-  field for each task should be quoted from their words. The bug
-  fixes (TASK-125 / 126 / 128 / 129) are the highest-value items in
-  the round even though they're the smallest — they're catching
-  trust-erosion failures the system didn't catch on its own.
-- **Push continuously, not in a batch**: round 5 made 19 commits but
-  pushed zero of them — the user had to push 32 commits manually at
-  round end (round-4's 13 carryover + round-5's 19). Round 6 fixes
-  this by treating `git push origin main` as the second half of every
-  ship phase. Local-only commits aren't shipped — pushed commits are.
-  This also means the user can pull intermediate progress instead of
-  waiting for the whole round to complete.
+  `SurfaceConsistencyTest` for TASK-114, round 6's TASK-130 codified
+  guards (`noTemplateReferencesDashboardDnsHealthRoute`), round 7's
+  `InMemoryQueryLogger`-based one-query assertion all caught real
+  regressions at the test layer. Round 8's TASK-136 should add a
+  codified guard against `is_repo_public` re-introduction (mirrors
+  the TASK-130 guard pattern).
+- **User-driven tasks have the highest signal**: rounds 6, 7, and 8
+  are all user-driven. The Why field for each task should quote the
+  user's words. The bug fixes (TASK-143 DKIM editability) and the
+  trust-erosion fixes (TASK-136 "stop apologising for things that
+  are done") are the highest-value items.
+- **Push continuously, not in a batch**: round 6 + 7 both pushed
+  every commit before moving to the next task. No carryover of
+  unpushed commits. Round 8 enforces this as a quality gate.
+- **Marketing copy ≠ tech stack**: rounds 5 + 7 cleaned up several
+  marketing-side honesty gaps (TASK-117 CTA, TASK-121 AI pricing,
+  TASK-132 onboarding mental model). Round 8's TASK-141 continues
+  the pattern — end users care about VALUE, not stack. Tech stack
+  lives in CLAUDE.md.

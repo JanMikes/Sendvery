@@ -4515,6 +4515,169 @@ Two underlying queries fire once per matrix row:
 
 ---
 
+## TASK-136: Repo is public — every "Notify me when the source ships" / "Coming soon" / `is_repo_public` env gate is now lying
+
+- Status: proposed
+- Area: marketing
+- Why: The Sendvery repo is now PUBLIC at `github.com/janmikes/sendvery`. User: "anywhere is mentioned 'notify me when the repo goes public' etc on /about/open-source on it was on homepage maybe too, the repo is already public, no waiting. we are all ready. […] Even in hero on homepage 'Notify me when the source ships' -> remove this." Every CTA still wrapped in `is_repo_public` / surfacing the notify-me mailto is contradicting the actual state. The only genuine "coming soon" left is AI Insights (waits for an Anthropic API key + final test pass — DEC-057 stub-first posture stays for the AI surface, NOT the repo).
+- Acceptance:
+  - Delete `SENDVERY_REPO_PUBLIC` from `.env` + `.env.test` + any other env file.
+  - Delete the `is_repo_public` Twig global from `OpenSourceExtension`. Keep `github_url` if templates still need it (or inline the literal `https://github.com/janmikes/sendvery`).
+  - Find every `{% if is_repo_public %}` / `{% else %}` branch in templates and collapse to just the github-link branch. The notify-me mailto + `homepage-hero-repo-launch` / `open-source-repo-launch` tracking strings are deleted.
+  - `/about/open-source` page — every "Coming soon" / "Notify me" copy replaced with the active GitHub link. Quickstart unconditionally renders `git clone https://github.com/janmikes/sendvery.git`.
+  - Homepage hero secondary CTA renders as "View on GitHub →" unconditionally.
+  - Grep guards: `grep -rn "Notify me when" templates/ src/` returns zero. `grep -rn "is_repo_public\|SENDVERY_REPO_PUBLIC" .` returns zero. `grep -rn "Coming soon" templates/` returns zero EXCEPT where the surface genuinely is coming soon (the AI Insights stub — those stay, gated on DEC-057's placeholder marker).
+  - Update tests pinning the env-gated branches (`heroSecondaryCtaRespectsRepoPublicGate`, any open-source page test) to assert the GitHub URL renders unconditionally.
+- Notes:
+  - Mechanical fix — bundle with TASK-139/140/141 under one dev agent + commit.
+
+---
+
+## TASK-137: Homepage hero (TASK-131 sections) uses lighter zinc-palette + explicit font-medium; sections below revert to daisyUI's heavier defaults — first-impression visitors see the seam
+
+- Status: proposed
+- Area: marketing
+- Why: User: "i can see fonts mismatch from first three sections what the other have. -> this is the most important part of the marketing page because everyone sees this on first sight." The TASK-131 hero/explainer/grade-card sections use `font-medium tracking-tight text-zinc-900` overrides; the pricing / FAQ / etc. sections below kept daisyUI's default heavier weights. The seam reads as inconsistency on the highest-traffic surface.
+- Acceptance:
+  - Read every `<h2>` on `templates/homepage/index.html.twig` and apply the TASK-131 register (`font-medium tracking-tight text-zinc-900`) page-end-to-end.
+  - `font-medium` ceiling: NO `font-bold`/`font-semibold`/`font-extrabold` on any section heading on `/`.
+  - Eyebrow + subhead patterns from TASK-131 (`text-xs uppercase tracking-wider text-zinc-500` for eyebrows, `text-zinc-500 leading-relaxed` for subheads) applied to lower sections for unified register.
+  - daisyUI component-internal weights (button labels, badge text) can stay — only SECTION HEADINGS are normalised.
+  - Test: extend `task131HomepageHeroAndNewSectionsRender` (or add companion) — assert EVERY `<h2>` on `/` carries `font-medium`. Fails if any future edit reintroduces heavier weights.
+- Notes:
+  - Ship AFTER TASK-138 (icons) to avoid template collisions; before TASK-145 (narrative restructure) so the architect plans against the final font register.
+
+---
+
+## TASK-138: Homepage "How it works" section uses custom illustration assets (how-connect.webp etc.) that don't fit the zinc-palette register; user wants icons
+
+- Status: proposed
+- Area: marketing
+- Why: User: "How it works on homepage, remove custom images and replace with some icons or something." The current Step 1 / 2 / 3 cards use bespoke illustrations that visually disagree with TASK-131's clean icon-and-zinc-palette register. Icons read as consistent with the dashboard polish.
+- Acceptance:
+  - Find the assets (`assets/images/how-*.webp` likely, or whatever the `<img src>` paths point to).
+  - Replace each `<img>` with an inline Lucide SVG icon at the same size (~`w-16 h-16` or `w-20 h-20`). Per-step icons:
+    - Step 1 (Add domain / Point DMARC at Sendvery): globe / dns / shield icon
+    - Step 2 (Monitor): activity / pulse / line-chart icon
+    - Step 3 (Act): bell / mail-check / shield-check icon
+  - Icon tile styling matches zinc palette: `bg-zinc-50 border border-zinc-200 rounded-lg p-4` with the SVG in `text-zinc-700`. NO emerald/blue/red tint unless it carries state meaning.
+  - Delete the orphaned `.webp` asset files if no other surface references them (grep first).
+  - Update the homepage test to assert SVG markers render and `<img>` tags for `how-*.webp` are gone.
+- Notes:
+  - Ship BEFORE TASK-137 (font register) so the agent doesn't collide with TASK-137's H2 normalization in the same file.
+
+---
+
+## TASK-139: "Built for engineers" section on homepage adds zero conversion value — remove it
+
+- Status: proposed
+- Area: marketing
+- Why: User: "We might remove the 'Built for engineers' from homepage completely i think." The section presumably tries to signal technical credibility but doesn't convert visitors who aren't already pre-sold; the visitors who ARE technical can see the open-source GitHub link + the dashboard screenshot, which already proves credibility better than a copy block.
+- Acceptance:
+  - `templates/homepage/index.html.twig` — find the "Built for engineers" section (grep the literal string), delete the entire `<section>` block.
+  - If the section had its own assets or structured data, delete those too.
+  - Update any test asserting the section's H2/body — delete the assertions outright, NOT comment them out.
+- Notes:
+  - Mechanical fix — bundle with TASK-136/140/141.
+
+---
+
+## TASK-140: "Related tools" sections on /tools/* pages are empty (e.g. /tools/spf-checker) — strip them rather than populate
+
+- Status: proposed
+- Area: marketing
+- Why: User: "on many public pages there are 'Related tools' on bottom for example /tools/spf-checker where is nothing? We might remove it completely." An empty section is worse than no section — looks broken and signals neglect. The footer's "Tools" column already lists every tool, so the per-page Related-tools block is redundant.
+- Acceptance:
+  - Audit every `templates/tools/*.html.twig` (and any shared `RelatedTools` component or include). Identify pages with empty/stale Related-tools blocks.
+  - Delete the markup. If the Related-tools component is itself only used by tool pages and is now orphaned, delete the component too.
+  - Grep `tests/` for assertions on "Related tools" — strip them.
+- Notes:
+  - Mechanical fix — bundle with TASK-136/139/141.
+
+---
+
+## TASK-141: Footer "Built with Symfony & FrankenPHP" name-drops the tech stack — replace with human attribution + GitHub link
+
+- Status: proposed
+- Area: marketing
+- Why: User: "'Built with Symfony & FrankenPHP' -> do not mention this. Built with love by Jan Mikeš and link to github etc or something, but not symfony & Frankenphp this is not what we want to communicate." End users care about VALUE, not stack. Tech stack name-drops belong in CLAUDE.md, not on user-facing marketing.
+- Acceptance:
+  - `templates/components/Footer.html.twig` (or wherever the line lives — `grep -rn "Symfony & FrankenPHP" templates/`): replace with "Built with love by [Jan Mikeš](https://github.com/janmikes) · [Source on GitHub →](https://github.com/janmikes/sendvery)" (or equivalent — sentence case, no shouting).
+  - Grep for any other "Built with <tech>" / "Powered by <tech>" copy on user-facing surfaces (Tailwind, daisyUI, Postgres, Caddy, etc.) — strip all of them.
+  - Update the footer test (likely `MarketingPagesTest`) asserting the new attribution string.
+- Notes:
+  - Mechanical fix — bundle with TASK-136/139/140.
+
+---
+
+## TASK-142: SEO audit + improvements pass — meta/OG/structured-data/canonical/headings/internal-linking across every public page
+
+- Status: proposed
+- Area: marketing / seo
+- Why: User: "Focus on SEO improvements now." Sendvery is launch-ready and the marketing site needs to be discoverable. Per-page meta, structured data, sitemap, canonical URLs, internal linking density are all baseline SEO hygiene that compound over months.
+- Acceptance:
+  - Architect produces a punch-list per page-type covering: `<title>` (unique, ~50-60 chars), `<meta description>` (unique, ~150-160 chars), Open Graph (`og:title`/description/image/url per page), Twitter Cards, canonical URLs, structured data (Organization on home, Product on pricing, Article + breadcrumbs on `/learn/*`, SoftwareTool on `/tools/*`), heading hierarchy (one H1, proper H2-H6), internal linking density (every page reaches related public pages in ~2 clicks), `robots.txt` + `sitemap.xml`, image `alt` attributes (decorative SVGs `aria-hidden="true"`).
+  - Ship the highest-leverage 5-10 fixes inline. Lower-priority items file as TASK-15X follow-ups.
+  - Tests: extend `MarketingPagesTest` per-page to assert `<title>` + meta description differ from the default, OG image present, canonical present.
+- Notes:
+  - Architect first — needs to scope the punch-list before committing to fixes.
+
+---
+
+## TASK-143: Dashboard DKIM selector field is read-only after first save — user cannot change selector when rotating keys
+
+- Status: proposed
+- Area: dashboard
+- Why: User: "In dashboard i am unable to change my dkim selector once it is saved - this is important!" Selectors rotate with key rotation; locking the field is a trust-erosion bug ("the dashboard trapped my input"). Operators who switch from `default` to `mailchimp` (or any other selector) hit a wall.
+- Acceptance:
+  - Find the DKIM-selector form. Grep `dkimSelector` / `dkim_selector` across `src/FormData/`, `src/Form/`, `src/Controller/Dashboard/Domain*`, `templates/dashboard/*`.
+  - Identify the read-only branch (probably `{% if domain.dkimSelector is not null %}render-as-text{% else %}render-input{% endif %}` OR `disabled: true` on the form field when the column is set).
+  - Make the field always editable. Submitting a changed selector triggers the same DNS re-verification command first-save used (probably `App\Message\VerifyDomainDns` — find via grep).
+  - Same validation as first save (valid DNS label, non-empty).
+  - Selector change does NOT silently invalidate historical DMARC reports — just updates the column + re-runs the DKIM check.
+  - Edge case: domain with a soft-deleted-mailbox case from TASK-133 still allows selector edit (no coupling).
+  - Tests: integration test seeds a domain with `dkimSelector = "default"`, POSTs a change to `"mailchimp"`, asserts the column was updated AND a DNS re-verification was dispatched. Second test asserts validation errors render the field still editable.
+- Notes:
+  - Architect first if the existing form has edge cases (multi-step wizard, separate edit endpoint, etc.); skip Architect if the form is a single-action edit.
+
+---
+
+## TASK-144: No DNS record helper forms on public /tools/* pages — visitors who don't know SPF/DMARC syntax can't generate the record they need
+
+- Status: proposed
+- Area: marketing / tools
+- Why: User: "could there be helper forms to set up dns records format for spf, dkim etc on the public pages?" The current `/tools/*` pages CHECK records but don't help visitors GENERATE them. A visitor whose SPF check fails because they need to add `include:spf.mandrillapp.com` has to look up Mailchimp's docs separately. v1 helper-form on the SPF + DMARC checker pages would close the loop.
+- Acceptance (v1):
+  - **SPF generator** on `/tools/spf-checker` (or sibling page if checker is the wrong home). Toggle/checkbox UI for ~6 common sending services (Google Workspace, Microsoft 365, Mailchimp, Postmark, SendGrid, Mailgun, Amazon SES, Brevo, Resend, Loops). Plus a free-form "Additional IPs / includes" textarea. Plus `~all` / `-all` mechanism choice. Output: the generated TXT record string in a `<code>` block + copy-to-clipboard button.
+  - **DMARC generator** on `/tools/dmarc-checker`. Inputs: policy (none/quarantine/reject), subdomain policy, pct=, reporting email (defaults to `reports@sendvery.com`), forensic email (optional), DKIM/SPF alignment mode. Output: generated TXT record string + copy button.
+  - Both PURELY client-side (Stimulus controller). No server round-trip. Works logged out.
+  - Below the code block: short "What to do next" paragraph linking to `/learn/*` for the record-type explainer.
+  - SEO bonus: new generator content adds H2-level structure to the page (good for keyword targeting — "SPF record generator").
+  - XSS guard: Stimulus controller MUST escape user input before injecting into the output code block (free-form "additional IPs" textarea is the attack surface).
+  - Tests: render the page + assert generator markup is present. Provider list lives in a config/PHP constant so it's easy to extend.
+  - DKIM + MX generators NOT in v1 (DKIM requires the selector + public-key bytes — non-trivial UX; MX rarely auth-related). File as TASK-15X follow-ups if v1 lands well.
+- Notes:
+  - Architect first — needs to confirm page placement (checker page vs separate generator page), Stimulus pattern (matching `HomeDomainCheckerComponent` register), provider list + canonical `include:` strings, output formatting.
+
+---
+
+## TASK-145: Homepage section order needs explicit narrative rationale; pricing should sit slightly higher per user direction
+
+- Status: proposed
+- Area: marketing
+- Why: User: "Completely go through the design of the public and marketing pages — the user story on the homepage should make sense, maybe put pricing slightly higher, but there should be clear story / flow from top the bottom reasoning why the sections are in such order — follow best practices."
+- Acceptance:
+  - Architect proposes the section-order with rationale per transition. Append to TASK-145 notes.
+  - Suggested skeleton (NOT prescriptive — architect's judgment): hero → trust → problem framing → solution (XML→English + grade card) → product preview (TASK-120 dashboard screenshot) → pricing (moved EARLIER per user direction) → FAQ → final CTA.
+  - Dev re-sequences `templates/homepage/index.html.twig`. Section boundaries clear, narrative-comment per section explaining what it does for the visitor.
+  - Verify each `/pricing`, `/about/what-is-sendvery`, `/learn`, `/tools/*`, `/open-source` page still flows coherently after the homepage restructure. Fix in scope where coherence is broken (don't restructure those pages just for parallelism).
+  - Existing functional tests still pass; update any position-based assertions (`strpos($body, X) > strpos($body, Y)`) to reflect the new order while preserving the spirit.
+  - Dotted-grid hero background, font register (TASK-137), per-section accessibility patterns from TASK-131 all carry over.
+- Notes:
+  - Ship LAST in the round, after TASK-137 + TASK-138 + TASK-142 — the architect needs the final per-section visual register + SEO structure to design against.
+
+---
+
 ## RUN SUMMARY — 2026-05-25 round 7 autonomous CX loop (round-6 follow-through: homepage IA alignment + disconnect-mailbox UX + N+1 retirement)
 
 ### Shipped (4 user-driven tasks + 1 self-review must-fix + 1 sidecar fix across 6 code commits + 2 docs commits — round-7 scope drained)
