@@ -290,7 +290,50 @@ final class RuaMailboxMatcherTest extends TestCase
         self::assertFalse($matcher->matchesMailbox($mailbox, null));
     }
 
-    private function buildMailbox(string $encryptedUsername, bool $isActive = true): MailboxConnection
+    #[Test]
+    public function matchesMailboxVariantReturnsFalseForInactiveMailbox(): void
+    {
+        // TASK-135: paused mailboxes (isActive=false) don't route reports
+        // anywhere we can ingest — sibling rule to findMailboxForDomain's
+        // active-only loop. Without this guard the IngestionPathResolver
+        // matrix path would still flip the "Ingesting via mailbox" badge on.
+        $mailbox = $this->buildMailbox(encryptedUsername: 'enc:dmarc@team.com', isActive: false);
+
+        $encryptor = $this->createMock(CredentialEncryptor::class);
+        $encryptor->expects(self::never())->method('decrypt');
+
+        $matcher = new RuaMailboxMatcher(
+            $this->createStub(MailboxConnectionRepository::class),
+            $encryptor,
+        );
+
+        self::assertFalse($matcher->matchesMailbox($mailbox, 'dmarc@team.com'));
+    }
+
+    #[Test]
+    public function matchesMailboxVariantReturnsFalseForDisconnectedMailbox(): void
+    {
+        // TASK-135: soft-deleted mailboxes (TASK-133 disconnectedAt != null)
+        // are skipped by the cron poller; matchesMailbox must mirror that so
+        // the green "Ingesting via mailbox" badge doesn't linger on the
+        // /app/mailboxes matrix row after the user clicked Disconnect.
+        $mailbox = $this->buildMailbox(
+            encryptedUsername: 'enc:dmarc@team.com',
+            disconnectedAt: new \DateTimeImmutable('2026-05-25 10:00:00'),
+        );
+
+        $encryptor = $this->createMock(CredentialEncryptor::class);
+        $encryptor->expects(self::never())->method('decrypt');
+
+        $matcher = new RuaMailboxMatcher(
+            $this->createStub(MailboxConnectionRepository::class),
+            $encryptor,
+        );
+
+        self::assertFalse($matcher->matchesMailbox($mailbox, 'dmarc@team.com'));
+    }
+
+    private function buildMailbox(string $encryptedUsername, bool $isActive = true, ?\DateTimeImmutable $disconnectedAt = null): MailboxConnection
     {
         $team = new Team(
             id: Uuid::uuid7(),
@@ -312,6 +355,9 @@ final class RuaMailboxMatcherTest extends TestCase
             createdAt: new \DateTimeImmutable('2026-01-01 00:00:00'),
             isActive: $isActive,
         );
+        if (null !== $disconnectedAt) {
+            $mailbox->disconnect($disconnectedAt);
+        }
         $mailbox->popEvents();
 
         return $mailbox;

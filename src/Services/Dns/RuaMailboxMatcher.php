@@ -86,6 +86,16 @@ readonly class RuaMailboxMatcher
             return false;
         }
 
+        // TASK-135: paused (isActive=false) AND soft-deleted (TASK-133
+        // disconnectedAt != null) mailboxes don't "route reports anywhere we
+        // can ingest" — the cron skips them. Mirrors the guard the
+        // findMailboxForDomain branch already runs (line 120) so the
+        // IngestionPathResolver path doesn't leave the "Ingesting via mailbox"
+        // success badge flipped on after disconnect.
+        if (!$mailbox->isActive || null !== $mailbox->disconnectedAt) {
+            return false;
+        }
+
         try {
             $username = $this->credentialEncryptor->decrypt($mailbox->encryptedUsername);
         } catch (\RuntimeException) {
