@@ -16,6 +16,11 @@ declare(strict_types=1);
 return [
     'founder_photo' => null, // TODO(placeholder): replace with real photo URL or asset path before launch (TASK-024)
     'linkedin_url' => null, // TODO(placeholder): replace with real LinkedIn profile URL before launch (TASK-024)
+    // TODO(placeholder): TASK-131 + DEC-057 — illustrative AI-summary copy used by the homepage section-2 "XML → plain English"
+    // transformation card. Swap when AnthropicAiInsightsService ships and real per-report summaries are available. Uses a
+    // unique marker suffix ("TASK-131 + DEC-057") so PlaceholdersConventionTest's testimonial-marker count stays accurate
+    // (only the literal "TODO(placeholder): replace before launch" phrase is counted against the testimonial total).
+    'homepage_ai_sample' => 'A Mailchimp send from your marketing subdomain failed DKIM. SPF alone won\'t pass alignment — add the Mailchimp selector to fix it.',
     'testimonials' => [
         [ // TODO(placeholder): replace before launch
             'quote' => 'We sat at p=none for 14 months because nobody could read the XML. Sendvery flagged that our Mailchimp subdomain was sending unsigned the first morning we connected it — we went to p=quarantine three weeks later.',

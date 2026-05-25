@@ -27,96 +27,231 @@
 
 {% block content %}
 
-{# === 1. Hero === #}
-<section class="relative overflow-hidden bg-gradient-to-br from-base-100 via-base-100 to-primary/5 py-24 lg:py-36">
-    <div class="container mx-auto text-center relative z-10">
-        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-8">
-            <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-            DMARC Monitoring &middot; AI Insights &middot; Open Source
-        </div>
-        <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight max-w-4xl mx-auto leading-tight">
-            Your domain sends email every day.<br class="hidden sm:block">
-            <span class="text-primary">Do you know who else is?</span>
-        </h1>
-        <p class="mt-6 text-lg md:text-xl text-base-content/70 max-w-2xl mx-auto">
-            Sendvery automatically parses your <strong class="text-base-content/90">DMARC reports</strong>,
-            monitors your <strong class="text-base-content/90">DNS health</strong> continuously, and explains
-            everything with <strong class="text-base-content/90">AI-powered insights</strong> — in plain English,
-            not XML. Free for 1 domain. No DMARC PhD required.
-        </p>
-        {# TODO TASK-003: Add analytics event for hero CTA clicks once event infra is wired (data-track attrs are already present). #}
-        <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="{{ path('auth_login') }}" class="btn btn-primary btn-lg" data-track="hero-cta-primary">
-                Get started free
-            </a>
-            <a href="#dns-checker" class="btn btn-ghost btn-lg" data-track="hero-cta-secondary" {{ stimulus_action('scroll-to', 'scroll', 'click') }} data-scroll-to-target-value="dns-checker">
-                Check your domain
-            </a>
-        </div>
-        <div class="mt-6 flex flex-wrap justify-center items-center gap-3 text-sm text-base-content/50">
-            <span class="inline-flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-                Open source &middot; AGPL-3.0
-            </span>
-            <span class="text-base-content/20">·</span>
-            <span class="inline-flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-                1 domain free forever
-            </span>
-            <span class="text-base-content/20">·</span>
-            <span class="inline-flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
-                Self-hostable
-            </span>
-            {% if github_stats is not null %}
-                <span class="text-base-content/20">·</span>
-                <span class="inline-flex items-center gap-1.5">
-                    {{ github_stats.stars|number_format }} ★ on GitHub · last commit {{ github_stats.lastCommitAt|date('M j') }}
-                </span>
-            {% endif %}
-            <span class="text-base-content/20">·</span>
-            <a href="https://github.com/janmikes/sendvery" target="_blank" rel="noopener" class="inline-flex items-center gap-1 hover:text-base-content/80 transition-colors">
-                See the source
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-            </a>
+{# === 1. Hero (TASK-131) ===
+   Two-column at md+, stacked on mobile. Left column carries eyebrow / H1 / subhead /
+   CTAs / trust line. Right column embeds the existing `HomeDomainChecker` Live Component
+   verbatim — only the visual shell (zinc card, label, sr-only state text on chips) changes.
+   The hero <section> carries `id="dns-checker"` so the marketing-nav "Check your domain"
+   button (which links to /#dns-checker via the scroll-to Stimulus controller) still
+   scrolls here after the standalone checker section was removed.
+   Background: subtle dotted-grid scoped to this section only — no gradients, no blobs. #}
+<section id="dns-checker" class="relative bg-base-100 py-16 md:py-24 bg-[radial-gradient(circle,theme(colors.zinc.200)_1px,transparent_1px)] bg-[length:24px_24px]">
+    <div class="container mx-auto px-4 md:px-6">
+        <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
+            {# Left column #}
+            <div>
+                <div class="text-xs uppercase tracking-wider text-zinc-500 mb-4">DMARC &middot; DNS &middot; deliverability</div>
+
+                <h1 class="text-4xl md:text-5xl font-medium tracking-tight leading-[1.1] text-zinc-900">DMARC, DNS, deliverability — monitored and explained.</h1>
+
+                <p class="mt-5 text-base md:text-lg text-zinc-500 max-w-xl leading-relaxed">
+                    Sendvery is the open-source email deliverability platform that watches your DNS 24/7, parses your DMARC reports, and translates the XML into plain English. Free for 1 domain.
+                </p>
+
+                {# TODO TASK-003: analytics event for hero CTA clicks once event infra is wired (data-track attrs are already present). #}
+                <div class="mt-8 flex flex-col sm:flex-row gap-3">
+                    <a href="{{ path('auth_login') }}"
+                       class="btn btn-primary inline-flex items-center justify-center bg-zinc-900 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
+                       data-track="hero-cta-primary">
+                        Get started free
+                    </a>
+
+                    {# Secondary CTA — env-gated per TASK-122: link to GitHub when the repo is public,
+                       fall back to the notify-me CTA while it's still private. The visible label changes
+                       so we don't promise a link the visitor can't actually click. #}
+                    {% if is_repo_public %}
+                        <a href="{{ github_url }}" target="_blank" rel="noopener"
+                           class="inline-flex items-center justify-center border border-zinc-300 rounded-md px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
+                           data-track="hero-cta-secondary">
+                            View on GitHub <span aria-hidden="true" class="ml-1">&rarr;</span>
+                        </a>
+                    {% else %}
+                        <a href="mailto:hello@sendvery.com?subject=Notify%20me%20when%20the%20Sendvery%20repo%20opens&amp;body=Please%20notify%20me%20when%20the%20open-source%20repo%20goes%20public."
+                           class="inline-flex items-center justify-center border border-zinc-300 rounded-md px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors"
+                           data-track="hero-cta-secondary"
+                           data-notify-source="homepage-hero-repo-launch">
+                            Notify me when the source ships
+                        </a>
+                    {% endif %}
+                </div>
+
+                <p class="mt-5 text-xs text-zinc-400">
+                    Open source &middot; AGPL-3.0 &middot; 1 domain free forever &middot; Self-hostable{% if github_stats is not null %} &middot; {{ github_stats.stars|number_format }} ★ on GitHub &middot; last commit {{ github_stats.lastCommitAt|date('M j') }}{% endif %}
+                </p>
+            </div>
+
+            {# Right column — visual shell + existing HomeDomainChecker Live Component reused verbatim. #}
+            <div>
+                <div class="bg-zinc-50 border border-zinc-200 rounded-lg p-5">
+                    <div class="text-xs uppercase tracking-wider text-zinc-500 mb-3">Free instant check — no signup</div>
+
+                    {# The HomeDomainChecker Symfony UX LiveComponent (src/Twig/Components/HomeDomainCheckerComponent.php)
+                       is reused VERBATIM. It owns its own `domain` LiveProp + `check` LiveAction; the embedded
+                       `_CheckerForm` partial already wires `data-model`, `data-action="live#action"`, and
+                       `data-live-action-param="check"`. Wrapping it in this visual shell doesn't touch any of
+                       those data attributes — the live behaviour is identical to before.
+                       `aria-live="polite"` is set on the parent so any result text rendered by the component
+                       gets announced to assistive tech. #}
+                    <div aria-live="polite" class="min-h-[110px]">
+                        <twig:HomeDomainChecker />
+                    </div>
+                </div>
+
+                {# Inline state-name span for assistive tech, mirroring the protocol chips the
+                   HomeDomainChecker renders after a successful check. The visible chips inside
+                   the component already carry semantic colour + glyph; this sr-only legend explains
+                   what each chip means so a screen-reader user understands the four-protocol shorthand. #}
+                <p class="sr-only">
+                    Protocol chips show the live state for four email-authentication protocols:
+                    <span class="sr-only">SPF (Sender Policy Framework)</span>,
+                    <span class="sr-only">DKIM (DomainKeys Identified Mail)</span>,
+                    <span class="sr-only">DMARC (Domain-based Message Authentication, Reporting & Conformance)</span>,
+                    and <span class="sr-only">MX (mail exchange) records</span>.
+                </p>
+            </div>
         </div>
     </div>
 </section>
 
-{# === 2. Live DNS Checker Widget === #}
-<twig:SectionContainer id="dns-checker" bgClass="bg-base-200/50">
-    <twig:SectionHeader
-        eyebrow="Free check"
-        title="Check your domain's email authentication"
-        lede="Free, instant SPF, DKIM, and DMARC analysis. No signup required."
-    />
-    <twig:HomeDomainChecker />
-</twig:SectionContainer>
-
-{# === 3. Real-world deployments === #}
-<twig:SectionContainer class="text-center" bgClass="border-y border-base-200">
-    <p class="text-sm text-base-content/40 uppercase tracking-wider font-medium mb-8">Already running on real production domains</p>
-    <div class="flex flex-wrap justify-center items-center gap-6 md:gap-12">
-        <a href="https://thedevs.cz" target="_blank" rel="noopener" class="text-lg font-semibold text-base-content/80 hover:text-primary transition-colors">TheDevs.cz</a>
-        <a href="https://speedpuzzling.com" target="_blank" rel="noopener" class="text-lg font-semibold text-base-content/80 hover:text-primary transition-colors">SpeedPuzzling.com</a>
-        <a href="https://fajnesklady.cz" target="_blank" rel="noopener" class="text-lg font-semibold text-base-content/80 hover:text-primary transition-colors">FajneSklady.cz</a>
+{# === 2. Trust logos row (kept from the previous homepage, restyled to zinc-tone palette
+       for visual consistency with the new hero). Sits between the new hero and the new
+       XML-to-English section per TASK-131 acceptance criteria. #}
+<section class="border-y border-zinc-200 bg-base-100 py-10">
+    <div class="container mx-auto px-4 md:px-6 text-center">
+        <p class="text-xs uppercase tracking-wider text-zinc-400 mb-6">Already running on real production domains</p>
+        <div class="flex flex-wrap justify-center items-center gap-x-10 gap-y-4">
+            <a href="https://thedevs.cz" target="_blank" rel="noopener" class="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 rounded-md">TheDevs.cz</a>
+            <a href="https://speedpuzzling.com" target="_blank" rel="noopener" class="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 rounded-md">SpeedPuzzling.com</a>
+            <a href="https://fajnesklady.cz" target="_blank" rel="noopener" class="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 rounded-md">FajneSklady.cz</a>
+        </div>
     </div>
-    <p class="mt-6 text-xs text-base-content/40">Built and battle-tested by the same hands behind these products.</p>
-</twig:SectionContainer>
+</section>
 
-{# === 4. Problem Statement === #}
-<twig:SectionContainer>
-    <div class="max-w-3xl mx-auto text-center">
-        <h2 class="text-2xl md:text-3xl font-bold">Email authentication is set once and forgotten.<br>Then things break silently.</h2>
-        <p class="mt-6 text-base-content/60 text-lg">
-            You added a new email service 6 months ago and broke your SPF without knowing.
-            Your DKIM key expired after a DNS migration. Your DMARC is on <code class="font-mono bg-base-200 px-1.5 py-0.5 rounded text-sm">p=none</code> — anyone can send as your domain right now.
-        </p>
-        <p class="mt-4 text-base-content/60 text-lg">
-            These problems exist for weeks or months before anyone notices. Sendvery catches them the moment they happen.
-        </p>
+{# === 3. From XML to plain English (TASK-131) ===
+   Centered narrow column. 3-column transformation visual at md+ — raw XML card → ArrowRight
+   icon → blue "AI summary" card. Mobile stacks vertically with an ArrowDown icon swap. #}
+<section class="bg-base-100 py-16 md:py-24">
+    <div class="container mx-auto px-4 md:px-6">
+        <div class="text-center max-w-3xl mx-auto">
+            <div class="text-xs uppercase tracking-wider text-zinc-500 mb-4">How the AI insights work</div>
+            <h2 class="text-3xl md:text-4xl font-medium tracking-tight text-zinc-900 max-w-2xl mx-auto">DMARC reports are written for machines. We translate them for you.</h2>
+            <p class="text-zinc-500 max-w-xl mx-auto mt-3 leading-relaxed">
+                Sendvery parses the XML, watches DNS continuously, and gives you one sentence that tells you exactly what to fix.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 mt-10 max-w-3xl mx-auto items-center">
+            {# Left card — raw DMARC XML #}
+            <div class="bg-zinc-50 border border-zinc-200 rounded-lg p-4 font-mono text-xs text-zinc-500 leading-relaxed overflow-x-auto">
+<pre class="whitespace-pre">&lt;record&gt;
+  &lt;row&gt;
+    &lt;source_ip&gt;198.2.179.45&lt;/source_ip&gt;
+    &lt;count&gt;42&lt;/count&gt;
+    &lt;policy_evaluated&gt;
+      &lt;disposition&gt;none&lt;/disposition&gt;
+      &lt;dkim&gt;fail&lt;/dkim&gt;
+      &lt;spf&gt;pass&lt;/spf&gt;
+    &lt;/policy_evaluated&gt;
+  &lt;/row&gt;
+&lt;/record&gt;</pre>
+            </div>
+
+            {# Middle — arrow. ArrowRight on md+, ArrowDown stacked on mobile.
+               Both glyphs come from the Lucide set (matches the existing inline-SVG idiom
+               used elsewhere in this template). #}
+            <div class="flex items-center justify-center text-zinc-400 py-2 md:py-0">
+                {# md+ ArrowRight #}
+                <svg class="hidden md:block w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 5l7 7-7 7"/>
+                </svg>
+                {# mobile ArrowDown #}
+                <svg class="md:hidden w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 13l7 7 7-7"/>
+                </svg>
+            </div>
+
+            {# Right card — illustrative AI summary.
+               TODO(placeholder): TASK-131 + DEC-057 — the AI-summary copy is illustrative. The
+               `AnthropicAiInsightsService` is still stub-only at launch (DEC-057 "AI stub-first"
+               posture), so we render a static sample sourced from `config/placeholders.php`
+               via `PlaceholdersExtension::homepage_ai_sample` rather than a live API call. Swap
+               both this template comment + the placeholders entry the moment real per-report
+               summaries land.
+            #}
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div class="flex items-center gap-1.5 mb-2">
+                    {# Lucide Sparkles glyph — semantic colour reserved for the AI-card label only. #}
+                    <svg class="w-3 h-3 text-blue-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3zM18 14l.9 2.5 2.5.9-2.5.9L18 21l-.9-2.7-2.5-.9 2.5-.9L18 14z"/>
+                    </svg>
+                    <span class="text-xs font-medium text-blue-700 uppercase tracking-wider">AI summary</span>
+                </div>
+                <p class="text-sm text-blue-900 leading-relaxed">{{ homepage_ai_sample }}</p>
+            </div>
+        </div>
     </div>
-</twig:SectionContainer>
+</section>
+
+{# === 4. Your domain, one letter (TASK-131) ===
+   Two-column at md+. Left: pitch + CTAs. Right: realistic grade card mockup (A tile + domain
+   + pass rate + 4 emerald pass chips). Uses the same monochrome zinc palette + emerald
+   semantic colour for state chips only. #}
+<section class="bg-base-100 py-16 md:py-24 border-t border-zinc-200">
+    <div class="container mx-auto px-4 md:px-6">
+        <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
+            {# Left column — pitch + CTAs #}
+            <div>
+                <div class="text-xs uppercase tracking-wider text-zinc-500 mb-4">Email authentication, scored</div>
+
+                <h2 class="text-3xl md:text-4xl font-medium tracking-tight leading-[1.15] text-zinc-900">One letter tells you if your email is at risk.</h2>
+
+                <p class="mt-4 text-base md:text-lg text-zinc-500 max-w-xl leading-relaxed">
+                    DMARC reports, DNS health, and AI insights rolled into a single A–F score per domain. No XML, no guesswork.
+                </p>
+
+                <div class="mt-8 flex flex-col sm:flex-row gap-3">
+                    <a href="{{ path('tools_domain_health') }}"
+                       class="inline-flex items-center justify-center bg-zinc-900 text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors">
+                        Check your domain's grade
+                    </a>
+                    {# Secondary CTA — there's no dedicated "how grading works" KB article yet, so we link
+                       to the closest fit (the SPF/DKIM/DMARC umbrella explainer). Spec said: "find one; if
+                       none, drop the secondary CTA." This is close enough — the article covers what each
+                       signal means, which is what someone clicking "How grading works" actually wants. #}
+                    <a href="{{ path('knowledge_base_article', {slug: 'email-authentication-explained'}) }}"
+                       class="inline-flex items-center justify-center border border-zinc-300 rounded-md px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 transition-colors">
+                        How grading works
+                    </a>
+                </div>
+            </div>
+
+            {# Right column — grade card mockup. #}
+            <div>
+                <div class="bg-white border border-zinc-200 rounded-lg p-5 max-w-sm">
+                    <div class="flex items-center gap-3">
+                        <div class="w-14 h-14 bg-emerald-50 text-emerald-700 rounded-md flex items-center justify-center text-3xl font-medium" aria-hidden="true">A</div>
+                        <div>
+                            <div class="font-mono text-zinc-500 text-sm">acme.io</div>
+                            <div class="text-sm font-medium mt-0.5 text-zinc-900">98.4% pass rate</div>
+                            <div class="text-xs text-zinc-400 mt-0.5">last 30 days &middot; 12 reports</div>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-1.5 flex-wrap">
+                        {% for protocol in ['SPF', 'DKIM', 'DMARC', 'MX'] %}
+                            <span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md px-2 py-0.5 text-xs font-medium">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                {{ protocol }}
+                                <span class="sr-only">passing</span>
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 {# === 4.5. Product Preview — real dashboard screenshot of /app/domains/{acme.example-id}
        captured against the demo seed data (TASK-120). The annotation callout
