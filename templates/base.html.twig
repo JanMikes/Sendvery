@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Sendvery{% endblock %}</title>
     <meta name="description" content="{% block meta_description %}Sendvery — Email health & deliverability monitoring. Free DMARC, SPF, DKIM checker tools. AI-powered insights. Open source.{% endblock %}">
-    <link rel="canonical" href="{% block canonical %}{{ app.request.uri }}{% endblock %}">
+    {# TASK-142: canonical + og:url derive from the matched ROUTE name (no query string),
+       so /tools/spf-checker?domain=foo.com and /tools/spf-checker canonicalize to the same URL.
+       The fallback to app.request.uri keeps the link working for routes that don't expose a name. #}
+    {% set _canonical_route = app.request.attributes.get('_route') %}
+    {% set _canonical_url = _canonical_route ? url(_canonical_route, app.request.attributes.get('_route_params')|default([])) : app.request.uri %}
+    <link rel="canonical" href="{% block canonical %}{{ _canonical_url }}{% endblock %}">
+    {# TASK-142: pages that add no organic search value (auth, dashboard, legal noise pages)
+       override this block with noindex,follow so they don't compete for ranking signal. #}
+    {% block robots %}{% endblock %}
 
     <meta property="og:title" content="{% block og_title %}{{ block('title') }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}{{ block('meta_description') }}{% endblock %}">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
-    <meta property="og:url" content="{{ app.request.uri }}">
+    <meta property="og:url" content="{{ _canonical_url }}">
     <meta property="og:site_name" content="Sendvery">
     <meta property="og:image" content="{% block og_image %}{{ absolute_url(asset('images/og-default.webp')) }}{% endblock %}">
 

@@ -19,6 +19,10 @@ final class RobotsController extends AbstractController
         $content = <<<TXT
             User-agent: *
             Allow: /
+            Disallow: /app/
+            Disallow: /onboarding/
+            Disallow: /_components/
+            Disallow: /auth/
 
             Sitemap: {$sitemapUrl}
             TXT;

@@ -3,6 +3,26 @@
 {% block title %}Pricing — Sendvery Email Monitoring{% endblock %}
 {% block meta_description %}Sendvery pricing: Free forever for 1 domain. Personal from $4.99/mo (save $12/yr on annual). Pro from $19.99/mo (save $48/yr). Business from $49.99/mo (save $120/yr). Self-host free, always.{% endblock %}
 
+{% block structured_data %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Sendvery",
+    "description": "Email health & deliverability monitoring with DMARC report parsing and AI-powered insights. Free for 1 domain.",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "url": "{{ url('home') }}",
+    "offers": [
+        {"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "USD", "category": "free"},
+        {"@type": "Offer", "name": "Personal", "price": "4.99", "priceCurrency": "USD", "category": "subscription"},
+        {"@type": "Offer", "name": "Pro", "price": "19.99", "priceCurrency": "USD", "category": "subscription"},
+        {"@type": "Offer", "name": "Business", "price": "49.99", "priceCurrency": "USD", "category": "subscription"}
+    ]
+}
+</script>
+{% endblock %}
+
 {% block content %}
     <twig:SectionContainer>
         <div class="text-center mb-12">

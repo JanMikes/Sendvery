@@ -30,6 +30,7 @@ final class SitemapController extends AbstractController
         ['route' => 'knowledge_base_article', 'priority' => '0.7', 'changefreq' => 'monthly', 'params' => ['slug' => 'gmail-yahoo-bulk-sender-requirements-2024']],
         ['route' => 'knowledge_base_article', 'priority' => '0.7', 'changefreq' => 'monthly', 'params' => ['slug' => 'dmarc-migration-guide-none-to-reject']],
         ['route' => 'knowledge_base_article', 'priority' => '0.7', 'changefreq' => 'monthly', 'params' => ['slug' => 'mx-records-explained']],
+        ['route' => 'knowledge_base_article', 'priority' => '0.7', 'changefreq' => 'monthly', 'params' => ['slug' => 'authorizing-senders-explained']],
         ['route' => 'pricing', 'priority' => '0.8', 'changefreq' => 'monthly'],
         ['route' => 'about_what_is_sendvery', 'priority' => '0.7', 'changefreq' => 'monthly'],
         ['route' => 'about_open_source', 'priority' => '0.7', 'changefreq' => 'monthly'],

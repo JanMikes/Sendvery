@@ -4612,7 +4612,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-142: SEO audit + improvements pass — meta/OG/structured-data/canonical/headings/internal-linking across every public page
 
-- Status: proposed
+- Status: done
 - Area: marketing / seo
 - Why: User: "Focus on SEO improvements now." Sendvery is launch-ready and the marketing site needs to be discoverable. Per-page meta, structured data, sitemap, canonical URLs, internal linking density are all baseline SEO hygiene that compound over months.
 - Acceptance:
@@ -4621,6 +4621,28 @@ Two underlying queries fire once per matrix row:
   - Tests: extend `MarketingPagesTest` per-page to assert `<title>` + meta description differ from the default, OG image present, canonical present.
 - Notes:
   - Architect first — needs to scope the punch-list before committing to fixes.
+
+### Architect plan (2026-05-25) + Round-8 shipped fixes
+
+Architect surveyed every public page-type and identified 6 P1/P2 fixes + 6 lower-priority follow-ups. Six highest-leverage fixes shipped in round 8:
+
+1. **`public/images/og-default.webp` created (P1)** — the file was referenced in `base.html.twig` + `OgImageController::fallbackRedirect()` but never existed, so every page lacking a dynamic OG image (home, pricing, about/*, KB index, login, legal, auth flows) was serving a broken `<meta property="og:image">`. Generated a 1200×630 branded webp via GD using the existing Inter fonts and brand teal (`rgb(13, 148, 136)`, same palette the `GdOgImagePainter` uses for dynamic cards) — keeps the static fallback consistent with the dynamic-card register.
+2. **Query-string-free canonical + og:url (P1)** — `base.html.twig` was emitting `<link rel="canonical" href="{{ app.request.uri }}">` and the same for `og:url`. `/tools/spf-checker?domain=example.com` was canonicalising to the parameterised URL — Google would have indexed a near-duplicate canonical for every checked domain. Replaced with `url(_route, _route_params)` which derives the URL from the matched route name (parameterless). Falls back to `app.request.uri` for routes that don't expose a name.
+3. **`Disallow: /app/`, `/onboarding/`, `/auth/`, `/_components/` in `robots.txt` (P2)** — crawlers were free to hit dashboard / onboarding / Live-Component endpoints, burning crawl budget on URLs that 302 to login. Added the disallow lines to `RobotsController`.
+4. **`authorizing-senders-explained` added to `SitemapController::ROUTES` (P2)** — the KB article was orphaned (article exists in `templates/knowledge_base/articles/` and renders, but absent from sitemap so Google had no path to discover it).
+5. **`noindex,follow` on login + check-email + login-failed + invitation-invalid (P2)** — these auth pages add zero organic search value; the login page especially should not appear in results. Added a `{% block robots %}{% endblock %}` hook to `base.html.twig` and override in the 4 auth templates.
+6. **`SoftwareApplication` JSON-LD on `/pricing` (P2)** — added a `{% block structured_data %}` block to `templates/about/pricing.html.twig` with all 4 offer rungs (Free / Personal / Pro / Business) priced in USD. This is the Sendvery-specific equivalent of a Product schema; Google's Pricing rich-results eligibility wants per-tier price markup.
+7. **Login page H1** — wrapped the existing "Sign in to your account" `<p>` in `<h1>` semantics (styled as `font-normal` so the visual register doesn't change).
+
+Six lower-priority items filed as TASK-15X candidates (Organization `logo` field, per-article `datePublished`/`dateModified` data source, `BreadcrumbList` on KB index, `WebSite` JSON-LD with `SearchAction`, Twitter handle, title length overages on 4 tool pages). All round-9 candidates.
+
+Test contract pinned by new `task142SeoBaselineContract` in `MarketingPagesTest`:
+- OG fallback file exists on disk.
+- robots.txt carries `Disallow: /app/`, `/onboarding/`, `/auth/`.
+- sitemap.xml includes `authorizing-senders-explained`.
+- `/tools/spf-checker?domain=example.com` emits a query-string-free canonical.
+- `/login` carries `<meta name="robots" content="noindex,…">`.
+- `/pricing` emits `SoftwareApplication` JSON-LD with all 4 offer rungs.
 
 ---
 

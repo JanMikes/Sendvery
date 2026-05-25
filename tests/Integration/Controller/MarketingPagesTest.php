@@ -409,17 +409,18 @@ final class MarketingPagesTest extends WebTestCase
             'Exactly one element with id="dns-checker" must exist — the standalone DNS-checker section was removed and only the hero carries the id now.',
         );
 
-        // 5. Trust-logos row sits between hero and section 2. Walk the DOM positions.
+        // 5. Section ordering: hero → section 2 (XML→plain English) → section 3 (grade card).
+        //    The TASK-131-era trust-logos row that sat between hero and section 2 was
+        //    removed by the user-driven 6a9d04b hero redesign (alternating section
+        //    backgrounds + simplified hero); pin the surviving order without the trust
+        //    logos so this test reflects the current intended sequence.
         $heroPos = strpos($body, 'id="dns-checker"');
-        $trustPos = strpos($body, 'Already running on real production domains');
         $section2Pos = strpos($body, 'How the AI insights work');
         $section3Pos = strpos($body, 'One letter tells you if your email is at risk.');
         self::assertNotFalse($heroPos);
-        self::assertNotFalse($trustPos);
         self::assertNotFalse($section2Pos);
         self::assertNotFalse($section3Pos);
-        self::assertGreaterThan($heroPos, $trustPos, 'Trust logos must render AFTER the hero.');
-        self::assertGreaterThan($trustPos, $section2Pos, 'Section 2 (XML → plain English) must render AFTER the trust logos row.');
+        self::assertGreaterThan($heroPos, $section2Pos, 'Section 2 (XML → plain English) must render AFTER the hero.');
         self::assertGreaterThan($section2Pos, $section3Pos, 'Section 3 (grade card) must render AFTER section 2.');
 
         // 6. Grade card mockup content.
@@ -507,6 +508,77 @@ final class MarketingPagesTest extends WebTestCase
             $iconTiles->count(),
             'TASK-138: each How-it-works step must render an SVG icon inside a zinc-bordered tile.',
         );
+    }
+
+    /**
+     * TASK-142 — SEO baseline contract pinned per public page-type.
+     *
+     * - canonical + og:url are query-string-free (so `/tools/spf-checker?domain=foo`
+     *   canonicalizes to `/tools/spf-checker`, not the parameterised URL).
+     * - login + auth + invitation pages carry `noindex,follow` so they don't compete
+     *   for ranking signal.
+     * - robots.txt disallows `/app/`, `/onboarding/`, `/auth/`, `/_components/` so
+     *   crawl budget isn't wasted on authenticated surfaces.
+     * - sitemap.xml includes every public KB article (including the
+     *   `authorizing-senders-explained` slug that was missing in round-7).
+     * - Pricing page exposes `SoftwareApplication` JSON-LD with all 4 offer rungs.
+     * - The static OG fallback file (`public/images/og-default.webp`) exists on
+     *   disk — otherwise every page that doesn't override `og_image` serves a
+     *   broken `<meta property="og:image">`.
+     */
+    #[Test]
+    public function task142SeoBaselineContract(): void
+    {
+        $client = self::createClient();
+
+        // OG fallback file must exist on disk — referenced by base.html.twig.
+        self::assertFileExists(
+            \dirname(__DIR__, 3).'/public/images/og-default.webp',
+            'TASK-142: the static OG fallback `public/images/og-default.webp` must exist; otherwise every page that does not override `og_image` ships a broken Open Graph image.',
+        );
+
+        // /robots.txt disallows the authenticated surfaces.
+        $client->request('GET', '/robots.txt');
+        $robots = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Disallow: /app/', $robots, 'TASK-142: robots.txt must disallow /app/ (dashboard).');
+        self::assertStringContainsString('Disallow: /onboarding/', $robots, 'TASK-142: robots.txt must disallow /onboarding/.');
+        self::assertStringContainsString('Disallow: /auth/', $robots, 'TASK-142: robots.txt must disallow /auth/.');
+
+        // sitemap.xml carries the previously-orphaned KB article.
+        $client->request('GET', '/sitemap.xml');
+        self::assertStringContainsString('authorizing-senders-explained', (string) $client->getResponse()->getContent(), 'TASK-142: sitemap.xml must include the authorizing-senders-explained KB article.');
+
+        // Canonical strips query string: hitting a tool with `?domain=foo` resolves to the
+        // bare route URL, not the parameterised one.
+        $client->request('GET', '/tools/spf-checker?domain=example.com');
+        $body = (string) $client->getResponse()->getContent();
+        self::assertMatchesRegularExpression(
+            '~<link\s+rel="canonical"\s+href="[^"]*?/tools/spf-checker"~',
+            $body,
+            'TASK-142: canonical URL on /tools/spf-checker must NOT include ?domain=… — query-string-free.',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '~<link\s+rel="canonical"[^>]*\?[^"]*"~',
+            $body,
+            'TASK-142: canonical href must not contain any query string.',
+        );
+
+        // Login page carries noindex,follow.
+        $client->request('GET', '/login');
+        $body = (string) $client->getResponse()->getContent();
+        self::assertMatchesRegularExpression(
+            '~<meta\s+name="robots"\s+content="noindex[^"]*"~',
+            $body,
+            'TASK-142: /login must carry <meta name="robots" content="noindex,…"> so it stays out of Google.',
+        );
+
+        // Pricing page exposes SoftwareApplication JSON-LD with all 4 offer rungs.
+        $client->request('GET', '/pricing');
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('"@type": "SoftwareApplication"', $body, 'TASK-142: /pricing must carry SoftwareApplication JSON-LD.');
+        self::assertStringContainsString('"name": "Personal"', $body, 'TASK-142: SoftwareApplication offers must include Personal.');
+        self::assertStringContainsString('"name": "Pro"', $body, 'TASK-142: SoftwareApplication offers must include Pro.');
+        self::assertStringContainsString('"name": "Business"', $body, 'TASK-142: SoftwareApplication offers must include Business.');
     }
 
     /**
