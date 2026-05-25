@@ -65,6 +65,110 @@
 {% block checker_card %}<twig:DmarcChecker domain="{{ initialDomain ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
+{# DMARC generator — client-side only, see assets/controllers/dmarc_generator_controller.js #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    <div class="max-w-3xl mx-auto">
+        <h2 id="dmarc-generator" class="text-2xl md:text-3xl font-medium tracking-tight text-zinc-900 mb-3">DMARC Record Generator</h2>
+        <p class="text-base-content/70 mb-6">Compose a valid DMARC record with the policy, reporting addresses, and alignment knobs you need. Nothing leaves your browser.</p>
+
+        <div class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl" data-controller="dmarc-generator">
+            <div class="card-body space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="dmarc-generator-policy"><span class="label-text font-semibold">Policy (p=)</span></label>
+                        <select id="dmarc-generator-policy" class="select select-bordered" data-dmarc-generator-target="policy" data-action="change->dmarc-generator#generate">
+                            <option value="none" selected>none — monitor only</option>
+                            <option value="quarantine">quarantine — send failing mail to spam</option>
+                            <option value="reject">reject — refuse failing mail outright</option>
+                        </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="dmarc-generator-sp"><span class="label-text font-semibold">Subdomain policy (sp=)</span></label>
+                        <select id="dmarc-generator-sp" class="select select-bordered" data-dmarc-generator-target="subdomainPolicy" data-action="change->dmarc-generator#generate">
+                            <option value="" selected>(inherit from p=)</option>
+                            <option value="none">none</option>
+                            <option value="quarantine">quarantine</option>
+                            <option value="reject">reject</option>
+                        </select>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="dmarc-generator-rua"><span class="label-text font-semibold">Aggregate reports (rua=)</span></label>
+                        <input
+                            id="dmarc-generator-rua"
+                            type="text"
+                            class="input input-bordered font-mono text-sm"
+                            value="{{ dmarcDefaultRua }}"
+                            placeholder="reports@example.com"
+                            data-dmarc-generator-target="rua"
+                            data-action="input->dmarc-generator#generate"
+                        />
+                        <span class="label-text-alt text-xs mt-1 text-base-content/60">Comma-separate multiple mailboxes. We pre-fill Sendvery's ingestion address.</span>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="dmarc-generator-ruf"><span class="label-text font-semibold">Forensic reports (ruf=, optional)</span></label>
+                        <input
+                            id="dmarc-generator-ruf"
+                            type="text"
+                            class="input input-bordered font-mono text-sm"
+                            placeholder="forensics@example.com"
+                            data-dmarc-generator-target="ruf"
+                            data-action="input->dmarc-generator#generate"
+                        />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="dmarc-generator-pct"><span class="label-text font-semibold">Percentage (pct=)</span></label>
+                        <input
+                            id="dmarc-generator-pct"
+                            type="number"
+                            min="0"
+                            max="100"
+                            value="100"
+                            class="input input-bordered font-mono text-sm"
+                            data-dmarc-generator-target="pct"
+                            data-action="input->dmarc-generator#generate"
+                        />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="form-control">
+                            <label class="label" for="dmarc-generator-adkim"><span class="label-text font-semibold">DKIM alignment (adkim=)</span></label>
+                            <select id="dmarc-generator-adkim" class="select select-bordered" data-dmarc-generator-target="adkim" data-action="change->dmarc-generator#generate">
+                                <option value="r" selected>r — relaxed</option>
+                                <option value="s">s — strict</option>
+                            </select>
+                        </div>
+                        <div class="form-control">
+                            <label class="label" for="dmarc-generator-aspf"><span class="label-text font-semibold">SPF alignment (aspf=)</span></label>
+                            <select id="dmarc-generator-aspf" class="select select-bordered" data-dmarc-generator-target="aspf" data-action="change->dmarc-generator#generate">
+                                <option value="r" selected>r — relaxed</option>
+                                <option value="s">s — strict</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="button" class="btn btn-primary" data-action="click->dmarc-generator#generate">Generate DMARC record</button>
+                </div>
+
+                <div hidden data-dmarc-generator-target="panel" class="space-y-3">
+                    <div class="label-text font-semibold">Publish this as a TXT record on <code class="font-mono">_dmarc.&lt;your-domain&gt;</code></div>
+                    <pre class="bg-base-200 rounded-lg p-4 overflow-x-auto"><code class="text-sm" data-dmarc-generator-target="output"></code></pre>
+                    <div class="flex flex-wrap gap-3 items-center">
+                        <button type="button" class="btn btn-sm" data-action="click->dmarc-generator#copy">Copy</button>
+                        <p class="text-sm text-base-content/60">Test in DNS before making this your live record. We don't publish for you.</p>
+                    </div>
+                    <p class="text-sm text-base-content/60">Moving from <code>p=none</code> to <code>p=reject</code>? Follow the <a class="link link-primary" href="{{ path('knowledge_base_article', {slug: 'dmarc-migration-guide-none-to-reject'}) }}">staged migration guide</a>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</twig:SectionContainer>
+
 <twig:SectionContainer>
     <div class="max-w-3xl mx-auto">
         <h2 class="text-2xl md:text-3xl font-bold mb-6">What is DMARC?</h2>

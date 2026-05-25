@@ -4691,7 +4691,7 @@ Test contract pinned by new `task142SeoBaselineContract` in `MarketingPagesTest`
 
 ## TASK-144: No DNS record helper forms on public /tools/* pages — visitors who don't know SPF/DMARC syntax can't generate the record they need
 
-- Status: proposed
+- Status: done
 - Area: marketing / tools
 - Why: User: "could there be helper forms to set up dns records format for spf, dkim etc on the public pages?" The current `/tools/*` pages CHECK records but don't help visitors GENERATE them. A visitor whose SPF check fails because they need to add `include:spf.mandrillapp.com` has to look up Mailchimp's docs separately. v1 helper-form on the SPF + DMARC checker pages would close the loop.
 - Acceptance (v1):
@@ -4705,6 +4705,32 @@ Test contract pinned by new `task142SeoBaselineContract` in `MarketingPagesTest`
   - DKIM + MX generators NOT in v1 (DKIM requires the selector + public-key bytes — non-trivial UX; MX rarely auth-related). File as TASK-15X follow-ups if v1 lands well.
 - Notes:
   - Architect first — needs to confirm page placement (checker page vs separate generator page), Stimulus pattern (matching `HomeDomainCheckerComponent` register), provider list + canonical `include:` strings, output formatting.
+
+### Architect plan (2026-05-25) — scope updated to all 4 generators per round-8 checkpoint
+
+User confirmed v1 = SPF + DMARC + DKIM + MX (not the original SPF+DMARC-only spec). Architect surveyed `assets/controllers/*.js` + existing tool templates and produced an implementation plan with these decisions:
+
+- **4 separate Stimulus controllers** (`spf_generator_controller.js` etc.) rather than 1 shared controller — the field sets are sufficiently different that a shared controller would need so many conditionals it would be harder to read than 4 focused files.
+- **Each generator card is the first `<twig:SectionContainer>` inside `{% block seo_content %}`**, before the "What is X?" section. No `<details>` toggle — the generator is the primary actionable surface.
+- **2 new PHP registries** (`SpfProviderRegistry` + `MxPresetRegistry`) following the existing `DkimSelectorRegistry` pattern — `final readonly class` + private const array + `allAsJson()` accessor.
+- **DKIM long-key splitting** via a `chunk(value, 255)` helper — RSA 2048-bit keys produce ~410-char record values that split into two quoted segments per BIND-format DNS zone-file convention.
+- **MX Microsoft 365** ships with a `your-tenant` placeholder + a tenant-name input the user fills in; the controller substitutes the slug into `<slug>.mail.protection.outlook.com`.
+- **XSS rule:** every assignment to a DOM element that displays user input uses `textContent` — never `innerHTML`.
+- **Copy UX:** each generator embeds an inline `copy()` action using `navigator.clipboard.writeText` + a 1.5s "Copied!" flash, rather than depending on the existing `clipboard_copy_controller` (which reads its value once at connect time and can't accept dynamic-value hand-offs).
+
+### Round-8 shipped (2026-05-25)
+
+- All 4 generator Stimulus controllers + 2 PHP registries + 3 modified checker controllers + 4 modified Twig templates + 9 new integration tests landed in one bundled commit.
+- Reviewer agent caught 2 must-fixes that shipped inline before commit:
+  1. **DMARC `buildMailtoList` double-`mailto:` prefix** — if a user pasted `mailto:reports@example.com` (copied from an existing DMARC record), output became `rua=mailto:mailto:reports@example.com`. Fixed via `replace(/^mailto:/i, '')` strip before prepending. The function is now idempotent.
+  2. **Brevo SPF include** — registry shipped with the legacy `spf.sendinblue.com` per the plan; live-DNS-checked both `spf.sendinblue.com` and `spf.brevo.com` (both return identical IPv4 ranges + `-all` terminator). Updated to current canonical `spf.brevo.com`.
+- 5 nice-to-haves flagged by the reviewer filed as TASK-15X follow-ups (dead `copyButton` Stimulus targets, basic email-format guard on rua/ruf inputs, "objects over arrays" registry refactor, missing `assertResponseIsSuccessful` on 3 tests, omit-default-when-relaxed for `adkim`/`aspf`). All round-9 candidates.
+
+### What's NOT in v1 (file as round-9 candidates if user asks)
+
+- Saved/persisted generator state (URL-encoded share link) — generators reset every page load. Not requested.
+- Multi-domain bulk SPF generation (paste 10 domains → 10 records) — not requested.
+- DMARC fo= / rf= / ri= advanced tags. Not requested.
 
 ---
 

@@ -163,6 +163,104 @@ final class ToolPagesTest extends WebTestCase
         self::assertGreaterThanOrEqual(1, $crawler->filter('a[href="/login"]')->count(), 'DNS monitoring page should link to /login');
     }
 
+    /**
+     * TASK-144 — the 4 generator cards (SPF/DMARC/DKIM/MX) live on the
+     * existing checker tool pages as the first SEO section, wired via
+     * Stimulus controllers. The asserts below pin the controller name
+     * + the JSON data attributes so a future refactor that drops the
+     * generator surface has to touch the test explicitly.
+     */
+    #[Test]
+    public function spfGeneratorRendersControllerAttribute(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/spf-checker');
+
+        self::assertSelectorExists('[data-controller="spf-generator"]');
+    }
+
+    #[Test]
+    public function spfGeneratorHasGoogleWorkspaceProvider(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/spf-checker');
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('Google Workspace', (string) $client->getResponse()->getContent());
+    }
+
+    #[Test]
+    public function spfGeneratorDataAttributeContainsProvidersJson(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/spf-checker');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('data-spf-generator-providers-value', $body);
+        self::assertStringContainsString('_spf.google.com', $body);
+    }
+
+    #[Test]
+    public function dmarcGeneratorRendersControllerAttribute(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/dmarc-checker');
+
+        self::assertSelectorExists('[data-controller="dmarc-generator"]');
+    }
+
+    #[Test]
+    public function dmarcGeneratorHasPolicies(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/dmarc-checker');
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('value="none"', $body);
+        self::assertStringContainsString('value="quarantine"', $body);
+        self::assertStringContainsString('value="reject"', $body);
+    }
+
+    #[Test]
+    public function dkimGeneratorRendersControllerAttribute(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/dkim-checker');
+
+        self::assertSelectorExists('[data-controller="dkim-generator"]');
+    }
+
+    #[Test]
+    public function mxGeneratorRendersControllerAttribute(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/mx-checker');
+
+        self::assertSelectorExists('[data-controller="mx-generator"]');
+    }
+
+    #[Test]
+    public function mxGeneratorHasGoogleWorkspacePreset(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/mx-checker');
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('Google Workspace', $body);
+    }
+
+    #[Test]
+    public function mxGeneratorDataAttributeContainsPresetsJson(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', '/tools/mx-checker');
+
+        $body = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString('data-mx-generator-presets-value', $body);
+        self::assertStringContainsString('ASPMX.L.GOOGLE.COM', $body);
+    }
+
     /** @return iterable<string, array{string}> */
     public static function toolPagesWithCheckers(): iterable
     {

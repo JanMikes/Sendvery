@@ -65,6 +65,82 @@
 {% block checker_card %}<twig:DkimChecker domain="{{ initialDomain ?? '' }}" selector="{{ initialSelector ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
+{# DKIM generator — client-side only, see assets/controllers/dkim_generator_controller.js #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    <div class="max-w-3xl mx-auto">
+        <h2 id="dkim-generator" class="text-2xl md:text-3xl font-medium tracking-tight text-zinc-900 mb-3">DKIM Record Generator</h2>
+        <p class="text-base-content/70 mb-6">Paste a public key produced by your mail server or signing service, pick a selector, and we'll format a valid TXT record (with 255-character chunks where needed). The key never leaves your browser.</p>
+
+        <div class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl" data-controller="dkim-generator">
+            <div class="card-body space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="dkim-generator-selector"><span class="label-text font-semibold">Selector</span></label>
+                        <input
+                            id="dkim-generator-selector"
+                            type="text"
+                            class="input input-bordered font-mono text-sm"
+                            placeholder="default"
+                            data-dkim-generator-target="selector"
+                            data-action="input->dkim-generator#generate"
+                        />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="dkim-generator-domain"><span class="label-text font-semibold">Domain</span></label>
+                        <input
+                            id="dkim-generator-domain"
+                            type="text"
+                            class="input input-bordered font-mono text-sm"
+                            placeholder="example.com"
+                            data-dkim-generator-target="domain"
+                            data-action="input->dkim-generator#generate"
+                        />
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="dkim-generator-keytype"><span class="label-text font-semibold">Key type</span></label>
+                        <select id="dkim-generator-keytype" class="select select-bordered" data-dkim-generator-target="keyType" data-action="change->dkim-generator#generate">
+                            <option value="rsa" selected>RSA</option>
+                            <option value="ed25519">Ed25519</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label" for="dkim-generator-rawkey">
+                        <span class="label-text font-semibold">Public key</span>
+                    </label>
+                    <textarea
+                        id="dkim-generator-rawkey"
+                        class="textarea textarea-bordered font-mono text-xs"
+                        rows="6"
+                        placeholder="-----BEGIN PUBLIC KEY-----&#10;MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQE...&#10;-----END PUBLIC KEY-----"
+                        data-dkim-generator-target="rawKey"
+                        data-action="input->dkim-generator#generate"
+                    ></textarea>
+                    <span class="label-text-alt text-xs mt-1 text-base-content/60">PEM-encoded or already-stripped base64 — we strip the armor and whitespace for you.</span>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="button" class="btn btn-primary" data-action="click->dkim-generator#generate">Generate DKIM record</button>
+                </div>
+
+                <div hidden data-dkim-generator-target="panel" class="space-y-3">
+                    <div class="label-text font-semibold">Publish this as a TXT record at:</div>
+                    <code class="font-mono text-sm bg-base-200 px-2 py-1 rounded" data-dkim-generator-target="hostLabel"></code>
+                    <pre class="bg-base-200 rounded-lg p-4 overflow-x-auto"><code class="text-sm whitespace-pre-wrap break-all" data-dkim-generator-target="output"></code></pre>
+                    <div class="flex flex-wrap gap-3 items-center">
+                        <button type="button" class="btn btn-sm" data-action="click->dkim-generator#copy">Copy</button>
+                        <p class="text-sm text-base-content/60">Test in DNS before making this your live record. We don't publish for you.</p>
+                    </div>
+                    <p class="text-sm text-base-content/60">New to DKIM selectors and rotation? Read the <a class="link link-primary" href="{{ path('knowledge_base_article', {slug: 'what-is-dkim'}) }}">DKIM guide</a>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</twig:SectionContainer>
+
 <twig:SectionContainer>
     <div class="max-w-3xl mx-auto">
         <h2 class="text-2xl md:text-3xl font-bold mb-6">What is DKIM?</h2>

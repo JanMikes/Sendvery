@@ -73,6 +73,86 @@
 {% block checker_card %}<twig:SpfChecker domain="{{ initialDomain ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
+{# SPF generator — client-side only, see assets/controllers/spf_generator_controller.js #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    <div class="max-w-3xl mx-auto">
+        <h2 id="spf-generator" class="text-2xl md:text-3xl font-medium tracking-tight text-zinc-900 mb-3">SPF Record Generator</h2>
+        <p class="text-base-content/70 mb-6">Pick the senders that send mail as your domain, choose a soft-fail or hard-fail terminator, and copy the record. The whole thing runs in your browser — we never see your inputs.</p>
+
+        <div
+            class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl"
+            data-controller="spf-generator"
+            data-spf-generator-providers-value="{{ spfProvidersJson|e('html_attr') }}"
+        >
+            <div class="card-body space-y-6">
+                <div>
+                    <h3 class="font-semibold mb-3">Sending services</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {% for provider in spfProviders %}
+                            <label class="label cursor-pointer justify-start gap-3 py-1">
+                                <input
+                                    type="checkbox"
+                                    class="checkbox checkbox-sm checkbox-primary"
+                                    data-spf-generator-target="checkbox"
+                                    data-spf-provider-key="{{ provider.key }}"
+                                    data-action="change->spf-generator#generate"
+                                />
+                                <span class="label-text">{{ provider.label }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label" for="spf-generator-freeform">
+                        <span class="label-text font-semibold">Additional mechanisms (optional)</span>
+                    </label>
+                    <textarea
+                        id="spf-generator-freeform"
+                        class="textarea textarea-bordered font-mono text-sm"
+                        rows="2"
+                        placeholder="ip4:198.51.100.10 a:mail.example.com"
+                        data-spf-generator-target="freeform"
+                        data-action="input->spf-generator#generate"
+                    ></textarea>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold mb-2">Terminator</h3>
+                    <div class="flex flex-wrap gap-4">
+                        <label class="label cursor-pointer justify-start gap-2 py-1">
+                            <input type="radio" name="spf-terminator" value="~all" class="radio radio-sm radio-primary" checked data-spf-generator-target="terminator" data-action="change->spf-generator#generate" />
+                            <span class="label-text font-mono text-sm">~all <span class="text-base-content/50">(softfail, recommended)</span></span>
+                        </label>
+                        <label class="label cursor-pointer justify-start gap-2 py-1">
+                            <input type="radio" name="spf-terminator" value="-all" class="radio radio-sm radio-primary" data-spf-generator-target="terminator" data-action="change->spf-generator#generate" />
+                            <span class="label-text font-mono text-sm">-all <span class="text-base-content/50">(hardfail)</span></span>
+                        </label>
+                        <label class="label cursor-pointer justify-start gap-2 py-1">
+                            <input type="radio" name="spf-terminator" value="?all" class="radio radio-sm radio-primary" data-spf-generator-target="terminator" data-action="change->spf-generator#generate" />
+                            <span class="label-text font-mono text-sm">?all <span class="text-base-content/50">(neutral)</span></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex justify-end">
+                    <button type="button" class="btn btn-primary" data-action="click->spf-generator#generate">Generate SPF record</button>
+                </div>
+
+                <div hidden data-spf-generator-target="panel" class="space-y-3">
+                    <div class="label-text font-semibold">Publish this as a TXT record on your apex domain</div>
+                    <pre class="bg-base-200 rounded-lg p-4 overflow-x-auto"><code class="text-sm" data-spf-generator-target="output"></code></pre>
+                    <div class="flex flex-wrap gap-3 items-center">
+                        <button type="button" class="btn btn-sm" data-action="click->spf-generator#copy">Copy</button>
+                        <p class="text-sm text-base-content/60">Test in DNS before making this your live record. We don't publish for you.</p>
+                    </div>
+                    <p class="text-sm text-base-content/60">Need a deeper walk-through? Read the <a class="link link-primary" href="{{ path('knowledge_base_article', {slug: 'spf-record-guide'}) }}">SPF record guide</a>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</twig:SectionContainer>
+
 {# What is SPF #}
 <twig:SectionContainer>
     <div class="max-w-3xl mx-auto">

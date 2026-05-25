@@ -65,6 +65,60 @@
 {% block checker_card %}<twig:MxChecker domain="{{ initialDomain ?? '' }}" />{% endblock %}
 
 {% block seo_content %}
+{# MX generator — client-side only, see assets/controllers/mx_generator_controller.js #}
+<twig:SectionContainer bgClass="bg-base-200/50">
+    <div class="max-w-3xl mx-auto">
+        <h2 id="mx-generator" class="text-2xl md:text-3xl font-medium tracking-tight text-zinc-900 mb-3">MX Record Generator</h2>
+        <p class="text-base-content/70 mb-6">Pick a mailbox provider preset and we'll render the matching MX records — priority and host, ready for your DNS zone. Microsoft 365 needs your tenant slug.</p>
+
+        <div
+            class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl"
+            data-controller="mx-generator"
+            data-mx-generator-presets-value="{{ mxPresetsJson|e('html_attr') }}"
+        >
+            <div class="card-body space-y-6">
+                <div class="form-control">
+                    <label class="label" for="mx-generator-preset"><span class="label-text font-semibold">Mailbox provider</span></label>
+                    <select
+                        id="mx-generator-preset"
+                        class="select select-bordered"
+                        data-mx-generator-target="preset"
+                        data-action="change->mx-generator#presetChanged"
+                    >
+                        <option value="" selected disabled>Choose a provider…</option>
+                        {% for preset in mxPresets %}
+                            <option value="{{ preset.key }}">{{ preset.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div hidden data-mx-generator-target="tenantPanel" class="form-control">
+                    <label class="label" for="mx-generator-tenant"><span class="label-text font-semibold">Microsoft 365 tenant slug</span></label>
+                    <input
+                        id="mx-generator-tenant"
+                        type="text"
+                        class="input input-bordered font-mono text-sm"
+                        placeholder="acme-com"
+                        data-mx-generator-target="tenant"
+                        data-action="input->mx-generator#presetChanged"
+                    />
+                    <span class="label-text-alt text-xs mt-1 text-base-content/60">Microsoft 365 generates a unique host like <code>acme-com.mail.protection.outlook.com</code>. Use the slug shown in your Microsoft admin centre.</span>
+                </div>
+
+                <div hidden data-mx-generator-target="panel" class="space-y-3">
+                    <div class="label-text font-semibold">Publish these as MX records on your apex domain</div>
+                    <pre class="bg-base-200 rounded-lg p-4 overflow-x-auto"><code class="text-sm" data-mx-generator-target="output"></code></pre>
+                    <div class="flex flex-wrap gap-3 items-center">
+                        <button type="button" class="btn btn-sm" data-action="click->mx-generator#copy">Copy</button>
+                        <p class="text-sm text-base-content/60">Test in DNS before making this your live record. We don't publish for you.</p>
+                    </div>
+                    <p class="text-sm text-base-content/60">New to MX priority and redundancy? Read <a class="link link-primary" href="{{ path('knowledge_base_article', {slug: 'mx-records-explained'}) }}">MX records explained</a>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</twig:SectionContainer>
+
 <twig:SectionContainer>
     <div class="max-w-3xl mx-auto">
         <h2 class="text-2xl md:text-3xl font-bold mb-6">What are MX records?</h2>
