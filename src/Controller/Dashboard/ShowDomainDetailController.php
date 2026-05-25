@@ -9,6 +9,7 @@ use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
+use App\Query\GetDomainWorkspaceTabCounts;
 use App\Query\GetTopSendersForDomain;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
@@ -35,6 +36,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly DomainSetupStatusResolver $domainSetupStatusResolver,
         private readonly RuaScenarioResolver $ruaScenarioResolver,
         private readonly GetDomainOverview $getDomainOverview,
+        private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
     ) {
     }
 
@@ -142,6 +144,8 @@ final class ShowDomainDetailController extends AbstractController
             $recentActivity->reportsCount,
         );
 
+        $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($id)->toTwigArray();
+
         return $this->render('dashboard/domain_detail.html.twig', [
             'domain' => $domain,
             'reports' => $reports,
@@ -154,6 +158,7 @@ final class ShowDomainDetailController extends AbstractController
             'dmarcPolicyAdvice' => $dmarcPolicyAdvice,
             'domainSetupStatus' => $domainSetupStatus,
             'hasPublishedDmarcRecord' => $hasPublishedDmarcRecord,
+            'tabCounts' => $tabCounts,
         ]);
     }
 }

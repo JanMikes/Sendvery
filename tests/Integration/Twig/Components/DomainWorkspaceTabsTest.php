@@ -74,7 +74,11 @@ final class DomainWorkspaceTabsTest extends WebTestCase
 
         $activeTab = $tablist->filter('a.tab.tab-active');
         self::assertGreaterThan(0, $activeTab->count(), 'The active tab must be rendered with `tab-active`.');
-        self::assertSame(
+        // ->text() concatenates all descendant text including badge spans
+        // (TASK-084), so use contains rather than equality — a future fixture
+        // with a non-zero badge count on the active tab would otherwise break
+        // this assertion with a confusing failure.
+        self::assertStringContainsString(
             $expectedActiveLabel,
             trim($activeTab->first()->text()),
             sprintf('Expected active tab "%s" on %s.', $expectedActiveLabel, $pathTemplate),

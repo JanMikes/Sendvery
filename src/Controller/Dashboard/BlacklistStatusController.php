@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetBlacklistStatus;
 use App\Query\GetDomainDetail;
+use App\Query\GetDomainWorkspaceTabCounts;
 use App\Services\DashboardContext;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,6 +18,7 @@ final class BlacklistStatusController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetBlacklistStatus $getBlacklistStatus,
+        private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
     ) {
     }
 
@@ -32,9 +34,12 @@ final class BlacklistStatusController extends AbstractController
 
         $statusResults = $this->getBlacklistStatus->forDomain($id, $teamIds);
 
+        $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($id)->toTwigArray();
+
         return $this->render('dashboard/blacklist_status.html.twig', [
             'domain' => $domain,
             'statusResults' => $statusResults,
+            'tabCounts' => $tabCounts,
         ]);
     }
 }

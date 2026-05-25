@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainDnsHistory;
+use App\Query\GetDomainWorkspaceTabCounts;
 use App\Repository\DnsCheckResultRepository;
 use App\Results\DnsCheckHistoryResult;
 use App\Services\DashboardContext;
@@ -31,6 +32,7 @@ final class DomainDnsHistoryController extends AbstractController
         private readonly DnsCheckResultRepository $dnsCheckResultRepository,
         private readonly ReportAddressProvider $reportAddressProvider,
         private readonly ClockInterface $clock,
+        private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
     ) {
     }
 
@@ -83,6 +85,8 @@ final class DomainDnsHistoryController extends AbstractController
             $this->reportAddressProvider->get(),
         );
 
+        $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($id)->toTwigArray();
+
         return $this->render('dashboard/domain_dns_history.html.twig', [
             'domain' => $domain,
             'groupedHistory' => $groupedHistory,
@@ -93,6 +97,7 @@ final class DomainDnsHistoryController extends AbstractController
             'changesOnlyCount' => $changesOnlyCount,
             'hasAnyHistory' => $hasAnyHistory,
             'ruaInstruction' => $ruaInstruction,
+            'tabCounts' => $tabCounts,
         ]);
     }
 

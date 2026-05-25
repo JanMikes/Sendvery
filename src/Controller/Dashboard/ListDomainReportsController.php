@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetAllReports;
 use App\Query\GetDomainDetail;
+use App\Query\GetDomainWorkspaceTabCounts;
 use App\Query\GetReporterOrgs;
 use App\Services\DashboardContext;
 use App\Value\ReportsFilter;
@@ -23,6 +24,7 @@ final class ListDomainReportsController extends AbstractController
         private readonly GetReporterOrgs $getReporterOrgs,
         private readonly GetDomainDetail $getDomainDetail,
         private readonly ClockInterface $clock,
+        private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
     ) {
     }
 
@@ -61,6 +63,8 @@ final class ListDomainReportsController extends AbstractController
             ? 'dashboard/_domain_reports_table.html.twig'
             : 'dashboard/domain_reports.html.twig';
 
+        $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($id)->toTwigArray();
+
         return $this->render($template, [
             'reports' => $reports,
             'domain' => $domain,
@@ -70,6 +74,7 @@ final class ListDomainReportsController extends AbstractController
             'filter' => $filter,
             'reporterOptions' => $reporterOptions,
             'filterParams' => $filter->toQueryParams(),
+            'tabCounts' => $tabCounts,
         ]);
     }
 }

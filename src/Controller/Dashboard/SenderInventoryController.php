@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Dashboard;
 
 use App\Query\GetDomainDetail;
+use App\Query\GetDomainWorkspaceTabCounts;
 use App\Query\GetSenderActivity30Day;
 use App\Query\GetSenderInventory;
 use App\Results\SenderActivity30Day;
@@ -24,6 +25,7 @@ final class SenderInventoryController extends AbstractController
         private readonly GetSenderInventory $getSenderInventory,
         private readonly GetSenderActivity30Day $getSenderActivity30Day,
         private readonly SenderAuthorizationAdvisor $senderAdvisor,
+        private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
     ) {
     }
 
@@ -88,6 +90,8 @@ final class SenderInventoryController extends AbstractController
             }
         }
 
+        $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($domainId)->toTwigArray();
+
         return $this->render('dashboard/sender_inventory.html.twig', [
             'domain' => $domain,
             'senders' => $senders,
@@ -95,6 +99,7 @@ final class SenderInventoryController extends AbstractController
             'recommendationFilter' => $recommendationParam,
             'advisorBySenderId' => $advisorByIdMap,
             'needsDecisionCount' => $needsDecisionCount,
+            'tabCounts' => $tabCounts,
         ]);
     }
 }

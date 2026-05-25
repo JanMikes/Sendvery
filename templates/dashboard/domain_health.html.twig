@@ -27,7 +27,7 @@
 {% endblock %}
 
 {% block content %}
-    <twig:DomainWorkspaceTabs :domain="domain" active="dns" />
+    <twig:DomainWorkspaceTabs :domain="domain" active="dns" :tabCounts="tabCounts" />
 
     {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
         <div class="mb-6">

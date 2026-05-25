@@ -37,7 +37,7 @@
        was removed (TASK-041) — DomainWorkspaceTabs (TASK-031) is now the sole
        cross-surface affordance for the domain workspace. Two stacked nav rows
        on the most-visited authenticated page read as unfinished. #}
-    <twig:DomainWorkspaceTabs :domain="domain" active="overview" />
+    <twig:DomainWorkspaceTabs :domain="domain" active="overview" :tabCounts="tabCounts" />
 
     {# Per-protocol setup checklist (TASK-080) — the actionable body under the
        banner. Renders one of three states: all-green confirmation, partial

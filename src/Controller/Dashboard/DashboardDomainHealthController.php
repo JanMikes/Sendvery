@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainHealthHistory;
+use App\Query\GetDomainWorkspaceTabCounts;
 use App\Repository\DnsCheckResultRepository;
 use App\Services\DashboardContext;
 use App\Services\Dns\DnsRecordRecommender;
@@ -26,6 +27,7 @@ final class DashboardDomainHealthController extends AbstractController
         private readonly DnsCheckResultRepository $dnsCheckResultRepository,
         private readonly ReportAddressProvider $reportAddressProvider,
         private readonly DnsRecordRecommender $dnsRecordRecommender,
+        private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
     ) {
     }
 
@@ -80,6 +82,8 @@ final class DashboardDomainHealthController extends AbstractController
             ];
         }
 
+        $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($id)->toTwigArray();
+
         return $this->render('dashboard/domain_health.html.twig', [
             'domain' => $domain,
             'latest' => $latest,
@@ -87,6 +91,7 @@ final class DashboardDomainHealthController extends AbstractController
             'trendChartConfig' => $trendChartConfig,
             'ruaInstruction' => $ruaInstruction,
             'dnsRecommendations' => $dnsRecommendations,
+            'tabCounts' => $tabCounts,
         ]);
     }
 }

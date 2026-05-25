@@ -17,7 +17,7 @@
 {% endblock %}
 
 {% block content %}
-    <twig:DomainWorkspaceTabs :domain="domain" active="blacklist" />
+    <twig:DomainWorkspaceTabs :domain="domain" active="blacklist" :tabCounts="tabCounts" />
 
     {% if statusResults is empty %}
         <div class="card bg-base-100 shadow">

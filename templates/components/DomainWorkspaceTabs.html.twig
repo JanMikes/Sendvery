@@ -1,20 +1,31 @@
 {# Sibling-surface navigation for the domain workspace. `active` matches one of
    the six tab keys; the matching anchor gets `tab-active`. NOTE: the Senders
    route uses `{domainId}` while all other domain-workspace routes use `{id}` —
-   using `{id}` for Senders throws `MissingMandatoryParametersException`. #}
-{% props domain, active %}
+   using `{id}` for Senders throws `MissingMandatoryParametersException`.
+
+   `tabCounts` (TASK-084) is an optional `{ reports, senders, dns, blacklist,
+   history, overview }` map produced by GetDomainWorkspaceTabCounts. Non-null
+   numeric counts render an inline `badge badge-xs badge-warning` after the
+   label. `dns` and `history` are boolean-ish (`1 = something to look at`) —
+   they render a tiny dot, not a number, because the count itself isn't
+   meaningful ("1 failing check" doesn't tell you anything more than
+   "something's failing"). `overview` is always null — the overview is the
+   catch-all, never carries a badge. When `tabCounts` is null (the default)
+   no badges render at all and the component degrades to its pre-TASK-084
+   nav-only behaviour. #}
+{% props domain, active, tabCounts = null %}
 
 <div role="tablist" class="tabs tabs-bordered mb-6 overflow-x-auto">
     <a role="tab" href="{{ path('dashboard_domain_detail', {id: domain.domainId}) }}"
        class="tab {{ active == 'overview' ? 'tab-active' : '' }}"{{ active == 'overview' ? ' aria-current="page"' : '' }}>Overview</a>
     <a role="tab" href="{{ path('dashboard_domain_reports', {id: domain.domainId}) }}"
-       class="tab {{ active == 'reports' ? 'tab-active' : '' }}"{{ active == 'reports' ? ' aria-current="page"' : '' }}>Reports</a>
+       class="tab {{ active == 'reports' ? 'tab-active' : '' }}"{{ active == 'reports' ? ' aria-current="page"' : '' }}>Reports{% if tabCounts is not null and tabCounts.reports is defined and tabCounts.reports %} <span class="badge badge-xs badge-warning ml-1" aria-label="{{ tabCounts.reports }} reports in the last 24 hours">{{ tabCounts.reports }}</span>{% endif %}</a>
     <a role="tab" href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
-       class="tab {{ active == 'senders' ? 'tab-active' : '' }}"{{ active == 'senders' ? ' aria-current="page"' : '' }}>Senders</a>
+       class="tab {{ active == 'senders' ? 'tab-active' : '' }}"{{ active == 'senders' ? ' aria-current="page"' : '' }}>Senders{% if tabCounts is not null and tabCounts.senders is defined and tabCounts.senders %} <span class="badge badge-xs badge-warning ml-1" aria-label="{{ tabCounts.senders }} unauthorized senders waiting for triage">{{ tabCounts.senders }}</span>{% endif %}</a>
     <a role="tab" href="{{ path('dashboard_domain_health', {id: domain.domainId}) }}"
-       class="tab {{ active == 'dns' ? 'tab-active' : '' }}"{{ active == 'dns' ? ' aria-current="page"' : '' }}>DNS</a>
+       class="tab {{ active == 'dns' ? 'tab-active' : '' }}"{{ active == 'dns' ? ' aria-current="page"' : '' }}>DNS{% if tabCounts is not null and tabCounts.dns is defined and tabCounts.dns %} <span class="badge badge-xs badge-warning ml-1 w-2 h-2 p-0" aria-label="DNS check failing"></span>{% endif %}</a>
     <a role="tab" href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}"
-       class="tab {{ active == 'blacklist' ? 'tab-active' : '' }}"{{ active == 'blacklist' ? ' aria-current="page"' : '' }}>Blacklist</a>
+       class="tab {{ active == 'blacklist' ? 'tab-active' : '' }}"{{ active == 'blacklist' ? ' aria-current="page"' : '' }}>Blacklist{% if tabCounts is not null and tabCounts.blacklist is defined and tabCounts.blacklist %} <span class="badge badge-xs badge-warning ml-1" aria-label="{{ tabCounts.blacklist }} IP addresses currently listed on a DNSBL">{{ tabCounts.blacklist }}</span>{% endif %}</a>
     <a role="tab" href="{{ path('dashboard_domain_dns_history', {id: domain.domainId}) }}"
-       class="tab {{ active == 'history' ? 'tab-active' : '' }}"{{ active == 'history' ? ' aria-current="page"' : '' }}>History</a>
+       class="tab {{ active == 'history' ? 'tab-active' : '' }}"{{ active == 'history' ? ' aria-current="page"' : '' }}>History{% if tabCounts is not null and tabCounts.history is defined and tabCounts.history %} <span class="badge badge-xs badge-warning ml-1 w-2 h-2 p-0" aria-label="DNS records changed in the last 7 days"></span>{% endif %}</a>
 </div>

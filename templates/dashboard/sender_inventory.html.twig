@@ -17,7 +17,7 @@
 {% endblock %}
 
 {% block content %}
-    <twig:DomainWorkspaceTabs :domain="domain" active="senders" />
+    <twig:DomainWorkspaceTabs :domain="domain" active="senders" :tabCounts="tabCounts" />
 
     {# TASK-092 "X senders need a decision" stat row — only renders when at
        least one row has a recommend_authorize or recommend_revoke verdict.

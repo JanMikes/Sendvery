@@ -14,7 +14,7 @@
 {% endblock %}
 
 {% block content %}
-    <twig:DomainWorkspaceTabs :domain="domain" active="reports" />
+    <twig:DomainWorkspaceTabs :domain="domain" active="reports" :tabCounts="tabCounts" />
 
     <twig:ReportsFilterBar
         filter="{{ filter }}"
