@@ -9,7 +9,7 @@ use ParagonIE\Halite\Symmetric\EncryptionKey;
 use ParagonIE\HiddenString\HiddenString;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-final readonly class CredentialEncryptor
+readonly class CredentialEncryptor
 {
     private const string HALITE_PREFIX = 'halite:';
 

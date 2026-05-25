@@ -252,6 +252,189 @@ final class ReportIngestionPageTest extends WebTestCase
     }
 
     /**
+     * TASK-105: every matrix row already routes via Sendvery — the two-card
+     * IngestionRoutesCallout collapses to a single confirmation card. The
+     * "Connect a mailbox (fallback)" header must not appear anywhere on the
+     * page; the new collapsed-callout testid must.
+     */
+    #[Test]
+    public function allScenarioBTeamCollapsesIngestionRoutesCalloutToConfirmation(): void
+    {
+        $data = $this->bootPersonaOnly();
+        $em = $data['em'];
+        $persona = $data['persona'];
+        assert(null !== $persona->domain);
+
+        // Persona's only domain: DNS-backed with a Sendvery-pointing rua tag.
+        $env = $this->persistEnvelope($em, ReportSource::CentralInbox, null, new \DateTimeImmutable('-1 day'));
+        $this->persistReport($em, $persona->domain, $env, new \DateTimeImmutable('-1 day'));
+        $this->persistDnsCheck($em, $persona->domain, 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
+
+        $data['client']->request('GET', '/app/mailboxes');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+
+        // Collapsed confirmation card present.
+        self::assertStringContainsString('data-testid="all-scenario-b-callout"', $body);
+        self::assertStringContainsString("Every domain is ingesting reports via Sendvery's central inbox", $body);
+        self::assertStringContainsString('Connect a private mailbox anyway', $body);
+
+        // Two-card layout suppressed — neither testid present.
+        self::assertStringNotContainsString('data-testid="recommended-callout"', $body);
+        self::assertStringNotContainsString('data-testid="fallback-callout"', $body);
+        // The fallback card's header copy is gone.
+        self::assertStringNotContainsString('Connect a mailbox (fallback)', $body);
+    }
+
+    /**
+     * Counterpart: as soon as one domain isn't scenario (b) the two-card
+     * layout returns. Mixed teams + scenario-(c) teams + brand-new teams all
+     * still get the educational split — only the homogeneous all-(b) state
+     * collapses.
+     */
+    #[Test]
+    public function mixedScenarioTeamKeepsTwoCardIngestionRoutesCallout(): void
+    {
+        $data = $this->bootPersonaOnly();
+        $em = $data['em'];
+        $persona = $data['persona'];
+        assert(null !== $persona->domain);
+
+        // Domain 1: scenario (b)
+        $envA = $this->persistEnvelope($em, ReportSource::CentralInbox, null, new \DateTimeImmutable('-1 day'));
+        $this->persistReport($em, $persona->domain, $envA, new \DateTimeImmutable('-1 day'));
+        $this->persistDnsCheck($em, $persona->domain, 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
+
+        // Domain 2: scenario (c) — external rua
+        $domainB = $this->persistDomain($em, $persona->team, 'b-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test');
+        $this->persistDnsCheck($em, $domainB, 'v=DMARC1; p=none; rua=mailto:dmarc@'.$domainB->domain);
+
+        $data['client']->request('GET', '/app/mailboxes');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+
+        // Two-card layout intact.
+        self::assertStringContainsString('data-testid="recommended-callout"', $body);
+        self::assertStringContainsString('data-testid="fallback-callout"', $body);
+        // Collapsed card NOT present.
+        self::assertStringNotContainsString('data-testid="all-scenario-b-callout"', $body);
+    }
+
+    /**
+     * Empty team (zero domains, zero scenarios) keeps the educational
+     * two-card layout because there's nothing to confirm — `allScenarioB`
+     * resolves to false for an empty matrix on purpose.
+     */
+    #[Test]
+    public function emptyTeamKeepsTwoCardIngestionRoutesCallout(): void
+    {
+        // The default persona has exactly one (no-report, no-DMARC) domain —
+        // not strictly empty, but the resolver returns NoRecord for it, so
+        // `allScenarioB` is false. The collapsed card must not appear.
+        $data = $this->bootPersonaOnly();
+
+        $data['client']->request('GET', '/app/mailboxes');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+
+        self::assertStringContainsString('data-testid="recommended-callout"', $body);
+        self::assertStringContainsString('data-testid="fallback-callout"', $body);
+        self::assertStringNotContainsString('data-testid="all-scenario-b-callout"', $body);
+    }
+
+    /**
+     * TASK-106 happy path: a mailbox-backed domain whose DMARC rua= tag
+     * names that same connected mailbox's login renders the "Ingesting via
+     * mailbox" success badge — NOT the "Configured for external inbox"
+     * warning. The "Connect this inbox" CTA is suppressed (already connected).
+     */
+    #[Test]
+    public function mailboxPathWithMatchingRuaEmailRendersIngestingViaMailboxBadge(): void
+    {
+        $data = $this->bootPersonaOnly();
+        $em = $data['em'];
+        $persona = $data['persona'];
+        assert(null !== $persona->domain);
+
+        $mailbox = $this->persistMailboxWithUsername(
+            $em,
+            $persona->team,
+            'dmarc@'.$persona->domain->domain,
+        );
+
+        // path=mailbox via a recent ByoMailbox-sourced report.
+        $env = $this->persistEnvelope($em, ReportSource::ByoMailbox, $mailbox, new \DateTimeImmutable('-1 day'));
+        $this->persistReport($em, $persona->domain, $env, new \DateTimeImmutable('-1 day'));
+
+        // scenario=PointsAtExternal — rua points at the same address as the
+        // connected mailbox.
+        $this->persistDnsCheck(
+            $em,
+            $persona->domain,
+            'v=DMARC1; p=none; rua=mailto:dmarc@'.$persona->domain->domain,
+        );
+
+        $data['client']->request('GET', '/app/mailboxes');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+
+        // The TASK-106 winning branch.
+        self::assertStringContainsString('Ingesting via mailbox', $body);
+        self::assertStringContainsString('DMARC routes here via your connected mailbox.', $body);
+
+        // The OLD branch must NOT render for this row — verify against a
+        // matrix-scoped substring so it doesn't false-positive on, say, a
+        // collapsed-callout copy elsewhere on the page.
+        self::assertStringNotContainsString('Configured for external inbox', $body);
+        // The "Connect this inbox" CTA is also suppressed — already connected.
+        self::assertStringNotContainsString('Connect this inbox', $body);
+    }
+
+    /**
+     * TASK-106 negative case: the published rua= tag points at an external
+     * address that does NOT match the connected mailbox's login. Operator
+     * wired the wrong inbox — keep the "Configured for external inbox"
+     * warning so they notice.
+     */
+    #[Test]
+    public function mailboxPathWithNonMatchingRuaEmailKeepsExternalInboxWarning(): void
+    {
+        $data = $this->bootPersonaOnly();
+        $em = $data['em'];
+        $persona = $data['persona'];
+        assert(null !== $persona->domain);
+
+        // Mailbox login is `notifications@…` but the rua tag says `dmarc@…`.
+        $mailbox = $this->persistMailboxWithUsername(
+            $em,
+            $persona->team,
+            'notifications@'.$persona->domain->domain,
+        );
+
+        $env = $this->persistEnvelope($em, ReportSource::ByoMailbox, $mailbox, new \DateTimeImmutable('-1 day'));
+        $this->persistReport($em, $persona->domain, $env, new \DateTimeImmutable('-1 day'));
+
+        $this->persistDnsCheck(
+            $em,
+            $persona->domain,
+            'v=DMARC1; p=none; rua=mailto:dmarc@'.$persona->domain->domain,
+        );
+
+        $data['client']->request('GET', '/app/mailboxes');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+
+        // Scenario-aware warning still wins.
+        self::assertStringContainsString('Configured for external inbox', $body);
+        self::assertStringNotContainsString('Ingesting via mailbox', $body);
+    }
+
+    /**
      * Pulls the recommended callout's outerHTML out of the rendered page
      * via DOM so per-CTA assertions don't get false positives from the
      * fallback callout's anchor (which has a different href).
@@ -319,6 +502,19 @@ final class ReportIngestionPageTest extends WebTestCase
 
     private function persistMailbox(EntityManagerInterface $em, Team $team): MailboxConnection
     {
+        return $this->persistMailboxWithUsername($em, $team, 'u');
+    }
+
+    /**
+     * Variant of {@see persistMailbox} that sets a caller-supplied username
+     * (encrypted at rest). TASK-106 uses this to seed a mailbox whose login
+     * matches — or doesn't — the rua= email in a parallel DMARC record.
+     */
+    private function persistMailboxWithUsername(
+        EntityManagerInterface $em,
+        Team $team,
+        string $username,
+    ): MailboxConnection {
         $encryptor = self::getContainer()->get(CredentialEncryptor::class);
         assert($encryptor instanceof CredentialEncryptor);
 
@@ -328,7 +524,7 @@ final class ReportIngestionPageTest extends WebTestCase
             type: MailboxType::ImapUser,
             host: 'imap.rpt-ing.test',
             port: 993,
-            encryptedUsername: $encryptor->encrypt('u'),
+            encryptedUsername: $encryptor->encrypt($username),
             encryptedPassword: $encryptor->encrypt('p'),
             encryption: MailboxEncryption::Ssl,
             createdAt: new \DateTimeImmutable(),

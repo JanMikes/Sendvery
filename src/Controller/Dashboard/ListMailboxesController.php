@@ -61,12 +61,20 @@ final class ListMailboxesController extends AbstractController
         // a per-domain health page that has nothing meaningful to show.
         $dnsCtaUrl = $this->resolveDnsCtaUrl($matrix);
 
+        // TASK-105: collapse the two-card IngestionRoutesCallout to a single
+        // confirmation card when every matrix row is already ingesting via
+        // Sendvery (scenario b). Empty / brand-new teams stay on the
+        // educational two-card layout — handled by the resolver returning
+        // false for an empty matrix.
+        $allScenarioB = $this->ingestionPathResolver->allScenarioPointsAtSendvery($matrix);
+
         return $this->render('dashboard/mailboxes.html.twig', [
             'mailboxes' => $mailboxes,
             'activity' => $activity,
             'matrix' => $matrix,
             'reportAddress' => $this->reportAddressProvider->get(),
             'dnsCtaUrl' => $dnsCtaUrl,
+            'allScenarioB' => $allScenarioB,
         ]);
     }
 

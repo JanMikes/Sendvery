@@ -27,6 +27,7 @@
     <twig:IngestionRoutesCallout
         reportAddress="{{ reportAddress }}"
         dnsCtaUrl="{{ dnsCtaUrl }}"
+        :allScenarioB="allScenarioB"
     />
 
     {% if matrix|length > 0 %}
@@ -53,11 +54,26 @@
                                                raw IngestionPath because the scenario answers "what does
                                                DMARC actually route?" — a strictly better signal than the
                                                envelope-history-only path classifier. Mixed always wins
-                                               so the duplicate-ingestion warning still surfaces. #}
+                                               so the duplicate-ingestion warning still surfaces.
+
+                                               TASK-106: BEFORE the scenario branches, check for the
+                                               "operator wired the mailbox right" shape — path=mailbox
+                                               (reports physically arriving) AND lastReportAt populated
+                                               AND scenario=PointsAtExternal AND the rua email matches
+                                               the connected mailbox login. In that case the path
+                                               classifier has the honest signal: render "Ingesting via
+                                               mailbox" with a confirmation hint instead of the
+                                               scenario-aware "Configured for external inbox" warning
+                                               (which implies the mailbox isn't connected). #}
                                             {% if row.path.value == 'mixed' %}
                                                 <span class="badge badge-warning">Both — please pick one</span>
                                                 <div class="text-xs text-warning mt-1">
                                                     Duplicate ingestion — choose DNS or mailbox per domain.
+                                                </div>
+                                            {% elseif row.path.value == 'mailbox' and row.lastReportAt is not null and row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_external' and row.pathMatchesMailbox %}
+                                                <span class="badge badge-success">Ingesting via mailbox</span>
+                                                <div class="text-xs text-base-content/60 mt-1">
+                                                    DMARC routes here via your connected mailbox.
                                                 </div>
                                             {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_sendvery' %}
                                                 <span class="badge badge-success">Ingesting via DNS (Sendvery)</span>
@@ -102,10 +118,18 @@
                                         <td>
                                             {# Scenario-driven action column. Mixed still wins. Then
                                                scenario-aware copy for the three RUA cases; finally
-                                               fall through to the legacy path-based branches. #}
+                                               fall through to the legacy path-based branches.
+
+                                               TASK-106: when the "Ingesting via mailbox" badge wins
+                                               above (path=mailbox + matching rua email), the
+                                               "Connect this inbox" CTA is redundant — the inbox is
+                                               ALREADY connected. Render the same em-dash placeholder
+                                               we use for the scenario-(b) all-good row. #}
                                             {% if row.path.value == 'mixed' %}
                                                 <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
                                                    class="btn btn-warning btn-xs">Decide</a>
+                                            {% elseif row.path.value == 'mailbox' and row.lastReportAt is not null and row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_external' and row.pathMatchesMailbox %}
+                                                <span class="text-base-content/40">—</span>
                                             {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'no_record' %}
                                                 <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
                                                    class="btn btn-ghost btn-xs">Publish RUA</a>

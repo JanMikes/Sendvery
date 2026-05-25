@@ -9,7 +9,7 @@ use App\Exceptions\MailboxConnectionNotFound;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
-final readonly class MailboxConnectionRepository
+readonly class MailboxConnectionRepository
 {
     public function __construct(
         private EntityManagerInterface $entityManager,

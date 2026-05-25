@@ -25,6 +25,14 @@ final readonly class DomainIngestionMatrixResult
      * and the resolver wraps each row with `withScenario(...)` before
      * returning to callers. The default keeps existing `fromDatabaseRow`
      * call sites working unchanged.
+     *
+     * `$pathMatchesMailbox` (TASK-106) is true when the row's published RUA
+     * email matches the credentials of the connected mailbox that's actually
+     * delivering reports — case-insensitive local-part@domain equality. Lets
+     * the template tell apart "operator wired the wrong inbox" (false → keep
+     * the scenario-aware "Configured for external inbox" warning) from
+     * "operator's mailbox is the rua= target and reports are arriving" (true
+     * → render the path-honest "Ingesting via mailbox" badge).
      */
     public function __construct(
         public string $domainId,
@@ -35,6 +43,7 @@ final readonly class DomainIngestionMatrixResult
         public ?string $mailboxHost,
         public ?int $mailboxPort,
         public ?RuaScenarioResult $ruaScenario = null,
+        public bool $pathMatchesMailbox = false,
     ) {
     }
 
@@ -73,6 +82,22 @@ final readonly class DomainIngestionMatrixResult
             mailboxHost: $this->mailboxHost,
             mailboxPort: $this->mailboxPort,
             ruaScenario: $scenario,
+            pathMatchesMailbox: $this->pathMatchesMailbox,
+        );
+    }
+
+    public function withPathMatchesMailbox(bool $matches): self
+    {
+        return new self(
+            domainId: $this->domainId,
+            domainName: $this->domainName,
+            path: $this->path,
+            lastReportAt: $this->lastReportAt,
+            mailboxId: $this->mailboxId,
+            mailboxHost: $this->mailboxHost,
+            mailboxPort: $this->mailboxPort,
+            ruaScenario: $this->ruaScenario,
+            pathMatchesMailbox: $matches,
         );
     }
 
