@@ -1,6 +1,20 @@
 {# Full feature-by-feature comparison of the four public tiers.
    No props — all values are static and match docs/05-monetization.md.
-   The "AI Insights" row is conditional on the `ai_available` Twig global. #}
+   The "AI Insights" row is conditional on the `ai_available` Twig global.
+
+   TASK-118: the "Reports / month" row carries a "What counts? →" footnote
+   link anchored to `#faq-what-counts-as-report` in PricingFaq below.
+   TASK-124: the three feature rows whose meaning isn't self-evident from
+   the label alone (Sender inventory, Blacklist monitoring, White-label
+   PDF reports) carry a daisyUI `tooltip` ⓘ icon that hovers a one-line
+   definition AND deep-links to the matching glossary FAQ entry. Both
+   the desktop matrix and the mobile cards get the same treatment so
+   the buyer experience is parity.
+
+   The tooltip markup is inlined (rather than a macro call) because this
+   template renders as a `<twig:>` component, where `_self` macro
+   resolution is brittle across UX-component / TwigPreLexer revisions —
+   inline is the boring, durable choice. #}
 
 {% set check %}
 <svg class="w-4 h-4 text-success inline" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
@@ -9,6 +23,41 @@
 {% endset %}
 
 {% set dash %}<span class="text-base-content/30">—</span>{% endset %}
+
+{# Reusable info-pill markup — captured into a variable so each row stays
+   readable. The wrapping <span class="tooltip"> is daisyUI's tooltip
+   primitive; `data-tip` carries the short label. The inner <a> targets
+   the glossary FAQ entry so keyboard / screen-reader users can follow
+   through to the full definition. #}
+{% set senderInventoryTip %}
+<span class="tooltip tooltip-right align-middle ml-1" data-tip="Every IP / SMTP host that sends mail as you, with authorize-or-revoke decisions per sender.">
+    <a href="#faq-sender-inventory" class="text-base-content/40 hover:text-primary" aria-label="What is the sender inventory? Learn more">
+        <svg class="w-4 h-4 inline" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+        </svg>
+    </a>
+</span>
+{% endset %}
+
+{% set blacklistTip %}
+<span class="tooltip tooltip-right align-middle ml-1" data-tip="Continuous DNS-based RBL checks (Spamhaus, Barracuda…) on every sending IP, with alerts when one gets listed.">
+    <a href="#faq-blacklist-monitoring" class="text-base-content/40 hover:text-primary" aria-label="What is blacklist monitoring? Learn more">
+        <svg class="w-4 h-4 inline" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+        </svg>
+    </a>
+</span>
+{% endset %}
+
+{% set whiteLabelTip %}
+<span class="tooltip tooltip-right align-middle ml-1" data-tip="Monthly aggregate report exports with your company branding (logo, colors, footer) — not Sendvery's.">
+    <a href="#faq-white-label-pdf" class="text-base-content/40 hover:text-primary" aria-label="What is white-label PDF? Learn more">
+        <svg class="w-4 h-4 inline" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+        </svg>
+    </a>
+</span>
+{% endset %}
 
 {# Desktop variant — full matrix table. #}
 <div class="hidden md:block overflow-x-auto">
@@ -34,7 +83,10 @@
                 <td class="text-center">50</td>
             </tr>
             <tr>
-                <td>Reports / month</td>
+                <td>
+                    Reports / month
+                    <a href="#faq-what-counts-as-report" class="block text-xs text-base-content/50 hover:text-primary mt-0.5">What counts? →</a>
+                </td>
                 <td class="text-center">100</td>
                 <td class="text-center">1,000</td>
                 <td class="text-center">10,000</td>
@@ -73,14 +125,14 @@
                 <td class="text-center">{{ check }}</td>
             </tr>
             <tr>
-                <td>Blacklist monitoring</td>
+                <td>Blacklist monitoring{{ blacklistTip }}</td>
                 <td class="text-center">{{ dash }}</td>
                 <td class="text-center">{{ check }}</td>
                 <td class="text-center">{{ check }}</td>
                 <td class="text-center">{{ check }}</td>
             </tr>
             <tr>
-                <td>Sender inventory</td>
+                <td>Sender inventory{{ senderInventoryTip }}</td>
                 <td class="text-center">{{ dash }}</td>
                 <td class="text-center">{{ check }}</td>
                 <td class="text-center">{{ check }}</td>
@@ -105,7 +157,7 @@
                 <td class="text-center">{{ check }}</td>
             </tr>
             <tr>
-                <td>White-label PDF reports</td>
+                <td>White-label PDF reports{{ whiteLabelTip }}</td>
                 <td class="text-center">{{ dash }}</td>
                 <td class="text-center">{{ dash }}</td>
                 <td class="text-center">{{ dash }}</td>
@@ -161,16 +213,31 @@
             <h3 class="card-title text-base">Free</h3>
             <dl class="mt-3 space-y-2 text-sm">
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>1</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>100</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">
+                        Reports / month
+                        <a href="#faq-what-counts-as-report" class="block text-xs text-base-content/50 hover:text-primary">What counts? →</a>
+                    </dt>
+                    <dd>100</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>30 days</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>1</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ dash }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ dash }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Blacklist monitoring{{ blacklistTip }}</dt>
+                    <dd>{{ dash }}</dd>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Sender inventory{{ senderInventoryTip }}</dt>
+                    <dd>{{ dash }}</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ dash }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ dash }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">White-label PDF{{ whiteLabelTip }}</dt>
+                    <dd>{{ dash }}</dd>
+                </div>
                 <div class="flex justify-between gap-4">
                     <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
                     <dd><span class="text-base-content/40 text-xs">Contact us</span></dd>
@@ -185,16 +252,31 @@
             <h3 class="card-title text-base">Personal</h3>
             <dl class="mt-3 space-y-2 text-sm">
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>5</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>1,000</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">
+                        Reports / month
+                        <a href="#faq-what-counts-as-report" class="block text-xs text-base-content/50 hover:text-primary">What counts? →</a>
+                    </dt>
+                    <dd>1,000</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>1 year</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>1</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Blacklist monitoring{{ blacklistTip }}</dt>
+                    <dd>{{ check }}</dd>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Sender inventory{{ senderInventoryTip }}</dt>
+                    <dd>{{ check }}</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ check }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ dash }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">White-label PDF{{ whiteLabelTip }}</dt>
+                    <dd>{{ dash }}</dd>
+                </div>
                 <div class="flex justify-between gap-4">
                     <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
                     <dd>
@@ -215,16 +297,31 @@
             <h3 class="card-title text-base">Pro</h3>
             <dl class="mt-3 space-y-2 text-sm">
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>20</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>10,000</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">
+                        Reports / month
+                        <a href="#faq-what-counts-as-report" class="block text-xs text-base-content/50 hover:text-primary">What counts? →</a>
+                    </dt>
+                    <dd>10,000</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>2 years</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>3</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Blacklist monitoring{{ blacklistTip }}</dt>
+                    <dd>{{ check }}</dd>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Sender inventory{{ senderInventoryTip }}</dt>
+                    <dd>{{ check }}</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ check }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ dash }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">White-label PDF{{ whiteLabelTip }}</dt>
+                    <dd>{{ dash }}</dd>
+                </div>
                 <div class="flex justify-between gap-4">
                     <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
                     <dd>
@@ -245,16 +342,31 @@
             <h3 class="card-title text-base">Business</h3>
             <dl class="mt-3 space-y-2 text-sm">
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Domains</dt><dd>50</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Reports / month</dt><dd>50,000</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">
+                        Reports / month
+                        <a href="#faq-what-counts-as-report" class="block text-xs text-base-content/50 hover:text-primary">What counts? →</a>
+                    </dt>
+                    <dd>50,000</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Retention</dt><dd>Unlimited</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Seats</dt><dd>10</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">DMARC + DNS</dt><dd>{{ check }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Real-time alerts</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Blacklist monitoring</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">Sender inventory</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Blacklist monitoring{{ blacklistTip }}</dt>
+                    <dd>{{ check }}</dd>
+                </div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">Sender inventory{{ senderInventoryTip }}</dt>
+                    <dd>{{ check }}</dd>
+                </div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">Email HTML reports</dt><dd>{{ check }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-base-content/60">API + webhooks</dt><dd>{{ check }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-base-content/60">White-label PDF</dt><dd>{{ check }}</dd></div>
+                <div class="flex justify-between gap-4">
+                    <dt class="text-base-content/60">White-label PDF{{ whiteLabelTip }}</dt>
+                    <dd>{{ check }}</dd>
+                </div>
                 <div class="flex justify-between gap-4">
                     <dt class="text-base-content/60">AI Insights{% if not ai_available %} <span class="badge badge-ghost badge-xs">coming soon</span>{% endif %}</dt>
                     <dd>

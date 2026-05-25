@@ -1,6 +1,12 @@
 {# Pricing-specific FAQ. Each entry is a daisyUI v5 collapse with a
    checkbox toggle so visitors can keep multiple answers open while they
-   compare. Answers contain inline HTML (no |raw filter on data). #}
+   compare. Answers contain inline HTML (no |raw filter on data).
+
+   Several entries carry an `id="faq-…"` so the comparison table above
+   (PricingComparisonTable.html.twig) can deep-link a curious buyer
+   directly at the relevant explanation. Keep these ids stable — they
+   are the anchor targets for the table's "What counts?" / tooltip
+   "Learn more" links. #}
 
 <div class="space-y-3 max-w-3xl mx-auto">
     <div class="collapse collapse-plus bg-base-200/50 border border-base-300">
@@ -8,6 +14,28 @@
         <div class="collapse-title font-semibold">Can I cancel anytime?</div>
         <div class="collapse-content text-base-content/70 text-sm">
             <p>Yes. You can cancel at any time from your billing page, and your subscription stays active until the end of the current billing period — no immediate cutoff and no early-termination fees. After that date your team rolls back to the Free plan automatically, and your data stays where it is (we never delete user data as a consequence of a billing event).</p>
+        </div>
+    </div>
+
+    <div id="faq-what-counts-as-report" class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-what-counts-as-report"/>
+        <div class="collapse-title font-semibold">What counts as a "report"?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>One DMARC aggregate XML file from one reporter (Google, Yahoo, Microsoft, Mail.ru, etc.) counts as one report. The big mailbox providers each send roughly one aggregate per day per domain they see mail from, so a single active domain typically lands between 30 and 150 reports per month from the major reporters combined.</p>
+            <p class="mt-2">Concrete example: if you monitor 3 domains and Gmail, Outlook, and Yahoo each send a daily report, that's roughly 3 × 3 × 30 ≈ <strong>270 reports/month</strong> — above Free's 100 cap but well inside Personal's 1,000. Free's <strong>100 reports/month</strong> comfortably covers one moderately active domain. Envelopes we receive but fail to classify as DMARC reports (spam, mis-routed mail) do <strong>not</strong> count toward your cap.</p>
+        </div>
+    </div>
+
+    <div id="faq-keep-own-inbox" class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-keep-own-inbox"/>
+        <div class="collapse-title font-semibold">Can I keep my DMARC reports going to my own inbox?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>Yes — Sendvery supports two ingestion paths and you pick whichever fits your setup:</p>
+            <ul class="list-disc pl-5 mt-2 space-y-1">
+                <li><strong>If you want zero DNS changes</strong> and a local copy of every report in a mailbox you already trust: connect your existing <strong>IMAP</strong> or <strong>Gmail</strong> / <strong>Outlook</strong> mailbox via OAuth and Sendvery pulls reports out of it on a 15-minute schedule. Nothing changes in your DNS.</li>
+                <li><strong>If you'd rather not run a mailbox at all</strong>: point your DMARC <code class="kbd kbd-xs">rua=</code> tag at <code class="kbd kbd-xs">rua=mailto:reports@sendvery.com</code> in your DNS TXT record and we ingest centrally — no inbox to maintain on your side.</li>
+            </ul>
+            <p class="mt-2">Both paths are available on every plan including Free, and you can use a different path per domain. <a href="{{ path('knowledge_base_index') }}" class="link link-primary">How ingestion works →</a></p>
         </div>
     </div>
 
@@ -80,6 +108,34 @@
         <div class="collapse-title font-semibold">How does AI Insights work?</div>
         <div class="collapse-content text-base-content/70 text-sm">
             <p>AI Insights is Claude-backed analysis layered on top of your DMARC data — a weekly plain-English digest, on-demand summaries of failing senders, and recommended next actions. Quotas scale with the plan: <strong>50 on-demand calls/month on Personal, 200 on Pro, 500 on Business</strong>. The feature is in the final stages of rollout and will appear automatically in your dashboard once it's enabled for your account; until then, paid plans run without it and the option is reserved on every paid tier. Free-plan users curious about AI can reach out to us directly.</p>
+        </div>
+    </div>
+
+    {# Glossary entries — TASK-124. Anchor targets for the comparison-table
+       tooltips above. Plain-English definitions, 2–3 sentences each, no
+       jargon. Cribbed from the dashboard's in-app explanations of these
+       same features so the language stays consistent end-to-end. #}
+    <div id="faq-sender-inventory" class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-sender-inventory"/>
+        <div class="collapse-title font-semibold">What is the sender inventory?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>The sender inventory is the list of every IP address and SMTP host that has ever sent mail using your domain — your own mail server, your CRM, your newsletter platform, your billing provider, and anything pretending to be you. For each sender Sendvery tracks pass rate, volume, and a recommended <strong>authorize</strong> / <strong>revoke</strong> / <strong>keep watching</strong> decision so you can quickly distinguish legitimate services from spoofers. You manage all of this on the <code class="kbd kbd-xs">/app/domains/{id}/senders</code> page inside the dashboard.</p>
+        </div>
+    </div>
+
+    <div id="faq-blacklist-monitoring" class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-blacklist-monitoring"/>
+        <div class="collapse-title font-semibold">What is blacklist monitoring?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>Blacklist monitoring continuously checks every IP address that sends mail on your domain's behalf against the major DNS-based block lists (Spamhaus, Barracuda, SORBS, and dozens more). If one of your sending IPs gets listed — usually the first warning sign of a deliverability problem — Sendvery raises an alert and tells you which list, when it happened, and which sender it's linked to, so you can fix the underlying issue before mailbox providers start rejecting your mail.</p>
+        </div>
+    </div>
+
+    <div id="faq-white-label-pdf" class="collapse collapse-plus bg-base-200/50 border border-base-300">
+        <input type="checkbox" name="pricing-faq-white-label-pdf"/>
+        <div class="collapse-title font-semibold">What is white-label PDF?</div>
+        <div class="collapse-content text-base-content/70 text-sm">
+            <p>White-label PDF lets you export your monthly aggregate reports as branded PDFs carrying <em>your</em> company logo, colors, and footer — not Sendvery's. It's the deliverable agencies and MSPs hand to their clients to show "here's your email health this month", and it's the report a security or compliance team archives alongside SOC 2 / ISO evidence. Available on the Business plan; sample available on request.</p>
         </div>
     </div>
 </div>
