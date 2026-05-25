@@ -1,0 +1,24 @@
+{#
+   Hero attention summary line — sits between the healthSummary banner and
+   the setup checklist on /app. Pure aggregation of three signals already
+   surfaced as sidebar badges (critical alerts / unverified domains /
+   quarantine pile-up), reframed as a single inline "do this today" line.
+
+   Renders NOTHING when totalCount = 0 — the healthSummary headline already
+   carries the high-level mood; a second "all clear" line would feel chatty.
+#}
+{% props summary %}
+
+{% if summary.totalCount > 0 %}
+    <div class="mb-4 flex items-start gap-2 text-sm text-base-content/80">
+        <svg class="w-4 h-4 mt-0.5 shrink-0 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <div class="flex-1 min-w-0">
+            <span class="font-semibold text-base-content">
+                {{ summary.totalCount }} {{ summary.totalCount == 1 ? 'thing needs' : 'things need' }} your attention today:
+            </span>
+            {% for item in summary.items %}<a href="{{ path(item.route, item.routeParams) }}" class="{{ item.colorClass }} hover:underline">{{ item.label }}</a>{% if not loop.last %} <span class="text-base-content/40" aria-hidden="true">·</span> {% endif %}{% endfor %}
+        </div>
+    </div>
+{% endif %}

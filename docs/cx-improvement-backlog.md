@@ -2715,7 +2715,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-062: `/app` hero has no global "things need your attention" opening line — the user has to assemble the picture from four banners and five stat cards
 
-- Status: todo
+- Status: done
 - Area: dashboard
 - Why: Attention-signals audit, hero-level surface. `templates/dashboard/overview.html.twig` opens with `healthSummary` banner (a single one-line health headline), then a setup checklist (optional), then a verification banner (optional), then five stat cards. That's already a strong opening, but each of those tiles surfaces ONE dimension (domains-health / setup-progress / DNS-verification / unread-alerts) — the user has to mentally aggregate them into "do I need to do anything today?" The PO brief asked specifically: *"the `/app` hero could also surface 3 things need your attention as a global opening line."* The right architectural home is a single line UNDER the existing healthSummary banner — not a fourth banner, not a toast, not a modal — that reads: **"3 things need your attention today: 1 critical alert · 2 unverified domains · 4 reports waiting in quarantine."** Each item is a deep link to the relevant page. If there's nothing to attend to, the line is absent (no "All clear!" copy — that's what the existing healthSummary `success` headline already says). This converts the hero from "here are five numbers" into "here are the N actions you should take right now."
   Architectural rationale for placement: the hero is the right home because (a) the user is already there as the first action of a session, (b) it's the most-visited route, (c) it's the only place we have the screen real estate for an inline list of actions WITHOUT competing with page-specific content. A toast would be dismissable and lose state; a fourth banner would visually flood; a per-page header line would be redundant with the sidebar badges (TASK-060/TASK-061). The hero is the single coherent home for an aggregated "your day in 3 lines" summary.
@@ -2732,7 +2732,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-063: Unify the three new sidebar count globals behind a single `NavCountsExtension` to avoid four round-trips per page render
 
-- Status: todo
+- Status: done
 - Area: dashboard
 - Why: Performance + maintainability fresh-eyes catch on TASK-060 + TASK-061. If each of `QuarantineCountExtension` (existing), `AlertCountExtension` (TASK-060), and `DomainHealthCountExtension` (TASK-061) is a separate Twig extension, then EVERY authenticated page render issues FOUR small `SELECT COUNT(*)` queries through the layout. Each one is fast (indexed), but four sequential round-trips on every page load is wasteful and grows linearly each time we add a new badge. The right architecture is a single `NavCountsExtension implements GlobalsInterface` that resolves all badge counts once per request and exposes them as discrete Twig globals (`unread_alert_count`, `critical_alert_count`, `quarantine_count`, `unverified_domain_count`). This keeps the templates' API identical (each badge still reads its own well-named global) while collapsing the security/team-resolve overhead.
   This task should land LAST in the round — after TASK-060 + TASK-061 have proven the badges work in isolation and have their own tests. The refactor is small, but the dependency order matters.
@@ -2749,7 +2749,7 @@ Both warrant a backlog entry. TASK-042 is the production-affecting one (heads-up
 
 ## TASK-064: Add a `<twig:NavBadge />` component so future sidebar badges share one consistent visual contract
 
-- Status: todo
+- Status: done
 - Area: dashboard
 - Why: Visual-consistency fresh-eyes catch. After TASK-060 + TASK-061 ship, the sidebar will have three inline `<span class="badge badge-xs badge-{warning|error} ml-auto">{{ count }}</span>` snippets — one per Quarantine/Alerts/Domains. Each is hand-rolled. The next time we add a badge (say, "Pending invites" on a Team Settings sub-entry), the engineer has to copy-paste-and-tweak the three existing instances — which is exactly the pattern that produced the `bulk_selection_controller.js` triplication called out in the TASK-020/022 follow-ups. Extracting `<twig:NavBadge count="alertsCount" color="error" />` now (while three call-sites exist) is the cheap moment; doing it later (when six exist) is the expensive moment.
 - Acceptance:

@@ -17,6 +17,7 @@ use App\Repository\MailboxConnectionRepository;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Repository\TeamRepository;
 use App\Results\MonthlyReportUsageResult;
+use App\Services\AttentionSummaryResolver;
 use App\Services\DashboardContext;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\DomainVerificationEvaluator;
@@ -59,6 +60,7 @@ final class DashboardOverviewController extends AbstractController
         private readonly IngestionPathResolver $ingestionPathResolver,
         private readonly GetEarliestDomainAddedAt $getEarliestDomainAddedAt,
         private readonly RuaScenarioResolver $ruaScenarioResolver,
+        private readonly AttentionSummaryResolver $attentionSummaryResolver,
     ) {
     }
 
@@ -202,6 +204,13 @@ final class DashboardOverviewController extends AbstractController
             verificationSeverity: $verificationSeverity,
         );
 
+        // TASK-062: "things need your attention today" line sits between the
+        // healthSummary banner and the setup checklist. Pure aggregator over
+        // the three sidebar-badge signals — renders nothing when totalCount = 0.
+        $attentionSummary = $this->attentionSummaryResolver->resolveForTeam(
+            $this->dashboardContext->getTeamId()->toString(),
+        );
+
         // Monthly-reports surface: a 6th stat card, but only when the team is
         // on a finite-limit plan AND has crossed 50% of its monthly cap.
         // Low-usage teams keep a clean overview free of "0 / 1000" noise.
@@ -263,6 +272,7 @@ final class DashboardOverviewController extends AbstractController
             'quarantineCount' => $quarantineCount,
             'nextAction' => $nextAction,
             'healthSummary' => $healthSummary,
+            'attentionSummary' => $attentionSummary,
             'overviewReportUsage' => $overviewReportUsage,
             'showReportUsageCard' => $showReportUsageCard,
             'setupChecklist' => $setupChecklist,

@@ -22,7 +22,7 @@ use Twig\Extension\GlobalsInterface;
  * can decide which menu items to enable / disable / hide without every
  * dashboard controller passing the data.
  *
- * Like {@see QuarantineCountExtension}, the resolver is wrapped in a defensive
+ * Like {@see NavCountsExtension}, the resolver is wrapped in a defensive
  * try/catch: the layout is also rendered on unauth / pre-onboarding pages
  * where `DashboardContext` throws (no user, no memberships). We return the
  * all-permissive null state in those cases — the dropdown still won't actually

@@ -162,7 +162,7 @@ final readonly class GetDomainOverview
     /**
      * Count of domains that have not yet passed DMARC verification —
      * dmarc_verified_at IS NULL. Matches DomainHealthFilter::Unverified semantics.
-     * Used by DomainHealthCountExtension to drive the sidebar badge.
+     * Used by NavCountsExtension to drive the sidebar badge.
      *
      * @param list<string> $teamIds team UUIDs the caller is allowed to read from
      */

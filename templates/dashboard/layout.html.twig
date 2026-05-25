@@ -95,7 +95,7 @@
                 {# badge-error = unverified only. Attention-status domains are NOT counted here
                    — DmarcPassRateRegressed alerts already drive the Alerts badge (TASK-060).
                    Double-signalling defeats the "single badge = look here" principle. #}
-                {% if unverified_domain_count > 0 %}<span class="badge badge-xs badge-error ml-auto">{{ unverified_domain_count > 99 ? '99+' : unverified_domain_count }}</span>{% endif %}
+                <twig:NavBadge :count="unverified_domain_count" color="error" :label="unverified_domain_count ~ ' domains awaiting DMARC verification'" />
             </a>
 
             <a href="{{ path('dashboard_dns_health') }}"
@@ -116,14 +116,21 @@
                class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route starts with 'dashboard_quarantine' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12a2 2 0 002 2h8a2 2 0 002-2L19 8M10 12v4m4-4v4"></path></svg>
                 Quarantine
-                {% if quarantine_count > 0 %}<span class="badge badge-xs badge-warning ml-auto">{{ quarantine_count }}</span>{% endif %}
+                <twig:NavBadge :count="quarantine_count" color="warning" :label="quarantine_count ~ ' reports waiting in quarantine'" />
             </a>
 
             <a href="{{ path('dashboard_alerts') }}"
                class="flex items-center gap-3 px-3 py-2 rounded-btn text-sm font-medium {{ current_route starts with 'dashboard_alert' ? 'bg-primary text-primary-content' : 'text-base-content/70 hover:bg-base-300 hover:text-base-content' }}">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                 Alerts
-                {% if critical_alert_count > 0 %}<span class="badge badge-xs badge-error ml-auto">{{ critical_alert_count > 99 ? '99+' : critical_alert_count }}</span>{% elseif unread_alert_count > 0 %}<span class="badge badge-xs badge-warning ml-auto">{{ unread_alert_count > 99 ? '99+' : unread_alert_count }}</span>{% endif %}
+                {# Two-tier badge: critical-unread takes precedence (red);
+                   when there are only non-critical unread alerts, fall back
+                   to the warning tier (yellow). #}
+                {% if critical_alert_count > 0 %}
+                    <twig:NavBadge :count="critical_alert_count" color="error" :label="critical_alert_count ~ ' critical unread alerts'" />
+                {% else %}
+                    <twig:NavBadge :count="unread_alert_count" color="warning" :label="unread_alert_count ~ ' unread alerts'" />
+                {% endif %}
             </a>
 
             <div class="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-base-content/40">Ingestion</div>

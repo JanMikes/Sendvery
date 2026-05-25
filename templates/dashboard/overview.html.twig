@@ -58,6 +58,12 @@
         </div>
     </div>
 
+    {# TASK-062: hero attention summary — collapses critical alerts +
+       unverified domains + quarantine pile-up into one "do this today" line.
+       Renders nothing when totalCount = 0 (the healthSummary headline already
+       carries the all-clear mood). #}
+    <twig:AttentionSummaryLine :summary="attentionSummary" />
+
     {# Setup checklist — persistent, dismissible per-team. Re-surfaces on DMARC regression. #}
     {% if setupChecklist.isVisible %}
         <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">

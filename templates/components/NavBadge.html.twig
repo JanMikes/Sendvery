@@ -1,0 +1,23 @@
+{#
+   Sidebar nav badge — the rounded "N waiting" pill next to a sidebar item
+   when there's at least one thing waiting for the user's attention.
+
+   Props:
+   - count (int, required): how many things are waiting. Renders nothing
+     when <= 0 so call sites don't need their own `{% if count > 0 %}`
+     guard.
+   - color (string, default 'warning'): daisyUI tone — `warning` (default)
+     for "things to look at" and `error` for "things that block delivery".
+     `info` is reserved for future low-priority badges.
+   - label (string, default null): optional aria-label so screen readers
+     read a meaningful phrase ("3 critical unread alerts") instead of just
+     the bare number.
+
+   Counts > 99 collapse to "99+" so the badge stays one tight chip — the
+   cap is centralised here instead of repeated at each call site.
+#}
+{% props count, color = 'warning', label = null %}
+
+{% if count > 0 %}
+    <span class="badge badge-xs badge-{{ color }} ml-auto"{% if label is not null %} aria-label="{{ label }}"{% endif %}>{{ count > 99 ? '99+' : count }}</span>
+{% endif %}
