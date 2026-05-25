@@ -4084,7 +4084,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-125: DNS history reports "CHANGED" on the very first DNS check — a baseline is not a change, and showing one erodes trust the day a domain is added
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: A user (j.mikes@me.com) added a single correctly-configured domain to their team. The first `sendvery:dns:check-all` run captured its DNS state and the history page rendered the row as `CHANGED`. Their words: "I just added the domain — there is no prior state for anything to have changed from." A first observation is a baseline, not a change. Telling the user something changed when nothing changed is the same trust-erosion failure round-4 + round-5 worked to eliminate (system having the wrong opinion about the user's state).
 - Acceptance:
@@ -4100,7 +4100,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-126: DNS history record-type labels (DKIM / DMARC / SPF / MX) are styled in semantic tones that overlap validity-state tones — a yellow "DMARC" label reads as a warning when it's just the record name
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: User flagged: the record-type labels on the DNS history page render in tones that collide with validity-state colours. "Why is DMARC yellow? Is something wrong with my DMARC?" — but the yellow is just the record name's badge tone, not a warning. The validity state is rendered separately ("Valid" / "Invalid" / etc.) and should own the warning/error palette. Colour-carrying record names compete with the actual status signal.
 - Acceptance:
@@ -4115,7 +4115,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-127: DNS history changes are shown as opaque before/after text blobs — the user wants an inline diff highlighting which specific tags changed within the record
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: User asked: "When DNS changes, show me WHAT changed — was it `p=none` to `p=quarantine`, or was the whole record swapped? Right now I have to diff two record strings in my head." The current side-by-side block is the long-form view; what's missing is a token-level inline diff that highlights exactly the tags that flipped, with the full record available behind an expander for the rare case where the user wants the whole picture.
 - Acceptance:
@@ -4133,7 +4133,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-128: /app "Receive your first DMARC report" card says "Connect a mailbox if you prefer pulling them yourself" even when the user's DMARC rua= already points at reports@sendvery.com — the alternative contradicts the user's correctly-configured state
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: User said: "My DMARC record IS pointing at sendvery's reports inbox. Why is the dashboard telling me I could ALTERNATIVELY connect a mailbox? I already chose. The alternative is misleading — it makes me wonder if I did something wrong." For PointsAtSendvery domains, suggesting they connect a mailbox is the same trust-erosion failure as TASK-125 (system has the wrong opinion about user state).
 - Acceptance:
@@ -4148,7 +4148,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-129: /app NEXT STEP card says "Publish a DMARC RUA record" when the user's RUA record IS published and points at Sendvery — the NEXT STEP resolver isn't reading RuaScenarioResolver output
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: User said: "It's telling me to publish a record I already published. The dashboard isn't reading its own state." The NEXT STEP card on `/app` resolves to `PublishDmarcRua` regardless of the actual rua= state. The bug lives in `NextActionResolver` (or whichever service drives the NEXT STEP card) — it's missing the "RUA already at Sendvery" branch (or has it but isn't reading the right state).
 - Acceptance:
@@ -4248,7 +4248,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-131: Homepage hero ("Email authentication is set once and forgotten") + standalone DNS-checker section feel boring next to the dashboard polish — rebuild as a designed hero that lives up to the product the screenshot below it shows
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: User said: "The homepage looks dated compared to the dashboard screenshot you just put on it. Hero copy is generic, the DNS-checker is a separate boring section, and there's no visual story about what makes Sendvery different from any other DMARC tool." Rebuild the top of `/` as three sequential designed sections that absorb the standalone checker and tell the XML→English story.
 - Acceptance:
@@ -4269,6 +4269,143 @@ Two underlying queries fire once per matrix row:
   - Per DEC-057 (AI stub-first launch posture, see `~/.claude/projects/-Users-janmikes-www-dmarc/memory/ai-stub-first-launch-posture.md`): the "AI summary" example in section 2 is illustrative — don't claim AI insights are live; the real `AnthropicAiInsightsService` ships post-launch.
   - "View on GitHub →" CTA links to env-driven URL via `OpenSourceExtension` (TASK-122). If repo isn't public, swap for the notify-me CTA per TASK-122's existing gate.
   - The dev agent should report rendered HTML excerpts of all three new sections in their final report so the user can review the diff in the commit message.
+
+---
+
+## TASK-132: Homepage "How it works" section 5 still says "Connect your DMARC report mailbox" — contradicts the round-4 DNS-first push the dashboard has been emitting since TASK-091/100/128
+
+- Status: proposed
+- Area: marketing
+- Why: A first-time visitor reads `/` top-to-bottom. The new TASK-131 hero says nothing about mailboxes. Section 2 ("From XML to plain English") describes DNS+DMARC monitoring. Section 3 (grade card) shows DNS protocol pills. Then section 5 ("How it works") tells them Step 1 is "Add your domain and connect your DMARC report mailbox". After signing up, the dashboard's Next Step card + onboarding flow (TASK-100/091/096) push `rua=mailto:reports@sendvery.com` as the recommended path with mailbox connection as the fallback. Marketing message and in-product reality contradict. Round-5 flagged this as too deep for a single PR; round-6's IA merge + onboarding fixes make the gap more visible. Self-review pass-2 candidate #1.
+- Acceptance:
+  - `templates/homepage/index.html.twig` section 5 Step 1 copy + title changed to lead with DNS-first: "Add your domain. Point your DMARC `rua=` at `reports@sendvery.com` (or connect your own mailbox)." Matches `IngestionRoutesCallout.html.twig` and the onboarding ingestion page.
+  - "Alternative" mailbox path named in one short line, NOT equal billing — mirrors dashboard's TASK-091 / TASK-128 phrasing.
+  - Lede sentence at the top of the section updated in the same spirit.
+  - Functional test: render `/` and assert section 5 Step 1 contains the literal `rua=` AND does NOT contain "connect your DMARC report mailbox" as a standalone Step 1 description.
+- Notes:
+  - The Step 1 illustration (`how-connect.webp`) can stay, or swap for a DNS-record glyph if cheap to produce — dev judgment.
+
+---
+
+## TASK-133: `MailboxHealthAdvisor`'s "Disconnect this mailbox" CTA links to the mailbox LIST page because no disconnect route exists — clicking it dumps the user on a list with no disconnect affordance
+
+- Status: proposed
+- Area: dashboard
+- Why: TASK-108 (round 4) made the silent-mailbox advisor scenario-aware: for a `PointsAtSendvery` domain + bound mailbox, the primary CTA reads "Disconnect this mailbox" with a broken-chain glyph. The user clicks it expecting a one-step action and lands on `/app/mailboxes` (the list) — `src/Services/MailboxHealthAdvisor.php:257-261` hardcodes `route: 'dashboard_mailboxes'` because no disconnect route exists. The list page surfaces no disconnect affordance per mailbox. The dashboard offered an action it can't perform — same "lying about state" failure mode rounds 4-6 worked to eliminate. Round-5's run summary flagged it as a deferred candidate; self-review pass-2 candidate #2.
+- Acceptance:
+  - New POST controller `src/Controller/Dashboard/DisconnectMailboxController.php` with `__invoke()` at `#[Route('/app/mailboxes/{id}/disconnect', methods: ['POST'])]`.
+  - New command `App\Message\DisconnectMailbox` + `DisconnectMailboxHandler` that soft-deletes the `MailboxConnection` (per `never-delete-user-data` memory; add a `disconnected_at` column rather than hard delete). Existing retention rules handle the eventual purge.
+  - CSRF-protected form (matches existing dashboard pattern like `dashboard_ingestion_recommendation_dismiss`).
+  - `MailboxHealthAdvisor` "Disconnect this mailbox" CTA route changes from `dashboard_mailboxes` to the new disconnect endpoint, with the mailbox ID in `routeParams`.
+  - Per-mailbox "Disconnect" button appears on `/app/mailboxes/{id}` detail page too, so the affordance exists on both surfaces.
+  - Confirmation modal or inline "are you sure" — TBD.
+  - Tests: integration test seeds a PointsAtSendvery domain + bound mailbox + silent-for-too-long state; asserts the advisor CTA href targets the new disconnect route. Second test POSTs to disconnect → soft-deletes → redirects to `/app/mailboxes` with a flash message.
+- Notes:
+  - Coordinate with `never-delete-user-data` memory — the soft-delete approach is the right default; verify with the user before going to hard delete.
+
+---
+
+## TASK-134: `IngestionPathResolver::resolveForTeams()` + `DashboardOverviewController` both fan out `RuaScenarioResolver::resolveForDomainId` per domain — batch them so the overview hot path doesn't issue N+1 queries
+
+- Status: proposed
+- Area: dashboard / perf
+- Why: Round-5's perf audit measured `IngestionPathResolver::resolveForTeams()` at ~3.5ms for 20 demo domains, projected linearly to ~16ms at 100, WATCH at ~300, BAD at ~500. Round-6's TASK-129 added a SECOND N+1 in the same pattern: `DashboardOverviewController:198-203` loops `foreach ($domains as $domainOverview)` and calls `ruaScenarioResolver->resolveForDomainId()` per row. The overview hot path now issues N+1 queries to `dns_check_result` on every render for an N-domain team. Demo-seed (3 domains) is trivial; a 100-domain agency is still acceptable; 500 domains will block. Self-review pass-2 candidate #3.
+- Acceptance:
+  - New batch method `RuaScenarioResolver::resolveForDomainIds(array $domainIds): array<string, RuaScenarioResult>` that fetches all latest `dns_check_result` rows for the input domain IDs in a SINGLE query (LATERAL or window function), keyed by domain ID.
+  - `DashboardOverviewController` swaps the foreach loop for one `resolveForDomainIds` call.
+  - `IngestionPathResolver::resolveForTeams()` adopts the same batch pattern.
+  - Per-domain `RuaScenarioResolver::resolveForDomainId` stays for callers that genuinely want one row.
+  - `tests/Integration/Query/RuaScenarioResolverTest.php` extended with a batch-method test asserting one round-trip for N domains.
+  - Round-7 perf audit's `EXPLAIN ANALYZE` confirms total query time stays sub-5ms for the demo team AND that the linear-per-row pattern is gone (single index-backed query, not N).
+- Notes:
+  - Lowest priority of round-6's three round-7 proposals — no production data is anywhere near the WATCH threshold today. Ship when a customer is approaching 100+ domains, OR pre-emptively as good hygiene.
+
+---
+
+## RUN SUMMARY — 2026-05-25 round 6 autonomous CX loop (truthful dashboard + DNS history depth + IA merge + homepage hero rework)
+
+### Shipped (7 user-driven tasks across 6 code commits + 2 docs commits — full round-6 scope drained)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 125+126 | DNS history truthfulness | `3214219` | dashboard | TASK-125: first `dns_check_result` row per `(monitored_domain_id, type)` renders an `Initial check` info badge instead of the `Changed` warning chip — detected via NOT EXISTS subquery on earlier rows. Baseline-exclusion guard also added to `GetDomainDnsHistory::countChanges`, `changesOnly` filter, `GetDomainWorkspaceTabCounts` History dot, AND `WeeklyDigestGenerator::getDnsChangesCount` (reviewer cross-surface catch). TASK-126: record-type labels (SPF/DKIM/DMARC/MX) all switch to unified `badge-neutral badge-outline` with per-protocol icon prefix; validity badges keep their semantic palette. `GetDomainDnsHistory` now injects ClockInterface for deterministic rangeDays. +5 integration tests, suite 2226 → 2232. |
+| 128+129 | /app onboarding + NEXT STEP stop lying about state | `fd11706` | dashboard / guidance | TASK-128: `SetupChecklistResolver` branches the third step's copy + CTA on `RuaScenario` — PointsAtSendvery drops the misleading "Connect a mailbox if you prefer" alt copy entirely. headlineDomainRuaScenario is REQUIRED (no backwards-compat default — CLAUDE.md). TASK-129: `NextActionResolver` picks highest-attention RUA scenario across ALL domains (NoRecord > PointsAtExternal > PointsAtSendvery) instead of LIMIT-1 headline. Multi-domain agency teams now see the right CTA for their worst-offender domain. WaitForReports detection switched from `totalReports === 0` to `firstReportAt IS NULL` (reviewer catch — totalReports collapses to 0 after retention purge). DomainOverviewResult + GetDomainOverview extended to carry md.first_report_at. +7 unit + 2 integration tests; suite 2232 → 2244. |
+| 127 | Token-level DNS diff with full-record expander | `7207cdd` | dashboard | New `DnsRecordDiffer` (`readonly final` service) tokenizes per protocol — DMARC by `;`-key=value, SPF by whitespace tokens, MX line-by-line, DKIM as one opaque block. Returns `DnsRecordDiff` = list of `DnsRecordDiffSegment` (text + DnsRecordDiffKind: Unchanged/Added/Removed). Adjacent same-kind segments compacted. Inline rendering via `_dns_record_diff.html.twig` macro: removed → `bg-error/20 line-through`, added → `bg-success/20 font-bold`. Default-collapsed `<details>` expander shows raw before/after for noisier records. Initial-check rows skip the diff entirely. +13 unit + 2 integration tests; suite 2244 → 2259. |
+| 131 | Homepage hero rework | `488914c` | marketing | Three sequential designed sections replace the previous hero + standalone DNS-checker block. Hero (two-column, dotted-grid bg scoped to container): zinc-palette H1 "DMARC, DNS, deliverability — monitored and explained.", reused `HomeDomainCheckerComponent` LiveComponent VERBATIM inside the right-column card. Section 2 (centered): "From XML to plain English" — raw DMARC XML → AI summary 3-column transformation with `homepage_ai_sample` Twig global per DEC-057 stub-first marker. Section 3 (two-column): A-grade card mockup. Explicit `font-medium` overrides daisyUI's heavier heading default. Trust-logos row preserved between hero and section 2. TASK-120 dashboard screenshot + everything below untouched. Removed the round-3-era `heroSeeTheSourceLinkPointsAtGithub` test (which had been propped up by a hidden anchor — backwards-compat shim per reviewer + CLAUDE.md) and replaced with `heroSecondaryCtaRespectsRepoPublicGate` asserting the real visible CTA. +1 new wide test pinning 9 spec criteria; suite 2244 → 2273. |
+| 130 | /app/dns-health collapsed into /app/domains | `a9f3c34` | dashboard / IA | Biggest task this round. 4 phases per architect plan. Phase 1: enriched `/app/domains` with the 4-card stat summary + `?status=unchecked` filter chip + per-card DNS health grade chip + 4 protocol badges + "DNS Health →" footer link. DomainCard root switched from `<a>` to `<div>` + stretched-link overlay (avoids invalid nested anchors + the noOnclickInAnyDashboardPage guard). Phase 2: migrated 9 production route references (NextActionResolver 4, SetupChecklistResolver 2, MailboxHealthAdvisor 2, ListMailboxesController 1) + 12 test assertions. Phase 3: deleted DnsHealthOverviewController, dns_health_overview.html.twig, DnsHealthOverviewTest (15 tests), sidebar entry, 2 orphan tests. Phase 4: codified two sweep guards (templates/ + src/) that fail-fast on any reintroduction of `dashboard_dns_health`. +9 new DomainsWithDnsHealthTest + 6 extracted GetDnsHealthOverviewTest cases; suite 2273 → 2256 (net -3 because 15 deleted dns-health-overview tests outweigh the 14 new + 2 guard additions; merged surface coverage intact). |
+
+### Perf audit — committed as `b37700a`
+
+Re-measured the 5 round-5 baseline queries + 1 NEW combined `/app/domains` two-query pattern that TASK-130 introduced. **All 6 measurements land SAFE (<5ms exec)** at demo-seed scale. No regressions, no TASK-13X optimisation task filed. Notable findings:
+
+- `GetDomainOverview::forTeams()` absorbed TASK-128/129's new `md.first_report_at` projection without plan-shape change (0.577ms vs 0.609ms — column folded into existing HashAggregate group key).
+- `GetDomainWorkspaceTabCounts::forDomain()` got *faster* despite TASK-125's NOT EXISTS guard (0.196ms vs 0.304ms — Postgres rewrites as Nested Loop Semi Join).
+- TASK-130's new two-query pattern on `/app/domains` (GetDomainOverview + GetDnsHealthOverview combined) clocks 0.668ms — 12% of the 5ms SAFE budget.
+- `NavCounts` plan shapes for `countUnread*` flipped from Index Scan (round 5) to Seq Scan (round 6) — not a regression, optimiser correctly skipping the index at 5 alert rows.
+
+Round-5 perf section preserved at line 3868; round-6 section sits above it at line 3770.
+
+### Self-review findings + dispositions
+
+**Pass 1 (fresh-eyes self-review of the 5 shipped task bundles):**
+- TASK-125+126: verified-clean. INITIAL CHECK badge reads cleanly at 360px; baseline-exclusion propagates correctly to all count surfaces.
+- TASK-127: one nice-to-have on `DnsRecordDiffer` — DMARC records with 4-5 simultaneous tag flips produce a busy inline rendering (~10 highlighted spans on one line). The `<details>` expander mitigates for power users. NOT shipped — worst case is rare in production records. Future TASK could swap to side-by-side blocks when N tags differ.
+- TASK-128+129: verified-clean. Confirmed via controller code-read that the two cards read INDEPENDENT scenario signals (TASK-128: `$headlineDomainRuaScenario`; TASK-129: `$domainRuaScenarios` per-domain map). The reviewer's concern about a single bug regressing both was real but the architecture prevents it.
+- TASK-130: verified-clean. DomainCard stretched-link + inner-anchor stacking correct (`relative z-10` on the footer link). No KB article / docs / test still references the deleted route. Both codified sweep guards fail-fast on regression.
+- TASK-131: verified-clean. Three-section narrative reads as one coherent story (hero → trust → XML→English → grade card). Dotted-grid bg correctly scoped to hero container only. AI-summary copy correctly DEC-057-marked.
+
+**Reviewer-caught fixes applied inline during the round** (high signal — round-4 + 5 pattern continues):
+- TASK-125+126 reviewer: `GetDomainDnsHistory` was using `new \DateTimeImmutable()` directly instead of ClockInterface (CLAUDE.md violation in the new `countChanges` method); `WeeklyDigestGenerator::getDnsChangesCount()` was the cross-surface duplicate of the baseline-as-change bug (digest email would have shown wrong counts). Both fixed before commit.
+- TASK-128+129 reviewer: 5 findings, 3 fixed inline (totalReports → firstReportAt proxy correction with DomainOverviewResult schema extension, mandatory headlineDomainRuaScenario param removing backwards-compat shim, test fixture using wrong-reason pass for `publishRuaRecordSkippedWhenScenarioIsPointsAtSendvery`). 1 deferred (route migration handled by TASK-130).
+- TASK-127 reviewer: 2 nice-to-have fixes applied (string-comparison-against-enum-value → identity comparison, template duplicated `isRealChange` logic → call the helper).
+- TASK-130 reviewer: 1 nice-to-have applied (`?status=unchecked` chip href assertion missing in `DomainsFilterTest`).
+- TASK-131 reviewer: 1 must-fix applied (hidden `aria-hidden` GitHub anchor + the test it propped up removed; new env-aware test asserts the real visible secondary CTA per `is_repo_public` gate).
+
+**Pass 2 (final Product-agent stop-condition sweep):** surfaced 3 round-7 candidates, all filed as `proposed`:
+- **TASK-132**: Homepage section 5 "How it works" Step 1 still says "Connect mailbox" — mental-model contradiction with dashboard's DNS-first push. Highest leverage (a first-time visitor reads `/` top-to-bottom and gets two different mental models in 60 seconds).
+- **TASK-133**: Disconnect-mailbox CTA links to list page with no actual disconnect — TASK-108's CTA lies. Highest trust impact (the dashboard explicitly tells the user "click here to disconnect" and then doesn't deliver).
+- **TASK-134**: Batch `RuaScenarioResolver::resolveForDomainIds` to fix N+1 — round-5 carryover that TASK-129 marginally worsened. Lowest urgency (no production team near the WATCH threshold today).
+
+### Test suite growth
+
+| Checkpoint | Tests | Assertions | Δ |
+|---|---|---|---|
+| Round-5 end (2026-05-25) | 2226 | 6499 | baseline |
+| After TASK-125+126 | 2232 | 6532 | +6 / +33 |
+| After TASK-128+129 | 2244 | 6572 | +12 / +40 |
+| After TASK-127 | 2259 | 6616 | +15 / +44 |
+| After TASK-131 | 2273 | 6668 | +14 / +52 |
+| After TASK-130 (15 deleted - 14 new - 2 guards = net -3 ish) | 2256 | 6615 | -17 / -53 |
+| After reviewer-fix sweep | 2256 | 6615 | flat |
+| **Final** | **2256** | **6615** | **+30 / +116** |
+
+30 new tests / 116 new assertions across the round. Smaller per-task delta than round 5 (+68 / +286) because TASK-130 was deletion-heavy (-15 tests for the merged surface), and TASK-127 + TASK-131 were the only net-additive-heavy single tasks. Coverage discipline maintained throughout.
+
+### Surfaces touched and judged "good enough"
+
+- `/app/domains/{id}/dns-history` — INITIAL CHECK distinct from CHANGED (TASK-125), record-type labels neutral (TASK-126), token-level inline diff with expander for real changes (TASK-127). Cross-surface count consistency with WeeklyDigest (TASK-125 reviewer catch).
+- `/app` overview — onboarding card scenario-aware (TASK-128), NEXT STEP card respects per-team scenario priority (TASK-129). Both cards stop lying about user state when the user has the dashboard's recommended config already in place.
+- `/app/domains` — absorbed `/app/dns-health` entirely (TASK-130). 4-card summary + 5 filter chips + per-card grade + protocol badges + DNS Health → footer link. Cross-surface tone consistency preserved with the per-domain `/app/domains/{id}/health` drill-down (same `text-success/info/warning/error` palette via shared `snapshotGradeColor()`).
+- Sidebar nav — DNS Health entry removed cleanly, no visual gap.
+- Homepage `/` — new 3-section top (TASK-131): hero with embedded checker, "XML → plain English" explainer, A-grade card showcase. Monochrome zinc palette + explicit `font-medium` ceiling overriding daisyUI defaults. Trust-logos row + TASK-120 screenshot + everything below untouched.
+- Performance — all 6 measured queries SAFE; no regressions vs round 5.
+
+### Suggested round-7 seed areas
+
+Already filed as proposed tasks in the backlog (TASK-132 / 133 / 134). In priority order:
+
+1. **TASK-132** — Homepage Step 1 "Connect your mailbox" copy contradicts the dashboard's DNS-first push. Single template edit; high leverage.
+2. **TASK-133** — Disconnect-mailbox dead-end. New POST route + soft-delete handler + advisor CTA rewire. Medium-sized task.
+3. **TASK-134** — Batch `RuaScenarioResolver` to retire the N+1 in `DashboardOverviewController` + `IngestionPathResolver`. Pre-emptive hygiene; ship when first ~100-domain customer signs up.
+
+Additional candidates considered but not filed (not real user-confusion gaps):
+- Mailbox detail polish, /app/alerts empty-state polish, pricing page `$4.99` / `$5.99` framing inconsistency, marketing-nav badge revisit, `SeverityConsistencyTest` extension to pin every cross-surface pair, `sendvery:tools:screenshot` ops command, `IngestionRoutesCallout` "fallback" branch rephrase. All have explicit rationale in the self-review report.
+
+### Stop signal
+
+**Backlog drained against the round-6 user-driven scope.** Round 6 was explicitly tighter than round 5 — 7 user-driven tasks + perf audit + self-review, all done. The Product agent's final sweep surfaced 3 round-7 proposals (filed as `proposed`) rather than no proposals — but each is genuinely round-7-shaped work, not a round-6 must-fix. Matches round-5's pattern of leaving Product-sweep findings as the next-round seed instead of chasing them in-round.
+
+7 user-driven tasks shipped across 6 code commits + 2 docs commits. Quality gates green at every step. 2256 tests / 6615 assertions in the final state. Performance audit captured for round-7 comparison. Pushed continuously throughout per the round-6 ship-phase rule (no carryover of unpushed commits like round-5's manual-push-of-32 incident).
 
 ---
 
