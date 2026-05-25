@@ -10,6 +10,7 @@ use App\Services\Dns\DmarcRecordParser;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\ReportAddressProvider;
 use App\Value\Dns\RuaScenario;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Ramsey\Uuid\Uuid;
@@ -163,6 +164,9 @@ final class RuaScenarioResolverTest extends TestCase
             $repo,
             new DmarcRecordParser(),
             new ReportAddressProvider('reports@sendvery.com'),
+            // Per-domain resolution doesn't go through DBAL — a stubbed
+            // Connection is enough to satisfy the constructor signature.
+            $this->createStub(Connection::class),
         );
     }
 

@@ -104,7 +104,13 @@ final class IngestionPathResolverTest extends TestCase
             ->willReturn([]);
 
         $scenarioResolver = $this->createMock(RuaScenarioResolver::class);
+        // TASK-134: empty teams produces an empty matrix, so the batch call
+        // (if it fires at all) receives `[]` and short-circuits inside the
+        // resolver. The contract we care about: the per-domain method must
+        // never fire on the matrix path. The batch call is harmless either
+        // way — it's an O(1) PHP short-circuit on empty input.
         $scenarioResolver->expects(self::never())->method('resolveForDomainId');
+        $scenarioResolver->method('resolveForDomainIds')->willReturn([]);
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
         $matcher = $this->createStub(RuaMailboxMatcher::class);
@@ -118,8 +124,9 @@ final class IngestionPathResolverTest extends TestCase
     public function attachesRuaScenarioToEachRow(): void
     {
         // TASK-100: the resolver enriches every matrix row with the RUA
-        // scenario for that domain. Mock the scenario resolver and assert
-        // the wrapped result carries the scenario through.
+        // scenario for that domain. TASK-134: scenarios resolve via a single
+        // batch call now — assert exactly ONE invocation regardless of row
+        // count, and that the keyed return map is read by domain ID.
         $result = $this->buildResult(IngestionPath::Dns);
         $scenario = new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com');
 
@@ -131,8 +138,9 @@ final class IngestionPathResolverTest extends TestCase
 
         $scenarioResolver = $this->createMock(RuaScenarioResolver::class);
         $scenarioResolver->expects(self::once())
-            ->method('resolveForDomainId')
-            ->willReturn($scenario);
+            ->method('resolveForDomainIds')
+            ->with([$result->domainId])
+            ->willReturn([$result->domainId => $scenario]);
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
         $matcher = $this->createStub(RuaMailboxMatcher::class);
@@ -226,8 +234,8 @@ final class IngestionPathResolverTest extends TestCase
         $query->method('forTeams')->willReturn([$result]);
 
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'DMARC@TEAM.COM'));
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys($ids, new RuaScenarioResult(RuaScenario::PointsAtExternal, 'DMARC@TEAM.COM')));
 
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::once())
@@ -271,8 +279,8 @@ final class IngestionPathResolverTest extends TestCase
         $query->method('forTeams')->willReturn([$result]);
 
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com'));
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys($ids, new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com')));
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
         $mailboxRepo->method('get')->willReturn($mailbox);
@@ -298,8 +306,8 @@ final class IngestionPathResolverTest extends TestCase
         $query->method('forTeams')->willReturn([$result]);
 
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com'));
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys($ids, new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com')));
 
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::never())->method('get');
@@ -325,8 +333,8 @@ final class IngestionPathResolverTest extends TestCase
         $query->method('forTeams')->willReturn([$result]);
 
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com'));
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys($ids, new RuaScenarioResult(RuaScenario::PointsAtSendvery, 'reports@sendvery.com')));
 
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::never())->method('get');
@@ -362,8 +370,8 @@ final class IngestionPathResolverTest extends TestCase
         $query->method('forTeams')->willReturn([$result]);
 
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com'));
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys($ids, new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com')));
 
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::never())->method('get');
@@ -398,8 +406,8 @@ final class IngestionPathResolverTest extends TestCase
         $query->method('forTeams')->willReturn([$result]);
 
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com'));
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys($ids, new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com')));
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
         $mailboxRepo->method('get')->willThrowException(new MailboxConnectionNotFound('gone'));
@@ -434,8 +442,8 @@ final class IngestionPathResolverTest extends TestCase
         $query->method('forTeams')->willReturn([$result]);
 
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com'));
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys($ids, new RuaScenarioResult(RuaScenario::PointsAtExternal, 'dmarc@team.com')));
 
         $mailboxRepo = $this->createMock(MailboxConnectionRepository::class);
         $mailboxRepo->expects(self::never())->method('get');
@@ -508,8 +516,14 @@ final class IngestionPathResolverTest extends TestCase
         // Stub (no expectations) — the four classification tests don't
         // care about scenarios, they only care about path classification.
         $scenarioResolver = $this->createStub(RuaScenarioResolver::class);
-        $scenarioResolver->method('resolveForDomainId')
-            ->willReturn(new RuaScenarioResult(RuaScenario::NoRecord, null));
+        // TASK-134: the resolver now calls the batch method. We return a
+        // closure-built map so the default scenario applies to whatever
+        // domain IDs the test's matrix rows happen to use.
+        $scenarioResolver->method('resolveForDomainIds')
+            ->willReturnCallback(static fn (array $ids): array => array_fill_keys(
+                $ids,
+                new RuaScenarioResult(RuaScenario::NoRecord, null),
+            ));
 
         $mailboxRepo = $this->createStub(MailboxConnectionRepository::class);
         $matcher = $this->createStub(RuaMailboxMatcher::class);

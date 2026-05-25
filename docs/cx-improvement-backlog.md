@@ -4303,6 +4303,58 @@ Two underlying queries fire once per matrix row:
 - Notes:
   - Coordinate with `never-delete-user-data` memory — the soft-delete approach is the right default; verify with the user before going to hard delete.
 
+### Architect plan (2026-05-25)
+
+**User decisions baked in (round 7):** soft-delete via `disconnected_at` column; confirmation via daisyUI `<dialog class="modal">` because every destructive action requires explicit confirmation.
+
+**Research findings**
+
+- `MailboxConnection` entity columns: `id`, `team_id`, `monitored_domain_id` (nullable), `type`, `host`, `port`, `encrypted_username`, `encrypted_password`, `encryption`, `last_polled_at` (nullable), `last_error` (nullable), `is_active` (boolean), `created_at`. The `lastPolledAt` column is the model for the new `disconnectedAt` (nullable `?\DateTimeImmutable` with the same Doctrine type comment).
+- `MailboxHealthAdvisor::silentForTooLongActions()` (`src/Services/MailboxHealthAdvisor.php:254-261`) currently returns `route: 'dashboard_mailboxes', routeParams: []` for the `PointsAtSendvery` primary CTA — the user-flagged dead end.
+- `MailboxHealthAdvisorCard.html.twig:85-107` already has a special-case branch for `dashboard_mailbox_retest` (POST form). Add a third branch for `dashboard_mailbox_disconnect` that renders a `<button onclick="...showModal()">` instead of a link.
+- `PollMailboxesCommand:52` reads `findActiveConnections()`. Disconnected mailboxes must be filtered out at the repository layer, not by conflating with `isActive` (different semantic). Filter by `'disconnectedAt' => null` instead.
+- `DashboardOverviewController:159` reads `findByTeam()` to compute `$hasMailbox`. Auto-fixed when the repository filter is added.
+- `RetestMailboxConnectionController:51` is the canonical inline team-ownership check pattern (`$connection->team->id->equals($this->dashboardContext->getTeamId())` → `createNotFoundException` if false). Mirror exactly — no Symfony voter needed.
+- `DismissIngestionRecommendationController` is the canonical CSRF pattern. Mirror.
+- `dashboard_mailboxes` callsites that pass a mailbox ID: NONE in the codebase (all existing references are plain list-page navigation). The route change is safe.
+
+**Files to create (7)**
+
+- `migrations/Version<datetime>.php` — `ALTER TABLE mailbox_connection ADD disconnected_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL` + Doctrine type comment.
+- `src/Events/MailboxDisconnected.php` — `readonly final class { connectionId, teamId }`.
+- `src/Message/DisconnectMailbox.php` — `readonly final class { mailboxId }`.
+- `src/MessageHandler/DisconnectMailboxHandler.php` — `#[AsMessageHandler]`, loads via repo, calls `$connection->disconnect($this->clock->now())`, EM flushes. ClockInterface injected.
+- `src/Controller/Dashboard/DisconnectMailboxController.php` — single-action POST-only with CSRF check (`mailbox_disconnect` token), inline team check, dispatches command, flash + redirect to `/app/mailboxes`.
+- `tests/Integration/Controller/DisconnectMailboxControllerTest.php` — 8 methods covering happy path / idempotence / CSRF / cross-tenant / 404 / GET-rejected / disconnected-hidden-from-list / new advisor CTA opens modal.
+- (Optional) `tests/Integration/Repository/MailboxConnectionRepositoryDisconnectFilterTest.php` — pins `findActiveConnections()` + `findByTeam()` skip disconnected rows.
+
+**Files to modify (5)**
+
+- `src/Entity/MailboxConnection.php` — add `?\DateTimeImmutable $disconnectedAt = null` (mutable, mirrors `lastPolledAt`) + constructor default + `disconnect(\DateTimeImmutable $at): void` method that sets the column AND emits `MailboxDisconnected` event via `recordThat()`.
+- `src/Repository/MailboxConnectionRepository.php` — `findActiveConnections()` + `findByTeam()` add `'disconnectedAt' => null` criterion (Doctrine treats null as IS NULL).
+- `src/Services/MailboxHealthAdvisor.php:258-259` — flip `route: 'dashboard_mailboxes', routeParams: []` to `route: 'dashboard_mailbox_disconnect', routeParams: ['id' => $mailbox->id->toString()]`.
+- `templates/components/MailboxHealthAdvisorCard.html.twig:85-107` — add 3rd elseif branch for `dashboard_mailbox_disconnect`: render `<button type="button" onclick="document.getElementById('disconnect-mailbox-modal').showModal()">`.
+- `templates/dashboard/mailbox_detail.html.twig` — add "Disconnect mailbox" button to heading area (same modal trigger) + `<dialog id="disconnect-mailbox-modal" class="modal">` at the bottom of `{% block content %}` (daisyUI modal-backdrop pattern from `sender_inventory.html.twig:239`). Modal body: heading "Disconnect {host}:{port}?", paragraph "Sendvery will stop polling this mailbox for new DMARC reports. Reports already parsed are preserved. You can re-connect anytime.", POST form with CSRF token + `<button type="submit" class="btn btn-error">Disconnect</button>` + Cancel button.
+
+**Test updates (2)**
+
+- `tests/Unit/Services/MailboxHealthAdvisorTest.php:149-151` — flip route assertion from `dashboard_mailboxes` to `dashboard_mailbox_disconnect` + assert `routeParams` contains `['id' => ...]`.
+- `tests/Integration/Controller/MailboxHealthAdvisorCardTest.php` — replace the `href` assertion with: primary CTA is a `<button>` (not `<a>`) carrying `onclick` referencing `disconnect-mailbox-modal`; `<dialog id="disconnect-mailbox-modal">` exists in the page.
+
+**Sequencing (5 phases, each must end green)**
+
+1. **Schema + entity + event**: migration + `MailboxConnection::$disconnectedAt` + `disconnect()` method + `MailboxDisconnected` event. PHPStan + cs-fixer green; existing tests still pass (no behaviour change yet, the column defaults to NULL).
+2. **Command + handler + repository filter**: `DisconnectMailbox` + handler + repository changes. Full test suite must still pass (existing fixtures all have `disconnectedAt = null`, so the new filter is a no-op for them).
+3. **Controller + route**: `DisconnectMailboxController` + new 8-method integration test. Run full suite green.
+4. **Templates + advisor service**: modal markup + advisor card branch + `MailboxHealthAdvisor` route flip + advisor-card-test update + advisor-unit-test update. Full suite green.
+5. **Codified guard**: confirm no `route: 'dashboard_mailboxes'` callsite anywhere intends to dispatch a disconnect (the unit-test update from Phase 4 is the regression net).
+
+**Idempotency**: disconnecting an already-disconnected mailbox is a no-op (timestamp gets refreshed). No throw. Matches the `team.ingestionRecommendationDismissedAt` pattern.
+
+**List-page visibility**: disconnected mailboxes are HIDDEN from `/app/mailboxes` by default after Phase 2 (repository filter). A `?show_disconnected=1` toggle is deferred to a future task — no confirmed user need yet; the row persists per `never-delete-user-data` and can be surfaced later.
+
+**Cron**: no crontab change. `sendvery:mailbox:poll` calls `findActiveConnections()` which auto-skips disconnected rows after Phase 2.
+
 ---
 
 ## TASK-134: `IngestionPathResolver::resolveForTeams()` + `DashboardOverviewController` both fan out `RuaScenarioResolver::resolveForDomainId` per domain — batch them so the overview hot path doesn't issue N+1 queries

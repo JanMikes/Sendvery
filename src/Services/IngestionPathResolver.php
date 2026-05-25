@@ -41,9 +41,13 @@ final readonly class IngestionPathResolver
         // TASK-100: enrich each matrix row with the RUA scenario derived from
         // the latest stored DMARC check so the template can render scenario-
         // aware badges + action CTAs without a second round of queries from
-        // Twig. TODO: this introduces one extra query per domain (N+1) —
-        // acceptable for a typical team's <20 domains; batch lookup is a
-        // future task.
+        // Twig.
+        //
+        // TASK-134: scenarios resolve in a single batch query rather than the
+        // per-row foreach this method used to run — the old N+1 was the
+        // primary contributor to the ingestion-matrix page's hot path latency
+        // (~one `dns_check_result` lookup per matrix row) and would have
+        // compounded with TASK-129's second N+1 on the dashboard overview.
         //
         // TASK-106: ALSO compute `pathMatchesMailbox` for rows where the
         // user's connected mailbox is the actual destination of the published
@@ -51,10 +55,13 @@ final readonly class IngestionPathResolver
         // mailbox" badge for the common operator-wired-it-right shape and
         // keep the scenario warning only for the genuinely-misconfigured
         // shape (wrong inbox connected).
+        $scenarios = $this->ruaScenarioResolver->resolveForDomainIds(
+            array_values(array_map(static fn (DomainIngestionMatrixResult $row): string => $row->domainId, $rows)),
+        );
+
         return array_values(array_map(
-            function (DomainIngestionMatrixResult $row): DomainIngestionMatrixResult {
-                $scenario = $this->ruaScenarioResolver->resolveForDomainId(Uuid::fromString($row->domainId));
-                $withScenario = $row->withScenario($scenario);
+            function (DomainIngestionMatrixResult $row) use ($scenarios): DomainIngestionMatrixResult {
+                $withScenario = $row->withScenario($scenarios[$row->domainId]);
 
                 return $withScenario->withPathMatchesMailbox(
                     $this->computePathMatchesMailbox($withScenario),

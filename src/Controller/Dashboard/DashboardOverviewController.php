@@ -29,7 +29,6 @@ use App\Services\SetupChecklistResolver;
 use App\Services\Stripe\PlanLimits;
 use App\Value\DomainHealthSort;
 use Psr\Clock\ClockInterface;
-use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -177,30 +176,24 @@ final class DashboardOverviewController extends AbstractController
         // on this page, so resolving for its `domainId` keeps the surface
         // consistent.
         //
-        // TASK-129: in addition to the headline scenario, compute the
-        // per-domain scenario map for every domain in the team so the
-        // resolver can honour the documented priority order
-        // (NoRecord > PointsAtExternal > PointsAtSendvery) across multi-
-        // domain teams. The headline scenario stays in scope because the
-        // SetupChecklistResolver below still consumes the LIMIT-1 headline
-        // value — the two cards intentionally share that headline read.
-        $headlineDomainRuaScenario = null;
-        if (null !== $verificationStatus) {
-            $headlineDomainRuaScenario = $this->ruaScenarioResolver->resolveForDomainId(
-                Uuid::fromString($verificationStatus->domainId),
-            );
-        }
+        // Per-domain RUA scenarios for NextActionResolver. TASK-134: one batch
+        // query rather than the per-domain foreach the controller used to run
+        // — the previous shape went N+1 on the dashboard overview hot path
+        // (~3.5ms at 20 domains, projected ~500ms at 500). Keyed by domainId
+        // so the resolver can pair each `DomainOverviewResult` with its
+        // scenario without re-iterating.
+        $domainRuaScenarios = $this->ruaScenarioResolver->resolveForDomainIds(
+            array_values(array_map(static fn ($d) => $d->domainId, $domains)),
+        );
 
-        // Per-domain RUA scenarios for NextActionResolver. Doing the lookups
-        // in the controller (one cached DB hit per domain) keeps the resolver
-        // itself a pure function. Keyed by domainId so the resolver can pair
-        // each `DomainOverviewResult` with its scenario without re-iterating.
-        $domainRuaScenarios = [];
-        foreach ($domains as $domainOverview) {
-            $domainRuaScenarios[$domainOverview->domainId] = $this->ruaScenarioResolver->resolveForDomainId(
-                Uuid::fromString($domainOverview->domainId),
-            );
-        }
+        // TASK-129: the headline scenario is the LIMIT-1 verification-status
+        // domain's entry in the batch map — SetupChecklistResolver below still
+        // consumes the LIMIT-1 headline value, but we read it from the batch
+        // result instead of issuing a redundant per-domain query (TASK-134
+        // reviewer catch — the headline domain was being fetched twice).
+        $headlineDomainRuaScenario = null !== $verificationStatus
+            ? ($domainRuaScenarios[$verificationStatus->domainId] ?? null)
+            : null;
 
         $nextAction = $this->nextActionResolver->resolve(
             domains: $domains,

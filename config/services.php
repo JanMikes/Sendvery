@@ -415,6 +415,21 @@ return App::config([
             'App\Services\OgImage\HealthOgImageContentResolver' => [
                 'public' => true,
             ],
+            // TASK-134: query-count regression net. The PSR-3 logger captures
+            // every SQL statement DBAL prepares/executes; tests fetch it from
+            // the container to assert the batch resolver issues ONE select
+            // against `dns_check_result` regardless of the input size. Wired
+            // through Doctrine's bundled `Logging\Middleware` so the recording
+            // happens transparently for every connection — no per-test setup.
+            'App\Tests\TestSupport\InMemoryQueryLogger' => [
+                'public' => true,
+            ],
+            'Doctrine\DBAL\Logging\Middleware' => [
+                'arguments' => ['@App\Tests\TestSupport\InMemoryQueryLogger'],
+                'tags' => [
+                    ['name' => 'doctrine.middleware'],
+                ],
+            ],
         ],
     ],
 ]);
