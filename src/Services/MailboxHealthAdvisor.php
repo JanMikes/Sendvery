@@ -210,10 +210,12 @@ final readonly class MailboxHealthAdvisor
      *    mailbox is redundant because DNS already routes to Sendvery). The
      *    secondary "Check DNS" link is retained — disconnecting is the right
      *    answer, but verifying the DNS first is a defensible operator habit.
-     *    Linked to `dashboard_mailboxes` because no dedicated disconnect or
-     *    edit route exists yet; the list page is the closest surface where
-     *    the user manages mailboxes (the per-mailbox detail page is where
-     *    THIS card already renders, so self-linking would be useless).
+     *    TASK-133: links to the new `dashboard_mailbox_disconnect` POST route
+     *    with the mailbox ID; the card template intercepts this route and
+     *    renders a modal-trigger button instead of an `<a>` so the user gets
+     *    an explicit confirmation step before the soft-delete. Previously
+     *    pointed at the bare list page — a dead-end for an operator who'd just
+     *    been promised "click here to disconnect".
      *  - PointsAtExternal → "Check DNS" (existing behaviour). The operator
      *    genuinely needs to inspect DNS / repoint rua=, so the verb stays. No
      *    secondary — the silent advisory copy already names the external rua
@@ -255,8 +257,8 @@ final readonly class MailboxHealthAdvisor
             RuaScenario::PointsAtSendvery => [
                 new MailboxHealthAdvisorAction(
                     label: 'Disconnect this mailbox',
-                    route: 'dashboard_mailboxes',
-                    routeParams: [],
+                    route: 'dashboard_mailbox_disconnect',
+                    routeParams: ['id' => $mailbox->id->toString()],
                     glyph: 'unlink',
                 ),
                 $checkDns,

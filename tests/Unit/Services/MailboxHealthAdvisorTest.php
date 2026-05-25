@@ -147,8 +147,11 @@ final class MailboxHealthAdvisorTest extends TestCase
         self::assertNotNull($result);
         self::assertSame(MailboxHealthSeverity::SilentForTooLong, $result->severity);
         self::assertSame('Disconnect this mailbox', $result->primaryAction->label);
-        self::assertSame('dashboard_mailboxes', $result->primaryAction->route);
-        self::assertSame([], $result->primaryAction->routeParams);
+        // TASK-133: the CTA now targets the real disconnect endpoint with the
+        // mailbox ID, not the bare list page. The card template intercepts the
+        // route and opens a confirmation modal instead of POSTing on click.
+        self::assertSame('dashboard_mailbox_disconnect', $result->primaryAction->route);
+        self::assertSame(['id' => $mailbox->id->toString()], $result->primaryAction->routeParams);
         self::assertSame('unlink', $result->primaryAction->glyph);
         self::assertNotNull($result->secondaryAction);
         self::assertSame('Check DNS', $result->secondaryAction->label);

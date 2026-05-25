@@ -27,19 +27,35 @@ readonly class MailboxConnectionRepository
         return $connection;
     }
 
-    /** @return array<MailboxConnection> */
+    /**
+     * Cron-poller consumers. TASK-133 hides soft-deleted mailboxes from polling
+     * (`disconnectedAt IS NULL`) so we never re-attempt IMAP login on a
+     * disconnected row. Hard delete is intentionally avoided per the
+     * `never-delete-user-data` memory.
+     *
+     * @return array<MailboxConnection>
+     */
     public function findActiveConnections(): array
     {
         return $this->entityManager->getRepository(MailboxConnection::class)->findBy([
             'isActive' => true,
+            'disconnectedAt' => null,
         ]);
     }
 
-    /** @return array<MailboxConnection> */
+    /**
+     * Dashboard list + `$hasMailbox` overview gating. TASK-133 hides soft-deleted
+     * rows from the team-scoped list so the operator sees the truthful "active
+     * mailboxes" count. The entity itself is still reachable via `get()` for
+     * audit / late-arriving-report attribution.
+     *
+     * @return array<MailboxConnection>
+     */
     public function findByTeam(UuidInterface $teamId): array
     {
         return $this->entityManager->getRepository(MailboxConnection::class)->findBy([
             'team' => $teamId->toString(),
+            'disconnectedAt' => null,
         ]);
     }
 
@@ -50,12 +66,19 @@ readonly class MailboxConnectionRepository
      * the connected mailbox login without re-deriving the binding from the
      * matrix query.
      *
+     * Disconnected (soft-deleted) mailboxes are excluded — otherwise
+     * `RuaMailboxMatcher` would still report a disconnected mailbox as
+     * "matched" and the per-domain RUA destination row would keep showing
+     * the green "Ingesting via mailbox" badge after the user clicked
+     * Disconnect (TASK-133 cross-surface regression — same shape as TASK-114).
+     *
      * @return array<MailboxConnection>
      */
     public function findByDomain(UuidInterface $domainId): array
     {
         return $this->entityManager->getRepository(MailboxConnection::class)->findBy([
             'monitoredDomain' => $domainId->toString(),
+            'disconnectedAt' => null,
         ]);
     }
 }

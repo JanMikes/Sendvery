@@ -21,10 +21,21 @@
             </h1>
             <p class="text-sm text-base-content/60 mt-1">Sendvery polls this mailbox every 5 minutes.</p>
         </div>
-        <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.mailboxId }) }}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
-            <button type="submit" class="btn btn-ghost btn-sm">Re-test connection</button>
-        </form>
+        <div class="flex items-center gap-2 flex-wrap">
+            <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.mailboxId }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
+                <button type="submit" class="btn btn-ghost btn-sm">Re-test connection</button>
+            </form>
+            {# TASK-133: opens the modal at the bottom of {% block content %};
+               every destructive action requires explicit confirmation, so the
+               button never POSTs directly. #}
+            <button type="button"
+                    class="btn btn-ghost btn-sm text-error"
+                    data-testid="mailbox-disconnect-trigger"
+                    onclick="document.getElementById('disconnect-mailbox-modal').showModal()">
+                Disconnect
+            </button>
+        </div>
     </div>
 {% endblock %}
 
@@ -162,4 +173,37 @@
             {% endif %}
         </div>
     </div>
+
+    {# TASK-133: disconnect confirmation modal. Triggered by the "Disconnect"
+       button in the page heading + (after Phase 4) the silent-for-too-long
+       advisor's "Disconnect this mailbox" primary CTA when the bound domain's
+       scenario is PointsAtSendvery. daisyUI v5 <dialog class="modal"> pattern
+       — opened via .showModal(); closed via the form-method=dialog backdrop
+       or the Cancel button. The form inside POSTs to the disconnect endpoint
+       with the CSRF token; on success the controller redirects to
+       /app/mailboxes (this row is filtered out of `findByTeam()` post-disconnect). #}
+    <dialog id="disconnect-mailbox-modal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Disconnect {{ mailbox.host }}:{{ mailbox.port }}?</h3>
+            <p class="text-sm text-base-content/70 mt-3">
+                Sendvery will stop polling this mailbox for new DMARC reports. Reports already parsed are preserved. You can re-connect anytime by adding a new mailbox.
+            </p>
+            <form method="post"
+                  action="{{ path('dashboard_mailbox_disconnect', { id: mailbox.mailboxId }) }}"
+                  class="mt-4">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_disconnect') }}">
+                <div class="modal-action">
+                    <button type="button"
+                            class="btn btn-ghost"
+                            onclick="document.getElementById('disconnect-mailbox-modal').close()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-error">Disconnect</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
 {% endblock %}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Events\MailboxConnectionCreated;
+use App\Events\MailboxDisconnected;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
 use Doctrine\ORM\Mapping as ORM;
@@ -58,6 +59,17 @@ final class MailboxConnection implements EntityWithEvents
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
 
+    /**
+     * TASK-133: nullable timestamp set when the user soft-deletes this mailbox
+     * via the disconnect CTA. The row is preserved per the `never-delete-user-data`
+     * memory; the repository filters disconnected rows out of `findActiveConnections()`
+     * and `findByTeam()` so the cron poller and dashboard list both skip them.
+     * Mutable (mirrors `lastPolledAt` / `lastError` / `isActive`) so a re-connect
+     * flow can flip it back to null without re-creating the entity.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $disconnectedAt;
+
     public function __construct(
         UuidInterface $id,
         Team $team,
@@ -72,6 +84,7 @@ final class MailboxConnection implements EntityWithEvents
         bool $isActive = true,
         ?\DateTimeImmutable $lastPolledAt = null,
         ?string $lastError = null,
+        ?\DateTimeImmutable $disconnectedAt = null,
     ) {
         $this->id = $id;
         $this->team = $team;
@@ -86,6 +99,7 @@ final class MailboxConnection implements EntityWithEvents
         $this->isActive = $isActive;
         $this->lastPolledAt = $lastPolledAt;
         $this->lastError = $lastError;
+        $this->disconnectedAt = $disconnectedAt;
 
         $this->recordThat(new MailboxConnectionCreated($this->id, $this->team->id));
     }
@@ -99,5 +113,22 @@ final class MailboxConnection implements EntityWithEvents
     public function markError(string $error): void
     {
         $this->lastError = $error;
+    }
+
+    /**
+     * TASK-133: soft-delete this mailbox. Stamps `disconnectedAt` with the
+     * caller's clock and emits {@see MailboxDisconnected} on the FIRST
+     * disconnect. Idempotent — a second call refreshes the timestamp but
+     * does NOT re-emit the event (future audit / billing / notification
+     * subscribers would otherwise double-fire on every retry).
+     */
+    public function disconnect(\DateTimeImmutable $at): void
+    {
+        $isFirstDisconnect = null === $this->disconnectedAt;
+        $this->disconnectedAt = $at;
+
+        if ($isFirstDisconnect) {
+            $this->recordThat(new MailboxDisconnected($this->id, $this->team->id));
+        }
     }
 }

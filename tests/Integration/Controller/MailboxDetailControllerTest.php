@@ -284,6 +284,9 @@ final class MailboxDetailControllerTest extends WebTestCase
         // already routes to Sendvery) must render "Disconnect this mailbox"
         // as the primary CTA — the operator should disconnect a redundant
         // mailbox rather than chase a DNS issue.
+        // TASK-133: the CTA is now a <button> that opens the disconnect
+        // confirmation modal (not an <a> to the bare list page). The modal
+        // must also be present so the trigger has a destination to open.
         $data = $this->buildSilentMailboxForScenario(rawDmarcRecord: 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
 
         $crawler = $data['client']->request('GET', '/app/mailboxes/'.$data['mailbox']->id->toString());
@@ -293,6 +296,19 @@ final class MailboxDetailControllerTest extends WebTestCase
         self::assertGreaterThan(0, $primaryCta->count(), 'Primary CTA must render on the advisor card');
         self::assertStringContainsString('Disconnect this mailbox', trim($primaryCta->text()));
         self::assertSame('unlink', $primaryCta->attr('data-glyph'));
+        // The CTA must be a <button>, not an <a> — clicking it opens the
+        // confirmation modal rather than navigating anywhere.
+        self::assertSame('button', $primaryCta->nodeName());
+        self::assertStringContainsString(
+            'disconnect-mailbox-modal',
+            (string) $primaryCta->attr('onclick'),
+        );
+        // The modal the trigger opens must actually exist on the page.
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('dialog#disconnect-mailbox-modal form[action$="/disconnect"]')->count(),
+            'Disconnect modal with POST form must render alongside the advisor CTA.',
+        );
     }
 
     #[Test]

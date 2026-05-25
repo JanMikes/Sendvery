@@ -96,6 +96,21 @@
                                     {{ advice.primaryAction.label }}
                                 </button>
                             </form>
+                        {% elseif advice.primaryAction.route == 'dashboard_mailbox_disconnect' %}
+                            {# TASK-133: disconnect is destructive AND CSRF-guarded POST, so we
+                               open the daisyUI <dialog id="disconnect-mailbox-modal"> rendered
+                               by mailbox_detail.html.twig instead of POSTing directly. The
+                               modal carries its own form + CSRF token + Cancel button, so the
+                               user always gets an explicit confirmation step before the row
+                               gets soft-deleted. #}
+                            <button type="button"
+                                    class="btn btn-sm {{ ctaToneBySeverity[severityValue] }} gap-2"
+                                    data-testid="mailbox-health-advisor-primary-cta"
+                                    data-glyph="{{ primaryGlyph }}"
+                                    onclick="document.getElementById('disconnect-mailbox-modal').showModal()">
+                                {{ include('components/_mailbox_advisor_glyph.html.twig', { glyph: primaryGlyph }, with_context = false) }}
+                                {{ advice.primaryAction.label }}
+                            </button>
                         {% else %}
                             <a href="{{ path(advice.primaryAction.route, advice.primaryAction.routeParams) }}"
                                class="btn btn-sm {{ ctaToneBySeverity[severityValue] }} gap-2"
