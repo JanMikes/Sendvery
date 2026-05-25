@@ -3649,3 +3649,78 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
   - Test: fixture for `path = mailbox`, `lastReportAt = recent`, `scenario = PointsAtExternal` with matching rua email. Assert "Ingesting via mailbox" badge renders.
 - Notes:
   - The matching test ("close enough rua email vs mailbox login") needs to be slightly loose — many operators connect `dmarc@team.com` as IMAP while the rua tag says `mailto:dmarc@team.com`. A direct lowercase equality on the local-part+domain is sufficient for v1; advanced cases (alias forwarding, etc.) can be deferred.
+
+---
+
+## RUN SUMMARY — 2026-05-25 round 4 autonomous CX loop (RUA recommendation engine, severity unification, guidance + polish + nav refactor)
+
+### Shipped (12 commits, 20 effective tasks)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 100 | DMARC RUA auto-detection drives ingestion recommendations | `7bdaf79` | dashboard / guidance | Sendvery's defining product feature as a recommendation engine. New `DmarcRecordParser` + `RuaScenarioResolver` classify every domain into NoRecord / PointsAtSendvery / PointsAtExternal using the already-stored `DnsCheckResult.rawRecord`. Three surfaces consume the scenario: `/app` Next Step gets a new `ConnectExternalMailbox` branch with the literal `{ruaEmail}` in copy; `/app/domains/{id}` setup-status panel gains a 5th "RUA destination" row; `/app/mailboxes` matrix Action column branches per scenario. Conservative `@sendvery.com` detection + env-configured ReportAddressProvider exact match. 36 new tests. No schema changes — pure new code feeding existing surfaces. |
+| 065 | Marketing nav: no attention badges decision recorded | `b739802` | marketing | Pure comment + CLAUDE.md note. The dashboard sidebar (TASK-060/061/quarantine) is the home for live counts; surfacing them on Pricing/Learn/Tools would feel intrusive and leak session state to over-the-shoulder onlookers. |
+| 098 | Unified `DomainHealthClassifier` — list/detail/banner agree | `586f95e` | dashboard | Two divergent severity calculators (DomainHealthFilter::fromOverview + DomainSetupStatusResolver) collapse into one classifier reading both DomainOverviewResult AND DnsHealthOverviewResult. Rule: Healthy ← verified + all 4 DNS configured + pass rate ≥ 90; Attention ← everything else; Unverified ← DMARC missing. GetDomainOverview gains a LEFT JOIN LATERAL onto `domain_health_snapshot` so the list page gets the same per-protocol signals. SeverityConsistencyTest is the load-bearing regression net pinning "list-severity == detail-severity" for any combination of signals. Mirror of TASK-100's "ship the system's opinion" philosophy applied to severity. |
+| 094 | Mailbox health advisor card interprets silent/broken mailboxes | `23303cf` | dashboard / guidance | `MailboxHealthAdvisor` with 3 branches (broken_credentials / silent_for_too_long / quarantine_dominant) plus a healthy null. silent_for_too_long composes with TASK-100's RuaScenarioResolver to name the linked domain's `rua=` address in copy. broken_credentials wins precedence over silent so an erroring mailbox shows the auth cause, not the silence symptom. Visual rhythm matches DmarcPolicyExplainer card. |
+| 068+069+070+071 | Row-level severity glyphs on every list surface | `e5c687b` | dashboard | Extends TASK-066's domain-card idiom to mailboxes / reports / alerts / quarantine. New `_severity_glyph.html.twig` macro is the single source of truth for SVG paths + pass-rate thresholds. Alerts: unread rows get tinted `bg-{tone}/5` background + leading 8px dot; redundant "New" badge removed. Quarantine: leading glyph doubles as a filter anchor (`?reason=`). New `QuarantineReason::severityTone()` enum method maps each reason to its canonical tone. +30 tests. |
+| 101+102+103 | Self-review must-fix bundle | `3fd8006` | dashboard | Round-4 self-review caught 3 round-3-style wrong-information bugs in the wave-1 ship. TASK-101: scenario-(c) banner said "all four records in place" while the panel below showed a yellow 5th RUA row — resolver now emits scenario-aware headline + new `panelLede` field. TASK-102: NextActionResolver scenario-(b) shortcut returned `AllHealthy` ("reports are flowing") even with `firstReportAt = null` — guard added that defers to `WaitForReports` with a "first report arrives in 24-48h" variant. TASK-103: `/app/quarantine` row had 3 different tones for the same reason (glyph / badge / help-card all hardcoded independently) — all three now read `QuarantineReason::severityTone()`. |
+| 043 | `sendvery:demo:seed` populates the dev DB | `75c3491` | ops | A fresh `docker compose up` shows every dashboard empty — both this autonomous run and the previous one mis-diagnosed normal empty states as bugs. New command: 1 demo team, 3 monitored domains (A-grade/C-grade/broken-SPF), 30 days of synthetic reports per domain, 30 daily health snapshots, 5 representative alerts. Idempotent. Refuses to run in prod. IdentityProvider for every UUID; ClockInterface for every timestamp. CLAUDE.md "Local dev bootstrap" section so future agents find the command. |
+| 062+063+064 | Hero attention summary + NavCountsExtension + NavBadge component | `b26c66b` | dashboard | TASK-062 — `/app` gets a one-line "N things need your attention today: 1 critical alert · 2 unverified domains · 4 reports in quarantine" with deep-linked items; renders nothing when total = 0. TASK-063 — three sidebar count Twig extensions (QuarantineCount + AlertCount + DomainHealthCount) collapse into one `NavCountsExtension` with one team-resolve per request. TASK-064 — three hand-rolled badge spans become `<twig:NavBadge>` calls with centralised 99+ cap + optional aria-label. +18 tests. |
+| 092+093+095+096 | Guidance advisor bundle | `6e0ea44` | dashboard / guidance / onboarding | Four scenario-aware advisor surfaces. TASK-092: `SenderAuthorizationAdvisor` recommends authorize/revoke/monitor on the sender inventory. TASK-093: `PassRateRegressionAdvisor` surfaces "pass rate dropped X% — here's the top failing sender" banner on `/app/reports`. TASK-095: `DnsRecordRecommender` generalises the DnsRecordInstruction pattern to SPF/DKIM (MX intentionally skipped — we don't run user inbound mail). TASK-096: onboarding ingestion step uses RuaScenarioResolver to short-circuit when the user's domain is already scenario (b). +64 tests. New KB article `authorizing-senders-explained.html.twig`. |
+| 083+085+086 | Clarity polish (3 of 4) | `478dcb7` | dashboard | TASK-083: `/app/dns-health` gets a 4-card summary row (Domains monitored / Fully healthy / Need attention / Awaiting first check) plus `?status=` filter chips. Counts via `DomainHealthClassifier::isFullyHealthy()` — single source of truth per TASK-098. TASK-085: `/app/alerts` + detail page get a one-sentence "Things Sendvery noticed..." lede so first-time users know what an alert IS. TASK-086: mailbox detail stat cards become value-reactive — a silent mailbox no longer renders all-green (Reports parsed = 0 styles as warning; Envelopes quarantined = 0 styles as success). |
+| 104 | Mailbox advisor redundancy hint extends to broken/quarantine | `823f5de` | dashboard / guidance | Round-4 self-review nice-to-have. TASK-094 only scenario-enriched the silent branch — broken_credentials and quarantine_dominant ignored the scenario. Operator on a scenario-(b) team would fix auth on a mailbox they didn't need. All three branches now share `redundancyHint()`: when scenario is PointsAtSendvery AND mailbox is bound to a specific domain, copy appends "Heads-up: {domain} already routes reports to Sendvery via DNS, so this mailbox is redundant — you can disconnect it instead of fixing it." +3 tests. |
+
+### Deferred to a future round
+
+- **TASK-084** — Domain workspace tab count badges. Scaffolding (GetDomainWorkspaceTabCounts query + DomainWorkspaceTabCountsResult DTO) was written by the polish bundle agent but the controller wiring + template integration across 6 surfaces got eaten by an editor-revert race during the parallel agent run. The scaffolding files were removed; the task stays `proposed` with the original full spec intact. Recommended approach for next round: re-launch a single dedicated agent and instruct it to write files via heredoc rather than Edit calls (the polish agent that hit the same race used heredocs successfully on the controllers that survived).
+- **TASK-105** — `IngestionRoutesCallout` suppression when every matrix row is scenario (b). Two-card "Connect a mailbox (fallback)" is noise the matrix below contradicts row-by-row for an all-scenario-b team. Pure template-level conditional + a controller-side `bool $allScenarioB` precomputed from the matrix.
+- **TASK-106** — Matrix path-vs-scenario priority. A domain with `path = mailbox` (reports physically arriving via connector) and `scenario = PointsAtExternal` renders as "Configured for external inbox" alongside a recent `lastReportAt` timestamp — confusing because the path classifier has the more honest signal. Template branch order needs to consider path before scenario when path is mailbox AND lastReportAt is recent.
+
+### Self-review findings + dispositions
+
+The mid-round self-review (after wave 1) caught 6 issues. 3 must-fix (TASK-101/102/103) shipped in `3fd8006`. 3 nice-to-haves (TASK-104/105/106) were filed; TASK-104 shipped in `823f5de`; TASK-105 + TASK-106 deferred per above.
+
+### Test suite growth
+
+| Checkpoint | Tests | Assertions | Δ |
+|---|---|---|---|
+| Round-3 end (2026-05-24) | 1977 | — | baseline |
+| Round-4 start (TASK-100 baseline) | 2014 | 5729 | +37 |
+| After wave 1 (TASK-100/065/098/094/068-71/101/102/103) | 2076 | 5945 | +62 |
+| After wave 2 (043 + 062-64 + 083/85/86 + 092-96) | 2155 | 6203 | +79 |
+| Final (TASK-104) | 2158 | 6213 | +3 |
+
+### Surfaces I touched and judged "good enough"
+
+- `/app` — Next Step card is now scenario-aware AND lie-free (no "reports are flowing" for a zero-report scenario-(b) settling-window domain); HealthSummary banner counts use the unified classifier; attention-summary line under it for fast triage; setup checklist intact.
+- `/app/domains` — DomainCard severity glyph + `border-l-4` driven by the unified classifier; filter chips per TASK-032; matches detail page severity for any combination of signals (locked by SeverityConsistencyTest).
+- `/app/domains/{id}` — banner / panel coexist without contradiction in any state (TASK-097/099/101); 5-row protocol panel (SPF/DKIM/DMARC/MX/RUA) with scenario-aware copy on every row.
+- `/app/mailboxes` — DNS-first callout + per-domain matrix with scenario-keyed Action column copy; row-level severity glyph on the connected-mailboxes table.
+- `/app/mailboxes/{id}` — value-reactive stat cards + MailboxHealthAdvisorCard above the connection details (with TASK-104's redundancy hint where applicable).
+- `/app/reports` — pass-rate regression banner above the filter bar; row-level severity glyph per pass rate.
+- `/app/alerts` — page lede + tinted bg + leading severity dot on unread rows (no more redundant "New" badge).
+- `/app/quarantine` — leading filter-anchor glyph + tone-consistent badges + tone-consistent help cards (all three signals driven by `QuarantineReason::severityTone()`).
+- `/app/dns-health` — 4-card summary row + filter chips.
+- `/app/domains/{id}/senders` — sender authorization advisor + decision-needed filter chip + "Connect KB article" link.
+- `/app/domains/{id}/health` — DNS record recommender across SPF/DKIM/DMARC categories.
+- `/app/domains/{id}/dns-history` — TASK-081 lede + chips + per-day collapsibles (shipped in round 3, no regressions noted in round-4 self-review).
+- Onboarding ingestion step — DNS-first DOM order locked by regression test; scenario-(b) users short-circuit straight to `/app/onboarding/complete`.
+- Sidebar — three count badges via `NavCountsExtension` + `<twig:NavBadge>` component (Quarantine, Alerts, Domains).
+- Marketing nav — deliberately NOT badged (TASK-065 + CLAUDE.md note).
+
+### Suggested next moves for a future round
+
+A round-5 plan that starts fresh, in priority order:
+
+1. **TASK-084** (domain workspace tab count badges). Scaffolding already exists; just needs the 6-controller wiring + template integration + tests. ~ 1-1.5 hours via a single defensive agent using heredocs (Edit calls got reverted by an editor race during round 4).
+2. **TASK-105** + **TASK-106** (matrix UX polish). Both small mechanical changes in `templates/dashboard/mailboxes.html.twig` + tiny controller updates. ~ 30 minutes for both, low risk.
+3. **Round-5 self-review** — focused audit of the round-4 work. Surfaces likely to be ripe for "what's still confusing":
+   - The 5th RUA destination row in DomainSetupStatus rendering with the same visual treatment as the 4 DNS rows might invite the user to read it as "another DNS record to publish" when it's actually a logical choice about ingestion path. Consider visual differentiation (different glyph shape, separator above, "INGESTION" sub-heading).
+   - The mailbox health advisor card's `silent_for_too_long` branch is identical for "domain has no DMARC record" vs "domain points at sendvery" — both end up at "Sendvery isn't getting reports here". Scenario-aware enrichment is good but the action ("Check DNS" / "Use DNS-based ingestion") doesn't differentiate. A scenario-(b) silent mailbox should suggest "disconnect this redundant mailbox" as the primary action, not "Check DNS".
+   - The `/app/reports` PassRateRegressionBanner fires on any 10pp drop — but for a low-volume domain (a few reports/week) random variance can hit that threshold easily. Consider a "minimum sample size" floor (e.g. ≥ 50 reports in each 7-day window before firing the banner) to avoid false alarms.
+4. **Marketing-site polish** — the brief suggested round 5 might be marketing-side. Areas worth a fresh-eyes pass: the public DMARC checker tool's post-result CTA (TASK-006 shipped in round 1; revisit for conversion now that the dashboard is production-grade), pricing page (TASK-005 shipped; revisit comparison-table + FAQ in light of stable plan structure), Open Source page (TASK-011 shipped; revisit now that the repo is closer to public).
+5. **Performance audit** — the round-4 work added several new queries on hot paths (GetDomainOverview LATERAL join, IngestionPathResolver per-domain RuaScenarioResolver call, NavCountsExtension's 4 COUNTs per request). Worth a `EXPLAIN ANALYZE` pass on a populated dev DB (use `sendvery:demo:seed`) to confirm none of these regress the overview page load time. The IngestionPathResolver N+1 is the most-likely candidate for a batch optimization.
+
+### Stop signal
+
+Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's graceful-degradation clause. The 3 must-fix self-review findings shipped; the 3 nice-to-haves are filed with full acceptance criteria and ready for a fresh-context round 5. Backlog has 3 `proposed` tasks remaining — not zero, but the remaining work doesn't depend on round-4's outputs and can be safely picked up in any order.
