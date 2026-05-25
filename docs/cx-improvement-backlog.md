@@ -3984,6 +3984,140 @@ Two underlying queries fire once per matrix row:
 
 ---
 
+## TASK-125: DNS history reports "CHANGED" on the very first DNS check — a baseline is not a change, and showing one erodes trust the day a domain is added
+
+- Status: proposed
+- Area: dashboard
+- Why: A user (j.mikes@me.com) added a single correctly-configured domain to their team. The first `sendvery:dns:check-all` run captured its DNS state and the history page rendered the row as `CHANGED`. Their words: "I just added the domain — there is no prior state for anything to have changed from." A first observation is a baseline, not a change. Telling the user something changed when nothing changed is the same trust-erosion failure round-4 + round-5 worked to eliminate (system having the wrong opinion about the user's state).
+- Acceptance:
+  - The first `dns_check_result` row per `(monitored_domain_id, record_type)` pair renders with an `INITIAL CHECK` label (use the existing severity-glyph badge pattern, distinct tone — `badge-info` or `badge-ghost`) instead of `CHANGED`.
+  - `INITIAL CHECK` must be visually distinct from both `CHANGED` (which stays for subsequent real diffs) AND from the protocol-row validity badges (which TASK-126 also clarifies).
+  - History page still shows the baseline state under the INITIAL CHECK row (SPF / DKIM / DMARC / MX values as they were when first observed), so the user can see what was originally there.
+  - Detection: a row is an "initial check" when there is no prior `dns_check_result` for the same `(monitored_domain_id, record_type)` OR when the row is the oldest for that protocol. Use whichever is cleaner against the actual schema — query first to decide.
+  - Test: integration test seeds 2 days of `dns_check_result` for a fresh domain (Day 0 = initial, Day 1 = a real DMARC `p` change). Renders `/app/domains/{id}/dns-history` and asserts the Day 0 row has `INITIAL CHECK` and the Day 1 row has `CHANGED`.
+- Notes:
+  - Bundle with TASK-126 — both touch the DNS history page; shipping under one agent avoids edit collisions.
+
+---
+
+## TASK-126: DNS history record-type labels (DKIM / DMARC / SPF / MX) are styled in semantic tones that overlap validity-state tones — a yellow "DMARC" label reads as a warning when it's just the record name
+
+- Status: proposed
+- Area: dashboard
+- Why: User flagged: the record-type labels on the DNS history page render in tones that collide with validity-state colours. "Why is DMARC yellow? Is something wrong with my DMARC?" — but the yellow is just the record name's badge tone, not a warning. The validity state is rendered separately ("Valid" / "Invalid" / etc.) and should own the warning/error palette. Colour-carrying record names compete with the actual status signal.
+- Acceptance:
+  - Record-type labels (SPF / DKIM / DMARC / MX) render in a SINGLE unified non-semantic tone (`badge-neutral` or `badge-ghost` with a small fixed-width icon prefix per protocol). Users identify the record by name/icon, not colour.
+  - Validity badges (`Valid` / `Invalid` / `Not found`) keep their existing tone palette (success/error/warning) — those colours own the meaning.
+  - At a glance, a row reads as `[icon] DMARC | [badge-success] Valid` — record name has no colour baggage, validity carries the tone.
+  - Test: render the DNS history page for a fixture with all 4 protocols in different validity states. Assert each protocol label has the same non-semantic class set, and each validity badge has the expected semantic class.
+- Notes:
+  - Bundle with TASK-125 under one agent.
+
+---
+
+## TASK-127: DNS history changes are shown as opaque before/after text blobs — the user wants an inline diff highlighting which specific tags changed within the record
+
+- Status: proposed
+- Area: dashboard
+- Why: User asked: "When DNS changes, show me WHAT changed — was it `p=none` to `p=quarantine`, or was the whole record swapped? Right now I have to diff two record strings in my head." The current side-by-side block is the long-form view; what's missing is a token-level inline diff that highlights exactly the tags that flipped, with the full record available behind an expander for the rare case where the user wants the whole picture.
+- Acceptance:
+  - For each changed protocol on a CHANGED row (NOT the initial-check row from TASK-125), render two views:
+    - **Default (token diff)**: inline rendering of the record text with the tags that differ highlighted — old tag gets `bg-error/20 line-through`, new tag gets `bg-success/20 font-bold`. Unchanged tags render neutral. For SPF, each `include:` / `ip4:` / `~all` token diffs independently. For DMARC, each `key=value` tag diffs independently. For DKIM, the public-key body is treated as one opaque block (don't try to diff inside `p=<base64>`).
+    - **Expanded (full records)**: a `<details>`/`<summary>` (or daisyUI `collapse`) toggle reveals two full code blocks — `Before` and `After` — with each record's raw value. Useful for longer/noisier records.
+  - Implementation: new `src/Services/Dns/DnsRecordDiffer.php` (`readonly final`) takes previous + current `DnsRecord` values, returns a `DnsRecordDiff` result with a list of `DnsRecordDiffSegment` items (each = `text`, `kind: unchanged|added|removed`). Template-level rendering via a Twig macro or small component.
+  - Tests:
+    - Unit test for `DnsRecordDiffer` covering SPF token diff (added include), DMARC tag diff (p= flip), DKIM (one opaque block), MX (priority change).
+    - Integration test renders `/app/domains/{id}/dns-history` for a fixture with a DMARC `p=` flip; asserts the HTML contains both the strike-through old value AND the highlighted new value within the same line, AND the `<details>` expander markup is present (default-collapsed).
+- Notes:
+  - Ships AFTER TASK-125/126 — touches the same page and depends on knowing whether the row is initial-vs-changed.
+
+---
+
+## TASK-128: /app "Receive your first DMARC report" card says "Connect a mailbox if you prefer pulling them yourself" even when the user's DMARC rua= already points at reports@sendvery.com — the alternative contradicts the user's correctly-configured state
+
+- Status: proposed
+- Area: dashboard
+- Why: User said: "My DMARC record IS pointing at sendvery's reports inbox. Why is the dashboard telling me I could ALTERNATIVELY connect a mailbox? I already chose. The alternative is misleading — it makes me wonder if I did something wrong." For PointsAtSendvery domains, suggesting they connect a mailbox is the same trust-erosion failure as TASK-125 (system has the wrong opinion about user state).
+- Acceptance:
+  - The card's body copy branches on `RuaScenarioResolver` (same pattern as TASK-091 / TASK-100):
+    - `PointsAtSendvery` → "Reports flow in automatically. The first one usually arrives within 24-48 hours of `rua=` publishing — Gmail / Outlook / Yahoo each send one per day per domain." NO mailbox alternative.
+    - `PointsAtExternal` → existing copy explaining the user's rua= routes elsewhere + suggesting they either change DNS or connect THAT inbox (matching TASK-100's external-inbox flow).
+    - `NoRecord` → existing copy pointing the user at publishing a DMARC record (deep-link to domain health).
+  - The card's CTA respects the same branching (no "Connect a mailbox" button when scenario is PointsAtSendvery).
+  - Test: integration test seeds a team with one domain whose rua= points at sendvery's reports email and no reports yet received. Asserts the card renders the new "Reports flow in automatically" copy and does NOT contain the literal "Connect a mailbox" string.
+
+---
+
+## TASK-129: /app NEXT STEP card says "Publish a DMARC RUA record" when the user's RUA record IS published and points at Sendvery — the NEXT STEP resolver isn't reading RuaScenarioResolver output
+
+- Status: proposed
+- Area: dashboard
+- Why: User said: "It's telling me to publish a record I already published. The dashboard isn't reading its own state." The NEXT STEP card on `/app` resolves to `PublishDmarcRua` regardless of the actual rua= state. The bug lives in `NextActionResolver` (or whichever service drives the NEXT STEP card) — it's missing the "RUA already at Sendvery" branch (or has it but isn't reading the right state).
+- Acceptance:
+  - When the team has at least one domain with `RuaScenario::PointsAtSendvery` AND `firstReportAt IS NULL`, the NEXT STEP card resolves to `WaitForReports` (the existing branch TASK-102 added for the "fresh scenario-b settling window" case) INSTEAD of `PublishDmarcRua`.
+  - When the team has at least one domain with `RuaScenario::NoRecord`, the existing `PublishDmarcRua` branch still fires for THAT domain.
+  - When the user has multiple domains with different scenarios, the resolver picks the highest-attention scenario per the existing priority order (NoRecord > misconfigured > waiting > healthy).
+  - Test: integration test seeds a one-domain team with rua= at sendvery + no reports. Renders `/app` and asserts the NEXT STEP card matches the WaitForReports variant ("Reports start flowing within 24-48 hours…") and does NOT contain "Publish a DMARC RUA record" or "Add a `_dmarc` TXT record".
+  - Test: integration test seeds a one-domain team with NO DMARC record. Renders `/app` and asserts the existing PublishDmarcRua copy still renders for that team.
+- Notes:
+  - Round-6 self-review must check whether TASK-128 + TASK-129 share a code path through `RuaScenarioResolver` — if they do, a single bug could regress both. Verify the tests exercise INDEPENDENT scenario reads.
+
+---
+
+## TASK-130: /app/domains and /app/dns-health are two separate pages rendering two views of the same underlying data — paying customers should not have to learn two surfaces for "my domains" vs "my domains' DNS health"
+
+- Status: proposed
+- Area: dashboard
+- Why: User said: "Why do I have a `/domains` page AND a `/dns-health` page? They're the same domains, just rendered differently. Merge them." The user explicitly added: "We do not need to keep backward compatibility, just migrate the functionality." This round's biggest single dashboard task — collapse `/app/dns-health` into `/app/domains` as one canonical "domains overview" surface, no shims.
+- Acceptance:
+  - `/app/domains` list page absorbs the DNS Health page's signals:
+    - The 4-card summary row from TASK-083 (Domains monitored / Fully healthy / Need attention / Awaiting first check) renders at the top of `/app/domains` (above the existing chip filters and domain cards).
+    - The `?status=` filter chips already on `/app/domains` keep working — they're the same classifier-driven chips as TASK-083.
+    - Each domain card in the list grows: the DNS health letter grade (A/B/C/D/F) as a chip, plus per-protocol badges (SPF / DKIM / DMARC / MX) showing pass/fail at a glance — reuse the badge-rendering pattern already in `templates/dashboard/dns_health.html.twig`.
+    - Clicking the letter grade or any protocol badge on a card deep-links to `/app/domains/{id}/health` (the per-domain DNS drill-down stays — that's a different scope: overview vs detail).
+  - `/app/dns-health` route deleted:
+    - Delete the controller (`DnsHealthOverviewController.php`).
+    - Delete the template (`templates/dashboard/dns_health_overview.html.twig`).
+    - Delete the integration test (`DnsHealthOverviewTest.php`).
+    - Find every `path('dashboard_dns_health')` reference in templates / controllers / KB / fixtures — migrate all to `path('dashboard_domains')`.
+    - Sidebar nav loses its standalone "DNS Health" entry (check the layout doesn't leave an obvious gap).
+  - The `GetDnsHealthOverview` query stays (TASK-001 + TASK-098 work) but now feeds the merged `/app/domains` page directly rather than its own controller. If `GetDomainOverview` already returns per-protocol scores (via TASK-098's LATERAL join), prefer that single query — collapse data access to a single round-trip where practical.
+  - Tests:
+    - `tests/Integration/Controller/ListDomainsTest.php` (or extend the existing list test) asserts: 4-card summary at top, each card has letter grade + 4 protocol badges, existing chip filters still work.
+    - A codified check confirms NO surviving reference to `path('dashboard_dns_health')` or `/app/dns-health` in templates / controllers / KB.
+    - All previously-existing tests for `/app/dns-health` removed cleanly (no orphan asserts).
+- Notes:
+  - Biggest task this round (~3-4 hours). Architect first — the deletion cascade needs careful sequencing so deletions don't break tests mid-flight.
+  - Round-5 perf audit noted `GetDnsHealthOverview` "feeds three call sites" — confirm each call site is now either `/app/domains` (merged) or `/app/domains/{id}/health` (drill-down). Any third call site is suspect.
+
+---
+
+## TASK-131: Homepage hero ("Email authentication is set once and forgotten") + standalone DNS-checker section feel boring next to the dashboard polish — rebuild as a designed hero that lives up to the product the screenshot below it shows
+
+- Status: proposed
+- Area: marketing
+- Why: User said: "The homepage looks dated compared to the dashboard screenshot you just put on it. Hero copy is generic, the DNS-checker is a separate boring section, and there's no visual story about what makes Sendvery different from any other DMARC tool." Rebuild the top of `/` as three sequential designed sections that absorb the standalone checker and tell the XML→English story.
+- Acceptance:
+  - Three sequential sections replace the current hero + standalone DNS-checker section. Existing trust-logos row stays between hero and section 2. Everything below "What Sendvery catches that nobody else does" stays untouched.
+  - **Section 1 — Hero (two-column at md+, stacked on mobile).** Left: eyebrow "DMARC · DNS · deliverability", H1 "DMARC, DNS, deliverability — monitored and explained.", subhead, two CTAs (primary "Get started free" → `/login`, secondary "View on GitHub →" → env-driven URL), trust line. Right: live checker visually integrated into a card — REUSE the existing Stimulus DNS-checker controller VERBATIM (only the visual shell changes), 4 protocol chips (SPF/DKIM/DMARC/MX) with semantic colours for state, one-line plain-English summary. Subtle dotted-grid background scoped to the hero container only.
+  - **Section 2 — From XML to plain English.** Centered narrow column. Eyebrow "How the AI insights work", H2 "DMARC reports are written for machines. We translate them for you.", 3-column transformation visual (md+): left card = raw DMARC XML in mono, middle = ArrowRight icon, right card = blue "AI summary" with sparkles icon + sample English insight. Mobile stacks vertically with ArrowDown. AI sample copy gets the dual placeholder marker per DEC-057.
+  - **Section 3 — Your domain, one letter.** Two-column at md+. Left: eyebrow "Email authentication, scored", H2 "One letter tells you if your email is at risk.", sub, two CTAs (primary "Check your domain's grade" → `/tools/domain-health`, secondary "How grading works"). Right: grade card mockup with `A` tile + `acme.io` + "98.4% pass rate" + 4 emerald pass chips.
+  - **Design constraints:** monochrome zinc palette + semantic colours only for state chips and AI card; `font-medium` ceiling (NO 600/700/800) — must override daisyUI default heading weights with explicit `font-medium`; sentence case throughout; no gradients/shadows/blur/blobs; rounded-md buttons/chips, rounded-lg cards; section rhythm `py-16 md:py-24`.
+  - **Accessibility:** visible `focus-visible:` rings; chip screen-reader text naming state; live-check result area `aria-live="polite"`; hero `<h1>`, sections 2/3 `<h2>`.
+  - Renders at 320 / 768 / 1024 / 1440 px (verify via curl/HTML inspection).
+  - Live checker behaves IDENTICALLY to before — existing checker integration tests pass unmodified.
+  - No layout shift when checker results render — reserve space or use `min-h-*`.
+  - Old hero markup AND standalone `#dns-checker` section REMOVED from template. Grep confirms no surviving `id="dns-checker"` outside the hero.
+  - Functional test asserts: new `<h1>` text "DMARC, DNS, deliverability — monitored and explained." renders; checker form is INSIDE the hero `<section>`; trust logos row sits between hero and section 2; section 2 eyebrow "How the AI insights work" renders; section 3 H2 "One letter tells you if your email is at risk." renders; grade card mockup contains "acme.io" and "98.4% pass rate".
+  - Existing homepage tests asserting OLD hero copy ("Email authentication is set once and forgotten") get UPDATED to assert new copy. No orphan tests.
+- Notes:
+  - Second-biggest task this round (~2-3 hours). Spec detailed enough to SKIP Architect — straight to Build.
+  - Per DEC-057 (AI stub-first launch posture, see `~/.claude/projects/-Users-janmikes-www-dmarc/memory/ai-stub-first-launch-posture.md`): the "AI summary" example in section 2 is illustrative — don't claim AI insights are live; the real `AnthropicAiInsightsService` ships post-launch.
+  - "View on GitHub →" CTA links to env-driven URL via `OpenSourceExtension` (TASK-122). If repo isn't public, swap for the notify-me CTA per TASK-122's existing gate.
+  - The dev agent should report rendered HTML excerpts of all three new sections in their final report so the user can review the diff in the commit message.
+
+---
+
 ## RUN SUMMARY — 2026-05-25 round 5 autonomous CX loop (round-4 carryover + self-review chain + marketing refresh + perf audit)
 
 ### Shipped (17 tasks across 12 code commits + 5 docs commits — full round-5 scope drained)
