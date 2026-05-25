@@ -216,6 +216,10 @@ final class ToolPagesTest extends WebTestCase
         $client = self::createClient();
         $client->request('GET', '/tools/dmarc-checker');
 
+        // TASK-156: guard the status code so a 500 surfaces as a status-code
+        // assertion failure rather than the less-actionable "string not in body".
+        self::assertResponseIsSuccessful();
+
         $body = (string) $client->getResponse()->getContent();
         self::assertStringContainsString('value="none"', $body);
         self::assertStringContainsString('value="quarantine"', $body);
@@ -246,6 +250,9 @@ final class ToolPagesTest extends WebTestCase
         $client = self::createClient();
         $client->request('GET', '/tools/mx-checker');
 
+        // TASK-156: status-code guard so a 500 surfaces clearly.
+        self::assertResponseIsSuccessful();
+
         $body = (string) $client->getResponse()->getContent();
         self::assertStringContainsString('Google Workspace', $body);
     }
@@ -255,6 +262,9 @@ final class ToolPagesTest extends WebTestCase
     {
         $client = self::createClient();
         $client->request('GET', '/tools/mx-checker');
+
+        // TASK-156: status-code guard so a 500 surfaces clearly.
+        self::assertResponseIsSuccessful();
 
         $body = (string) $client->getResponse()->getContent();
         self::assertStringContainsString('data-mx-generator-presets-value', $body);

@@ -5185,8 +5185,9 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-147: Organization JSON-LD on homepage missing `logo` field — hurts Knowledge Panel eligibility
 
-- Status: proposed
+- Status: deferred — future-watchlist
 - Area: marketing / seo
+- Note (round 9): deferred because no logo asset exists at a stable `public/logo.png` path yet. The existing `og-default.webp` is a 1200x630 social card, not a logo-shaped asset Google would consume. File a round-10 sub-task once a square logo (recommended ≥112x112, ≤600x60 wide for `ImageObject`) is committed at `public/logo.png` or `public/logo.webp`.
 - Why: TASK-142 SEO baseline shipped a basic Organization JSON-LD on `/` but without the `logo` property. Google uses `logo` to populate Knowledge Panels — its absence means even if Google ever indexes Sendvery as a brand entity, the panel will be missing the visual identity hook. Cheap one-line fix once a stable logo asset exists.
 - Acceptance:
   - Add `"logo": "{{ url('home') }}logo.png"` (or `.webp`) to the existing Organization JSON-LD in `templates/homepage/index.html.twig`.
@@ -5199,7 +5200,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-148: KB articles ship hardcoded `datePublished`/`dateModified` so Google sees all 7 as same-freshness
 
-- Status: proposed
+- Status: done
 - Area: marketing / seo
 - Why: `templates/knowledge_base/_article_layout.html.twig` emits `"datePublished": "2026-03-25"` and `"dateModified": "2026-03-25"` for every KB article. Google treats them as a single freshness cohort; an article actually updated later loses its rank against the original. Per-article dates fix this.
 - Acceptance:
@@ -5214,7 +5215,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-149: BreadcrumbList JSON-LD missing on KB index + /about/* pages
 
-- Status: proposed
+- Status: done
 - Area: marketing / seo
 - Why: Tool pages + KB articles emit BreadcrumbList JSON-LD; the KB index (`/learn`) and the 3 `/about/*` pages (`what-is-sendvery`, `open-source`, `pricing`) do not. Adding it improves SERP appearance with site-hierarchy breadcrumbs under each result.
 - Acceptance:
@@ -5228,7 +5229,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-150: WebSite JSON-LD with SearchAction on homepage missing — blocks Sitelinks Searchbox eligibility
 
-- Status: proposed
+- Status: done
 - Area: marketing / seo
 - Why: Google's Sitelinks Searchbox feature uses `WebSite` JSON-LD with a `potentialAction` of type `SearchAction`. Sendvery has no search feature today, so the searchbox won't render — but adding the JSON-LD now is a free zero-cost forward investment: when search ships, the structured data is already in place for Google to pick up on the next crawl.
 - Acceptance:
@@ -5241,8 +5242,9 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-151: Twitter Cards missing `twitter:site` handle
 
-- Status: proposed
+- Status: deferred — future-watchlist
 - Area: marketing / seo
+- Note (round 9): deferred because there is no verified @sendvery Twitter/X account yet. Shipping `twitter:site` with a non-existent handle produces a broken card preview. File a round-10 sub-task once the brand handle is registered + verified.
 - Why: Twitter/X cards render with full attribution only when `twitter:site` is set to the canonical handle. Without it, a shared link shows the card content but not the publisher's verified handle in the embed.
 - Acceptance:
   - Verify Sendvery has a `@sendvery` (or similar) handle on Twitter/X. If not, defer this task as future-watchlist (no benefit without an account).
@@ -5255,7 +5257,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-152: 4 tool/article pages have `<title>` overages above SERP-friendly ~60 char threshold
 
-- Status: proposed
+- Status: done
 - Area: marketing / seo
 - Why: Google truncates `<title>` at ~600 pixels (~60 chars on average). The blacklist-checker, email-auth-checker, domain-health tool, and gmail-yahoo-bulk-sender article all sit 5-8 chars over. The truncation drops the brand suffix ("...| Sendvery") which means the brand never gets the impression. Trimming reclaims the brand visibility.
 - Acceptance:

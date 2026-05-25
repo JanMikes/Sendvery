@@ -4,36 +4,37 @@ declare(strict_types=1);
 
 namespace App\Services\Dns;
 
+use App\Value\SpfProvider;
+
 /**
  * Canonical include: targets for the most common transactional / marketing
  * senders, exposed to the public SPF-generator UI. Keep it short and curated
  * — every entry is a real `include:` lookup against the 10-DNS-lookup limit,
  * so we deliberately ship only the providers that pay rent in our reports.
+ *
+ * TASK-155: entries are SpfProvider value objects rather than shape arrays
+ * (per CLAUDE.md "objects over arrays"). `allAsJson()` emits byte-identical
+ * JSON to the round-8 array shape via JsonSerializable property order.
  */
 final readonly class SpfProviderRegistry
 {
     /**
-     * @var list<array{key: string, label: string, include: string}>
-     */
-    private const array PROVIDERS = [
-        ['key' => 'google',     'label' => 'Google Workspace', 'include' => '_spf.google.com'],
-        ['key' => 'microsoft',  'label' => 'Microsoft 365',    'include' => 'spf.protection.outlook.com'],
-        ['key' => 'mailchimp',  'label' => 'Mailchimp',        'include' => 'servers.mcsv.net'],
-        ['key' => 'postmark',   'label' => 'Postmark',         'include' => 'spf.mtasv.net'],
-        ['key' => 'sendgrid',   'label' => 'SendGrid',         'include' => 'sendgrid.net'],
-        ['key' => 'mailgun',    'label' => 'Mailgun',          'include' => 'mailgun.org'],
-        ['key' => 'amazonses',  'label' => 'Amazon SES',       'include' => 'amazonses.com'],
-        ['key' => 'brevo',      'label' => 'Brevo',            'include' => 'spf.brevo.com'],
-        ['key' => 'resend',     'label' => 'Resend',           'include' => 'spf.resend.com'],
-        ['key' => 'loops',      'label' => 'Loops',            'include' => 'spf.loops.so'],
-    ];
-
-    /**
-     * @return list<array{key: string, label: string, include: string}>
+     * @return list<SpfProvider>
      */
     public function all(): array
     {
-        return self::PROVIDERS;
+        return [
+            new SpfProvider('google',    'Google Workspace', '_spf.google.com'),
+            new SpfProvider('microsoft', 'Microsoft 365',    'spf.protection.outlook.com'),
+            new SpfProvider('mailchimp', 'Mailchimp',        'servers.mcsv.net'),
+            new SpfProvider('postmark',  'Postmark',         'spf.mtasv.net'),
+            new SpfProvider('sendgrid',  'SendGrid',         'sendgrid.net'),
+            new SpfProvider('mailgun',   'Mailgun',          'mailgun.org'),
+            new SpfProvider('amazonses', 'Amazon SES',       'amazonses.com'),
+            new SpfProvider('brevo',     'Brevo',            'spf.brevo.com'),
+            new SpfProvider('resend',    'Resend',           'spf.resend.com'),
+            new SpfProvider('loops',     'Loops',            'spf.loops.so'),
+        ];
     }
 
     /**
@@ -43,6 +44,6 @@ final readonly class SpfProviderRegistry
      */
     public function allAsJson(): string
     {
-        return json_encode(self::PROVIDERS, JSON_THROW_ON_ERROR);
+        return json_encode($this->all(), JSON_THROW_ON_ERROR);
     }
 }

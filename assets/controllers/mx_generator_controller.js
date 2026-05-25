@@ -23,7 +23,9 @@ export default class extends Controller {
         presets: Array,
     };
 
-    static targets = ['output', 'copyButton', 'panel', 'preset', 'tenant', 'tenantPanel'];
+    // TASK-153: copyButton target removed (was declared but never wired in
+    // the template — copy() uses event.currentTarget).
+    static targets = ['output', 'panel', 'preset', 'tenant', 'tenantPanel'];
 
     presetChanged() {
         if (!this.hasPresetTarget) {

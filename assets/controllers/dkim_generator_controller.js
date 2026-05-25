@@ -18,8 +18,10 @@ import { Controller } from '@hotwired/stimulus';
  *                                rendering "<selector>._domainkey.<domain>".
  */
 export default class extends Controller {
+    // TASK-153: copyButton target removed (was declared but never wired in
+    // the template — copy() uses event.currentTarget).
     static targets = [
-        'output', 'copyButton', 'panel',
+        'output', 'panel',
         'selector', 'domain', 'keyType', 'rawKey', 'hostLabel',
     ];
 

@@ -13,7 +13,6 @@ import { Controller } from '@hotwired/stimulus';
  *
  * Targets:
  *   output     — <code> element that holds the rendered record.
- *   copyButton — copy-to-clipboard button (label flashes "Copied!").
  *   terminator — the `~all` / `-all` radio inputs (default ~all).
  *   freeform   — extra mechanisms textarea (e.g. "ip4:1.2.3.4").
  *   checkbox   — one per provider (data-spf-provider-key on each).
@@ -24,7 +23,11 @@ export default class extends Controller {
         providers: Array,
     };
 
-    static targets = ['output', 'copyButton', 'terminator', 'freeform', 'checkbox', 'panel'];
+    // TASK-153: copyButton target was declared but never wired in any
+    // template — the copy() action uses event.currentTarget. Dead code
+    // removed so anyone extending the controller doesn't waste time
+    // looking for the non-existent binding.
+    static targets = ['output', 'terminator', 'freeform', 'checkbox', 'panel'];
 
     generate() {
         const includesByKey = {};
