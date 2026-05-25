@@ -8,6 +8,7 @@ use App\Query\GetDomainDetail;
 use App\Query\GetDomainHealthHistory;
 use App\Repository\DnsCheckResultRepository;
 use App\Services\DashboardContext;
+use App\Services\Dns\DnsRecordRecommender;
 use App\Services\ReportAddressProvider;
 use App\Value\Dns\DmarcRuaInstruction;
 use App\Value\DnsCheckType;
@@ -24,6 +25,7 @@ final class DashboardDomainHealthController extends AbstractController
         private readonly GetDomainHealthHistory $getDomainHealthHistory,
         private readonly DnsCheckResultRepository $dnsCheckResultRepository,
         private readonly ReportAddressProvider $reportAddressProvider,
+        private readonly DnsRecordRecommender $dnsRecordRecommender,
     ) {
     }
 
@@ -40,15 +42,24 @@ final class DashboardDomainHealthController extends AbstractController
         $latest = $this->getDomainHealthHistory->latestForDomain($id, $teamIds);
         $history = $this->getDomainHealthHistory->forDomain($id, $teamIds);
 
-        $latestDmarcCheck = $this->dnsCheckResultRepository->findLatestForDomainAndType(
-            Uuid::fromString($id),
-            DnsCheckType::Dmarc,
-        );
+        $domainUuid = Uuid::fromString($id);
+
+        // TASK-095: load every per-category DNS check in one go so the
+        // recommender can reason over the full picture (e.g. cross-reference
+        // an SPF "no record" with the DMARC state).
+        $latestByType = [
+            DnsCheckType::Spf->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Spf),
+            DnsCheckType::Dkim->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Dkim),
+            DnsCheckType::Dmarc->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Dmarc),
+            DnsCheckType::Mx->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Mx),
+        ];
 
         $ruaInstruction = DmarcRuaInstruction::build(
-            $latestDmarcCheck?->rawRecord,
+            $latestByType[DnsCheckType::Dmarc->value]?->rawRecord,
             $this->reportAddressProvider->get(),
         );
+
+        $dnsRecommendations = $this->dnsRecordRecommender->recommendForDomain($domain->domainName, $latestByType);
 
         $trendChartConfig = null;
         if (count($history) > 1) {
@@ -75,6 +86,7 @@ final class DashboardDomainHealthController extends AbstractController
             'history' => $history,
             'trendChartConfig' => $trendChartConfig,
             'ruaInstruction' => $ruaInstruction,
+            'dnsRecommendations' => $dnsRecommendations,
         ]);
     }
 }

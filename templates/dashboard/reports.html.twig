@@ -11,6 +11,13 @@
 {% endblock %}
 
 {% block content %}
+    {# TASK-093 — pass-rate regression / improvement banner. Renders nothing
+       when the advisor returns Stable, so the table-only frame refresh path
+       (no regressionResult variable) stays unchanged. #}
+    {% if regressionResult is defined %}
+        <twig:PassRateRegressionBanner :regression="regressionResult" />
+    {% endif %}
+
     <twig:ReportsFilterBar
         filter="{{ filter }}"
         domains="{{ domains }}"

@@ -7,7 +7,10 @@ namespace App\Controller\Dashboard;
 use App\Query\GetAllReports;
 use App\Query\GetDomainOverview;
 use App\Query\GetReporterOrgs;
+use App\Query\GetTeamPassRateAggregates;
+use App\Query\GetTopFailingSenderForTeam;
 use App\Services\DashboardContext;
+use App\Services\PassRateRegressionAdvisor;
 use App\Value\ReportsFilter;
 use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -22,6 +25,9 @@ final class ListReportsController extends AbstractController
         private readonly GetAllReports $getAllReports,
         private readonly GetReporterOrgs $getReporterOrgs,
         private readonly GetDomainOverview $getDomainOverview,
+        private readonly GetTeamPassRateAggregates $getTeamPassRateAggregates,
+        private readonly GetTopFailingSenderForTeam $getTopFailingSenderForTeam,
+        private readonly PassRateRegressionAdvisor $passRateRegressionAdvisor,
         private readonly ClockInterface $clock,
     ) {
     }
@@ -52,6 +58,17 @@ final class ListReportsController extends AbstractController
         $domains = $this->getDomainOverview->forTeams($teamIds);
         $reporterOptions = $this->getReporterOrgs->forTeams($teamIds);
 
+        $regressionResult = null;
+        if (!$request->headers->has('Turbo-Frame')) {
+            $aggregates = $this->getTeamPassRateAggregates->forTeams($teamIds);
+            $topFailing = $this->getTopFailingSenderForTeam->forTeams($teamIds);
+            $regressionResult = $this->passRateRegressionAdvisor->advise(
+                window7d: $aggregates['window7d'],
+                baseline30d: $aggregates['baseline30d'],
+                topFailingSender: $topFailing,
+            );
+        }
+
         $template = $request->headers->has('Turbo-Frame')
             ? 'dashboard/_reports_table.html.twig'
             : 'dashboard/reports.html.twig';
@@ -64,6 +81,7 @@ final class ListReportsController extends AbstractController
             'domains' => $domains,
             'reporterOptions' => $reporterOptions,
             'filterParams' => $filter->toQueryParams(),
+            'regressionResult' => $regressionResult,
         ]);
     }
 }

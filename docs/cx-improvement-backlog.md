@@ -3282,7 +3282,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-092: Sender Inventory has no "you should authorize or revoke this sender" recommendation — high-volume unauthorized senders are silently listed
 
-- Status: proposed
+- Status: done
 - Area: domains / guidance
 - Why: Apply the TASK-037 reference pattern (eligibility logic + plain-English next-step + KB link) to the Sender Inventory page. `templates/dashboard/sender_inventory.html.twig` today renders a table of senders with Authorize/Revoke buttons but never *recommends* an action. A sender that has sent ≥50 messages in the last 30 days and is still marked Unknown is exactly the moment to nudge: "We've seen Mailchimp send 1,247 messages as `acme.io` in the last 30 days — is that you? Authorize it to stop these alerts; revoke it if it's spoofing." Without this nudge, a small business gets the inventory grid, doesn't know what to do with it, and the feature value evaporates.
 - Acceptance:
@@ -3302,7 +3302,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-093: Reports list never surfaces "your pass rate dropped this week — here's the sender behind it" — the recommendation is the table row that's already there, but unframed
 
-- Status: proposed
+- Status: done
 - Area: reports / guidance
 - Why: Apply the recommendation pattern to the most-watched health number. The Reports list page (`dashboard_reports`) shows individual report rows with their pass rate, but never says "your team-wide 7-day pass rate is 73% — down from your 30-day baseline of 91%, and 84% of the failures come from `mailchimp.com`". That insight requires zero new data — `dmarc_record` has source IP + pass/fail per report, and `known_sender` has the org. Without surfacing this, the user sees a wall of report rows with no narrative; with it, they get the single most actionable email-deliverability sentence the product can produce.
 - Acceptance:
@@ -3338,7 +3338,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-095: DNS Health page labels missing/broken records as "Fail" but never tells the user the literal record to publish — the recommendation is the cure, and we're hiding it
 
-- Status: proposed
+- Status: done
 - Area: dashboard / guidance
 - Why: The DNS Health page (`dashboard_domain_health`) renders five category scores (SPF/DKIM/DMARC/MX/Blacklist) as numbers + progress bars. When DMARC is missing, the page conditionally renders a `<twig:DnsRecordInstruction>` block (the existing pattern from the public DMARC checker), but ONLY for DMARC — when SPF is missing, when DKIM has no key, or when SPF lookup count is over 10, the user gets a low score and a red bar and no concrete record-level guidance. The recommendation pattern *exists in the codebase* (`DnsRecordInstruction.html.twig`); it's just under-applied. This is the cheapest "make value visible" win in the dashboard — the data is already on the page, only the framing is missing.
 - Acceptance:
@@ -3357,7 +3357,7 @@ Integration tests on `DashboardOverviewController` covering each branch + `Dismi
 
 ## TASK-096: Onboarding ingestion step gives equal weight to mailbox vs DNS — first-touch experience teaches the wrong mental model
 
-- Status: proposed
+- Status: done
 - Area: onboarding / guidance
 - Why: `templates/onboarding/ingestion.html.twig` is the moment a brand-new user picks their ingestion path BEFORE they ever see `/app/mailboxes`. If the onboarding flow gives equal weight to both options (or worse, presents mailbox-connection first because the controller historically lived there), every fix on `/app/mailboxes` (TASK-090) is undermined by the first-touch experience that taught the wrong mental model. Without auditing this page, the recommendation hierarchy gets re-broken at the source.
 - Acceptance:

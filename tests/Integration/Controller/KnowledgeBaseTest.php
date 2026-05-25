@@ -49,14 +49,16 @@ final class KnowledgeBaseTest extends WebTestCase
     }
 
     #[Test]
-    public function indexRendersAllSevenArticles(): void
+    public function indexRendersAllPublishedArticles(): void
     {
         $client = self::createClient();
         $crawler = $client->request('GET', '/learn');
 
         // The KB index should render one card per published guide. We count
         // article-card links pointing at /learn/<slug> to avoid double-counting
-        // category headings or CTA buttons.
+        // category headings or CTA buttons. The expected count is sourced
+        // directly from the GUIDES constant so adding a guide doesn't require
+        // updating a magic number here.
         $articleLinks = $crawler->filter('a[href^="/learn/"]')->reduce(static function ($node): bool {
             $href = (string) $node->attr('href');
 
@@ -64,7 +66,11 @@ final class KnowledgeBaseTest extends WebTestCase
             return '/learn' !== $href && '/learn/' !== $href;
         });
 
-        self::assertCount(7, $articleLinks, 'KB index should render exactly 7 article links');
+        self::assertCount(
+            count(\App\Controller\KnowledgeBaseIndexController::GUIDES),
+            $articleLinks,
+            'KB index should render one link per published guide.',
+        );
     }
 
     #[Test]

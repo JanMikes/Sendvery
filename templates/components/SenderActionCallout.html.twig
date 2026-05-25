@@ -1,0 +1,99 @@
+{# Per-sender recommendation callout for the Sender Inventory page (TASK-092).
+   Renders an inline detail row beneath the matching sender table row when the
+   {@see \App\Services\SenderAuthorizationAdvisor} flags the row as
+   `recommend_authorize` or `recommend_revoke`. Returns nothing for `monitor`,
+   `none`, or a null `advice` prop — the caller can render it unconditionally
+   for every row and let the component decide.
+
+   The action button uses the HTML5 `form=` attribute to submit the hidden
+   per-row authorize/revoke form already rendered by the page (so CSRF + POST
+   semantics carry over without duplicating the form here).
+
+   Props:
+     - advice    (?SenderAdvisorResult)  advisor verdict for this row, or null
+     - domainId  (string)                URL placeholder for the KB "Read more" link
+#}
+{% props advice = null, domainId %}
+
+{% if advice is not null %}
+    {% set severityValue = advice.severity.value %}
+    {% if severityValue in ['recommend_authorize', 'recommend_revoke'] %}
+        {% set toneByCard = {
+            'recommend_authorize': 'border-primary/30 bg-primary/5',
+            'recommend_revoke': 'border-warning/30 bg-warning/5',
+        } %}
+
+        {% set toneByIconBg = {
+            'recommend_authorize': 'bg-primary/10',
+            'recommend_revoke': 'bg-warning/10',
+        } %}
+
+        {% set toneByIconText = {
+            'recommend_authorize': 'text-primary',
+            'recommend_revoke': 'text-warning',
+        } %}
+
+        {% set ctaToneBySeverity = {
+            'recommend_authorize': 'btn-primary',
+            'recommend_revoke': 'btn-warning',
+        } %}
+
+        {% set headlineBySeverity = {
+            'recommend_authorize': 'Consider authorizing this sender',
+            'recommend_revoke': 'Consider revoking this sender',
+        } %}
+
+        {% set formIdBySeverity = {
+            'recommend_authorize': 'authorize-form-' ~ advice.senderId,
+            'recommend_revoke': 'revoke-form-' ~ advice.senderId,
+        } %}
+
+        <div class="card border {{ toneByCard[severityValue] }} shadow-sm"
+             data-testid="sender-action-callout"
+             data-sender-id="{{ advice.senderId }}"
+             data-severity="{{ severityValue }}">
+            <div class="card-body p-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-9 h-9 rounded-full {{ toneByIconBg[severityValue] }} flex items-center justify-center shrink-0">
+                        {% if severityValue == 'recommend_authorize' %}
+                            {# Check-circle — lifted from overview.html.twig:20 #}
+                            <svg class="w-5 h-5 {{ toneByIconText[severityValue] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        {% else %}
+                            {# Exclamation-triangle — lifted from alerts.html.twig:101 #}
+                            <svg class="w-5 h-5 {{ toneByIconText[severityValue] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-semibold text-sm sm:text-base leading-snug" data-testid="sender-action-callout-headline">
+                            {{ headlineBySeverity[severityValue] }}
+                        </h4>
+                        <p class="text-sm text-base-content/70 mt-1 leading-relaxed max-w-3xl"
+                           data-testid="sender-action-callout-reason">
+                            {{ advice.reasonText }}
+                        </p>
+
+                        <div class="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+                            <button type="submit"
+                                    form="{{ formIdBySeverity[severityValue] }}"
+                                    class="btn btn-xs sm:btn-sm {{ ctaToneBySeverity[severityValue] }}"
+                                    data-testid="sender-action-callout-primary-cta">
+                                {{ advice.primaryActionLabel }}
+                            </button>
+
+                            <a href="{{ path('knowledge_base_article', { slug: 'authorizing-senders-explained' }) }}"
+                               class="link link-hover text-xs sm:text-sm text-base-content/70"
+                               data-testid="sender-action-callout-kb-link">
+                                Read more about authorizing senders →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endif %}

@@ -8,10 +8,12 @@ use App\Entity\User;
 use App\Message\ConnectMailbox;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\Dns\DmarcChecker;
+use App\Services\Dns\RuaScenarioResolver;
 use App\Services\IdentityProvider;
 use App\Services\ReportAddressProvider;
 use App\Services\TeamProvisioner;
 use App\Value\Dns\DmarcRuaInstruction;
+use App\Value\Dns\RuaScenario;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -29,6 +31,7 @@ final class OnboardingIngestionController extends AbstractController
         private readonly MonitoredDomainRepository $monitoredDomainRepository,
         private readonly DmarcChecker $dmarcChecker,
         private readonly ReportAddressProvider $reportAddressProvider,
+        private readonly RuaScenarioResolver $ruaScenarioResolver,
     ) {
     }
 
@@ -45,7 +48,8 @@ final class OnboardingIngestionController extends AbstractController
         $teamId = $this->teamProvisioner->provisionForUser($user)->id;
 
         // Block direct access to step 3 until the user has actually saved a domain in step 2.
-        if (null === $this->monitoredDomainRepository->findLatestForTeam($teamId)) {
+        $primaryDomain = $this->monitoredDomainRepository->findLatestForTeam($teamId);
+        if (null === $primaryDomain) {
             return $this->redirectToRoute('onboarding_domain');
         }
 
@@ -85,12 +89,28 @@ final class OnboardingIngestionController extends AbstractController
         }
 
         $requestedDomain = strtolower(trim($request->query->getString('domain')));
-        $primaryDomain = '' !== $requestedDomain
+        $explicitDomain = '' !== $requestedDomain
             ? $this->monitoredDomainRepository->findByDomain($requestedDomain, $teamId)
             : null;
 
         // The early-return guard above ensures the team has at least one domain.
-        $primaryDomain ??= $this->monitoredDomainRepository->findLatestForTeam($teamId);
+        $primaryDomain = $explicitDomain ?? $primaryDomain;
+
+        // TASK-096: skip the ingestion step entirely when the team's primary
+        // domain already publishes a rua= tag that points at Sendvery — the
+        // user is already done; making them re-confirm "I'll publish a record"
+        // when the record is in place is the wrong shape of friction. Uses
+        // RuaScenarioResolver from TASK-100 (reads the latest STORED DNS
+        // check; no live lookup), which means the skip only fires once the
+        // domain has been DNS-checked at least once. A brand-new domain stays
+        // on this page until the next check tick — exactly the behaviour the
+        // user expects ("show me what to do, then verify").
+        if ($request->isMethod('GET')) {
+            $scenario = $this->ruaScenarioResolver->resolveForDomain($primaryDomain);
+            if (RuaScenario::PointsAtSendvery === $scenario->scenario) {
+                return $this->redirectToRoute('onboarding_complete');
+            }
+        }
 
         $dmarcCheck = $this->dmarcChecker->check($primaryDomain->domain);
 

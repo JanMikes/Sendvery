@@ -43,6 +43,41 @@
         </div>
     {% endif %}
 
+    {# TASK-095: per-category DNS recommendations. Renders one card per
+       category that has actionable guidance — SPF "missing" / "over the
+       lookup limit", DKIM "no key found", DMARC "publish me" (in addition
+       to the rua= add card above). When the recommender has a literal record
+       to publish we use the existing DnsRecordInstruction card; otherwise
+       a lighter DnsRecordHowTo text-only variant. #}
+    {% if dnsRecommendations is defined and dnsRecommendations|length > 0 %}
+        <div class="space-y-4 mb-6" data-testid="dns-record-recommendations">
+            {% for rec in dnsRecommendations %}
+                {# DMARC's recommendation is already covered by the ruaInstruction
+                   card above — skip the duplicate render. #}
+                {% if rec.category.value != 'dmarc' %}
+                    {% if rec.recommendedValue is not null %}
+                        <twig:DnsRecordInstruction
+                            recordType="{{ rec.recordType }}"
+                            host="{{ rec.recordHost }}"
+                            whatText="{{ rec.whatText }}"
+                            whyText="{{ rec.whyText }}"
+                            finalValue="{{ rec.recommendedValue }}"
+                            :alreadyConfigured="false"
+                        />
+                    {% else %}
+                        <twig:DnsRecordHowTo
+                            recordType="{{ rec.recordType }}"
+                            host="{{ rec.recordHost }}"
+                            whatText="{{ rec.whatText }}"
+                            whyText="{{ rec.whyText }}"
+                            kbSlug="{{ rec.category.value == 'dkim' ? 'what-is-dkim' : (rec.category.value == 'spf' ? 'spf-record-guide' : null) }}"
+                        />
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
     {% if latest %}
         {# Current score #}
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

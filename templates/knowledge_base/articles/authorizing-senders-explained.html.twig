@@ -1,0 +1,36 @@
+{% extends 'knowledge_base/_article_layout.html.twig' %}
+
+{% block title %}Authorizing Senders Explained — Sendvery{% endblock %}
+{% block meta_description %}When a sender appears in your Sender Inventory, you have three choices: authorize, revoke, or keep watching. This guide explains how Sendvery picks the recommendation and what each option does.{% endblock %}
+
+{% block article_title %}Authorizing Senders Explained{% endblock %}
+{% block article_intro %}The Sender Inventory shows every IP that has tried to send mail as your domain. This is how Sendvery decides which ones to nudge you about &mdash; and what happens when you click Authorize or Mark as revoked.{% endblock %}
+
+{% block table_of_contents %}
+<ul class="space-y-2 text-sm">
+    <li><a href="#what-it-means" class="link link-hover text-base-content/60">What "authorized" actually means</a></li>
+    <li><a href="#how-recommendations-work" class="link link-hover text-base-content/60">How Sendvery picks the recommendation</a></li>
+</ul>
+{% endblock %}
+
+{% block article_content %}
+
+<h2 id="what-it-means">What "authorized" actually means</h2>
+
+<p>Marking a sender as <strong>authorized</strong> is a note-to-self &mdash; it tells Sendvery that you've recognised the source and intend mail from it, so we should stop highlighting it in your alerts and dashboards. It does <strong>not</strong> change your DNS, your SPF record, your DKIM keys, or anything visible to receivers. Authorization is an internal label that helps the next person looking at your inventory understand what's expected vs. what's surprising.</p>
+
+<p><strong>Mark as revoked</strong> is the inverse signal: it flags a source you've decided is illegitimate. We don't block anything either &mdash; revocation is again an internal label &mdash; but a revoked sender becomes a permanent red flag the next time it shows up, so spoofers don't slowly drift back into the "we'll just ignore that one" pile. If you want receivers to actually drop spoofed mail, that's what your DMARC policy does (move from <code>p=none</code> to <code>p=quarantine</code> or <code>p=reject</code> in the DNS health page).</p>
+
+<h2 id="how-recommendations-work">How Sendvery picks the recommendation</h2>
+
+<p>Sendvery looks at the last 30 days of activity for each sender and emits one of three nudges. The thresholds are chosen so a legitimate marketing IP that's been sending real mail for a week clears the authorize bar, while a spoofer producing failing mail crosses the revoke bar before they drown out the genuine traffic.</p>
+
+<ul>
+    <li><strong>Recommend authorize</strong>: at least 50 messages in the last 30 days with a DKIM pass rate of 90% or higher, and we can identify the organisation (so the suggestion is concrete: "Mailchimp has sent X messages"). The recommendation never fires for unknown IPs &mdash; we will not pre-stamp "looks fine" for a source we can't name.</li>
+    <li><strong>Recommend revoke</strong>: at least 20 messages in the last 30 days with a DKIM pass rate below 50%, and the source is unknown. A known organisation with a low pass rate is more likely misconfigured than malicious &mdash; revocation isn't the right tool for that and we don't suggest it.</li>
+    <li><strong>Monitor</strong>: enough activity to be worth surfacing but the volume or pass rate sits between the two thresholds &mdash; not yet enough signal to commit to a recommendation. We'll re-evaluate as more data arrives.</li>
+</ul>
+
+<p>You're never forced to follow a recommendation. If a sender looks wrong to you, mark it as revoked even if we said "authorize". The advisor exists to surface the senders worth your attention, not to make the decision for you.</p>
+
+{% endblock %}

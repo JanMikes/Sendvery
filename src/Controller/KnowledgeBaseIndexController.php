@@ -54,6 +54,12 @@ final class KnowledgeBaseIndexController extends AbstractController
             'excerpt' => 'How email routing works under the hood: priorities, multi-MX failover, common provider records, and the subtle interaction between MX, SPF, and reverse DNS.',
             'category' => 'DNS & Records',
         ],
+        [
+            'slug' => 'authorizing-senders-explained',
+            'title' => 'Authorizing Senders Explained',
+            'excerpt' => 'When a sender appears in your inventory you can authorize, revoke, or keep watching. Explains how Sendvery picks the recommendation and what each label actually changes.',
+            'category' => 'Email Authentication Basics',
+        ],
     ];
 
     #[Route('/learn', name: 'knowledge_base_index')]

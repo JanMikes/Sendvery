@@ -19,6 +19,34 @@
 {% block content %}
     <twig:DomainWorkspaceTabs :domain="domain" active="senders" />
 
+    {# TASK-092 "X senders need a decision" stat row — only renders when at
+       least one row has a recommend_authorize or recommend_revoke verdict.
+       Links to ?recommendation=needs_decision to narrow the table. #}
+    {% if needsDecisionCount is defined and needsDecisionCount > 0 %}
+        <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId, recommendation: 'needs_decision' }) }}"
+           class="card border border-warning/30 bg-warning/5 shadow-sm mb-4 block hover:bg-warning/10 transition-colors"
+           data-testid="sender-needs-decision-stat">
+            <div class="card-body p-4 flex flex-row items-center gap-3">
+                <div class="w-9 h-9 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-sm sm:text-base">
+                        {{ needsDecisionCount }} sender{{ needsDecisionCount == 1 ? '' : 's' }} need{{ needsDecisionCount == 1 ? 's' : '' }} a decision
+                    </div>
+                    <div class="text-xs sm:text-sm text-base-content/60">
+                        Each one has crossed the threshold for an authorize or revoke recommendation. Click to filter the table.
+                    </div>
+                </div>
+                <svg class="w-5 h-5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </div>
+        </a>
+    {% endif %}
+
     {# Filter tabs #}
     <div class="tabs tabs-bordered mb-6">
         <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId }) }}"
@@ -27,6 +55,12 @@
            class="tab {{ filter == 'authorized' ? 'tab-active' : '' }}">Authorized</a>
         <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId, filter: 'unauthorized' }) }}"
            class="tab {{ filter == 'unauthorized' ? 'tab-active' : '' }}">Unauthorized</a>
+        {% if recommendationFilter is defined and recommendationFilter == 'needs_decision' %}
+            <span class="tab tab-active flex items-center gap-1" data-testid="sender-needs-decision-active-tab">
+                Needs decision
+                <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId }) }}" class="text-base-content/60 hover:text-base-content" aria-label="Clear filter">×</a>
+            </span>
+        {% endif %}
     </div>
 
     {% if senders is empty %}
@@ -82,8 +116,6 @@
                     </thead>
                     <tbody>
                         {% for sender in senders %}
-                            {# id="sender-{id}" enables deep-link targets from
-                               the domain-detail "Top Senders" table (TASK-038). #}
                             <tr id="sender-{{ sender.id }}">
                                 <td>
                                     <input type="checkbox"
@@ -148,6 +180,17 @@
                                     </div>
                                 </td>
                             </tr>
+                            {# TASK-092 inline recommendation callout. The
+                               SenderActionCallout component renders nothing for
+                               monitor/none — this guard keeps the empty extra
+                               <tr> out of the DOM when the row is healthy. #}
+                            {% if advisorBySenderId is defined and advisorBySenderId[sender.id] is defined and advisorBySenderId[sender.id].severity.value in ['recommend_authorize', 'recommend_revoke'] %}
+                                <tr class="bg-transparent" data-testid="sender-callout-row-{{ sender.id }}">
+                                    <td colspan="10" class="p-0 pb-3">
+                                        <twig:SenderActionCallout :advice="advisorBySenderId[sender.id]" domainId="{{ domain.domainId }}" />
+                                    </td>
+                                </tr>
+                            {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>

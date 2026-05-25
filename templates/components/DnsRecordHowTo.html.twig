@@ -1,0 +1,59 @@
+{# Text-only DNS recommendation card (TASK-095). Renders when the
+   {@see \App\Services\Dns\DnsRecordRecommender} produces a guidance card
+   that DOESN'T have a literal record to paste — e.g. SPF over the
+   10-lookup limit, or DKIM where the selector/key has to come from the
+   sending platform. Visually matches {@see DnsRecordInstruction} so the
+   page rhythm reads as one family of cards.
+
+   When a copyable record IS available, use `<twig:DnsRecordInstruction>`
+   instead.
+
+   Props:
+     - recordType (string)  DNS record type label (TXT/MX/CNAME). Shown for
+                            visual consistency with DnsRecordInstruction.
+     - host (string)        Full host name (e.g. `<selector>._domainkey.example.com`).
+     - whatText (string)    Short imperative title — what we're asking for.
+     - whyText (string)     One-or-two sentence explanation in plain language.
+     - kbSlug (?string)     Optional KB article slug for a "Read more" link.
+#}
+{% props recordType, host, whatText, whyText, kbSlug = null %}
+
+<div class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl"
+     data-testid="dns-record-howto"
+     data-record-type="{{ recordType|lower }}">
+    <div class="card-body p-5 sm:p-6 space-y-4">
+        <div class="flex items-start gap-3">
+            <div class="w-10 h-10 rounded-xl bg-info/10 text-info flex items-center justify-center shrink-0">
+                {# Info-circle — lifted from alerts.html.twig:109 #}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 class="font-bold text-base sm:text-lg leading-snug">{{ whatText }}</h3>
+                <p class="text-sm text-base-content/70 mt-2 leading-relaxed">
+                    {{ whyText }}
+                </p>
+            </div>
+        </div>
+
+        <div class="rounded-xl bg-base-200/60 p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div>
+                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Record type</div>
+                <div class="font-mono font-semibold">{{ recordType }}</div>
+            </div>
+            <div class="sm:col-span-2">
+                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Host / Name</div>
+                <div class="font-mono break-all">{{ host }}</div>
+            </div>
+        </div>
+
+        {% if kbSlug is not null %}
+            <a href="{{ path('knowledge_base_article', { slug: kbSlug }) }}"
+               class="link link-hover text-sm text-base-content/70"
+               data-testid="dns-record-howto-kb-link">
+                Read more →
+            </a>
+        {% endif %}
+    </div>
+</div>

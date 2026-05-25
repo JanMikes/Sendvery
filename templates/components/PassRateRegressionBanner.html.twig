@@ -1,0 +1,85 @@
+{# Team-wide pass-rate banner shown above the table on `/app/reports`
+   (TASK-093). Renders nothing for the Stable severity so the caller can
+   pipe the advisor output through unconditionally without an `{% if %}`
+   wrapper at the call site.
+
+   Severity drives every visual signal: tint, glyph, and the CTA cluster.
+   Regression cards may also include a "X% from {{ sender }}" sentence and
+   an "Investigate this sender" deep-link when the advisor surfaced a
+   dominant failure source.
+
+   Hard rule (locked by tests + the TASK-093 spec): NEVER suggest "connect
+   a mailbox" or "switch to DNS" from this banner — those decisions belong
+   on `/app/mailboxes`. The CTAs below stay within the reports/senders/health
+   surface area.
+
+   Props:
+     - regression (?PassRateRegressionResult)
+#}
+{% props regression = null %}
+
+{% if regression is not null and regression.severity.value in ['regression', 'improvement'] %}
+    {% set severityValue = regression.severity.value %}
+    {% set tone = severityValue == 'regression' ? 'warning' : 'success' %}
+
+    <div class="card border border-{{ tone }}/30 bg-{{ tone }}/5 shadow-sm mb-4"
+         data-testid="pass-rate-regression-banner"
+         data-severity="{{ severityValue }}">
+        <div class="card-body p-5">
+            <div class="flex items-start gap-4">
+                <div class="w-9 h-9 rounded-full bg-{{ tone }}/10 flex items-center justify-center shrink-0">
+                    {% if severityValue == 'regression' %}
+                        {# Trending-down — exclamation-triangle glyph from
+                           templates/dashboard/alerts.html.twig:101 #}
+                        <svg class="w-5 h-5 text-{{ tone }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                        </svg>
+                    {% else %}
+                        {# Check-circle — celebrate glyph from
+                           templates/dashboard/overview.html.twig:20 #}
+                        <svg class="w-5 h-5 text-{{ tone }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    {% endif %}
+                </div>
+
+                <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold text-base sm:text-lg leading-snug"
+                        data-testid="pass-rate-regression-banner-headline">
+                        {% if severityValue == 'regression' %}
+                            Pass rate dropped from {{ regression.baselineRate30d|number_format(0) }}% to {{ regression.currentRate7d|number_format(0) }}% this week
+                        {% else %}
+                            Pass rate improved from {{ regression.baselineRate30d|number_format(0) }}% to {{ regression.currentRate7d|number_format(0) }}% this week — nice
+                        {% endif %}
+                    </h3>
+
+                    {% if severityValue == 'regression' and regression.topFailingSender is not null and regression.percentFromTopSender() is not null %}
+                        <p class="text-sm text-base-content/70 mt-2 leading-relaxed max-w-3xl"
+                           data-testid="pass-rate-regression-banner-reason">
+                            {{ regression.percentFromTopSender()|number_format(0) }}% of the failures came from
+                            <span class="font-mono font-medium">{{ regression.topFailingSender.displayLabel }}</span>.
+                        </p>
+                    {% endif %}
+
+                    {% if severityValue == 'regression' %}
+                        <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+                            {% if regression.topFailingSender is not null and regression.topFailingSender.senderId is not null %}
+                                <a href="{{ path('dashboard_sender_inventory', { domainId: regression.topFailingSender.domainId }) }}#sender-{{ regression.topFailingSender.senderId }}"
+                                   class="btn btn-sm btn-warning"
+                                   data-testid="pass-rate-regression-banner-primary-cta">
+                                    Investigate this sender →
+                                </a>
+                            {% endif %}
+
+                            <a href="{{ path('dashboard_reports', { pass_rate: 'low' }) }}"
+                               class="link link-hover text-sm text-base-content/70"
+                               data-testid="pass-rate-regression-banner-secondary-link">
+                                Filter reports to failing only →
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
