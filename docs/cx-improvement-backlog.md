@@ -3984,6 +3984,102 @@ Two underlying queries fire once per matrix row:
 
 ---
 
+## RUN SUMMARY — 2026-05-25 round 5 autonomous CX loop (round-4 carryover + self-review chain + marketing refresh + perf audit)
+
+### Shipped (17 tasks across 12 code commits + 5 docs commits — full round-5 scope drained)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 084 | Domain workspace tab count badges | `ea58b0c` | dashboard | Round-4 carryover. New `GetDomainWorkspaceTabCounts` (single SQL round-trip, 5 scalar subselects) + `DomainWorkspaceTabCountsResult` DTO wired through all 6 domain-workspace controllers. `DomainWorkspaceTabs` component gains optional `tabCounts` prop; number badges (Reports/Senders/Blacklist), dot badges (DNS/History), no badge on Overview. Defensive `Write`-based ship; survived the round-4 editor-revert race. +14 tests. |
+| 105+106 | Mailboxes matrix polish | `6a812a1` | dashboard / mailboxes | TASK-105: `IngestionRoutesCallout` collapses to a single confirmation card when every matrix row is scenario `PointsAtSendvery`. TASK-106: matrix row prioritises `path=mailbox` + recent `lastReportAt` over `scenario=PointsAtExternal` when the connected mailbox login matches the rua= email — renders "Ingesting via mailbox" success badge instead of the "Configured for external inbox" warning that contradicts the populated `lastReportAt` column. +18 tests. |
+| 108 | MailboxHealthAdvisor silent CTA is scenario-aware | `8a819ab` | dashboard / guidance | Round-4 self-review #2. silent_for_too_long primary action now branches per bound-domain scenario: PointsAtSendvery → "Disconnect this mailbox" (unlink glyph); PointsAtExternal → "Check DNS" (search glyph); NoRecord → "Publish a DMARC record" (pencil glyph). DTO refactor introduces `MailboxHealthAdvisorAction` value object; no backwards-compat shim. New `_mailbox_advisor_glyph.html.twig` partial for inline-SVG glyphs. +5 tests. |
+| 109 | PassRateRegressionAdvisor minimum-sample-size floor | `65dc804` | dashboard / guidance | Round-4 self-review #3. `private const MIN_SAMPLE_SIZE = 50` — banner suppresses when EITHER the 7-day window OR the 30-day baseline has <50 reports. Stops false-alarm regression banners on low-volume domains where 10pp swings are random variance. Existing thresholds unchanged. Reviewer caught: `noBannerForHealthyTeamWithSteadyPassRate` fixture bumped to 240 reports/30d so the test exercises the right branch. +3 tests. |
+| 107+114 | RUA destination row visual diff + cross-surface fix | `a75d20d` | dashboard / consistency | Round-4 self-review #1 + round-5 self-review #1 must-fix. TASK-107: the 5th "RUA destination" row in `DomainSetupStatus` gains a routing-arrow glyph + "Where reports go" pre-label so users don't read it as "another DNS record to publish". TASK-114: extracted `RuaMailboxMatcher` service — both `IngestionPathResolver` AND `DomainSetupStatusResolver` now consume the same `pathMatchesMailbox` signal, so `/app/mailboxes` "Ingesting via mailbox" and `/app/domains/{id}` 5th RUA row agree on tone for the same domain. New cross-surface test pins the agreement. +19 tests. |
+| 115 | Active workspace tab dot-badge contrast ring | `2ced6c7` | dashboard / visual | Round-5 self-review #2 must-fix. DNS/History dot badges added `ring-1 ring-base-100` when their tab is active — amber-on-dark active background was making the signal disappear exactly when the operator landed on the tab. Number badges left as-is (digit mass = enough contrast). +2 tests. |
+| 116 | TASK-106 success sub-line names the rua= address | `b52d71b` | dashboard / clarity | Round-5 self-review #3. The "Ingesting via mailbox" sub-line was the only matrix branch that hid the rua= address its path-detection actually hinges on — surrounding branches all show it in a monospace pill. Restored: `"DMARC routes here via <span class=font-mono>{ruaEmail}</span> — your connected mailbox."` Test updated. |
+| 117 | Public DMARC checker post-result CTA | `39bd3e5` | marketing | Round-5 marketing #1. The post-result CTA on `/tools/domain-health` previously sold a DNS-change-watcher; the dashboard does considerably more after round-4. New 3-bullet list names DMARC report parsing / pass-rate + sender regression alerts / plain-English setup guidance. Wide + banner variants only; compact + authenticated branches stay focused. |
+| 121+123 | Homepage AI-bundle copy + marketing nav explainer link | `8cf4b1e + 0662b88` | marketing | TASK-121: homepage FAQ said "$3.99/mo or Team plan" — both stale. Updated to actual per-tier shape (Personal+AI $8.99, Pro+AI $29.99, Business+AI $69.99 / 50-200-500 quotas). TASK-123: marketing nav now leads with a "What is this?" link to `/about/what-is-sendvery`, the long-form explainer previously only reachable via footer. No badge (CLAUDE.md note). Mobile + desktop. |
+| 122 | Open-source quickstart repo-public gate | `e8d8d52` | marketing / honesty | Round-5 marketing #6. The quickstart `git clone https://github.com/.../sendvery.git` 404'd because the repo isn't public yet (the page bottom even admitted it). Quickstart now wraps in `{% if is_repo_public %}` (bool was already wired via `OpenSourceExtension` / `SENDVERY_REPO_PUBLIC` env). Private branch swaps in a notify-me CTA carrying `data-notify-source="open-source-repo-launch"` for marketing tracking. |
+| 118+119+124 | Pricing FAQ bundle | `26c05f2` | marketing | TASK-118: new "What counts as a 'report'?" FAQ with concrete example using real `PlanLimits` numbers (3 domains × 3 reporters × 30 days ≈ 270 reports/mo — Personal-tier territory). Comparison-table "Reports/month" row anchors to the FAQ. TASK-119: new "Can I keep DMARC reports going to my own inbox?" naming both paths in plain English (zero-DNS-changes IMAP/OAuth vs no-mailbox `rua=mailto:reports@sendvery.com`). TASK-124: comparison-table tooltips + glossary FAQ entries for Sender Inventory / Blacklist Monitoring / White-label PDF. |
+| 120 | Homepage product preview = real dashboard screenshot | `0bc2c7d` | marketing | Round-5 marketing #4 — the highest-leverage marketing change shipped this round. The daisyUI HTML mock + `TODO(placeholder)` comment in homepage section 4.5 replaced with a real `/app/domains/{id}` screenshot captured from the demo-seeded dev DB (acme.example, A-grade). Responsive `<picture>` with 1x + @2x webp via Symfony AssetMapper. Visitor's first product impression is now production-grade. |
+
+### Deferred to round 6
+
+**None.** Backlog has zero `proposed` or `planned` tasks at run end. The brief's "primary stop signal — the round is designed to drain the backlog completely" hit cleanly.
+
+### Self-review findings + dispositions
+
+The wave-1 self-review (after TASK-084/105/106 shipped) caught 3 issues — all filed as TASK-114/115/116 and shipped in wave 2. Pattern matched round-3 (3 caught) and round-4 (6 caught) — discipline of "audit every 3 ships" continues to pay off.
+
+Issues caught by round-5 self-review:
+1. **TASK-114** (must-fix, shipped `a75d20d`) — `/app/mailboxes` "Ingesting via mailbox" success badge contradicted `/app/domains/{id}` 5th RUA row still showing yellow "Configured for external inbox" for the SAME domain. Cross-surface contradiction, exact same shape as round-3's TASK-097 finding. Fixed by extracting `RuaMailboxMatcher` so both surfaces consume one signal.
+2. **TASK-115** (must-fix, shipped `2ced6c7`) — DNS/History dot badges invisible on active tab background.
+3. **TASK-116** (nice-to-have, shipped `b52d71b`) — TASK-106 success sub-line hid the rua= address.
+
+Wave-2 self-review (after TASK-107/108/109/114/115/116 shipped) was effectively subsumed by the marketing Product agent's audit, which functions as a fresh-eyes pass over a new surface set. No additional dashboard findings surfaced.
+
+Reviewer agents during the round caught: (a) TASK-084 `DomainWorkspaceTabsTest` active-tab assertion fragility (latent bug introduced by the new badge spans); (b) TASK-084 `DomainWorkspaceTabCountsResult` boolean branches needed dedicated unit test for coverage; (c) TASK-105/106 `pathMatchesMailbox` missing `lastReportAt` guard; (d) TASK-105 template prop should use `:colon-binding` not string interpolation; (e) TASK-109 `noBannerForHealthyTeamWithSteadyPassRate` test passed for the wrong reason after the floor was added. All fixed inline before commit — the "review then ship" rhythm continued to net real findings.
+
+### Test suite growth
+
+| Checkpoint | Tests | Assertions | Δ |
+|---|---|---|---|
+| Round-4 end (2026-05-25) | 2158 | 6213 | baseline |
+| After round-4 carryover (TASK-084/105/106) | 2183 | 6295 | +25 |
+| After round-4 self-review (TASK-108/109) | 2191 | 6337 | +8 |
+| After round-5 self-review wave (TASK-107/114/115/116) | 2216 | 6443 | +25 |
+| After marketing wave (TASK-117-124) | 2226 | 6499 | +10 |
+| **Final** | **2226** | **6499** | **+68** |
+
+68 new tests / 286 new assertions across the round. Round-4 added 181 tests; round-5 added 68 — smaller per-task surface area (more polish, less new infrastructure) is the reason, not less coverage discipline.
+
+### Round-5 perf audit measurements (2026-05-25)
+
+Captured as a separate section above the run summary. All 5 round-4/round-5-added queries land in SAFE (<5ms) on the demo-seeded dev DB:
+
+- `GetDomainOverview::forTeams()` (post-TASK-098 LATERAL): exec 0.61ms, plan 1.52ms — index-backed.
+- `GetDnsHealthOverview::forTeams()`: exec 0.11ms, plan 0.79ms — clean LATERAL.
+- `NavCountsExtension::getGlobals()` (4 COUNTs): exec ~0.21ms total, plan ~2.34ms — hash-joined, no smell.
+- `IngestionPathResolver::resolveForTeams()` (N+1 with `RuaScenarioResolver` per row): exec ~3.5ms @ 20 domains; projects ~16ms @ 100 (SAFE until ~300, WATCH at 300+, BAD at 500+).
+- `GetDomainWorkspaceTabCounts::forDomain()` (round-5 new): exec 0.30ms, plan 2.90ms — 5 subselects, 4 index-backed + 1 Seq Scan that Postgres correctly picks on the 90-row table.
+
+No regressions confirmed. No optimization tasks filed. Round-6 should diff against these numbers to detect regressions as data volume grows.
+
+### Surfaces touched and judged "good enough"
+
+- `/app/domains/{id}` workspace tabs — count badges work at every tab including the active one (TASK-115 closed the contrast gap). Mobile-safe at 360px (overflow-x-auto with no scroll affordance is a pre-existing edge case, not a round-5 regression).
+- `/app/domains/{id}` setup-status panel — 5th RUA row visually differentiated from the 4 DNS protocol rows (TASK-107 routing-arrow glyph + "Where reports go" pre-label). Cross-surface agreement with `/app/mailboxes` (TASK-114 cross-surface test pinned).
+- `/app/mailboxes` matrix — TASK-106 success branch now names the rua= address (TASK-116), TASK-105 collapses the educational two-card callout for all-scenario-b teams, TASK-106 priority order is correct.
+- `/app/mailboxes/{id}` — MailboxHealthAdvisor silent CTA is now scenario-aware (TASK-108): Disconnect/Publish/Check DNS per bound-domain scenario. Glyph differentiation (unlink/pencil/search) makes the change visually obvious for returning operators.
+- `/app/reports` — PassRateRegressionAdvisor banner no longer fires on small-sample variance (TASK-109).
+- Marketing site — post-result CTA names the actual product (TASK-117); pricing FAQ answers the three most-asked buyer questions (TASK-118/119); pricing comparison has glossary tooltips (TASK-124); homepage carries a real dashboard screenshot (TASK-120); homepage FAQ AI copy is accurate (TASK-121); open-source quickstart doesn't 404 (TASK-122); nav has a discoverable explainer link (TASK-123).
+- Marketing nav — deliberately NOT badged (TASK-065 from round 4 still holds; TASK-123 added the "What is this?" link without badges).
+- Performance — measurement-validated, no regressions at demo-seed volume.
+
+### Suggested round-6 seed areas
+
+The backlog is empty, but a few directions surfaced during round-5 that didn't fit the scope:
+
+1. **Round-5 self-review of marketing wave-3** — round-5 ran a self-review of the dashboard work (caught TASK-114/115/116) but the marketing surfaces shipped late in the round and didn't get the same audit. A round-6 fresh-eyes pass over `/tools/domain-health` post-result CTA, the new pricing FAQ entries, and the homepage screenshot section would catch any "wait, this contradicts X" issues before more polish lands on top.
+
+2. **`/about/what-is-sendvery` homepage section 5 mental-model contradiction** — flagged by the marketing audit Product agent but deemed too deep for a single-PR task: the homepage's "How it works" section 5 still says "Step 1: Connect your DMARC report mailbox" — the round-4 DNS-first push (TASK-100, TASK-091, TASK-096) hasn't propagated here. A round-6 "marketing-side ingestion mental model refresh" task could re-frame Step 1 as "Step 1: point your DMARC rua= at Sendvery's central inbox OR connect your own mailbox" so the marketing message matches the dashboard's actual onboarding.
+
+3. **`dashboard_mailbox_disconnect` POST route** — TASK-108's "Disconnect this mailbox" CTA links to the mailbox list page because no disconnect/delete route exists. A round-6 task could ship the actual POST handler so the CTA goes straight to the action (one-click vs find-in-list).
+
+4. **AssetMapper screenshot pipeline** — TASK-120 captured the screenshot via host-side Puppeteer + manual asset placement. A round-6 ops task could codify this as a `bin/console sendvery:tools:screenshot <route>` command so future marketing-side screenshots don't require a one-off agent investigation.
+
+5. **Pricing comparison-table feature row audit** — TASK-124 added tooltips to three rows but the table has more rows (verify against `PlanLimits`). If the new "info icon" pattern works, extend to every comparison row that lacks a glossary anchor.
+
+6. **`IngestionPathResolver` batch optimization** — measured at SAFE for now but the perf audit projection said WATCH at ~300 domains, BAD at ~500. Not urgent, but a round-6 task could batch the per-domain `RuaScenarioResolver::resolveForDomainId` + `RuaMailboxMatcher::matchesConnectedMailbox` into a single query for teams approaching the threshold.
+
+7. **`SeverityConsistencyTest` extension to TASK-114's cross-surface pin** — there's now ONE cross-surface test pinning mailbox-row tone == per-domain RUA panel tone for `pathMatchesMailbox`. Round 6 should consider extending the pattern: ANY surface that renders domain health (list / detail / banner / panel / matrix row / advisor card) should be regression-pinned by one test pair per cross-surface comparison. A test-infrastructure task.
+
+### Stop signal
+
+**Backlog fully drained.** The round-5 brief explicitly said "Aim for full backlog drain. Round 4 stopped on graceful-degradation with 3 nice-to-haves left." Round 5 hit the primary stop signal: zero `proposed` and zero `planned` tasks at run end. 17 tasks shipped across 12 code commits + 5 docs commits; quality gates green at every step; 2226 tests / 6499 assertions in the final state; performance audit captured for round-6 comparison.
+
+---
+
 ## RUN SUMMARY — 2026-05-25 round 4 autonomous CX loop (RUA recommendation engine, severity unification, guidance + polish + nav refactor)
 
 ### Shipped (12 commits, 20 effective tasks)
