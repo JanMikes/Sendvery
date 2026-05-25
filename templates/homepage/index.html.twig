@@ -67,7 +67,7 @@
 
             {# Right column — visual shell + existing HomeDomainChecker Live Component reused verbatim. #}
             <div>
-                <div class="bg-white rounded-lg p-5 shadow-lg shadow-zinc-900/5 ring-1 ring-zinc-900/5">
+                <div class="bg-white rounded-lg p-5 shadow-xl shadow-zinc-900/10 ring-1 ring-zinc-900/5">
                     <div class="text-xs uppercase tracking-wider text-zinc-500 mb-3">Free instant check — no signup</div>
 
                     <div aria-live="polite">
@@ -286,19 +286,25 @@
     />
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
         <div class="text-center">
-            <img src="{{ asset('images/how-connect.webp') }}" alt="Add your domain and point DMARC at Sendvery" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
+            <div class="inline-flex w-20 h-20 mx-auto mb-4 items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg" aria-hidden="true">
+                <svg class="w-10 h-10 text-zinc-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20"/><path d="M12 2a14.5 14.5 0 0 1 0 20"/><path d="M2 12h20"/></svg>
+            </div>
             <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 1</div>
             <h3 class="text-lg font-bold mb-2">Add your domain. Point DMARC at Sendvery.</h3>
             <p class="text-base-content/60 text-sm">Point your DMARC <code class="kbd kbd-xs">rua=</code> at <code class="kbd kbd-xs">reports@sendvery.com</code> so email providers send their aggregate reports straight to Sendvery — or connect your own mailbox if you prefer pulling them yourself.</p>
         </div>
         <div class="text-center">
-            <img src="{{ asset('images/how-monitor.webp') }}" alt="Monitor your email authentication" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
+            <div class="inline-flex w-20 h-20 mx-auto mb-4 items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg" aria-hidden="true">
+                <svg class="w-10 h-10 text-zinc-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
             <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 2</div>
             <h3 class="text-lg font-bold mb-2">Monitor</h3>
             <p class="text-base-content/60 text-sm">We parse your DMARC reports, monitor DNS records, and track changes continuously.</p>
         </div>
         <div class="text-center">
-            <img src="{{ asset('images/how-act.webp') }}" alt="Act on alerts" class="w-20 h-20 mx-auto mb-4 rounded-2xl" loading="lazy">
+            <div class="inline-flex w-20 h-20 mx-auto mb-4 items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg" aria-hidden="true">
+                <svg class="w-10 h-10 text-zinc-700" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            </div>
             <div class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Step 3</div>
             <h3 class="text-lg font-bold mb-2">Act</h3>
             <p class="text-base-content/60 text-sm">Get alerts when something changes or breaks. AI explains what happened and how to fix it.</p>
@@ -466,8 +472,8 @@
 {# === 12. Final CTA — Get Started === #}
 <section class="py-24 lg:py-32 bg-gradient-to-br from-primary/10 via-base-100 to-accent-500/5">
     <div class="container mx-auto text-center">
-        <h2 class="text-3xl md:text-4xl font-bold">Start monitoring your email health today</h2>
-        <p class="mt-4 text-base-content/60 text-lg max-w-xl mx-auto">
+        <h2 class="text-3xl md:text-4xl font-medium tracking-tight text-zinc-900">Start monitoring your email health today</h2>
+        <p class="mt-4 text-zinc-500 text-lg max-w-xl mx-auto leading-relaxed">
             DMARC report parsing, DNS monitoring, sender inventory, and blacklist checking. Free for 1 domain, no credit card required.
         </p>
         <div class="mt-10">

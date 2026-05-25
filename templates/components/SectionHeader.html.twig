@@ -5,7 +5,7 @@
 {% props eyebrow = null, title, lede = null, centered = true %}
 
 <div class="{{ centered ? 'text-center' : '' }} mb-10">
-    {% if eyebrow %}<div class="text-xs font-semibold uppercase tracking-[0.18em] text-primary mb-3">{{ eyebrow }}</div>{% endif %}
-    <h2 class="text-3xl md:text-4xl font-bold tracking-tight">{{ title }}</h2>
-    {% if lede %}<p class="mt-4 text-base-content/65 text-lg{{ centered ? ' max-w-2xl mx-auto' : '' }}">{{ lede }}</p>{% endif %}
+    {% if eyebrow %}<div class="text-xs uppercase tracking-wider text-zinc-500 mb-3">{{ eyebrow }}</div>{% endif %}
+    <h2 class="text-3xl md:text-4xl font-medium tracking-tight text-zinc-900">{{ title }}</h2>
+    {% if lede %}<p class="mt-4 text-zinc-500 text-lg leading-relaxed{{ centered ? ' max-w-2xl mx-auto' : '' }}">{{ lede }}</p>{% endif %}
 </div>

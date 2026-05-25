@@ -61,9 +61,10 @@ final class HomepageSectionHeaderTest extends WebTestCase
         $client->request('GET', '/');
 
         self::assertStringContainsString(
-            '<div class="text-xs font-semibold uppercase tracking-[0.18em] text-primary mb-3">Pricing</div>',
+            '<div class="text-xs uppercase tracking-wider text-zinc-500 mb-3">Pricing</div>',
             (string) $client->getResponse()->getContent(),
-            'Section-10 must carry the "Pricing" eyebrow via the SectionHeader component.',
+            'Section-10 must carry the "Pricing" eyebrow via the SectionHeader component '
+            .'(TASK-137: eyebrow uses zinc palette to match the TASK-131 hero register).',
         );
     }
 
@@ -87,10 +88,11 @@ final class HomepageSectionHeaderTest extends WebTestCase
         $client->request('GET', '/');
 
         self::assertStringContainsString(
-            '<h2 class="text-3xl md:text-4xl font-bold tracking-tight">',
+            '<h2 class="text-3xl md:text-4xl font-medium tracking-tight text-zinc-900">',
             (string) $client->getResponse()->getContent(),
-            'At least one <h2> must use the new SectionHeader class. '
-            .'Regression-guard against accidental fallback to the old `text-2xl md:text-3xl font-bold` rhythm.',
+            'At least one <h2> must use the SectionHeader class. '
+            .'Regression-guard against accidental fallback to the pre-TASK-026 `text-2xl md:text-3xl font-bold` rhythm '
+            .'AND the pre-TASK-137 `font-bold tracking-tight` register that broke visual coherence with the TASK-131 hero.',
         );
     }
 

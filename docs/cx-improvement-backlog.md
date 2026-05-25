@@ -4535,7 +4535,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-137: Homepage hero (TASK-131 sections) uses lighter zinc-palette + explicit font-medium; sections below revert to daisyUI's heavier defaults — first-impression visitors see the seam
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: User: "i can see fonts mismatch from first three sections what the other have. -> this is the most important part of the marketing page because everyone sees this on first sight." The TASK-131 hero/explainer/grade-card sections use `font-medium tracking-tight text-zinc-900` overrides; the pricing / FAQ / etc. sections below kept daisyUI's default heavier weights. The seam reads as inconsistency on the highest-traffic surface.
 - Acceptance:
@@ -4551,7 +4551,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-138: Homepage "How it works" section uses custom illustration assets (how-connect.webp etc.) that don't fit the zinc-palette register; user wants icons
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: User: "How it works on homepage, remove custom images and replace with some icons or something." The current Step 1 / 2 / 3 cards use bespoke illustrations that visually disagree with TASK-131's clean icon-and-zinc-palette register. Icons read as consistent with the dashboard polish.
 - Acceptance:

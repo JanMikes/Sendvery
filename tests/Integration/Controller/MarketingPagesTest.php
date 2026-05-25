@@ -449,6 +449,67 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     /**
+     * TASK-137 — Homepage font register: EVERY <h2> on `/` must carry `font-medium`.
+     * The TASK-131 sections introduced an explicit `font-medium tracking-tight
+     * text-zinc-900` register on the hero and the next two sections; section 4+
+     * still rendered with daisyUI's `font-bold` default, which made the page
+     * visually break in half at the seam. This test pins the unified register
+     * page-end-to-end: any future edit that re-introduces `font-bold`,
+     * `font-semibold`, or `font-extrabold` on a section H2 fails fast.
+     *
+     * TASK-138 — Step 1/2/3 cards in "How it works" used custom `how-*.webp`
+     * illustrations that visually disagreed with the zinc register. The cards
+     * now render inline Lucide SVGs inside a zinc-bordered tile; this test
+     * pins both the SVG markers and the absence of the legacy <img> tags so
+     * the assets stay deleted.
+     */
+    #[Test]
+    public function task137And138HomepageRegisterAndIcons(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $body = (string) $client->getResponse()->getContent();
+
+        // TASK-137: every <h2> on the page must carry font-medium and must NOT carry
+        //           font-bold / font-semibold / font-extrabold. Walk each <h2>.
+        $headings = $crawler->filter('h2');
+        self::assertGreaterThan(
+            5,
+            $headings->count(),
+            'Sanity check: the homepage should have many section H2s.',
+        );
+
+        $headings->each(function (\Symfony\Component\DomCrawler\Crawler $node): void {
+            $class = (string) $node->attr('class');
+            $text = trim($node->text());
+            self::assertStringContainsString(
+                'font-medium',
+                $class,
+                sprintf('TASK-137: H2 "%s" must carry font-medium (got class="%s").', $text, $class),
+            );
+            self::assertDoesNotMatchRegularExpression(
+                '~\b(?:font-bold|font-semibold|font-extrabold)\b~',
+                $class,
+                sprintf('TASK-137: H2 "%s" must NOT carry font-bold/semibold/extrabold (got class="%s").', $text, $class),
+            );
+        });
+
+        // TASK-138: the three how-*.webp illustrations are gone; per-step Lucide icons render instead.
+        self::assertStringNotContainsString('how-connect.webp', $body, 'TASK-138: how-connect.webp asset reference must be deleted.');
+        self::assertStringNotContainsString('how-monitor.webp', $body, 'TASK-138: how-monitor.webp asset reference must be deleted.');
+        self::assertStringNotContainsString('how-act.webp', $body, 'TASK-138: how-act.webp asset reference must be deleted.');
+
+        // The three Lucide icon tiles inside the How-it-works section share a zinc-bordered shell.
+        $iconTiles = $crawler->filter('section .bg-zinc-50.border.border-zinc-200.rounded-lg svg');
+        self::assertGreaterThanOrEqual(
+            3,
+            $iconTiles->count(),
+            'TASK-138: each How-it-works step must render an SVG icon inside a zinc-bordered tile.',
+        );
+    }
+
+    /**
      * TASK-132 — Section 5 "How it works" Step 1 was the last surface still pitching
      * "Add your domain and connect your DMARC report mailbox" as the primary path.
      * The dashboard (TASK-091/100, TASK-128/130) leads with DNS-first ingestion:
