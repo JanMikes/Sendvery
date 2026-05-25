@@ -418,15 +418,21 @@ final class NextActionResolverTest extends TestCase
         $result = $resolver->resolve(
             domains: [$this->buildDomain(totalReports: 0)],
             verificationStatus: $this->buildStatus(
-                dmarcVerifiedAt: new \DateTimeImmutable('-10 days'),
-                firstReportAt: new \DateTimeImmutable('-9 days'),
+                dmarcVerifiedAt: new \DateTimeImmutable('2026-05-14 12:00:00'),
+                firstReportAt: new \DateTimeImmutable('2026-05-15 12:00:00'),
             ),
             verificationSeverity: DomainVerificationSeverity::Ok,
             unreadCriticalAlertCount: 0,
             quarantineCount: 0,
             hasMailbox: false,
             reportAddress: 'reports@sendvery.com',
-            earliestDomainAddedAt: new \DateTimeImmutable('-8 days'),
+            // Anchored absolute date, not a `-8 days` relative — the resolver
+            // checks `now > earliestDomainAddedAt + 7 days` strictly, so a
+            // relative date drifting against the fixed `now` made this test
+            // flaky at the second-boundary. Domain added 2026-05-15, +7 days
+            // = 2026-05-22, well before now=2026-05-24, so the 7-day window
+            // has unambiguously elapsed.
+            earliestDomainAddedAt: new \DateTimeImmutable('2026-05-15 12:00:00'),
             ingestionPaths: [$this->buildIngestionPath('example.com', IngestionPath::None)],
             ingestionRecommendationDismissedAt: null,
             now: new \DateTimeImmutable('2026-05-24 12:00:00'),
