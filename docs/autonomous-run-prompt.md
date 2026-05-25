@@ -691,10 +691,20 @@ Repeat until "Stop conditions" are met:
    mark `blocked` and move on.
 
 7. SHIP PHASE:
-   Run quality gates. If green: commit, push, mark `done`. Commit per
-   task (or per coherent bundle) — round-5 shipped 12 task-commits +
-   5 docs-commits = 17 total, which made the git log readable and
-   `git revert <task>` safe.
+   Run quality gates. If green: **commit AND push to `origin/main`**,
+   then mark `done`. Commit per task (or per coherent bundle) —
+   round-5 shipped 12 task-commits + 5 docs-commits = 17 total, which
+   made the git log readable and `git revert <task>` safe.
+
+   **Push continuously, not at the end.** After every successful
+   commit, run `git push origin main` before moving to the next task.
+   Round 5 ended with 32 unpushed local commits — the user had to
+   push them manually at the end. Don't repeat that. The flow is:
+   `git commit` → `git push origin main` → mark backlog status `done`
+   → next task. If a push fails (network blip, remote moved ahead),
+   investigate before continuing: `git pull --rebase origin main`
+   first when remote diverged, then re-push. Never `--force` to
+   resolve a divergence — investigate the conflict.
 
 8. SELF-REVIEW PHASE (every 3 shipped tasks):
    Step back. Audit the affected pages by reading the post-shipping
@@ -803,6 +813,10 @@ All must pass — no skipping, no --no-verify:
   returns nothing (or only `// removed in TASK-130` markers that are
   themselves about to be deleted — CLAUDE.md prefers actual deletion
   over removal comments)
+- **After each successful commit**, `git push origin main` runs and
+  succeeds before moving to the next task. `git status` shows the
+  branch at parity with `origin/main` (NOT ahead). Round 5 violated
+  this — round 6 enforces it as a quality gate.
 
 ================================================================
 AUTONOMY (do these without asking)
@@ -812,8 +826,9 @@ AUTONOMY (do these without asking)
 - Run any docker compose / composer / phpunit / phpstan / cs-fixer
   command. Also run `bin/console sendvery:*` commands including
   `sendvery:demo:seed` for perf measurement.
-- Create commits on the current branch and push to origin (including
-  main).
+- Create commits on the current branch AND push to origin (including
+  main) — see the SHIP PHASE rule that you push CONTINUOUSLY after
+  every successful commit, not in a final batch.
 - Run dev server, hit endpoints, inspect rendered HTML.
 - Update docs/cx-improvement-backlog.md freely.
 - Add placeholder content where the brief explicitly permits it.
@@ -965,3 +980,10 @@ LESSONS FROM ROUNDS 4 + 5 — APPLY HERE
   fixes (TASK-125 / 126 / 128 / 129) are the highest-value items in
   the round even though they're the smallest — they're catching
   trust-erosion failures the system didn't catch on its own.
+- **Push continuously, not in a batch**: round 5 made 19 commits but
+  pushed zero of them — the user had to push 32 commits manually at
+  round end (round-4's 13 carryover + round-5's 19). Round 6 fixes
+  this by treating `git push origin main` as the second half of every
+  ship phase. Local-only commits aren't shipped — pushed commits are.
+  This also means the user can pull intermediate progress instead of
+  waiting for the whole round to complete.
