@@ -26,7 +26,7 @@ final readonly class GetDomainDetail
         }
 
 
-        /** @var array{domain_id: string, domain_name: string, dmarc_policy: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, first_report_at: string|null, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string}|false $row */
+        /** @var array{domain_id: string, domain_name: string, dmarc_policy: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, first_report_at: string|null, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string, dkim_selector: string|null}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 md.id AS domain_id,
@@ -37,6 +37,7 @@ final readonly class GetDomainDetail
                 md.dmarc_verified_at AS dmarc_verified_at,
                 md.first_report_at AS first_report_at,
                 md.created_at AS created_at,
+                md.dkim_selector AS dkim_selector,
                 COALESCE((SELECT COUNT(*) FROM dmarc_report dr WHERE dr.monitored_domain_id = md.id), 0) AS total_reports,
                 COALESCE((
                     SELECT SUM(rec.count)

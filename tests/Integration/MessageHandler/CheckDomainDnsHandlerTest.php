@@ -259,7 +259,44 @@ final class CheckDomainDnsHandlerTest extends IntegrationTestCase
         self::assertSame($first->rawRecord, $second->previousRawRecord);
     }
 
-    private function createDomain(string $domain): UuidInterface
+    /**
+     * TASK-146 — when the team has set a per-domain DKIM selector, the
+     * checker must query THAT selector directly rather than brute-forcing the
+     * canonical registry. Pins the DnsMonitor → DkimChecker hand-off so a
+     * future refactor that drops the `$domain->dkimSelector` argument and
+     * silently reverts to brute-force fails fast.
+     */
+    #[Test]
+    public function customDkimSelectorIsPassedThroughToTheChecker(): void
+    {
+        // Place the key at a selector ("acme-2024") that is NOT in
+        // DkimSelectorRegistry::PROVIDER_SELECTORS. Without the round-9 wiring,
+        // the brute-force fallback would miss it entirely.
+        $this->scriptDns()->withTxt(
+            'acme-2024._domainkey.custom-selector.example',
+            'v=DKIM1; k=rsa; p='.base64_encode(str_repeat('A', 250)),
+        );
+
+        $domainId = $this->createDomain('custom-selector.example', dkimSelector: 'acme-2024');
+
+        $handler = $this->getService(CheckDomainDnsHandler::class);
+        $handler(new CheckDomainDns(domainId: $domainId));
+
+        $em = $this->getService(EntityManagerInterface::class);
+        $em->flush();
+        $em->clear();
+
+        $dkim = $this->latestCheck($em, $domainId, DnsCheckType::Dkim);
+        self::assertNotNull($dkim);
+        self::assertTrue($dkim->isValid, 'A custom DKIM selector saved on the domain must be passed to DkimChecker — without the wiring the brute-force fallback would miss this selector and mark DKIM invalid.');
+        self::assertSame('acme-2024', $dkim->details['selector'] ?? null, 'The check result must record the custom selector that was queried.');
+
+        $updatedDomain = $em->find(MonitoredDomain::class, $domainId);
+        self::assertNotNull($updatedDomain);
+        self::assertNotNull($updatedDomain->dkimVerifiedAt, 'A valid DKIM check using the team\'s custom selector must mark the domain DKIM-verified.');
+    }
+
+    private function createDomain(string $domain, ?string $dkimSelector = null): UuidInterface
     {
         $em = $this->getService(EntityManagerInterface::class);
 
@@ -278,6 +315,7 @@ final class CheckDomainDnsHandlerTest extends IntegrationTestCase
             team: $team,
             domain: $domain,
             createdAt: new \DateTimeImmutable(),
+            dkimSelector: $dkimSelector,
         );
         $entity->popEvents();
         $em->persist($entity);

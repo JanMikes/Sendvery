@@ -52,6 +52,17 @@ final class MonitoredDomain implements EntityWithEvents
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $createdAt;
 
+    /**
+     * TASK-146 — per-domain DKIM selector preference. When NULL, the DkimChecker
+     * brute-forces selectors from DkimSelectorRegistry::PROVIDER_SELECTORS;
+     * when set, the checker queries this selector directly. Teams whose
+     * selector isn't in the canonical registry (custom selectors from
+     * internal rotation, niche providers, etc.) set this so the dashboard
+     * stops reporting "DKIM not found" forever.
+     */
+    #[ORM\Column(length: 255, nullable: true)]
+    public ?string $dkimSelector;
+
     public function __construct(
         UuidInterface $id,
         Team $team,
@@ -62,6 +73,7 @@ final class MonitoredDomain implements EntityWithEvents
         ?\DateTimeImmutable $dkimVerifiedAt = null,
         ?\DateTimeImmutable $dmarcVerifiedAt = null,
         ?\DateTimeImmutable $firstReportAt = null,
+        ?string $dkimSelector = null,
     ) {
         $this->id = $id;
         $this->team = $team;
@@ -72,6 +84,7 @@ final class MonitoredDomain implements EntityWithEvents
         $this->dkimVerifiedAt = $dkimVerifiedAt;
         $this->dmarcVerifiedAt = $dmarcVerifiedAt;
         $this->firstReportAt = $firstReportAt;
+        $this->dkimSelector = $dkimSelector;
 
         $this->recordThat(new DomainAdded($this->id, $this->team->id));
     }

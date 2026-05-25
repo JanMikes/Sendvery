@@ -26,6 +26,7 @@ final class DomainDetailResultTest extends TestCase
             totalMessages: 5000,
             passRate: 98.5,
             uniqueSenders: 15,
+            dkimSelector: 'selector1',
         );
 
         self::assertSame('abc-123', $result->domainId);
@@ -38,6 +39,7 @@ final class DomainDetailResultTest extends TestCase
         self::assertSame(5000, $result->totalMessages);
         self::assertSame(98.5, $result->passRate);
         self::assertSame(15, $result->uniqueSenders);
+        self::assertSame('selector1', $result->dkimSelector);
     }
 
     #[Test]
@@ -56,6 +58,7 @@ final class DomainDetailResultTest extends TestCase
             'total_messages' => '100',
             'pass_rate' => '87.5',
             'unique_senders' => '7',
+            'dkim_selector' => null,
         ]);
 
         self::assertSame('abc-123', $result->domainId);
@@ -67,5 +70,6 @@ final class DomainDetailResultTest extends TestCase
         self::assertSame(100, $result->totalMessages);
         self::assertSame(87.5, $result->passRate);
         self::assertSame(7, $result->uniqueSenders);
+        self::assertNull($result->dkimSelector);
     }
 }

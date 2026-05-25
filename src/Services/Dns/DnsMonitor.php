@@ -39,7 +39,10 @@ final readonly class DnsMonitor
             'includes' => $spfResult->includes,
         ], $now);
 
-        $dkimResult = $this->dkimChecker->check($domain->domain);
+        // TASK-146 — pass the per-domain DKIM selector preference (when set) so
+        // the checker queries the user's actual selector instead of brute-forcing
+        // the canonical registry. NULL preserves the existing brute-force fallback.
+        $dkimResult = $this->dkimChecker->check($domain->domain, $domain->dkimSelector);
         $results[] = $this->buildCheckResult($domain, DnsCheckType::Dkim, $dkimResult->rawRecord, $dkimResult->keyExists, $dkimResult->issues, [
             'key_type' => $dkimResult->keyType,
             'key_bits' => $dkimResult->keyBits,

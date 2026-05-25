@@ -5180,3 +5180,170 @@ A round-5 plan that starts fresh, in priority order:
 ### Stop signal
 
 Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's graceful-degradation clause. The 3 must-fix self-review findings shipped; the 3 nice-to-haves are filed with full acceptance criteria and ready for a fresh-context round 5. Backlog has 3 `proposed` tasks remaining — not zero, but the remaining work doesn't depend on round-4's outputs and can be safely picked up in any order.
+
+---
+
+## TASK-147: Organization JSON-LD on homepage missing `logo` field — hurts Knowledge Panel eligibility
+
+- Status: proposed
+- Area: marketing / seo
+- Why: TASK-142 SEO baseline shipped a basic Organization JSON-LD on `/` but without the `logo` property. Google uses `logo` to populate Knowledge Panels — its absence means even if Google ever indexes Sendvery as a brand entity, the panel will be missing the visual identity hook. Cheap one-line fix once a stable logo asset exists.
+- Acceptance:
+  - Add `"logo": "{{ url('home') }}logo.png"` (or `.webp`) to the existing Organization JSON-LD in `templates/homepage/index.html.twig`.
+  - Create / confirm the asset at `public/logo.png` (or `.webp`).
+  - Test: extend `publicPagesShipSeoBaseline` to assert the `logo` field is present in the homepage Organization JSON-LD.
+- Notes:
+  - Bundled with TASK-148..152 as one SEO polish commit.
+
+---
+
+## TASK-148: KB articles ship hardcoded `datePublished`/`dateModified` so Google sees all 7 as same-freshness
+
+- Status: proposed
+- Area: marketing / seo
+- Why: `templates/knowledge_base/_article_layout.html.twig` emits `"datePublished": "2026-03-25"` and `"dateModified": "2026-03-25"` for every KB article. Google treats them as a single freshness cohort; an article actually updated later loses its rank against the original. Per-article dates fix this.
+- Acceptance:
+  - Add `publishedAt` + `updatedAt` fields to whichever config drives the KB index (`KnowledgeBaseIndexController::GUIDES` or sibling).
+  - Thread the dates through to the article layout via Twig variables (or via overridable `{% block article_published_at %}` + `{% block article_updated_at %}` hooks).
+  - Each article template either sets the dates or inherits the layout default.
+  - Test: assert at least one KB article's JSON-LD `datePublished` differs from another's after the per-article wiring lands.
+- Notes:
+  - Bundled with TASK-147..152.
+
+---
+
+## TASK-149: BreadcrumbList JSON-LD missing on KB index + /about/* pages
+
+- Status: proposed
+- Area: marketing / seo
+- Why: Tool pages + KB articles emit BreadcrumbList JSON-LD; the KB index (`/learn`) and the 3 `/about/*` pages (`what-is-sendvery`, `open-source`, `pricing`) do not. Adding it improves SERP appearance with site-hierarchy breadcrumbs under each result.
+- Acceptance:
+  - Add a `BreadcrumbList` JSON-LD `<script type="application/ld+json">` block to `templates/knowledge_base/index.html.twig` and to `templates/about/{what-is-sendvery,open-source,pricing}.html.twig`.
+  - Each one's `itemListElement` includes Home → page name.
+  - Test: extend `publicPagesShipSeoBaseline` to assert presence of `BreadcrumbList` JSON-LD on these 4 routes.
+- Notes:
+  - Bundled with TASK-147..152.
+
+---
+
+## TASK-150: WebSite JSON-LD with SearchAction on homepage missing — blocks Sitelinks Searchbox eligibility
+
+- Status: proposed
+- Area: marketing / seo
+- Why: Google's Sitelinks Searchbox feature uses `WebSite` JSON-LD with a `potentialAction` of type `SearchAction`. Sendvery has no search feature today, so the searchbox won't render — but adding the JSON-LD now is a free zero-cost forward investment: when search ships, the structured data is already in place for Google to pick up on the next crawl.
+- Acceptance:
+  - Add a second `<script type="application/ld+json">` block in `templates/homepage/index.html.twig` (after the Organization JSON-LD) emitting WebSite + a SearchAction template URL pointing at a `/search?q={search_term_string}` placeholder.
+  - Test: extend `publicPagesShipSeoBaseline` to assert the `WebSite` type is present on `/`.
+- Notes:
+  - The search endpoint doesn't need to exist yet — the JSON-LD is forward-declarative. Bundled with TASK-147..152.
+
+---
+
+## TASK-151: Twitter Cards missing `twitter:site` handle
+
+- Status: proposed
+- Area: marketing / seo
+- Why: Twitter/X cards render with full attribution only when `twitter:site` is set to the canonical handle. Without it, a shared link shows the card content but not the publisher's verified handle in the embed.
+- Acceptance:
+  - Verify Sendvery has a `@sendvery` (or similar) handle on Twitter/X. If not, defer this task as future-watchlist (no benefit without an account).
+  - If the handle exists, add `<meta name="twitter:site" content="@<handle>">` to `templates/base.html.twig` in the same block as the existing Twitter Card meta tags.
+  - Test: extend `publicPagesShipSeoBaseline` to assert the `twitter:site` meta is present.
+- Notes:
+  - Bundled with TASK-147..152. Verify the account first — don't ship a broken handle.
+
+---
+
+## TASK-152: 4 tool/article pages have `<title>` overages above SERP-friendly ~60 char threshold
+
+- Status: proposed
+- Area: marketing / seo
+- Why: Google truncates `<title>` at ~600 pixels (~60 chars on average). The blacklist-checker, email-auth-checker, domain-health tool, and gmail-yahoo-bulk-sender article all sit 5-8 chars over. The truncation drops the brand suffix ("...| Sendvery") which means the brand never gets the impression. Trimming reclaims the brand visibility.
+- Acceptance:
+  - For each of the 4 pages, audit the current `<title>` length, then trim by (a) swapping `| Sendvery` → `— Sendvery` (an em-dash is narrower than a pipe + space) and (b) tightening the descriptor so the result is ≤ 60 chars.
+  - Test: extend `publicPagesShipSeoBaseline` (or add a new method) to assert each of the 4 title lengths is ≤ 60 chars.
+- Notes:
+  - Architect-first unnecessary — straight to Build. Bundled with TASK-147..151.
+
+---
+
+## TASK-153: 4 generator Stimulus controllers declare unreachable `copyButton` targets
+
+- Status: proposed
+- Area: dashboard / quality
+- Why: Round-8 reviewer flagged: each of `spf_generator_controller.js`, `dmarc_generator_controller.js`, `dkim_generator_controller.js`, `mx_generator_controller.js` declares `static targets = [..., 'copyButton']` but no template wires `data-*-generator-target="copyButton"`. The `copy()` action uses `event.currentTarget`, so the declaration is dead code that misleads anyone trying to extend the controller.
+- Acceptance:
+  - Remove the `'copyButton'` literal from each of the 4 generator controllers' `static targets` array.
+  - Tests: existing generator tests still pass.
+- Notes:
+  - Bundled with TASK-154..157 as one nice-to-haves commit.
+
+---
+
+## TASK-154: DMARC generator accepts malformed `rua`/`ruf` email input — silently builds broken records
+
+- Status: proposed
+- Area: dashboard / quality
+- Why: Round-8 reviewer flagged: `dmarc_generator_controller.js` accepts any string and slaps `mailto:` in front. A user who pastes "reports@" (missing the domain) or "reports[at]example.com" gets a `mailto:reports[at]example.com` in the generated record — silently broken. A regex pre-check catches the typo before the user pastes the record into DNS.
+- Acceptance:
+  - Add `/^[^@\s]+@[^@\s]+\.[^@\s]+$/` (or similar minimal email-format regex) validation to the rua/ruf input on each blur / on output regeneration.
+  - On invalid input: either visually flag the input (e.g., `border-red-500` + an `aria-invalid="true"` attr) AND exclude that address from the generated record, OR reject the entire generate action with an inline message. Either approach acceptable.
+  - Tests: add an integration test that sends a malformed email + asserts the output record either flags the input or omits the invalid address.
+- Notes:
+  - Bundled with TASK-153..157.
+
+---
+
+## TASK-155: SpfProviderRegistry + MxPresetRegistry return shape-arrays — violates CLAUDE.md "objects over arrays"
+
+- Status: proposed
+- Area: dashboard / refactor
+- Why: Round-8 reviewer flagged: both registries return `list<array{key: string, label: string, ...}>` shape arrays. CLAUDE.md mandates "never use associative arrays for structured data; use value objects." Per-entry DTOs (`SpfProvider` + `MxPreset`) make the registries type-safe and self-documenting.
+- Acceptance:
+  - Create `src/Value/SpfProvider.php` + `src/Value/MxPreset.php` as `readonly final class` with constructor-promoted public properties matching the array shapes.
+  - Refactor both registries to return `list<SpfProvider>` / `list<MxPreset>`.
+  - `allAsJson()` continues to emit byte-identical JSON to round 8 — the Stimulus controllers consume `data-*-providers-value` as `{key, label, include}` arrays and any change in serialization shape breaks the generators.
+  - Tests: extend the existing registry tests to assert the DTO shape AND the JSON output equals the round-8 baseline byte-for-byte.
+- Notes:
+  - Bundled with TASK-153..157. JSON-shape sanity check is the must-pass before commit.
+
+---
+
+## TASK-156: 3 generator integration tests in ToolPagesTest missing `assertResponseIsSuccessful()` guard
+
+- Status: proposed
+- Area: dashboard / quality
+- Why: Round-8 reviewer flagged: `dmarcGeneratorHasPolicies`, `mxGeneratorHasGoogleWorkspacePreset`, `mxGeneratorDataAttributeContainsPresetsJson` in `tests/Integration/Controller/ToolPagesTest.php` request the page and assert on body content — but skip the `assertResponseIsSuccessful()` status-code guard the rest of the file uses. If the page 500s, the test fails on body assertion rather than the clearer status check.
+- Acceptance:
+  - Add `self::assertResponseIsSuccessful();` after the `$client->request('GET', ...)` line in each of the 3 tests.
+- Notes:
+  - Bundled with TASK-153..157.
+
+---
+
+## TASK-157: DMARC generator emits default `adkim=r`/`aspf=r` tags when both are at relaxed — adds noise without information
+
+- Status: proposed
+- Area: dashboard / quality
+- Why: Round-8 reviewer flagged: RFC 7489 defaults both `adkim` and `aspf` to `r` (relaxed). Emitting them at their default produces a longer record with identical semantics. Omitting them when both are at default keeps the record concise and matches what DMARC generators ship in the wild (Mxtoolbox, dmarcian).
+- Acceptance:
+  - When BOTH `adkim` AND `aspf` selectors are at "relaxed" (the default state), omit both tags from the generated record. When either is "strict", emit both (so the reader doesn't have to remember the default).
+  - Tests: assert the default-mode output has no `adkim=` / `aspf=` tags; assert toggling one to strict re-introduces both tags.
+- Notes:
+  - Bundled with TASK-153..157.
+
+---
+
+## TASK-158: Homepage hero leads with feature labels + open-source pitch + dual CTA — user value buried + checker card below mobile fold
+
+- Status: done
+- Area: marketing
+- Why: User round-9 feedback: the hero is the most-seen surface; a broken value prop here costs more than any other gap. The prior H1 ("DMARC, DNS, deliverability — monitored and explained") labelled features instead of promising an outcome; the eyebrow above duplicated the H1 keywords without information; the subhead opened with "Sendvery is the open-source email deliverability platform that..." which made the licence the first thing a visitor read; the "View on GitHub" secondary CTA took visitors off the conversion path; the prior mobile padding pushed the checker card below the fold at 360px.
+- Acceptance:
+  - H1 outcome-framed; no "explained"; not feature-label triad.
+  - Eyebrow above H1 deleted.
+  - Subhead rewritten to lead with user value; no open-source mention (still in chip row + dedicated section deeper down).
+  - Hero has exactly one CTA = "Get started free" → `/login`.
+  - Mobile rhythm: `py-10 md:py-24`, H1 `text-3xl md:text-5xl`, gap `gap-6 md:gap-16`, card `p-4 md:p-5` — checker card fits at 360px viewport.
+  - Tests use business-behaviour names (per round-8 user feedback).
+- Notes:
+  - Shipped commit `1b00869` (round 9). Audit of other marketing-page heroes (`/about/what-is-sendvery`, `/about/open-source`, `/about/pricing`) confirmed they already lead with user value — no in-scope fix needed.
