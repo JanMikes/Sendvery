@@ -4626,7 +4626,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-143: Dashboard DKIM selector field is read-only after first save — user cannot change selector when rotating keys
 
-- Status: proposed
+- Status: blocked
 - Area: dashboard
 - Why: User: "In dashboard i am unable to change my dkim selector once it is saved - this is important!" Selectors rotate with key rotation; locking the field is a trust-erosion bug ("the dashboard trapped my input"). Operators who switch from `default` to `mailchimp` (or any other selector) hit a wall.
 - Acceptance:
@@ -4639,6 +4639,31 @@ Two underlying queries fire once per matrix row:
   - Tests: integration test seeds a domain with `dkimSelector = "default"`, POSTs a change to `"mailchimp"`, asserts the column was updated AND a DNS re-verification was dispatched. Second test asserts validation errors render the field still editable.
 - Notes:
   - Architect first if the existing form has edge cases (multi-step wizard, separate edit endpoint, etc.); skip Architect if the form is a single-action edit.
+  - **Round-8 investigation (2026-05-25):** the described bug surface DOES NOT EXIST in the current codebase. Confirmed by exhaustive grep:
+    - `MonitoredDomain` entity has NO `dkimSelector` column (only `dkimVerifiedAt` timestamp).
+    - No migrations introduce a per-domain DKIM-selector column.
+    - No dashboard route / controller / form / template accepts a DKIM selector input.
+    - The only DKIM-selector input lives on the public `/tools/dkim-checker` page via `DkimCheckerComponent` (Live Component). That field is `data-model="norender|selector"` with NO `disabled` / `readonly` attribute and re-submits cleanly with a new value on every action.
+    - The dashboard's "Re-check now" flow (`ReverifyDomainController` → `CheckDomainDns` → `DkimChecker::check(domain, null)`) brute-forces selectors from `DkimSelectorRegistry`. The user has no way to TELL the system "use this selector for my domain" because there's nowhere to save that preference.
+  - **Reinterpretation of the user complaint:** the user almost certainly hit the brute-force registry wall — their custom DKIM selector isn't in `DkimSelectorRegistry::PROVIDER_SELECTORS` so the dashboard always flags DKIM as "not found", and there's no UI to teach Sendvery the correct selector. This is a missing-feature gap, not a read-only-field bug. Designing the per-domain DKIM-selector preference (data model + form + dashboard surface + re-verification trigger + ordering against the brute-force fallback + validation rules) is round-9-sized work that needs an architect pass and product alignment on UX (free-form text? select from known providers + custom override? per-mailbox vs per-domain?).
+  - **Round-8 status: blocked pending user clarification.** Filing TASK-146 as the follow-up that captures the actual missing feature (per-domain DKIM-selector preference). Recommend a screenshot + repro from the user before the next round picks it up.
+
+---
+
+## TASK-146: Per-domain DKIM-selector preference is missing — dashboard brute-forces the registry, ignoring teams whose selector isn't in the canonical list
+
+- Status: proposed
+- Area: dashboard / dns
+- Why: Round-8 investigation of TASK-143 surfaced that `DkimChecker::check()` runs without a per-domain preference and the dashboard's "Re-check now" path passes `selector: null`, so the only way Sendvery can find a DKIM key is if the team's selector is already in `DkimSelectorRegistry::PROVIDER_SELECTORS`. Teams running custom selectors (rotated keys, niche providers, transactional accounts) silently see "DKIM not found" forever — the dashboard cannot be told the right selector. This is the actual gap behind the TASK-143 user complaint ("I am unable to change my dkim selector once it is saved"). The "saved" they expected to find isn't there at all.
+- Acceptance:
+  - Architect proposes the data model: most likely a `dkim_selector` nullable string column on `monitored_domain` (matches the migration shape of TASK-133's `disconnected_at` add — single-column metadata-only ALTER on PG16+). Validation: non-empty (when set) + plausible DNS label.
+  - Architect proposes the surface: probably a small `<input>` on `/app/domains/{id}` (Domain detail) under the DKIM health card, with a POST endpoint that saves the value AND immediately re-runs `CheckDomainDns` against the new selector so the verification status reflects the change.
+  - `DkimChecker::check(domain, selector)` already supports a passed selector — the only wiring change is `CheckDomainDnsHandler` reading `$domain->dkimSelector` and passing it through.
+  - Edge cases: clearing the selector (empty string) reverts to brute-force; changing the selector triggers re-verification; the historical `dns_check_result` rows are preserved (the column change is metadata-only and doesn't invalidate the report stream).
+  - Tests: integration test seeds a domain without a selector, asserts brute-force runs. Second test sets a custom selector, asserts the check uses it. Third test changes the selector, asserts re-verification fires.
+- Notes:
+  - Architect first — needs product-level alignment on UX (free-form text? select from known providers + override? per-mailbox?). Likely round 9.
+  - Round-8 deferred because the original TASK-143 was scoped as a "small bug fix on an existing form" and turned out to be a missing-feature gap once investigated. Don't ship a half-feature under a bug ticket.
 
 ---
 
