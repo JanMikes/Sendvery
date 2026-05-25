@@ -137,4 +137,25 @@ final class HomepageFounderBioTest extends WebTestCase
             'Founder bio must consist of exactly three paragraphs.',
         );
     }
+
+    #[Test]
+    public function bioSurfacesPrimaryCallToActionToContactPage(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $contactCta = $crawler->filter('#founder a[href$="/about/contact"]');
+
+        self::assertGreaterThanOrEqual(
+            1,
+            $contactCta->count(),
+            'The founder bio is the most-credible section on the homepage — once "/about/contact" exists, visitors who connect with the bio must have a primary CTA there. Without it, the credibility hook lands but has no next step, and visitors who want to reach Jan have to scavenge the footer or remember the URL.',
+        );
+
+        self::assertStringContainsString(
+            'Talk to the founder',
+            $contactCta->first()->text(),
+            'The contact CTA must read "Talk to the founder" (per the user round-10 framing). A generic "Contact" label loses the founder-level promise the bio sets up two paragraphs earlier.',
+        );
+    }
 }

@@ -5378,7 +5378,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-159: Founder contact surface — `/about/contact` page with founder-level framing + Symfony Form submission + DB-persisted inquiries + Symfony Mailer to `jan.mikes@sendvery.com`
 
-- Status: proposed
+- Status: done
 - Area: marketing / trust
 - Why: User round-10 ask (verbatim): *"To build some trust and transparency, it is always good to show who is behind the project, who am i paying to. We need some contact section or something with contact form and public email jan.mikes@sendvery.com - some text like 'Talk directly to the founder'."* Sendvery is positioned against the no-reply support-ticket SaaS anti-pattern (open-source + self-hostable + founder-built). Visitors about to enter a credit card on `/pricing` need to see there's a human on the other end — and the founder being publicly reachable is a credibility multiplier that scales WITH the open-source positioning, not against it.
 - Acceptance:
@@ -5401,11 +5401,144 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
   - Architect-first because of the multi-decision data-model + form schema + spam-mitigation + route-placement + nav/footer wiring scope.
   - Ships on the same page as TASK-160 (developer feedback / GitHub-issues card) so visitors see both routing options at once.
 
+### Architect plan (2026-05-25)
+
+**Conventions confirmed from codebase read:**
+- Controllers: `final class` (NOT readonly), `AbstractController` extension, single `__invoke()`. See `src/Controller/WhatIsSendveryController.php`.
+- Entities: `final class` (NOT readonly — Doctrine constraint), properties `readonly` where immutable. See `src/Entity/UserFeedback.php`.
+- Commands: `readonly final class`, public constructor-promoted properties. See `src/Message/SubmitFeedback.php`.
+- Handlers: `readonly final class`, `#[AsMessageHandler]`, `__invoke()`, inject `MailerInterface` + `EntityManagerInterface` + `ClockInterface`. **Email-send pattern lives at `src/MessageHandler/SubmitFeedbackHandler.php` lines 48-60 — reuse verbatim.**
+- FormData: `final class` (NOT readonly — mutable for form binding), public non-promoted properties with defaults, `#[Assert\...]` constraints. See `src/FormData/BetaSignupData.php`.
+- Tests: extend `App\Tests\WebTestCase`, `#[Test]` attribute, `self::createClient()`, `getClock()` returns `MockClock`.
+- Migration next sequential: `Version20260531000000.php`.
+- Rate limiter config block does NOT yet exist in `config/packages/framework.php` — add inside the `'framework'` array.
+- `SitemapController::ROUTES` constant at `src/Controller/SitemapController.php:15` — `about_contact` entry goes after `about_open_source` (line 36).
+- Footer Trust column at `templates/components/Footer.html.twig` lines 53-59 — Contact `<li>` goes after Status (line 56), before Open Source (line 57).
+- Nav desktop at `templates/components/Nav.html.twig` line 62 + mobile at line 103 — Contact link goes after Open Source in each section.
+- BreadcrumbList JSON-LD: 2-item pattern (Home → Contact). Do NOT invent a phantom `/about` intermediate route.
+- GitHub repo casing: TASK-160 card uses **capital-S `Sendvery`** (`github.com/janmikes/Sendvery/issues/new`).
+
+**Files to create:**
+
+1. `migrations/Version20260531000000.php` — creates `contact_inquiry` table. Columns: `id UUID NOT NULL`, `name VARCHAR(255) NOT NULL`, `email VARCHAR(255) NOT NULL`, `subject VARCHAR(255) NOT NULL`, `message TEXT NOT NULL`, `submitted_at TIMESTAMP(0) WITH TIME ZONE NOT NULL`, `submitter_ip VARCHAR(45) DEFAULT NULL`, `user_agent VARCHAR(512) DEFAULT NULL`. PK on `id`. Index on `submitted_at`. No FK (no `team_id` — public surface, must NOT be team-scoped).
+
+2. `src/Entity/ContactInquiry.php` — `final class ContactInquiry`. `#[ORM\Entity]`, `#[ORM\Table(name: 'contact_inquiry')]`, `#[ORM\Index(name: 'idx_contact_inquiry_submitted_at', columns: ['submitted_at'])]`. All properties `readonly` (set in constructor only): `UuidInterface $id`, `string $name`, `string $email`, `string $subject`, `string $message`, `\DateTimeImmutable $submittedAt`, `?string $submitterIp`, `?string $userAgent`. No `HasEvents` trait — synchronous notification in the handler; no domain events.
+
+3. `src/FormData/ContactInquiryData.php` — `final class`. Public mutable properties with `#[Assert]` constraints:
+   - `#[Assert\NotBlank] #[Assert\Length(max: 255)] public string $name = '';`
+   - `#[Assert\NotBlank] #[Assert\Email] #[Assert\Length(max: 255)] public string $email = '';`
+   - `#[Assert\NotBlank] #[Assert\Length(max: 255)] public string $subject = '';`
+   - `#[Assert\NotBlank] #[Assert\Length(min: 10, max: 5000)] public string $message = '';`
+   - `public string $website = '';` — **honeypot**, NO constraints (silent-reject in controller).
+   - `public ?int $renderedAt = null;` — **time-trap**, NO constraints (handled in controller).
+
+4. `src/Message/CreateContactInquiry.php` — `readonly final class CreateContactInquiry`. Constructor-promoted: `UuidInterface $inquiryId`, `string $name`, `string $email`, `string $subject`, `string $message`, `?string $submitterIp`, `?string $userAgent`.
+
+5. `src/MessageHandler/CreateContactInquiryHandler.php` — `#[AsMessageHandler] readonly final class`. Injects `EntityManagerInterface`, `ClockInterface`, `MailerInterface`. `__invoke(CreateContactInquiry $message): void` does TWO things:
+   - Instantiate + persist `new ContactInquiry(id: $message->inquiryId, ..., submittedAt: $this->clock->now(), ...)` then `$em->persist($inquiry); $em->flush();`
+   - Build + send `(new Email())->to('jan.mikes@sendvery.com')->subject(sprintf('[Contact] %s — %s', $message->subject, $message->name))->text(<formatted body with name + email + subject + message + submitted-at + IP + UA>)` via `$mailer->send(...)`.
+
+6. `src/Controller/AboutContactController.php` — `final class extends AbstractController`. `#[Route('/about/contact', name: 'about_contact', methods: ['GET', 'POST'])]`. Injects: `MessageBusInterface $commandBus`, `IdentityProvider $identityProvider`, `ClockInterface $clock`, `RateLimiterFactory $contactFormLimiter` (autowired by camelCase of `contact_form` + `Limiter`). `__invoke(Request $request): Response`. GET: `$data = new ContactInquiryData(); $data->renderedAt = $this->clock->now()->getTimestamp();` then build form with `createFormBuilder($data)->add('name', TextType::class)->add('email', EmailType::class)->add('subject', TextType::class)->add('message', TextareaType::class)->add('website', HiddenType::class)->add('renderedAt', HiddenType::class)->getForm()`. Render `about/contact.html.twig` with `['form' => $form->createView(), 'sent' => $request->query->getBoolean('sent')]`. POST: handle form, then in order:
+   1. **Honeypot**: `if ($data->website !== '')` → success-flash + redirect to `?sent=1` (silent reject).
+   2. **Time-trap**: `if ($data->renderedAt === null || ($this->clock->now()->getTimestamp() - $data->renderedAt) < 2)` → silent reject.
+   3. **Rate-limit**: `$limiter = $this->contactFormLimiter->create($request->getClientIp() ?? 'anonymous'); if (!$limiter->consume()->isAccepted())` → error flash + redirect (no `?sent=1`).
+   4. **Validate + dispatch**: `if ($form->isValid())` → `$id = $this->identityProvider->nextIdentity(); $commandBus->dispatch(new CreateContactInquiry(...));` → success flash + redirect to `?sent=1`.
+   5. **Fall-through**: re-render with form errors.
+
+7. `templates/about/contact.html.twig` — extends `marketing_layout.html.twig`. `{% block title %}Talk directly to the founder — Sendvery{% endblock %}`. `{% block meta_description %}Contact Jan Mikeš, the founder of Sendvery. Billing questions, custom plans, partnerships, and "is Sendvery right for me?" — Jan handles these personally.{% endblock %}`. `{% block structured_data %}` emits BreadcrumbList JSON-LD: position 1 = Home / `url('home')`, position 2 = Contact / `url('about_contact')`. `{% block content %}`:
+   - Header with H1 `Talk directly to the founder.` + lede paragraph (see exact copy in item 12 below).
+   - If `sent` is true: daisyUI `alert alert-success` "Thank you" panel.
+   - Two-column grid `grid grid-cols-1 md:grid-cols-2 gap-8`:
+     - **Left card** (Mail glyph + "Send a message" heading): form widgets, submit button. Honeypot wrapped in `<div style="display:none" aria-hidden="true">` with `tabindex="-1"` + `autocomplete="off"`. `renderedAt` as standard hidden input.
+     - **Right card** (GitHub glyph + "Open an issue on GitHub" heading): verbatim copy `Product suggestions or bug reports — open an issue directly on GitHub, where the code lives.` + `<a href="https://github.com/janmikes/Sendvery/issues/new" target="_blank" rel="noopener" class="btn btn-outline">Open an issue</a>`.
+
+**Files to modify:**
+
+8. `config/packages/framework.php` — add inside the `'framework'` array (after `'csrf_protection'`):
+   ```php
+   'rate_limiter' => [
+       'contact_form' => [
+           'policy' => 'token_bucket',
+           'limit' => 5,
+           'rate' => ['interval' => '1 hour', 'amount' => 5],
+       ],
+   ],
+   ```
+   Symfony auto-registers `RateLimiterFactory` autowirable as `$contactFormLimiter`.
+
+9. `src/Controller/SitemapController.php` — add to `ROUTES` const after `about_open_source`:
+   ```php
+   ['route' => 'about_contact', 'priority' => '0.6', 'changefreq' => 'monthly'],
+   ```
+
+10. `templates/components/Nav.html.twig` — two insertions:
+    - **Desktop** (after line 62 / `about_open_source`): `<a href="{{ path('about_contact') }}" class="btn btn-ghost btn-sm">Contact</a>`
+    - **Mobile** (after line 103 / `about_open_source`): `<a href="{{ path('about_contact') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">Contact</a>`
+
+11. `templates/components/Footer.html.twig` — in Trust column after Status `<li>` (line 56), before Open Source (line 57):
+    ```html
+    <li><a href="{{ path('about_contact') }}" class="link link-hover text-base-content/70">Contact</a></li>
+    ```
+
+**Test plan** — all method names follow business-behaviour convention (per `feedback-tests-describe-business-behaviour` memory). NO `task159*` / `task160*` prefixes.
+
+12. `tests/Integration/Controller/AboutContactControllerTest.php`:
+    - `pageRendersForAnonymousVisitor`
+    - `pageRendersForSignedInVisitor`
+    - `visitorCanSubmitContactFormAndFounderGetsEmail` (Symfony `assertEmailCount(1)` + recipient + subject + DB row)
+    - `formSubmissionPersistsContactInquiryRow` (DBAL check on `contact_inquiry`)
+    - `honeypotFieldSilentlyRejectsBotSubmissions` (POST with `website` filled → silent success-flash, NO row, NO email)
+    - `timeTrapRejectsSubmissionsArrivingFasterThanHuman` (MockClock controls elapsed time)
+    - `rateLimiterBlocksSixthRequestWithinAnHour`
+    - `csrfTokenIsRequired`
+    - `breadcrumbListJsonLdIsPresentOnContactPage`
+    - `navContainsContactLinkForAllVisitors`
+    - `footerContainsContactLinkInTrustColumn`
+    - `githubIssuesCardLinksToCanonicalRepoCasing` (assert `github.com/janmikes/Sendvery/issues/new` with capital S)
+    - `sitemapIncludesContactRoute`
+
+13. `tests/Integration/MessageHandler/CreateContactInquiryHandlerTest.php`:
+    - `handlerPersistsInquiryAndSendsEmailToFounder`
+
+**Build sequence** (each step depends on the previous):
+1. Migration `Version20260531000000.php` → `doctrine:migrations:migrate`.
+2. `ContactInquiry` entity → phpstan clean.
+3. `ContactInquiryData` FormData.
+4. `CreateContactInquiry` command.
+5. `CreateContactInquiryHandler` handler → phpstan clean.
+6. `framework.rate_limiter.contact_form` config → `bin/console debug:container contact_form.limiter` confirms service.
+7. `AboutContactController` → `bin/console debug:router about_contact` confirms route.
+8. `templates/about/contact.html.twig`.
+9. Nav (desktop + mobile) + Footer (Trust column) + Sitemap.
+10. Controller test (13 methods).
+11. Handler test (1 method).
+12. phpunit → phpstan → cs-fixer → ALL GREEN.
+
+**Critical details and edge cases:**
+
+- **Rate-limiter autowire name**: `contact_form` key → service `limiter.contact_form` → autowire by argument name `$contactFormLimiter` (camelCase + `Limiter` suffix). Type as `RateLimiterFactory` from `Symfony\Component\RateLimiter\RateLimiterFactory`.
+- **Rate-limiter backing store in tests**: token-bucket may need a cache pool. If container compile fails under `when@test`, add `'cache' => ['pools' => ['cache.rate_limiter' => ['adapter' => 'cache.adapter.array']]]`. Don't pre-add — only if compile fails.
+- **Honeypot rendering**: `<div style="display:none" aria-hidden="true">` wrapper with `tabindex="-1"` + `autocomplete="off"` on the input (via Symfony form `attr` option). DO NOT use `aria-label` patterns that would flag accessibility scanners.
+- **Time-trap null guard**: if `$data->renderedAt === null` (bot stripped the hidden field), treat as suspicious — silent reject.
+- **CSRF**: `createFormBuilder()` auto-adds `_token`. Do NOT call `setAllowExtraFields(false)`.
+- **`ClockInterface`**: from `Psr\Clock\ClockInterface`. Inject as `private readonly ClockInterface $clock`.
+- **`SeoTest::sitemapContainsAllPublicRoutes`**: extend with `self::assertStringContainsString('/about/contact', $content);` in addition to the standalone `sitemapIncludesContactRoute` test.
+- **Page copy** (verbatim — Developer ships these exactly):
+  - H1: `Talk directly to the founder.`
+  - Lede: `Jan Mikeš is the sole founder and maintainer of Sendvery — a Czech-based software engineer who built and operates this platform. Billing questions, custom plan requests, agency partnerships, or simply "is Sendvery right for my setup?" — Jan handles these personally. Email him directly at <a href="mailto:jan.mikes@sendvery.com" class="link link-primary">jan.mikes@sendvery.com</a> or use the form below.`
+  - Right-card copy: `Product suggestions or bug reports — open an issue directly on GitHub, where the code lives.`
+
+**Out of scope (downstream tasks):**
+- `FounderBio.html.twig` edits → TASK-161.
+- Footer attribution-row "Talk to Jan →" link → TASK-162.
+- `ContactPage` JSON-LD schema (optional; BreadcrumbList alone matches TASK-149 baseline).
+- 3rd-party CAPTCHA (explicitly forbidden per round brief).
+
 ---
 
 ## TASK-160: Developer feedback surface — GitHub-issues card alongside the founder-contact form on `/about/contact`
 
-- Status: proposed
+- Status: done
 - Area: marketing / trust
 - Why: User round-10 ask (verbatim): *"as well incorporate link to github - one card/section for developers 'Product suggestions or bug report - can open issue directly on github, where the code lives.'"* This is the second route of the two-channel trust pattern: business questions → founder email; engineering questions → GitHub Issues. Without GitHub, the founder's inbox becomes the bug tracker. Without the founder channel, non-technical visitors think "I need a GitHub account to ask about billing?" Both routes side-by-side = visitor self-selects the right channel.
 - Acceptance:
@@ -5421,7 +5554,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-161: Founder bio section on homepage — wire to new `/about/contact` route + ensure credibility hook is actionable
 
-- Status: proposed
+- Status: done
 - Area: marketing / trust
 - Why: The homepage already has a founder bio section (TASK-145 narrative arc §12). It's currently a credibility artefact but probably reads "here's who built this" without an actionable next step. Now that `/about/contact` exists, the bio should LINK to it — same pattern as the hero linking to the chip row for open-source credibility. The bio is the most-credible section on the page; the contact CTA needs to be reachable from there.
 - Acceptance:
