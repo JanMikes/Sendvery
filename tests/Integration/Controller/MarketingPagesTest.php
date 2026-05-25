@@ -324,11 +324,8 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     /**
-     * TASK-158 — mobile vertical rhythm contract. The prior `py-16` + `text-4xl`
-     * + `gap-10` pushed the checker card below the fold on phones; visitors at
-     * 360px viewport never saw "Free instant check — no signup" without
-     * scrolling. Pin the mobile-tighter class strings so a careless revert
-     * to the desktop-only rhythm fails fast.
+     * TASK-158 — mobile vertical rhythm contract. The hero must stay compact
+     * enough that the checker card fits above the fold on 360px phones.
      */
     #[Test]
     public function heroUsesMobileTighterVerticalRhythm(): void
@@ -339,18 +336,15 @@ final class MarketingPagesTest extends WebTestCase
         $hero = $crawler->filter('section#dns-checker');
         $heroOuter = (string) $hero->outerHtml();
 
-        // The hero <section> itself uses py-10 on mobile (was py-16), keeping py-24 on md+.
-        self::assertStringContainsString('py-10 md:py-24', $heroOuter, 'The hero must use mobile-tighter vertical padding (py-10) so the checker card fits in the 360px viewport without scrolling.');
+        self::assertStringContainsString('py-2.5 md:py-6', $heroOuter, 'The hero must use compact vertical padding so the checker card fits above the fold.');
 
-        // The H1 starts smaller on mobile (text-3xl) but scales to text-5xl on md+.
         self::assertMatchesRegularExpression(
             '~<h1[^>]*\btext-3xl\b[^>]*\bmd:text-5xl\b~',
             $heroOuter,
-            'The hero H1 must use text-3xl on mobile (was text-4xl) so it doesn\'t consume the whole viewport before the subhead + CTA + card render.',
+            'The hero H1 must use text-3xl on mobile so it doesn\'t consume the whole viewport before the subhead + CTA + card render.',
         );
 
-        // The grid gap drops on mobile so the right-column card sits closer to the CTA.
-        self::assertStringContainsString('gap-6 md:gap-16', $heroOuter, 'The hero grid must use gap-6 on mobile (was gap-10) so the checker card sits closer to the CTA.');
+        self::assertStringContainsString('gap-6 md:gap-16', $heroOuter, 'The hero grid must use gap-6 on mobile so the checker card sits closer to the CTA.');
     }
 
     /**
