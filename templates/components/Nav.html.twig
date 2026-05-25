@@ -33,6 +33,12 @@
 
         {# Desktop nav #}
         <div class="hidden lg:flex items-center gap-1">
+            {# TASK-123: cold-visitor entry point to the long-form explainer.
+               "Learn" is taken by the knowledge-base route, so the wording is
+               the question framing ("What is this?") — ≤ 12 chars to keep the
+               nav rhythm at 1024px. No badge per TASK-065 / CLAUDE.md. #}
+            <a href="{{ path('about_what_is_sendvery') }}" class="btn btn-ghost btn-sm">What is this?</a>
+
             {# Tools dropdown #}
             <div class="dropdown dropdown-hover">
                 <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
@@ -79,6 +85,9 @@
     <div class="lg:hidden hidden border-t border-base-200 bg-base-100"
          {{ stimulus_target('mobile-nav', 'menu') }}>
         <div class="container mx-auto py-2 flex flex-col">
+            {# TASK-123: same first-item placement on mobile — flat-link style, no dropdown wrapper. #}
+            <a href="{{ path('about_what_is_sendvery') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">What is this?</a>
+            <div class="border-t border-base-200 my-2"></div>
             <span class="text-xs font-semibold text-base-content/50 uppercase tracking-wider px-3 pt-2 pb-1">Tools</span>
             <a href="{{ path('tools_spf_checker') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">SPF Checker</a>
             <a href="{{ path('tools_dkim_checker') }}" class="px-3 py-2 rounded-btn text-sm font-medium hover:bg-base-200">DKIM Checker</a>
