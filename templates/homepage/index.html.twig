@@ -91,24 +91,8 @@
     </div>
 </section>
 
-{# === 2. Trust logos row (kept from the previous homepage, restyled to zinc-tone palette
-       for visual consistency with the new hero). Sits between the new hero and the new
-       XML-to-English section per TASK-131 acceptance criteria. #}
-<section class="border-y border-zinc-200 bg-base-100 py-10">
-    <div class="container mx-auto px-4 md:px-6 text-center">
-        <p class="text-xs uppercase tracking-wider text-zinc-400 mb-6">Already running on real production domains</p>
-        <div class="flex flex-wrap justify-center items-center gap-x-10 gap-y-4">
-            <a href="https://thedevs.cz" target="_blank" rel="noopener" class="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 rounded-md">TheDevs.cz</a>
-            <a href="https://speedpuzzling.com" target="_blank" rel="noopener" class="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 rounded-md">SpeedPuzzling.com</a>
-            <a href="https://fajnesklady.cz" target="_blank" rel="noopener" class="text-zinc-500 hover:text-zinc-900 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 rounded-md">FajneSklady.cz</a>
-        </div>
-    </div>
-</section>
-
-{# === 3. From XML to plain English (TASK-131) ===
-   Centered narrow column. 3-column transformation visual at md+ — raw XML card → ArrowRight
-   icon → blue "AI summary" card. Mobile stacks vertically with an ArrowDown icon swap. #}
-<section class="bg-base-100 py-16 md:py-24">
+{# === 3. From XML to plain English (TASK-131) === #}
+<section class="bg-zinc-50/80 py-16 md:py-24">
     <div class="container mx-auto px-4 md:px-6">
         <div class="text-center max-w-3xl mx-auto">
             <div class="text-xs uppercase tracking-wider text-zinc-500 mb-4">How the AI insights work</div>
@@ -174,7 +158,7 @@
    Two-column at md+. Left: pitch + CTAs. Right: realistic grade card mockup (A tile + domain
    + pass rate + 4 emerald pass chips). Uses the same monochrome zinc palette + emerald
    semantic colour for state chips only. #}
-<section class="bg-base-100 py-16 md:py-24 border-t border-zinc-200">
+<section class="bg-base-100 py-16 md:py-24">
     <div class="container mx-auto px-4 md:px-6">
         <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
             {# Left column — pitch + CTAs #}
@@ -236,7 +220,7 @@
        now points at the "Monitoring active" banner (the round-4 setup-status
        surface from TASK-097/100) rather than a grade badge — that's what the
        screenshot actually leads with. #}
-<twig:SectionContainer bgClass="bg-base-200/20">
+<twig:SectionContainer bgClass="bg-zinc-50/80">
     <twig:SectionHeader
         eyebrow="Your dashboard, one screen"
         title="Everything for one domain in one view"
@@ -272,13 +256,8 @@
     </div>
 </twig:SectionContainer>
 
-{# === 5. How it Works ===
-   TASK-132: Step 1 leads with DNS-first ingestion (publish `rua=mailto:reports@sendvery.com`
-   in your DMARC TXT record) — the same posture the dashboard's IngestionRoutesCallout and
-   the round-6 onboarding card take. The legacy "connect your DMARC report mailbox" framing
-   sat one step ahead of what users actually see in the product within a minute of signing
-   up. Mailbox connection stays NAMED here but as the fallback path, not equal billing. #}
-<twig:SectionContainer bgClass="bg-base-200/50">
+{# === 5. How it Works === #}
+<twig:SectionContainer>
     <twig:SectionHeader
         eyebrow="How it works"
         title="Three steps to email authentication peace of mind"
@@ -313,7 +292,7 @@
 </twig:SectionContainer>
 
 {# === 6. Feature Highlights === #}
-<twig:SectionContainer>
+<twig:SectionContainer bgClass="bg-zinc-50/80">
     <twig:SectionHeader
         eyebrow="Capabilities"
         title="Everything you need for email authentication"
@@ -346,7 +325,7 @@
        Reframed (TASK-028) from a second four-card grid into concrete failure
        scenarios. The four tool destinations the old section linked to are
        reachable via the nav Tools dropdown + footer Free Tools column. #}
-<twig:SectionContainer bgClass="bg-base-200/50">
+<twig:SectionContainer>
     <div class="max-w-4xl mx-auto">
         <twig:SectionHeader
             eyebrow="Risks in your DNS"
@@ -379,7 +358,7 @@
 </twig:SectionContainer>
 
 {# === 8. Domain Health Score Preview === #}
-<twig:SectionContainer>
+<twig:SectionContainer bgClass="bg-zinc-50/80">
     <div class="max-w-4xl mx-auto text-center">
         <twig:SectionHeader
             eyebrow="Health grade"
@@ -417,7 +396,7 @@
 <twig:FounderBio />
 
 {# === 9. Open Source Callout === #}
-<twig:SectionContainer bgClass="bg-primary/5 border-y border-primary/10">
+<twig:SectionContainer>
     <div class="max-w-3xl mx-auto text-center">
         <svg class="w-12 h-12 mx-auto mb-4 text-primary" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4" y="11" width="16" height="10" rx="2" stroke-linecap="round" stroke-linejoin="round"></rect>
@@ -440,7 +419,7 @@
 </twig:SectionContainer>
 
 {# === 10. Pricing === #}
-<twig:SectionContainer id="pricing">
+<twig:SectionContainer id="pricing" bgClass="bg-zinc-50/80">
     <twig:SectionHeader
         eyebrow="Pricing"
         title="Simple, transparent pricing"
