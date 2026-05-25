@@ -5569,7 +5569,7 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ## TASK-162: Footer "Talk to Jan" / "Contact" link on every page — founder channel reachable from every public surface
 
-- Status: proposed
+- Status: done
 - Area: marketing / trust
 - Why: The footer currently shows "Built with love by Jan Mikeš · Source on GitHub →" (TASK-141). Adding a contact link makes the founder channel reachable from EVERY page — KB articles, tool pages, pricing, dashboard — not just from the new `/about/contact` route. Visitors who land on a non-About page first still get the contact affordance without a re-architect.
 - Acceptance:

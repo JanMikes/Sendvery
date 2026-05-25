@@ -409,6 +409,36 @@ final class MarketingPagesTest extends WebTestCase
     }
 
     /**
+     * TASK-162 — the attribution row also surfaces a direct "Talk to Jan →"
+     * link to /about/contact so the founder channel is reachable from every
+     * page (KB articles, tool pages, pricing — wherever a visitor lands
+     * first), not only from the new contact route or the Trust footer column.
+     * The Trust column "Contact" link (added in TASK-159) is column-scoped
+     * for SEO + scanning; this attribution-row link is the highly-visible
+     * affordance for visitors who skim the legal bottom-bar.
+     */
+    #[Test]
+    public function footerAttributionRowSurfacesTalkToJanLinkToContactPage(): void
+    {
+        $client = self::createClient();
+        $crawler = $client->request('GET', '/');
+
+        $footerText = $crawler->filter('footer')->text();
+        self::assertStringContainsString(
+            'Talk to Jan',
+            $footerText,
+            'Footer attribution row must include a "Talk to Jan →" link so the founder channel is reachable from every public surface — KB articles, tool pages, pricing — without scrolling back up to the column links.',
+        );
+
+        $contactLinks = $crawler->filter('footer a[href$="/about/contact"]');
+        self::assertGreaterThanOrEqual(
+            2,
+            $contactLinks->count(),
+            'Footer must surface /about/contact from BOTH the Trust column AND the attribution row — they serve different scanning patterns (column = browse, attribution = quick reference).',
+        );
+    }
+
+    /**
      * TASK-131 acceptance criteria — pin the new three-section top of the homepage:
      *  1. new H1 copy renders
      *  2. checker form lives INSIDE the hero <section> (and no surviving #dns-checker
