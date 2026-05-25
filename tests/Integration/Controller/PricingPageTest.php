@@ -24,15 +24,6 @@ final class PricingPageTest extends WebTestCase
         self::assertGreaterThanOrEqual(1, $crawler->filter('table.table.table-zebra')->count());
     }
 
-    public function testComparisonTableMobileVariantIsPresent(): void
-    {
-        $client = self::createClient();
-        $client->request('GET', '/pricing');
-
-        $body = (string) $client->getResponse()->getContent();
-        // The mobile variant wraps four per-tier cards in a `md:hidden` container.
-        self::assertStringContainsString('md:hidden', $body);
-    }
 
     public function testComparisonTableContainsAllTierNames(): void
     {

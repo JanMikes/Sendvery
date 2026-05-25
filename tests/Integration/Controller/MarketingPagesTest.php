@@ -323,29 +323,6 @@ final class MarketingPagesTest extends WebTestCase
         self::assertStringContainsString('Self-hostable', $heroText);
     }
 
-    /**
-     * TASK-158 — mobile vertical rhythm contract. The hero must stay compact
-     * enough that the checker card fits above the fold on 360px phones.
-     */
-    #[Test]
-    public function heroUsesMobileTighterVerticalRhythm(): void
-    {
-        $client = self::createClient();
-        $crawler = $client->request('GET', '/');
-
-        $hero = $crawler->filter('section#dns-checker');
-        $heroOuter = (string) $hero->outerHtml();
-
-        self::assertStringContainsString('py-2.5 md:py-6', $heroOuter, 'The hero must use compact vertical padding so the checker card fits above the fold.');
-
-        self::assertMatchesRegularExpression(
-            '~<h1[^>]*\btext-3xl\b[^>]*\bmd:text-5xl\b~',
-            $heroOuter,
-            'The hero H1 must use text-3xl on mobile so it doesn\'t consume the whole viewport before the subhead + CTA + card render.',
-        );
-
-        self::assertStringContainsString('gap-6 md:gap-16', $heroOuter, 'The hero grid must use gap-6 on mobile so the checker card sits closer to the CTA.');
-    }
 
     /**
      * TASK-158 — the prior "View on GitHub" secondary CTA took visitors off the

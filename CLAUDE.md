@@ -357,6 +357,7 @@ readonly final class DnsRecord
 - **ClockInterface** (PSR-20) mocked for deterministic timestamps
 - **Infection mutation testing** from the start
 - Tests describe business requirements — they are the specification
+- **Never assert specific CSS/Tailwind classes** (spacing, font-size, responsive breakpoints, layout utilities) in tests. These change constantly during UI prototyping and have no business impact. Only assert semantic daisyUI tokens (e.g. `text-error`, `border-l-success`) when the test verifies a business rule like severity mapping.
 
 ## Frontend: daisyUI 5 + Tailwind CSS 4
 
