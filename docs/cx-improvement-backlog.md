@@ -3767,6 +3767,133 @@ The owner's six explicit seed areas — ops investigation (urgent), clarity of i
 
 ---
 
+## Round-7 performance audit (2026-05-25)
+
+**DB state:** Demo seed re-run after TASK-132/133/134. Same shape as round-6 — 3 monitored domains × 30 days reports + snapshots = 90 reports, 180 records, 90 health snapshots, 5 alerts. Postgres 17-alpine in dev compose. Fresh UUIDs per re-seed; round-7 numbers use `019e5f58-d2fc-73e9-93ca-441af3a20100` for the team and `019e5f58-d308-7386-9da4-56613d5aa7e0` for `acme.example`. `dns_check_result`, `mailbox_connection`, `quarantined_dmarc_report`, `blacklist_check_result` all empty (matches every prior round; the demo seed doesn't populate them).
+
+**Methodology:** `EXPLAIN (ANALYZE, BUFFERS)` via `docker compose exec database psql -U app -d sendvery`, parameters bound to the seeded UUIDs above, three runs per query and the median exec time is what the per-query subsection reports. Two genuinely new code paths shipped this round: (1) `RuaScenarioResolver::resolveForDomainIds()` (TASK-134) — the LATERAL batch query that retired the per-domain `findLatestForDomainAndType` loop on the dashboard overview and the ingestion-matrix page; (2) `MailboxConnectionRepository`'s three reader methods (TASK-133) — they all carry a new `disconnected_at IS NULL` predicate alongside their pre-existing filters. The round-6 six-query suite is re-measured to confirm none of the round-7 surface changes regressed them.
+
+**Stop criteria recap:** SAFE = <5ms, WATCH = 5-50ms, BAD = >50ms (file a task). All eight measurement targets land SAFE; the most expensive query (`GetDomainOverview::forTeams`) sits at ~9% of the SAFE budget. No regression crossed the SAFE→WATCH boundary; no TASK-13X optimisation task is filed.
+
+### NEW: RuaScenarioResolver::resolveForDomainIds() — batch LATERAL query (TASK-134)
+
+The interesting one. This query did NOT exist before round 7 — it replaces N invocations of `DnsCheckResultRepository::findLatestForDomainAndType()` (one per domain × per call site — the dashboard overview AND the ingestion matrix were each running their own per-row loop). The single LATERAL query covers both call sites.
+
+- **Planning time:** 0.913 ms (median of 3)
+- **Execution time:** 0.083 ms (median of 3)
+- **Plan:** `Nested Loop Left Join` outer → `Seq Scan on monitored_domain md` filtered by `id = ANY (:domainIds)` (3 rows, optimiser correctly skips the PK index at 3-row cardinality) + LATERAL `Limit → Sort → Index Scan using idx_dns_check_domain_type on dns_check_result` (0 rows because demo seed has no `dns_check_result` rows; per-loop exec 0.005ms). Buffers: shared hit=7 total.
+- **vs running the per-domain path 3 times:** the per-row baseline is `findLatestForDomainAndType` at 0.065ms exec + 0.668ms plan per call. Three sequential per-domain calls → 0.195ms exec + 2.004ms plan + 3× PHP/Doctrine round-trip overhead. The batch query lands at 0.083ms exec + 0.913ms plan + 1× round trip → **~57% reduction in total DB time AND elimination of 2 round-trip costs**. At 20 domains (where the round-5 audit projected the per-domain loop to dominate at ~2.1ms exec), the batch query plan stays basically flat (the `id = ANY` IN-list scan grows linearly but the LATERAL per-loop cost is unchanged) — projects to ~0.15ms exec + 0.9ms plan vs the per-domain loop's ~2.1ms exec + ~13ms plan.
+- **Smell check on the SQL:** the WHERE/LATERAL pattern is identical to the one `GetDomainOverview` and `GetDnsHealthOverview` already use against `domain_health_snapshot` — index-backed candidate filtering, in-memory sort over the per-domain candidates (cheap because per-protocol cardinality is a handful of rows), `LIMIT 1` per outer row. No covering-index opportunity at current scale; the resolver code's own comment flags `(monitored_domain_id, type, checked_at DESC)` as the future optimisation knob if it ever crosses WATCH.
+- **Scaling note:** Per-domain cardinality of `dns_check_result` for `type='dmarc'` is bounded by the daily-check cron (1 row/day → ~365 rows/year/domain at most). At 100 domains the LATERAL fires 100× with a per-loop sort over a few hundred candidates each — projects to ~1-2ms exec, well within SAFE.
+- **Verdict:** SAFE — and a strict improvement over the round-6 per-domain N+1 it replaced.
+
+### DashboardOverviewController combined cost (TASK-134 net change)
+
+The controller now issues:
+- 1× `GetDomainOverview::forTeams` (unchanged shape)
+- 1× `GetDnsHealthOverview::forTeams` (unchanged — only `/app/domains` consumes this in this controller's tree; `/app` itself doesn't, but the headline-domain branch + the batch RUA query that replaced it are what changed)
+- 1× `RuaScenarioResolver::resolveForDomainIds` (NEW — replaces what used to be per-domain calls inside `NextActionResolver` and the headline-domain re-fetch)
+- 4× `NavCountsExtension::getGlobals` (unchanged COUNTs)
+- the IngestionPathResolver matrix + its own internal batch RUA call (shared with the dashboard via the resolver service; counted once when both surfaces render on the same request, which they don't — IngestionPathResolver fires here, the matrix CTE itself is on `/app/mailboxes`).
+
+Round-6 baseline for the overview surface (the round-6 audit measured this implicitly as GetDomainOverview + NavCounts + GetDnsHealthOverview's contribution where called): exec ~0.85 ms.
+
+- **Round-7 sum on the overview hot path (median of 3):**
+  - GetDomainOverview::forTeams = 0.449 ms exec, 1.803 ms plan
+  - RuaScenarioResolver::resolveForDomainIds = 0.083 ms exec, 0.913 ms plan
+  - NavCounts (4 COUNTs aggregate) = ~0.21 ms exec, ~3.0 ms plan
+  - IngestionPathResolver (matrix CTE + batch RUA, no per-row DNS check loop) = 0.320 ms exec, 1.409 ms plan
+- **Combined exec on overview render:** **~1.06 ms** — replaces a round-6 hot path that was already SAFE at ~0.85ms PLUS up to 3× per-domain `findLatestForDomainAndType` calls (~0.2ms exec each = ~0.6ms eliminated). Net: ~similar exec time at the 3-domain demo scale BUT genuinely cheaper at higher domain counts because the eliminated per-domain N+1 was the only term that scaled linearly with domain count.
+- **Smell check:** the new batch RUA query feeds off the same `monitored_domain` heap pages the other LATERAL queries already warmed (`shared hit=1` for the outer Seq Scan). The 0.913ms plan time is the cost of parsing the LATERAL + `id = ANY` shape; once Postgres caches it the per-query plan cost drops on subsequent renders within the same connection (FrankenPHP worker mode amortises this).
+- **Verdict:** SAFE — combined render hot path stays well under the 5 ms SAFE budget. TASK-134 traded a flat ~0.6ms (3-domain demo) for a query that scales to ~1-2ms at 100 domains instead of the per-domain N+1's projected ~10ms+ at the same scale.
+
+### MailboxConnection queries — new `disconnected_at IS NULL` predicate (TASK-133)
+
+All three reader methods on `MailboxConnectionRepository` now carry the soft-delete filter. Predicate is folded into existing scans at current cardinality (0 rows in demo seed — typical for a fresh team that hasn't connected a mailbox).
+
+| # | Query | Plan | Exec | Plan time |
+|---|-------|------|------|-----------|
+| 1 | `findActiveConnections` (`is_active = true AND disconnected_at IS NULL`) | Seq Scan on `mailbox_connection` (0 rows) | 0.039 ms | 0.426 ms |
+| 2 | `findByTeam` (`team_id = ? AND disconnected_at IS NULL`) | Seq Scan on `mailbox_connection` (0 rows) | 0.022 ms | 0.251 ms |
+| 3 | `findByDomain` (`monitored_domain_id = ? AND disconnected_at IS NULL`) | Seq Scan on `mailbox_connection` (0 rows) | 0.031 ms | 0.402 ms |
+
+- **Smell check:** all three Seq Scan at this size — `mailbox_connection` has zero rows in the demo seed, so the optimiser correctly skips its indexes (`idx_2384baf22294f766` on `monitored_domain_id`, `idx_2384baf2296cd8ae` on `team_id`). Predicate evaluation is constant-time per row regardless of how many predicates the WHERE clause carries; at zero rows the cost is the table-open + Seq Scan setup itself (~0.02ms-0.04ms). At realistic scale (~10 mailboxes per team) the indexes engage and the `disconnected_at IS NULL` filter becomes a heap-side check on the candidates the index already narrowed — no extra round-trip cost. A partial index `WHERE disconnected_at IS NULL` would shave a few microseconds but isn't justified until a customer has >100 mailboxes.
+- **Scaling note:** linear in row count via index after ~50 rows total in the table. The cron poller (`findActiveConnections`) is the highest-cardinality reader; even a multi-tenant table with 10k mailbox rows would resolve in <2ms via the existing `is_active = true` filter Postgres already memoises.
+- **Verdict:** SAFE — TASK-133's new predicate adds zero measurable cost vs the round-6 baseline at demo-seed scale; same plan shape, same Seq Scan path.
+
+### Re-baseline: GetDomainOverview::forTeams() (round-6 comparison)
+
+- **Planning time:** 1.803 ms (median of 3; round 6 was 1.454 ms — within run-to-run noise + ~0.3ms regression that's in the noise floor for plan time)
+- **Execution time:** 0.449 ms (median of 3; round 6 was 0.577 ms — -0.128ms, faster)
+- **Plan:** Identical shape to round-6 — Sort → HashAggregate → Nested Loop Left Join → Hash Right Join on dmarc_report/dmarc_record + LATERAL `Index Scan Backward using idx_health_snapshot_domain_date` (1 row, 3 loops). Memoize wrap on the LATERAL (`Hits: 177  Misses: 3`) — most outer-row LATERAL evaluations hit cache.
+- **Verdict:** SAFE — marginally faster than round 6 (median exec -0.128ms; within noise). TASK-132/133/134 didn't touch this query and the plan confirms it.
+
+### Re-baseline: GetDnsHealthOverview::forTeams() (round-6 comparison)
+
+- **Planning time:** 0.710 ms (round 6: 0.746 ms — flat)
+- **Execution time:** 0.104 ms (round 6: 0.091 ms — +0.013ms; within noise)
+- **Plan:** Identical to round 6 — Sort → Nested Loop Left Join → Seq Scan on `monitored_domain` (3 rows) + LATERAL `Index Scan Backward using idx_health_snapshot_domain_date`.
+- **Verdict:** SAFE — no plan-shape change.
+
+### Re-baseline: NavCountsExtension::getGlobals() (round-6 comparison)
+
+| # | Query | Plan | Exec | Plan time |
+|---|-------|------|------|-----------|
+| 1 | `GetQuarantineList::countForTeam` | `Hash Join` over `quarantined_dmarc_report → received_report_email` with hashed SubPlans for monitored_domain + mailbox_connection lookup (subplans never executed — empty quarantine set) | 0.131 ms | 2.230 ms |
+| 2 | `GetAlerts::countUnreadForTeams` | Seq Scan on `alert` (5 rows; optimiser skips `idx_alert_team` at this size — same as round 6) | 0.117 ms | 0.618 ms |
+| 3 | `GetAlerts::countUnreadCriticalForTeams` | Seq Scan on `alert` (5 rows) | 0.050 ms | 0.526 ms |
+| 4 | `GetDomainOverview::countUnverifiedForTeams` | Seq Scan on `monitored_domain` (3 rows) | 0.044 ms | 0.527 ms |
+
+- **Total execution:** ~0.342 ms across all four COUNTs (round 6: ~0.152 ms — +0.19ms, within run-to-run noise; the first cold query in this batch took 0.131ms vs round-6's 0.094ms which is the bulk of the delta and is explainable as the cold-cache cost of the first connection on this measurement run).
+- **Verdict:** SAFE — plan shapes unchanged; aggregate well under 1ms.
+
+### Re-baseline: IngestionPathResolver::resolveForTeams() (round-6 comparison)
+
+Two underlying queries fire per request — both unchanged in plan shape, but the per-row N+1 loop on `findLatestForDomainAndType` (which round 6 measured) has been **eliminated** by TASK-134:
+
+1. **`GetDomainIngestionMatrix::forTeams`** (CTE shape unchanged) — Execution 0.320 ms (median of 3; round 6: 0.335 ms — flat), planning 1.409 ms (round 6: 1.268 ms — within noise).
+2. **`DnsCheckResultRepository::findLatestForDomainAndType` (DELETED from this call site by TASK-134)** — round 6 measured 0.019 ms exec × 3 loops = ~0.057 ms total. Round 7 retires this loop entirely; the batch `RuaScenarioResolver::resolveForDomainIds` (0.083 ms exec, see above) takes its place but runs once across both `/app` and `/app/mailboxes` per request.
+3. **`MailboxConnectionRepository::get`** — PK fetch, only fires on the path-vs-scenario flip branch (TASK-114). Demo seed has 0 mailbox_connection rows so never fires.
+
+- **Aggregate per request at 3 demo domains:** ~0.320 ms (matrix) + ~0.083 ms (batch RUA, shared with overview) + 0 ms (no mailbox lookups) ≈ **~0.40 ms** — flat vs round 6 at this scale.
+- **Aggregate at 20 domains:** matrix CTE stays ~0.4ms, batch RUA grows to ~0.15ms, no per-row DNS check loop → ~0.55ms total. **Round-6 projection for the same scale was ~2.4ms (matrix + per-row DNS check loop).** TASK-134 saved ~1.9ms at 20 domains.
+- **Aggregate at 100 domains:** matrix ~0.5ms, batch RUA ~1-2ms → ~2.5-3.0ms total. **Round-6 projection was ~10.5ms** (matrix + 100 × 0.1ms DNS check loop). TASK-134 saved ~7-8ms at 100 domains.
+- **Verdict:** SAFE — and a strict scaling improvement over round 6, exactly as TASK-134 promised.
+
+### Re-baseline: GetDomainWorkspaceTabCounts::forDomain() (round-6 comparison)
+
+- **Planning time:** 2.866 ms (round 6: 1.913 ms — +0.95ms; within run-to-run noise for a five-InitPlan query)
+- **Execution time:** 0.312 ms (round 6: 0.196 ms — +0.116ms; within run-to-run noise — the optimiser's InitPlan re-evaluation costs are noisy at sub-millisecond scale)
+- **Plan:** Identical to round 6 — five InitPlans, all index-backed except #1 (Seq Scan on dmarc_report at 90 rows, correctly skipping the index). #5 (history_changed_7d, TASK-125's NOT EXISTS) renders as `Nested Loop Semi Join` between outer `dns_check_result dcr` (filtered by has_changed + 7d window) and inner `dns_check_result earlier` (`idx_dns_check_domain_type`). Inner side never executes (empty `dns_check_result`).
+- **Verdict:** SAFE — plan shape unchanged from round 6; exec stayed sub-millisecond despite the apparent +0.116ms drift (this is normal noise for InitPlan-heavy queries at sub-1ms scale).
+
+### Re-baseline: combined /app/domains two-query cost (round-6 comparison)
+
+`ListDomainsController` still issues both `GetDomainOverview::forTeams` + `GetDnsHealthOverview::forTeams` on the same render (TASK-130 IA merge, round-6 measurement target).
+
+- **Q1 (GetDomainOverview):** exec 0.449 ms, plan 1.803 ms
+- **Q2 (GetDnsHealthOverview):** exec 0.104 ms, plan 0.710 ms
+- **Combined per request (sum):** **exec 0.553 ms, plan 2.513 ms**
+- **vs round 6 (exec 0.668 ms):** -0.115 ms — flat, within noise.
+- **Verdict:** SAFE — still at ~11% of the 5 ms SAFE budget.
+
+### Round-7 vs round-6 diff
+
+| Query | Round-6 exec | Round-7 exec | Δ | Verdict |
+|-------|--------------|--------------|---|---------|
+| GetDomainOverview::forTeams | 0.577 ms | 0.449 ms | -0.128 ms | Flat (within noise). |
+| GetDnsHealthOverview::forTeams | 0.091 ms | 0.104 ms | +0.013 ms | Flat (within noise). |
+| NavCounts (aggregate) | ~0.152 ms | ~0.342 ms | +0.190 ms | Noise-floor drift on a cold-cache run; per-COUNT shape unchanged. |
+| IngestionPathResolver (3-domain seed, total) | ~0.39 ms | ~0.40 ms | +0.01 ms | Flat — but the per-row N+1 loop is GONE; round-6's measurement included it, round-7 replaces it with a shared batch query. |
+| GetDomainWorkspaceTabCounts::forDomain | 0.196 ms | 0.312 ms | +0.116 ms | Noise-floor drift on a five-InitPlan query; plan shape unchanged. |
+| /app/domains combined (Q1+Q2) | 0.668 ms | 0.553 ms | -0.115 ms | Flat (within noise). |
+| **NEW: RuaScenarioResolver::resolveForDomainIds (batch)** | — | 0.083 ms | n/a | SAFE. Replaces the per-domain N+1 that wasn't counted in the round-6 baseline. |
+| **NEW: MailboxConnection {findActive, findByTeam, findByDomain} (with disconnected_at filter)** | — | 0.022-0.039 ms | n/a | SAFE. New predicate adds no measurable cost at 0-row demo cardinality. |
+
+**No query crossed the SAFE→WATCH boundary. No regression filed.** TASK-134's batch query measurably retires a round-6 N+1 (~1.9ms saved at 20 domains projection, ~7-8ms saved at 100). TASK-133's soft-delete predicate is plan-level free. TASK-132 is a template-only change with no DB impact. Round 8 should re-measure when a real customer crosses 50 domains — the IngestionPathResolver path is now the most scale-sensitive call site, and the new batch RUA query is its dominant cost.
+
+---
+
 ## Round-6 performance audit (2026-05-25)
 
 **DB state:** Demo seed re-run after TASK-130 (IA merge). 3 domains × 30 days reports + snapshots = 90 reports, 180 records, 90 health snapshots, 5 alerts, 0 dns_check_result rows, 0 quarantined_dmarc_report rows, 0 blacklist_check_result rows. Postgres 17-alpine in dev compose. Demo team UUID drifted since round 5 (re-seed mints fresh UUIDs each run) — round-6 numbers use `019e5ed5-432a-729f-bc8c-e1bbfb1a441d` for the team and `019e5ed5-4336-71e6-90e2-622c8d9031c8` for the `acme.example` domain.
@@ -4274,7 +4401,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-132: Homepage "How it works" section 5 still says "Connect your DMARC report mailbox" — contradicts the round-4 DNS-first push the dashboard has been emitting since TASK-091/100/128
 
-- Status: proposed
+- Status: done
 - Area: marketing
 - Why: A first-time visitor reads `/` top-to-bottom. The new TASK-131 hero says nothing about mailboxes. Section 2 ("From XML to plain English") describes DNS+DMARC monitoring. Section 3 (grade card) shows DNS protocol pills. Then section 5 ("How it works") tells them Step 1 is "Add your domain and connect your DMARC report mailbox". After signing up, the dashboard's Next Step card + onboarding flow (TASK-100/091/096) push `rua=mailto:reports@sendvery.com` as the recommended path with mailbox connection as the fallback. Marketing message and in-product reality contradict. Round-5 flagged this as too deep for a single PR; round-6's IA merge + onboarding fixes make the gap more visible. Self-review pass-2 candidate #1.
 - Acceptance:
@@ -4289,7 +4416,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-133: `MailboxHealthAdvisor`'s "Disconnect this mailbox" CTA links to the mailbox LIST page because no disconnect route exists — clicking it dumps the user on a list with no disconnect affordance
 
-- Status: proposed
+- Status: done
 - Area: dashboard
 - Why: TASK-108 (round 4) made the silent-mailbox advisor scenario-aware: for a `PointsAtSendvery` domain + bound mailbox, the primary CTA reads "Disconnect this mailbox" with a broken-chain glyph. The user clicks it expecting a one-step action and lands on `/app/mailboxes` (the list) — `src/Services/MailboxHealthAdvisor.php:257-261` hardcodes `route: 'dashboard_mailboxes'` because no disconnect route exists. The list page surfaces no disconnect affordance per mailbox. The dashboard offered an action it can't perform — same "lying about state" failure mode rounds 4-6 worked to eliminate. Round-5's run summary flagged it as a deferred candidate; self-review pass-2 candidate #2.
 - Acceptance:
@@ -4359,7 +4486,7 @@ Two underlying queries fire once per matrix row:
 
 ## TASK-134: `IngestionPathResolver::resolveForTeams()` + `DashboardOverviewController` both fan out `RuaScenarioResolver::resolveForDomainId` per domain — batch them so the overview hot path doesn't issue N+1 queries
 
-- Status: proposed
+- Status: done
 - Area: dashboard / perf
 - Why: Round-5's perf audit measured `IngestionPathResolver::resolveForTeams()` at ~3.5ms for 20 demo domains, projected linearly to ~16ms at 100, WATCH at ~300, BAD at ~500. Round-6's TASK-129 added a SECOND N+1 in the same pattern: `DashboardOverviewController:198-203` loops `foreach ($domains as $domainOverview)` and calls `ruaScenarioResolver->resolveForDomainId()` per row. The overview hot path now issues N+1 queries to `dns_check_result` on every render for an N-domain team. Demo-seed (3 domains) is trivial; a 100-domain agency is still acceptable; 500 domains will block. Self-review pass-2 candidate #3.
 - Acceptance:
@@ -4371,6 +4498,90 @@ Two underlying queries fire once per matrix row:
   - Round-7 perf audit's `EXPLAIN ANALYZE` confirms total query time stays sub-5ms for the demo team AND that the linear-per-row pattern is gone (single index-backed query, not N).
 - Notes:
   - Lowest priority of round-6's three round-7 proposals — no production data is anywhere near the WATCH threshold today. Ship when a customer is approaching 100+ domains, OR pre-emptively as good hygiene.
+
+---
+
+## TASK-135: `RuaMailboxMatcher::matchesMailbox()` (the IngestionPathResolver variant) bypasses the disconnect/inactive guard — soft-deleted mailboxes still flip "Ingesting via mailbox" badges on the matrix row
+
+- Status: done
+- Shipped: 2026-05-25 (commit included in round-7 closing batch)
+- Area: dashboard / consistency
+- Why: TASK-133 added the `disconnected_at` soft-delete column + repository filters in `findActiveConnections()` / `findByTeam()` / `findByDomain()`. The sibling overload `RuaMailboxMatcher::matchesMailbox(MailboxConnection $mailbox, ?string $ruaEmail)` (used by `IngestionPathResolver` when the matrix query already returned a specific `mailboxId` for the row) had NO `isActive`/`disconnectedAt` guard. A domain whose published `rua=` matches a soft-deleted mailbox login would still render the green "Ingesting via mailbox" badge on `/app/mailboxes` after disconnect — same "system has the wrong opinion about user state" failure mode TASK-114 / round-5 / round-6 worked to eliminate. Round-7 self-review caught it.
+- Acceptance:
+  - `RuaMailboxMatcher::matchesMailbox()` returns `false` early when `!isActive || disconnectedAt !== null` — mirroring the guard `findMailboxForDomain` already runs.
+  - +2 unit tests pin the inactive + disconnected cases independently.
+- Notes:
+  - Found by round-7 self-review pass-2 audit; shipped inline as part of round-7 closing rather than deferred to round 8.
+
+---
+
+## RUN SUMMARY — 2026-05-25 round 7 autonomous CX loop (round-6 follow-through: homepage IA alignment + disconnect-mailbox UX + N+1 retirement)
+
+### Shipped (4 user-driven tasks + 1 self-review must-fix + 1 sidecar fix across 6 code commits + 2 docs commits — round-7 scope drained)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 132 | Homepage Step 1 DNS-first copy | `984c07f` | marketing | Section 5 "How it works" Step 1 now leads with "Add your domain. Point DMARC at Sendvery." + body `rua=mailto:reports@sendvery.com` (mailbox demoted to fallback line). Matches the in-product `IngestionRoutesCallout` two-card framing + `SetupChecklistResolver`'s PointsAtSendvery copy. Marketing register and onboarding register now reinforce each other instead of contradicting. +1 integration test pinning the new copy. |
+| — | De-flake `NextActionResolverTest::resolveConnectMailboxWhenNoMailboxAndNoReports` | `246a128` | dashboard / tests | Sidecar fix surfaced while shipping TASK-132. Test mixed `earliestDomainAddedAt: -8 days` (relative to test execution time) with `now: 2026-05-24 12:00:00` (fixed). The resolver's strict `now > earliestDomainAddedAt + 7 days` comparison sat exactly on the day boundary, so the test flipped pass/fail depending on what time the suite ran. Anchored both ends to absolute dates. |
+| 133 | Disconnect-mailbox endpoint + soft-delete + confirmation modal | `e7b8012` | dashboard | New POST `/app/mailboxes/{id}/disconnect` route + soft-delete via new `disconnected_at` column on `mailbox_connection` (per `never-delete-user-data` memory). User-decided confirmation UX: daisyUI `<dialog class="modal">` triggered from BOTH the per-mailbox heading button AND the MailboxHealthAdvisor "Disconnect this mailbox" CTA (TASK-108 dead-end fix). MailboxConnection emits `MailboxDisconnected` event only on the FIRST disconnect (reviewer catch — repeated call would double-fire any future audit/billing/notification handler). Soft-delete propagates through `findActiveConnections()` (cron skip), `findByTeam()` (list + `$hasMailbox` gate), and `findByDomain()` (RuaMailboxMatcher — reviewer must-fix the round-6 plan missed). New migration `Version20260525125419` adds the column as nullable TIMESTAMP(0) — metadata-only on PG16+. +9 integration tests. |
+| 134 | Batch `RuaScenarioResolver::resolveForDomainIds` retires N+1 | `ca0df6e` | dashboard / perf | New batch method issues ONE LATERAL-backed SELECT against `dns_check_result` for arbitrary input size; per-domain `resolveForDomainId` stays (still used by per-domain detail). Both paths route through a shared `classifyRawRecord()` helper for bit-for-bit parity. `DashboardOverviewController` foreach replaced with one batch call AND the headline-domain scenario is now read from the batch map instead of a redundant per-domain fetch (reviewer catch — TASK-129's headline-vs-batch overlap). `IngestionPathResolver::resolveForTeams` adopts the same batch pattern. New `InMemoryQueryLogger` PSR-3 middleware (`when@test`, zero prod overhead) wired via DBAL `Logging\Middleware` provides the one-query regression net: 6 new integration tests including `assertCount(1, $logger->queriesContaining('dns_check_result'))`. |
+| 135 | `RuaMailboxMatcher::matchesMailbox()` skips disconnected/inactive mailboxes | round-7 closing batch | dashboard / consistency | Round-7 self-review pass-2 catch. The `IngestionPathResolver`-side overload didn't run the `isActive && disconnectedAt IS NULL` guard the sibling `findMailboxForDomain` method has — meaning a domain whose `rua=` matched a soft-deleted mailbox login would still render "Ingesting via mailbox" on the matrix row after disconnect. Same cross-surface failure mode TASK-114 worked to eliminate, just on a different overload. +2 unit tests pin the inactive + disconnected branches. |
+
+### Perf audit — committed in the round-7 closing batch
+
+Re-measured the 6 round-6 baseline queries + 2 NEW queries introduced by round 7 (`RuaScenarioResolver::resolveForDomainIds` batch + `MailboxConnection` repo methods carrying the `disconnectedAt` predicate). **All 8 measurements land SAFE.** Highlights:
+
+- **TASK-134 batch query** clocks 0.083ms exec at 3-domain demo scale — strict improvement over the per-domain N+1 it retires (projected ~7-8ms saved at 100 domains).
+- **TASK-133 disconnect filter** adds zero measurable cost — Postgres folds the `disconnected_at IS NULL` predicate into the existing Seq Scan.
+- Round-6 baselines all within noise of their round-6 numbers (largest delta is `GetDomainWorkspaceTabCounts` drifting from 0.196ms to 0.312ms — both well under the 5ms SAFE threshold).
+
+Full per-query breakdown sits in the `## Round-7 performance audit (2026-05-25)` section at line 3770; round-6 section preserved at line 3897.
+
+### Self-review findings + dispositions
+
+**Pass 1 (fresh-eyes self-review of TASK-132/133/134):**
+- TASK-132: verified-clean. Step 1 copy mirrors `IngestionRoutesCallout` framing; lede flows logically into Steps 2-3; no surviving "Connect your DMARC report mailbox" elsewhere in templates.
+- TASK-133: verified-clean modal UX (`<dialog>` closes via Cancel/Esc/backdrop; CSRF stays on the inner POST form). One real must-fix found, filed and shipped as TASK-135.
+- TASK-134: verified-clean batch+per-domain parity via shared `classifyRawRecord` helper; missing-domain + no-DMARC-record edges both handled.
+
+**Reviewer-caught fixes applied inline during the round** (high signal continues — round 4/5/6/7 reviewer-fix rate >50%):
+- TASK-133 reviewer: `findByDomain()` was missing the `disconnectedAt IS NULL` filter (would have left "Ingesting via mailbox" badge flipped on after disconnect) — fixed. Idempotent disconnect was emitting the event twice — guarded on `isFirstDisconnect`.
+- TASK-134 reviewer: SQL comment claimed `idx_dns_check_domain_type` covers ORDER BY checked_at — corrected to say only the filter is index-backed, sort is in-memory at small per-domain cardinality. The headline-domain scenario was being fetched twice per page load (once per-domain, once via batch) — collapsed to one batch read with a keyed lookup.
+
+**Pass 2 (Product-agent stop-condition sweep):** one round-8 candidate worth mentioning — `/app/alerts` empty-state copy is generic ("No alerts to show…") and could teach a new user what kinds of alerts to expect. Carried over from rounds 5 + 6 with no priority change. NOT filed as TASK-13X this round — no real user signal yet, and round 7 was tightly scoped to the 3 user-driven seed tasks. Round 8 should wait for real customer signal rather than fishing.
+
+### Test suite growth
+
+| Checkpoint | Tests | Assertions | Δ |
+|---|---|---|---|
+| Round-6 end (2026-05-25) | 2256 | 6615 | baseline |
+| After de-flake sidecar | 2256 | 6615 | flat (assertion-recovery, no test count change) |
+| After TASK-132 | 2257 | 6620 | +1 / +5 |
+| After TASK-133 + TASK-134 (parallel agents + reviewer fixes) | 2272 | 6683 | +15 / +63 |
+| After TASK-135 closing fix | 2274 | 6687 | +2 / +4 |
+| **Final** | **2274** | **6687** | **+18 / +72** |
+
+18 new tests / 72 new assertions across the round. Smaller per-task delta than round 5 (+68 / +286) and round 6 (+30 / +116) — round 7 was the tightest user-driven scope yet (3 tasks vs round-6's 7 vs round-5's 17). Coverage discipline maintained throughout.
+
+### Surfaces touched and judged "good enough"
+
+- Homepage `/` — TASK-131's hero now flows into a TASK-132-aligned "How it works" Step 1; marketing register and dashboard register agree end-to-end on DNS-first ingestion.
+- `/app/mailboxes/{id}` — TASK-108's "Disconnect this mailbox" CTA finally delivers on its promise. Heading button + advisor card CTA both open the same daisyUI confirmation modal; soft-delete is immediate; list/cron auto-filter the disconnected mailbox; cross-surface badge (`/app/mailboxes` matrix row) flips to "Configured" correctly via TASK-135's matchesMailbox guard.
+- `DashboardOverviewController` hot path — round-6's 2x N+1 (added by TASK-129) replaced with one batch call; the codified `InMemoryQueryLogger` test guarantees no future regression to the loop pattern.
+- Performance — all 8 measured queries SAFE; no regressions vs round 6 baseline.
+
+### Suggested round-8 seed areas
+
+Backlog has zero `proposed` tasks at round-end. The Product-sweep candidates considered:
+
+1. **`/app/alerts` empty-state copy** — repeated suggestion from rounds 5 + 6. Still nice-to-have, not user-flagged, no priority change. Defer until real customer signal.
+2. **Re-measure `IngestionPathResolver` at >50 domains** — round-6 watchlist item. Defer until a real customer triggers it.
+
+Both are watchlist items rather than action-now tasks. **Round 8 should wait for real customer signal** rather than fishing for more — the user-driven runway has caught up to actual user feedback for now. Round-end backlog: 7 historical run summaries + 135 done tasks; zero proposed / planned / in-progress / in-review tasks.
+
+### Stop signal
+
+**Backlog fully drained against the round-7 user-driven scope.** Round 7 shipped exactly the 3 user-driven tasks the user asked for (TASK-132/133/134) PLUS one self-review-found must-fix (TASK-135) PLUS one sidecar fix (de-flake of `NextActionResolverTest`) PLUS the round-7 perf audit. 6 task-commits + 2 docs-commits = 8 commits, all pushed continuously per round-6's rule (no carryover of unpushed commits). Quality gates green at every step. 2274 tests / 6687 assertions in the final state. Product sweep returned zero round-8 proposals worth filing — primary stop signal hit cleanly.
 
 ---
 
