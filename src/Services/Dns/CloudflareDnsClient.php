@@ -135,7 +135,7 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
 
         foreach ($response['result'] as $record) {
             if (is_array($record) && isset($record['id'], $record['name'], $record['content'])) {
-                /** @var array{id: string, name: string, content: string, comment?: string, created_on?: string} $record */
+                /* @var array{id: string, name: string, content: string, comment?: string, created_on?: string} $record */
                 return CloudflareDnsRecord::fromApiResponse($record);
             }
         }
@@ -168,7 +168,7 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
 
             foreach ($response['result'] as $record) {
                 if (is_array($record) && isset($record['id'], $record['name'], $record['content'])) {
-                    /** @var array{id: string, name: string, content: string, comment?: string, created_on?: string} $record */
+                    /* @var array{id: string, name: string, content: string, comment?: string, created_on?: string} $record */
                     $records[] = CloudflareDnsRecord::fromApiResponse($record);
                 }
             }

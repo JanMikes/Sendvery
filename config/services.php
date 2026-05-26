@@ -302,6 +302,9 @@ return App::config([
             'App\MessageHandler\AddDomainHandler' => [
                 'public' => true,
             ],
+            'App\MessageHandler\PublishAuthorizationRecordWhenDomainAdded' => [
+                'public' => true,
+            ],
             'App\Repository\MagicLinkTokenRepository' => [
                 'public' => true,
             ],
