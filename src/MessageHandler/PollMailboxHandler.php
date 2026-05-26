@@ -11,7 +11,6 @@ use App\Repository\MailboxConnectionRepository;
 use App\Services\Dmarc\ReportAttachmentExtractor;
 use App\Services\IdentityProvider;
 use App\Services\Mail\MailClient;
-use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
@@ -21,7 +20,6 @@ use Symfony\Component\Messenger\MessageBusInterface;
 final readonly class PollMailboxHandler
 {
     public function __construct(
-        private EntityManagerInterface $entityManager,
         private MailboxConnectionRepository $connectionRepository,
         private MailClient $mailClient,
         private ReportAttachmentExtractor $extractor,
@@ -106,7 +104,5 @@ final readonly class PollMailboxHandler
             reportsFound: $reportsFound,
             errors: $errors,
         ));
-
-        $this->entityManager->flush();
     }
 }

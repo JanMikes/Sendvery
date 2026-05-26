@@ -43,6 +43,7 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         $this->em->clear();
 
         ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+        $this->em->flush();
 
         $this->em->clear();
         $reloaded = $this->em->find(ReceivedReportEmail::class, $envelope->id);
@@ -64,6 +65,7 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         $this->em->clear();
 
         ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+        $this->em->flush();
 
         $this->em->clear();
         $reloaded = $this->em->find(ReceivedReportEmail::class, $envelope->id);
@@ -83,6 +85,7 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         $this->em->clear();
 
         ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+        $this->em->flush();
 
         $this->em->clear();
         $quarantine = $this->em->getRepository(QuarantinedDmarcReport::class)
@@ -108,6 +111,7 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         $this->em->clear();
 
         ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+        $this->em->flush();
 
         $this->em->clear();
         $reloaded = $this->em->find(ReceivedReportEmail::class, $envelope->id);
@@ -127,6 +131,7 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         $this->em->clear();
 
         ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+        $this->em->flush();
 
         $this->em->clear();
         $reloaded = $this->em->find(ReceivedReportEmail::class, $envelope->id);
@@ -142,8 +147,10 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         $this->em->clear();
 
         ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+        $this->em->flush();
         $this->em->clear();
         ($this->handler)(new ProcessReceivedReportEmail(envelopeId: $envelope->id));
+        $this->em->flush();
 
         $this->em->clear();
         $reloaded = $this->em->find(ReceivedReportEmail::class, $envelope->id);

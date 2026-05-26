@@ -96,6 +96,8 @@ readonly final class AddDomain
 
 `#[AsMessageHandler]` attribute. `readonly final class` with single `__invoke()`. One handler per command.
 
+**Never call `$entityManager->flush()` in handlers.** Both `command_bus` and `event_bus` have `doctrine_transaction` middleware configured (`config/packages/messenger.php`) — it wraps every handler in a transaction, calls `flush()` on success, and rolls back on failure. Manual flush calls are redundant and break atomicity.
+
 ```php
 #[AsMessageHandler]
 readonly final class AddDomainHandler

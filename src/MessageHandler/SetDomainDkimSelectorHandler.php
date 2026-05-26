@@ -8,7 +8,6 @@ use App\Exceptions\InvalidDkimSelectorException;
 use App\Message\CheckDomainDns;
 use App\Message\SetDomainDkimSelector;
 use App\Repository\MonitoredDomainRepository;
-use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -25,7 +24,6 @@ final readonly class SetDomainDkimSelectorHandler
 
     public function __construct(
         private MonitoredDomainRepository $monitoredDomainRepository,
-        private EntityManagerInterface $entityManager,
         private CheckDomainDnsHandler $checkDomainDnsHandler,
     ) {
     }
@@ -55,13 +53,8 @@ final readonly class SetDomainDkimSelectorHandler
         }
 
         $domain->dkimSelector = $normalised;
-        $this->entityManager->flush();
 
-        // Run the same handler the daily cron uses so the dns_check_result row
-        // is written and the verification status reflects the new selector
-        // immediately — visitors don't have to wait for the nightly sweep.
         ($this->checkDomainDnsHandler)(new CheckDomainDns(domainId: $domain->id));
-        $this->entityManager->flush();
     }
 
     private static function normalise(?string $raw): ?string

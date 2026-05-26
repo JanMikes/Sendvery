@@ -47,7 +47,6 @@ final readonly class InviteBetaUserHandler
         );
 
         $this->entityManager->persist($invitation);
-        $this->entityManager->flush();
 
         $acceptUrl = $this->urlGenerator->generate(
             'auth_accept_invitation',

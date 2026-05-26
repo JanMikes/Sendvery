@@ -17,6 +17,9 @@ return App::config([
                     'default_middleware' => [
                         'allow_no_handlers' => true,
                     ],
+                    'middleware' => [
+                        'doctrine_transaction',
+                    ],
                 ],
             ],
             'default_bus' => 'command_bus',

@@ -63,13 +63,7 @@ final readonly class ReprocessQuarantinedReportHandler
         // hydrate the envelope from scratch.
         $this->entityManager->detach($quarantined->receivedEmail);
 
-        // Drop the quarantine row first and flush so the row is gone before
-        // the worker re-parses the envelope (otherwise a successful re-parse
-        // would race with the cleanup). The downstream
-        // ProcessReceivedReportEmail handler may produce a fresh quarantine
-        // row of its own if the underlying condition still applies.
         $this->entityManager->remove($quarantined);
-        $this->entityManager->flush();
 
         $this->commandBus->dispatch(new ProcessReceivedReportEmail(
             envelopeId: Uuid::fromString($envelopeIdString),

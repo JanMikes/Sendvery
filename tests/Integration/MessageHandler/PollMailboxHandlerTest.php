@@ -66,6 +66,7 @@ final class PollMailboxHandlerTest extends IntegrationTestCase
 
         $handler = $this->getService(PollMailboxHandler::class);
         $handler(new PollMailbox(connectionId: $connection->id));
+        $this->em->flush();
 
         self::assertSame(['<poll-test@example.com>'], $this->fakeClient->getProcessedMessageIds());
 
@@ -88,6 +89,7 @@ final class PollMailboxHandlerTest extends IntegrationTestCase
 
         $handler = $this->getService(PollMailboxHandler::class);
         $handler(new PollMailbox(connectionId: $connection->id));
+        $this->em->flush();
 
         $this->em->clear();
         $refreshed = $this->em->find(MailboxConnection::class, $connection->id);

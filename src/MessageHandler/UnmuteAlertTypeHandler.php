@@ -23,9 +23,5 @@ final readonly class UnmuteAlertTypeHandler
         $muted = $this->mutedAlertRepository->get($message->mutedAlertId);
 
         $this->entityManager->remove($muted);
-
-        // No EntityWithEvents on MutedAlert, so postFlush won't fire — flush
-        // here so the delete actually hits the DB.
-        $this->entityManager->flush();
     }
 }

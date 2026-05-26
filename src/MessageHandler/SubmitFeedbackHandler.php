@@ -42,7 +42,6 @@ final readonly class SubmitFeedbackHandler
         );
 
         $this->entityManager->persist($feedback);
-        $this->entityManager->flush();
 
         // Notify admin about new feedback
         $adminEmail = (new Email())

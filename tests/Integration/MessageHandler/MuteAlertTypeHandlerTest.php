@@ -35,9 +35,8 @@ final class MuteAlertTypeHandlerTest extends IntegrationTestCase
             domainId: $domain->id,
             alertType: AlertType::FailureSpike,
         ));
+        $em->flush();
 
-        // No explicit flush in test — the handler must flush itself because
-        // MutedAlert has no EntityWithEvents → postFlush won't fire.
         $em->clear();
         $reloaded = $em->find(MutedAlert::class, $mutedAlertId);
         self::assertNotNull($reloaded);
@@ -58,14 +57,15 @@ final class MuteAlertTypeHandlerTest extends IntegrationTestCase
             domainId: $domain->id,
             alertType: AlertType::FailureSpike,
         ));
+        $em->flush();
 
-        // Second mute for the same (team, domain, type) — must be a no-op.
         $handler(new MuteAlertType(
             mutedAlertId: Uuid::uuid7(),
             teamId: $team->id,
             domainId: $domain->id,
             alertType: AlertType::FailureSpike,
         ));
+        $em->flush();
 
         $em->clear();
         $count = $em->getRepository(MutedAlert::class)->count([
@@ -92,10 +92,12 @@ final class MuteAlertTypeHandlerTest extends IntegrationTestCase
             domainId: $domain->id,
             alertType: AlertType::FailureSpike,
         ));
+        $em->flush();
 
         self::assertTrue($repo->isMuted($team->id->toString(), $domain->id->toString(), AlertType::FailureSpike));
 
         $unmuteHandler(new UnmuteAlertType(mutedAlertId: $mutedAlertId));
+        $em->flush();
 
         $em->clear();
         self::assertNull($em->find(MutedAlert::class, $mutedAlertId));

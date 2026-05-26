@@ -6,26 +6,20 @@ namespace App\Controller\Dashboard;
 
 use App\Exceptions\InvalidDkimSelectorException;
 use App\Message\SetDomainDkimSelector;
-use App\MessageHandler\SetDomainDkimSelectorHandler;
 use App\Services\DashboardContext;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\Exception\HandlerFailedException;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 
-/**
- * TASK-146 — Save (or clear) the per-domain DKIM selector preference.
- *
- * Empty input reverts to the brute-force fallback over
- * DkimSelectorRegistry::PROVIDER_SELECTORS. Any non-empty value must match
- * a DNS label (RFC 1035) — validation enforced by the handler.
- */
 final class SetDomainDkimSelectorController extends AbstractController
 {
     public function __construct(
         private readonly DashboardContext $dashboardContext,
-        private readonly SetDomainDkimSelectorHandler $handler,
+        private readonly MessageBusInterface $commandBus,
     ) {
     }
 
@@ -44,17 +38,24 @@ final class SetDomainDkimSelectorController extends AbstractController
         $selectorString = is_string($selector) ? $selector : null;
 
         try {
-            ($this->handler)(new SetDomainDkimSelector(
+            $this->commandBus->dispatch(new SetDomainDkimSelector(
                 domainId: Uuid::fromString($id),
                 teamId: $this->dashboardContext->getTeamId()->toString(),
                 selector: $selectorString,
             ));
-        } catch (InvalidDkimSelectorException $e) {
-            $this->addFlash('error', $e->getMessage());
+        } catch (HandlerFailedException $e) {
+            foreach ($e->getWrappedExceptions() as $wrapped) {
+                if ($wrapped instanceof InvalidDkimSelectorException) {
+                    $this->addFlash('error', $wrapped->getMessage());
 
-            return $this->redirectToRoute('dashboard_domain_detail', ['id' => $id]);
-        } catch (\RuntimeException) {
-            throw $this->createNotFoundException('Domain not found.');
+                    return $this->redirectToRoute('dashboard_domain_detail', ['id' => $id]);
+                }
+                if ($wrapped instanceof \RuntimeException) {
+                    throw $this->createNotFoundException('Domain not found.');
+                }
+            }
+
+            throw $e;
         }
 
         $normalised = null === $selectorString || '' === trim($selectorString) ? null : trim($selectorString);

@@ -51,7 +51,5 @@ final readonly class ReleaseQuarantinedReportsForDomainHandler
             // it short-circuits, so deleting here is safe.
             $this->entityManager->remove($quarantined);
         }
-
-        $this->entityManager->flush();
     }
 }

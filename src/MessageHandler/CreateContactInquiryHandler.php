@@ -36,7 +36,6 @@ final readonly class CreateContactInquiryHandler
         );
 
         $this->entityManager->persist($inquiry);
-        $this->entityManager->flush();
 
         // Notify the founder. Same Mailer transport as SubmitFeedbackHandler
         // (magic-link auth + weekly digest already share this transport — we

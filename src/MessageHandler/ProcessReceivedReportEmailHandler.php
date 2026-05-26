@@ -67,8 +67,6 @@ final readonly class ProcessReceivedReportEmailHandler
 
         $destination = $this->processEnvelope($envelope, $now);
 
-        $this->entityManager->flush();
-
         try {
             $this->client->moveByMessageId($envelope->messageId, CentralInboxFolder::Pending, $destination);
         } catch (\Throwable $e) {

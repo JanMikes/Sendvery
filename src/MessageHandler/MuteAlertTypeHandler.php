@@ -51,10 +51,5 @@ final readonly class MuteAlertTypeHandler
         );
 
         $this->entityManager->persist($muted);
-
-        // MutedAlert doesn't implement EntityWithEvents, so the
-        // DomainEventsSubscriber::postFlush chain won't fire — we have to
-        // flush explicitly here to actually write the row.
-        $this->entityManager->flush();
     }
 }

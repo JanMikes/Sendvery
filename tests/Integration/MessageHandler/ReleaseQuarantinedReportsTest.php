@@ -45,6 +45,7 @@ final class ReleaseQuarantinedReportsTest extends IntegrationTestCase
             domainId: $domain->id,
             domainName: 'release-test.com',
         ));
+        $this->em->flush();
 
         $this->em->clear();
 
@@ -69,6 +70,7 @@ final class ReleaseQuarantinedReportsTest extends IntegrationTestCase
             domainId: $domain->id,
             domainName: 'noop-domain.com',
         ));
+        $this->em->flush();
 
         $this->em->clear();
         $reports = $this->em->getRepository(DmarcReport::class)
@@ -89,6 +91,7 @@ final class ReleaseQuarantinedReportsTest extends IntegrationTestCase
             domainId: $domain->id,
             domainName: 'MIXED-CASE-DOMAIN.COM',
         ));
+        $this->em->flush();
 
         $this->em->clear();
         $reports = $this->em->getRepository(DmarcReport::class)

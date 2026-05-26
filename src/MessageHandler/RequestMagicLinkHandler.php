@@ -61,7 +61,6 @@ final readonly class RequestMagicLinkHandler
         );
 
         $this->entityManager->persist($magicLinkToken);
-        $this->entityManager->flush();
 
         $verifyUrl = $this->urlGenerator->generate(
             'auth_verify_magic_link',
