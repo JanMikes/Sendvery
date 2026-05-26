@@ -42,6 +42,9 @@ return App::config([
         'App\Services\Github\GithubApiClient' => [
             'alias' => 'App\Services\Github\FileGetContentsGithubApiClient',
         ],
+        'App\Services\Dns\DnsRecordPublisher' => [
+            'alias' => 'App\Services\Dns\CloudflareDnsClient',
+        ],
         'App\Services\Stripe\SubscriptionManager' => [
             'arguments' => [
                 '$defaultUri' => '%env(DEFAULT_URI)%',
@@ -398,6 +401,13 @@ return App::config([
             ],
             'App\Services\Github\GithubApiClient' => [
                 'alias' => 'App\Services\Github\FakeGithubApiClient',
+                'public' => true,
+            ],
+            'App\Services\Dns\FakeDnsRecordPublisher' => [
+                'public' => true,
+            ],
+            'App\Services\Dns\DnsRecordPublisher' => [
+                'alias' => 'App\Services\Dns\FakeDnsRecordPublisher',
                 'public' => true,
             ],
             'App\Twig\OpenSourceExtension' => [

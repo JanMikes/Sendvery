@@ -63,6 +63,9 @@ final class MonitoredDomain implements EntityWithEvents
     #[ORM\Column(length: 255, nullable: true)]
     public ?string $dkimSelector;
 
+    #[ORM\Column(length: 64, nullable: true)]
+    public ?string $cloudflareAuthRecordId = null;
+
     public function __construct(
         UuidInterface $id,
         Team $team,
