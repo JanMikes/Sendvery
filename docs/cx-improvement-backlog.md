@@ -5639,6 +5639,87 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ---
 
+## TASK-169: Cloudflare DNS client service
+
+- Status: done
+- Shipped: 2026-05-26 (commit `7452d52`, bundled with TASK-170)
+- Area: infrastructure / dns
+- Why: Foundation for automated RFC 7489 authorization record management via the Cloudflare API. Without this, authorization records must be manually published on Sendvery's DNS for each customer domain.
+
+## TASK-170: Persist Cloudflare record ID on MonitoredDomain
+
+- Status: done
+- Shipped: 2026-05-26 (commit `7452d52`, bundled with TASK-169)
+- Area: entity / infrastructure
+- Why: Stores the Cloudflare DNS record ID on the entity for direct deletion without a lookup round-trip.
+
+## TASK-171: Auto-publish authorization record on domain add
+
+- Status: done
+- Shipped: 2026-05-26 (commit `de45a25`)
+- Area: event handler / automation
+- Why: Adding a domain to Sendvery must immediately publish the RFC 7489 authorization TXT record so ISPs start delivering reports without manual DNS intervention.
+
+## TASK-172: Periodic sync + stale record cleanup cron
+
+- Status: done
+- Shipped: 2026-05-26 (commit `18846f4`)
+- Area: cron / automation
+- Why: Reconciliation safety net: creates missing records (catch-up for pre-automation domains), deletes stale records (domains no longer monitored), and fixes entity record IDs.
+
+## TASK-173: Update domain detail UI for automated authorization
+
+- Status: done
+- Shipped: 2026-05-26 (commit `4968582`)
+- Area: dashboard / ux
+- Why: SaaS users should see "published automatically" instead of manual DNS instructions now that Cloudflare automation handles it.
+
+---
+
+## RUN SUMMARY — 2026-05-26 round 12 autonomous CX loop (Cloudflare DNS automation for RFC 7489 authorization records)
+
+### Shipped (5 tasks across 5 code commits + 1 self-review fix)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 169+170 | Cloudflare DNS client + entity column | `7452d52` | infra / dns | New `CloudflareDnsClient` service implementing `DnsRecordPublisher` interface with idempotent create (81057), delete (81044), find, list, and pagination. `CloudflareDnsRecord` DTO. `FakeDnsRecordPublisher` test double. `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ZONE_ID` env vars. New nullable `cloudflare_auth_record_id` column on `monitored_domain` with migration. Interface alias + test wiring in `config/services.php`. `symfony/http-client` added as dependency. 17 unit tests. |
+| 171 | Auto-publish authorization record on domain add | `de45a25` | event / automation | `PublishAuthorizationRecordWhenDomainAdded` event handler listens to `DomainAdded`, publishes the `{domain}._report._dmarc.{reportDomain}` TXT record via `DnsRecordPublisher`, stores the Cloudflare record ID on the entity. Graceful no-op when publisher fails (sync cron retries). 3 integration tests. |
+| 172 | Periodic sync + stale record cleanup cron | `18846f4` | cron / automation | `sendvery:dns:sync-authorization-records` command reconciles Cloudflare TXT records with active monitored domains: creates missing authorization records, deletes stale records for domains no longer monitored, reconciles entity record IDs. Idempotent. Scheduled daily at 04:00 UTC. 1 integration test + 4 unit tests. |
+| 173 | Update domain detail UI for automated authorization | `4968582` | dashboard / ux | Authorization card updated for SaaS vs self-hoster mode. SaaS (Cloudflare configured): green = "published automatically", missing = "being provisioned" (info tone, no manual instructions). Self-hoster (Cloudflare not configured): keeps manual TXT record instructions. TASK-167 extend panel auth warning updated: "Authorization records are published automatically when you add a domain." in SaaS mode. |
+
+### Self-review fix
+
+| Commit | Finding | Fix |
+|---|---|---|
+| `393dcb7` | `PublishAuthorizationRecordWhenDomainAdded` never called `flush()` — the `cloudflareAuthRecordId` was set in memory but never persisted because the handler runs inside Doctrine's `postFlush` callback with no subsequent flush. `buildRecordName()` had a hardcoded `sendvery.com` fallback violating the "no hardcoded sendvery.com" rule. | Added `$this->entityManager->flush()` after setting the record ID. Replaced `?? 'sendvery.com'` with `RuntimeException` for malformed `SENDVERY_REPORT_ADDRESS`. |
+
+### Deferred to round-13 watchlist (not shipped, with reasons)
+
+- **TASK-147** (Organization JSON-LD logo field) — carried from round 9. Still no square logo asset.
+- **TASK-151** (`twitter:site` handle) — carried from round 9. Still no verified `@sendvery` Twitter/X account.
+- **Marketing-page H1 register audit** — carried from round 9. No user signal.
+- **`/app/alerts` empty-state copy** — carried since round 5 with no user signal.
+- **Imprint / legal entity on `/about/contact`** — German Impressumspflicht. Low-priority until first EU-enterprise buyer.
+
+### Suite growth (round-11 baseline → round-12 finish)
+
+| Metric | Round 11 finish | Round 12 finish | Delta |
+|---|---|---|---|
+| Tests | 2348 | 2374 | +26 |
+| Assertions | 7106 | 7140 | +34 |
+
+### Self-review findings (after 3 shipped tasks)
+
+Reviewer-agent caught one critical bug: the missing `flush()` in `PublishAuthorizationRecordWhenDomainAdded` meant the Cloudflare record ID was set in memory but never written to the database. The integration test masked this because it manually flushed after calling the handler directly. Also caught a hardcoded `sendvery.com` fallback in `buildRecordName()`. Both fixed in `393dcb7`.
+
+Design feedback noted (non-blocking): `SyncAuthorizationRecordsCommand` type-hints the concrete `CloudflareDnsClient` rather than the `DnsRecordPublisher` interface, because the sync command needs provider-specific methods (`listAuthorizationRecords`, `extractCustomerDomain`, `deleteRecordById`) that don't belong on the abstraction. Documented as intentional.
+
+### Stop signal
+
+Backlog drained against the round-12 user-driven scope: all 5 tasks (TASK-169 through TASK-173) shipped. The full TASK-168 Phase 2 (Cloudflare DNS automation) is now complete. No `proposed` or `planned` tasks remain.
+
+---
+
 ## RUN SUMMARY — 2026-05-26 round 11 autonomous CX loop (DKIM selector UX + DMARC RUA extend + RFC 7489 authorization record)
 
 ### Shipped (3 tasks across 3 code commits + 1 self-review fix)

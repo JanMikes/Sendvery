@@ -1,4 +1,4 @@
-# Autonomous CX/Product Improvement Run — Sendvery (Round 11: DKIM selector UX + DMARC RUA extend-vs-replace + RFC 7489 authorization records)
+# Autonomous CX/Product Improvement Run — Sendvery (Round 12: Cloudflare DNS automation for RFC 7489 authorization records)
 
 You are the ORCHESTRATOR. Your job is to autonomously improve Sendvery's
 marketing surfaces + dashboard by running a continuous loop of
@@ -8,453 +8,376 @@ the backlog is genuinely empty (Product agent confirms nothing more is
 worth doing) or you hit a real blocker in "Stop conditions".
 
 ================================================================
-CHECKPOINT — WHAT ROUND 10 SHIPPED (read this first)
+CHECKPOINT — WHAT ROUND 11 SHIPPED (read this first)
 ================================================================
-Round 10 closed cleanly with **7 tasks shipped** across 4 code commits
-+ 1 docs commit. Final state: **2326 tests / 7041 assertions**, all
-gates green, all commits pushed to `origin/main`.
+Round 11 closed with **3 tasks shipped** across 3 code commits
++ 1 self-review fix + 1 docs commit. Final state: **2348 tests /
+7106 assertions**, all gates green, all commits pushed to `origin/main`.
 
-Shipped in round 10 (in this order):
+Shipped in round 11:
 
-- **TASK-159 + TASK-160** (commit `f6365f0`) — `/about/contact`
-  founder-contact surface + GitHub-issues sibling card. New public
-  route with H1 outcome-framed ("Talk directly to the founder."),
-  founder-level lede, plain mailto `jan.mikes@sendvery.com`, Symfony
-  Form with CSRF + server-side validation, `contact_inquiry` DB table
-  (NO `team_id` FK — public surface, must not be team-scoped),
-  `CreateContactInquiry` CQRS command/handler that persists row AND
-  emails the founder via existing `MailerInterface`. Spam mitigation:
-  honeypot (display:none + tabindex=-1) + time-trap (≥ 2s) + per-IP
-  rate-limit (5/hour token-bucket via `RateLimiterFactory`). NO
-  3rd-party CAPTCHA. GitHub-issues sibling card routes engineering
-  questions to `github.com/janmikes/sendvery/issues/new`. Nav +
-  Footer Trust column + Sitemap wired. BreadcrumbList JSON-LD. 19 new
-  business-behaviour-named tests (18 controller + 1 handler).
-  Reviewer caught 1 nice-to-have (custom email-count helper
-  redundant) — applied inline.
+- **TASK-166** (`584e8bd`) — DKIM selector UX improvement. Redesigned
+  DKIM card: detected selector display from persisted DNS check data,
+  provider-aware suggestion chips, saved-vs-detected mismatch warning,
+  reset-to-auto-detect button. 10 new tests.
 
-- **TASK-161** (`feff7a8`) — Homepage founder bio primary CTA wires
-  to `/about/contact`. New "Talk to the founder →" button prepended
-  to FounderBio.html.twig's button row. 1 new test.
+- **TASK-167** (`16dc0f7`) — DMARC RUA "extend" path UX. Added
+  "add Sendvery alongside your existing address" option in the
+  PointsAtExternal checklist row with copy-to-clipboard record from
+  `DmarcRuaInstruction::build()`, 2-address limit warning,
+  authorization forward reference. 7 new tests.
 
-- **TASK-162** (`58a5e0a`) — Footer attribution row surfaces
-  "Talk to Jan →" on every page. 1 new test.
+- **TASK-168** (`6bab334` + `25a0f63` self-review fix) — RFC 7489
+  `_report._dmarc` authorization record **detection + guidance**
+  (Phase 1 only). New `DmarcReportAuthorizationChecker` service
+  queries for the TXT record, integrated into `DnsMonitor`,
+  persisted in DMARC details JSON. Standalone card on domain detail:
+  green when published, yellow warning with exact TXT record when
+  missing. Uses dynamic `ReportAddressProvider` domain.
+  5 new tests.
 
-- **TASK-163 + TASK-164 + TASK-165** (`75c62c7`) — Product-sweep
-  trust-polish bundle. TASK-163: response-time SLA ("Jan replies
-  within 24 hours on EU business days.") now visible pre-submit on
-  contact page. TASK-164: privacy policy enumerates `contact_inquiry`
-  data collection (name, email, subject, message, submitter IP,
-  user-agent) with 24-month retention entry. TASK-165: GitHub URL
-  casing aligned to lowercase across all surfaces (the capital-S
-  premise was wrong — verified no 301 redirect happens).
+Round 11 final stats: **2326 → 2348 tests (+22), 7041 → 7106
+assertions (+65)** vs round-10 baseline.
 
-- **Docs** (`764358f`) — Round-10 RUN SUMMARY + perf audit + flip
-  TASK-159/160/161/162/163/164/165 statuses to done.
-
-Round 10 final stats: **2303 → 2326 tests (+23), 6913 → 7041
-assertions (+128)** vs round-9 baseline. Perf delta vs round 9 ≈ 0
-(no dashboard hot-path changes; new `/about/contact` POST cost is
-1 INSERT + 1 SMTP RTT, capped at 5/hour per IP).
-
-**Deferred to round-11 watchlist** (carried from rounds 9-10):
-
-- **TASK-147** — Organization JSON-LD `logo`. No square logo asset.
-- **TASK-151** — `twitter:site` handle. No verified account.
-- **Marketing-page H1 register audit** — `font-extrabold` vs
-  `font-medium` inconsistency between tool pages and homepage.
-- **`/app/alerts` empty-state copy** — no user signal since round 5.
-- **`IngestionPathResolver::resolveForTeams` re-measure** — demo-only.
-- **DKIM selector UX expansion** — round 9 v1 is free-form text.
-- **Imprint / legal entity statement on `/about/contact`** — German
-  Impressumspflicht. Low-priority until first EU-enterprise buyer.
-- **Urgent-issues framing on `/about/contact`** — only matters once
-  Sendvery has paying customers reporting incidents.
-- **Public roadmap link** — bio mentions public issue triage but no
-  roadmap surface exists.
-- **Dashboard triage queue for `contact_inquiry`** — only once volume
-  justifies it.
+**TASK-168 Phase 2 was explicitly deferred to this round.**
 
 ================================================================
 MISSION
 ================================================================
-Round 11 is **user-driven dashboard + DNS tooling improvement**:
-the user wants to improve the DKIM selector experience and add
-intelligent DMARC RUA handling so Sendvery can coexist with existing
-DMARC setups instead of demanding users replace their entire config.
+Round 12 is **Cloudflare DNS automation for RFC 7489 authorization
+records** — the direct follow-up to TASK-168 Phase 1.
 
-User's round-11 asks (two scopes):
+**The problem:** When a customer adds their domain to Sendvery and
+configures `rua=mailto:reports@sendvery.com` in their DMARC record,
+ISPs silently drop the reports UNLESS `sendvery.com` publishes a TXT
+authorization record at:
 
-**Scope A — DKIM selector UX:**
+```
+{customer-domain}._report._dmarc.sendvery.com IN TXT "v=DMARC1;"
+```
 
-> "We should improve DKIM selector - in the dashboard show what dkim
-> selector is currently active (saved to the domain) and ability to
-> change it. We already have form to change it but i do not think it
-> is user friendly now."
+Phase 1 (round 11) shipped detection + guidance — the dashboard
+tells users when the record is missing and shows the exact TXT to
+publish. But "tell Jan to manually add it" doesn't scale. This round
+automates the lifecycle via the Cloudflare API.
 
-**Scope B — DMARC RUA extend-vs-replace + RFC 7489 authorization:**
+**User's round-12 ask:**
 
-> "[...] for dmarc, i am worried we need dynamically change our DNS,
-> adding support for customer domains (+ if user already has active
-> dmarc reports email, we can offer instead of replacing it with ours,
-> simply extending)"
->
-> Plus this context the user shared:
-> "Both rua (aggregate reports) and ruf (failure reports) accept
-> multiple URIs separated by commas:
-> `v=DMARC1; p=reject; rua=mailto:dmarc@yourdomain.com,mailto:reports@external-service.com`
->
-> One gotcha worth knowing: if any of the report addresses are on a
-> different domain than the one publishing the DMARC record, that
-> external domain must publish an authorization record, or most
-> receivers will silently drop reports to it. For example, if
-> myspeedpuzzling.com wants reports sent to dmarc@some-monitoring-service.com,
-> then some-monitoring-service.com needs this TXT record:
-> `myspeedpuzzling.com._report._dmarc.some-monitoring-service.com IN TXT "v=DMARC1;"`
->
-> Monitoring services like Postmark, dmarcian, Valimail, etc. publish
-> these automatically for their customers, so you don't have to worry
-> about it when using them — only when routing to arbitrary
-> third-party mailboxes.
->
-> Also, RFC 7489 lets receivers cap the number of addresses they'll
-> send to (commonly 2 per tag), so don't go wild — typically one
-> internal mailbox plus one monitoring service is the practical pattern."
+> "Sendvery must be able to set TXT record on our side to be able to
+> accept DMARC records. This must be automated. Use Cloudflare API to
+> do it automatically — we would need periodic check as well and
+> remove stale/no longer used DNS records and immediately when the
+> domain is added to sendvery add for the domain DNS for
+> verification/authentication."
 
 ================================================================
-CODEBASE INVENTORY — WHAT ALREADY EXISTS (read before designing)
+CODEBASE INVENTORY — WHAT ALREADY EXISTS
 ================================================================
 
-### DKIM Selector (round-9 TASK-146 shipped state)
+### Phase 1 detection (shipped in round 11)
 
-**Entity:** `src/Entity/MonitoredDomain.php` — `dkimSelector` is a
-nullable VARCHAR(255). When null → brute-force via
-`DkimSelectorRegistry::PROVIDER_SELECTORS`. When set → DnsMonitor
-passes it to `DkimChecker::check()` directly.
+**Checker:** `src/Services/Dns/DmarcReportAuthorizationChecker.php`
+- `check(string $monitoredDomain, ?string $dmarcRawRecord): ?bool`
+- Queries `{domain}._report._dmarc.{reportDomain}` TXT via `Spatie\Dns\Dns`
+- Returns `true` (found), `false` (missing), `null` (not applicable)
+- Uses `ReportAddressProvider::get()` to derive the report domain
+- Has `getReportDomain(): ?string` helper to extract domain from email
 
-**Form/Controller:** `src/Controller/Dashboard/SetDomainDkimSelectorController.php`
-(POST `/app/domains/{id}/dkim-selector`). Validates CSRF + RFC 1035
-DNS-label regex. Flash messages on success/failure. Redirects to
-domain detail.
+**Integration in DnsMonitor:** `src/Services/Dns/DnsMonitor.php` line ~57
+- Runs after DMARC check, stores result in `details['report_authorization_found']`
 
-**Template:** `templates/dashboard/domain_detail.html.twig` lines
-48-86. A card with:
-- Title "DKIM selector"
-- Explanatory copy: "Sendvery normally brute-forces common selectors…"
-- Free-form `<input>` pre-filled with current value
-- Placeholder: "e.g. selector1 — leave empty to brute-force"
-- "Save & re-check DNS" button
+**UI display:** `templates/dashboard/domain_detail.html.twig` lines 48-88
+- Standalone card: green "published" / yellow "missing" with exact TXT record
+- Uses `reportAuthorizationFound` and `reportDomain` template variables
 
-**Selector registry:** `src/Services/Dns/DkimSelectorRegistry.php`
-maps provider names → known selectors (Google→`google`, Microsoft→
-`selector1`/`selector2`, Mailgun→`k1`/`mta`/`pic`/`mailgun`, etc.
-53 total selectors across ~15 providers). Also has a generic
-fallback probe list.
+**RuaScenarioResult:** `src/Results/Dns/RuaScenarioResult.php`
+- Carries `reportAuthorizationFound: ?bool` from persisted DMARC check details
 
-**DNS integration:** `src/Services/Dns/DkimChecker.php` — if selector
-is provided, checks that one directly. If null, detects provider
-from MX/CNAME records and brute-forces selectors from registry.
+### Domain lifecycle
 
-**What the user says is wrong:** the form isn't user-friendly. There's
-no display of what selector Sendvery DETECTED during the last DNS
-check (only what the user manually saved). If DkimChecker found the
-DKIM key via brute-force (e.g. it discovered `selector1`), the user
-never sees that discovery — they just see "leave empty to
-brute-force" and a blank input. The form should show: (1) what
-selector Sendvery found during the last check (the detected one),
-(2) whether that matches the saved preference, (3) provider-aware
-suggestions based on MX records (e.g. "We detected Microsoft 365
-MX records — try `selector1`").
+**Domain creation:**
+- Command: `src/Message/AddDomain.php` (domainId, teamId, domainName)
+- Handler: `src/MessageHandler/AddDomainHandler.php`
+- Entity: `src/Entity/MonitoredDomain.php` — constructor emits `DomainAdded` event
+- **`DomainAdded` event has ZERO handlers** — the trigger point is available
 
-### DMARC RUA Handling (current state)
+**Domain removal:**
+- **Does NOT exist yet.** No `RemoveDomain` command, no `DomainRemoved` event,
+  no soft-delete column on `MonitoredDomain`. The "never delete user data"
+  principle applies — domains should be deactivated, not hard-deleted.
+- Reference pattern: `MailboxConnection` uses `disconnectedAt` column + `DisconnectMailbox` command
 
-**Single shared inbox:** `src/Services/ReportAddressProvider.php`
-returns `reports@sendvery.com` (from env `SENDVERY_REPORT_ADDRESS`).
-One inbox for all customers. No per-domain ingest addresses.
+### DNS check pipeline
 
-**RUA scenario classification:** `src/Value/Dns/RuaScenario.php` —
-three enum cases: `NoRecord`, `PointsAtSendvery`, `PointsAtExternal`.
-Resolved per-domain by `src/Services/Dns/RuaScenarioResolver.php`.
+- Nightly cron: `sendvery:dns:check-all` at 03:00 UTC
+- Dispatches `CheckDomainDns` per domain → `CheckDomainDnsHandler` → `DnsMonitor::check()`
+- Each check persists 4 `DnsCheckResult` rows (SPF, DKIM, DMARC, MX)
+- DMARC result includes `details['report_authorization_found']` since TASK-168
 
-**Extend/append logic ALREADY EXISTS:**
-`src/Value/Dns/DmarcRuaInstruction.php` has a `build()` static
-factory that:
-- If no DMARC record: creates new with `rua=mailto:reports@sendvery.com`
-- If DMARC exists but Sendvery NOT in rua: **APPENDS** Sendvery's
-  address to the existing comma-separated list
-- If DMARC exists and Sendvery already in rua: returns unchanged,
-  `alreadyConfigured: true`
-Preserves canonical tag ordering (v, p, sp, rua, ruf, …).
+### External API patterns
 
-**Setup status display:** `src/Services/DomainSetupStatusResolver.php`
-lines 309-388 builds the RUA checklist row. Three scenarios:
-1. No record → "Publish a _dmarc TXT record with rua=mailto:{addr}"
-2. Points at Sendvery → "Pointing at Sendvery — reports flow in"
-3. Points at External → yellow warning: "Pointing at {ext} — connect
-   that inbox or repoint to Sendvery"
-The `PointsAtExternal` case today says OR — replace or connect. It
-does NOT currently offer the "extend" path (add Sendvery alongside
-the existing address). The `DmarcRuaInstruction.build()` logic does
-the extend correctly, but the UX doesn't surface it.
+- Only existing HTTP integration: `src/Services/Github/GithubApiClient.php`
+  (interface) + `FileGetContentsGithubApiClient.php` (stock PHP `file_get_contents`)
+- Intentionally lightweight — no Symfony HttpClient dependency yet
+- For Cloudflare API, using Symfony HttpClient is justified (it's a real
+  production integration with auth, pagination, error handling, retries)
 
-**DMARC generator tool:** `src/Controller/DmarcCheckerController.php`
-(route `/tools/dmarc-checker`) pre-fills RUA with
-`reports@sendvery.com`. Template supports comma-separated multiple
-addresses. Helper text: "Comma-separate multiple mailboxes."
+### Environment variables
 
-### RFC 7489 Authorization Records — NOT IMPLEMENTED
+```
+SENDVERY_REPORT_ADDRESS=reports@sendvery.com   # derives the report domain
+```
 
-**Zero references to `_report._dmarc`** in the entire codebase.
+No Cloudflare env vars exist yet. Need to add:
+```
+CLOUDFLARE_API_TOKEN=     # Bearer token with Zone.DNS:Edit scope for sendvery.com
+CLOUDFLARE_ZONE_ID=       # Zone ID for sendvery.com (hex string)
+```
 
-When a domain's `rua=` points to an address on a DIFFERENT domain
-(e.g. `example.com` → `rua=mailto:reports@sendvery.com`), the
-receiving domain (`sendvery.com`) must publish an authorization TXT
-record at: `example.com._report._dmarc.sendvery.com IN TXT "v=DMARC1;"`
+### ReportAddressProvider
 
-Without this, most receivers (Google, Microsoft, Yahoo) silently
-drop the DMARC aggregate reports. This is WHY the extend pattern
-matters: if a user adds `reports@sendvery.com` to their rua list,
-Sendvery MUST publish the authorization record for the user's domain,
-or the user's ISPs will never actually send reports to Sendvery.
-
-Commercial services (dmarcian, Valimail, Postmark) handle this
-automatically for their customers. Sendvery needs the same capability.
-
-**Implementation options for authorization records:**
-1. **DNS API integration** (e.g. Cloudflare, Hetzner DNS, Route 53) —
-   Sendvery controls its own DNS and can auto-publish
-   `{customer-domain}._report._dmarc.sendvery.com TXT "v=DMARC1;"`
-   when a domain is added. Requires DNS provider API credentials +
-   an async job that manages record lifecycle (create on domain-add,
-   delete on domain-remove). This is what commercial services do.
-2. **Manual operator task** — Sendvery surfaces a banner "Authorization
-   record needed: ask your DNS admin to add X" and the operator
-   (Jan) manually adds TXT records to sendvery.com DNS. Doesn't scale
-   but works for early stage.
-3. **Verification check** — Sendvery queries for the authorization
-   record during DNS checks and warns the user if it's missing
-   ("Reports may not be delivered because sendvery.com hasn't
-   published your authorization record yet — contact support"). This
-   is the bare minimum: detection + guidance, no automation.
-
-**Practical constraint the user flagged:** RFC 7489 lets receivers
-cap rua addresses (commonly 2 per tag). Sendvery should advise
-"one internal mailbox + one monitoring service" as the practical
-limit and NOT encourage >2 rua addresses.
+`src/Services/ReportAddressProvider.php` — returns the configured report email.
+Domain extraction: `substr($email, strrpos($email, '@') + 1)`.
+SaaS default: `reports@sendvery.com` → domain `sendvery.com`.
+Self-hosters override to their domain.
 
 ================================================================
-SEED FOCUS AREAS (priority order)
+CLOUDFLARE DNS API REFERENCE
 ================================================================
 
-### TASK-166 — DKIM selector UX improvement (P0, dashboard)
+### Authentication
+```
+Authorization: Bearer {CLOUDFLARE_API_TOKEN}
+```
+Token needs `Zone.DNS:Edit` permission scoped to the `sendvery.com` zone.
 
-**What the user asked for:** show what DKIM selector is currently
-active (saved + detected) and make the change flow more user-friendly.
+### Create TXT record
+```
+POST https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records
+Content-Type: application/json
 
-**Current state assessment:**
-- The form works (TASK-146 shipped it), but it's expert-facing:
-  a blank text input with "leave empty to brute-force" placeholder.
-- The `DkimChecker` DISCOVERS which selector worked during the last
-  DNS check, but that information is not persisted or surfaced.
-  The check result lives in `dns_check_result` (via
-  `DnsCheckResultPersister`) but the user never sees "we found your
-  DKIM key at selector `google`."
-- The `DkimSelectorRegistry` knows which providers use which
-  selectors, and MX records reveal the provider — so Sendvery could
-  suggest "We detect Microsoft 365 MX records → try `selector1`."
+{
+  "type": "TXT",
+  "name": "{customer-domain}._report._dmarc.sendvery.com",
+  "content": "v=DMARC1;",
+  "ttl": 1,
+  "comment": "DMARC report authorization for {customer-domain}"
+}
+```
+Response: `result.id` is the record ID (needed for deletion).
 
-**Scope (architect-first because of data-flow + UX changes):**
+### Check if record exists
+```
+GET /zones/{zone_id}/dns_records?type=TXT&name={customer-domain}._report._dmarc.sendvery.com
+```
 
-1. **Surface the detected selector on the domain detail page.**
-   After a DNS check, the `DkimCheckResult` knows which selector
-   succeeded (if any). Thread that information through to the
-   domain detail template. Show it as a read-only "Detected
-   selector" label above the form input: e.g. "Last check found
-   DKIM at selector `google` (2048-bit RSA)." When the brute-force
-   found nothing: "No DKIM key detected on any common selector."
+### List all authorization records (for audit/cleanup)
+```
+GET /zones/{zone_id}/dns_records?type=TXT&name=endswith:._report._dmarc.sendvery.com&per_page=100
+```
+Paginate via `page` param when `total_pages > 1`.
 
-2. **Provider-aware selector suggestions.** MX records are already
-   checked in `DnsMonitor`. Use the provider detection that
-   `DkimChecker` already does to suggest likely selectors:
-   "We detected Google Workspace MX records — common selectors:
-   `google`." The user can click a suggestion to pre-fill the input
-   instead of typing blind.
+### Delete record
+```
+DELETE /zones/{zone_id}/dns_records/{dns_record_id}
+```
 
-3. **Show current saved vs detected state clearly.** Three-state
-   display:
-   - Saved preference: `selector1` (or "Auto-detect / brute-force")
-   - Last detection: "Found at `selector1`" / "Not found"
-   - Status badge: "Match" (saved = detected), "Mismatch" (saved
-     points to X but detection found Y — likely a config error),
-     "Not checked yet"
+### Rate limits
+1,200 requests per 5-minute window. Our usage is <10 records/day — never an issue.
 
-4. **Make the form less expert-facing.** Instead of a raw text input:
-   - Show detected/suggested selectors as clickable chips/buttons
-   - Keep the free-form override for custom selectors not in the
-     registry
-   - "Reset to auto-detect" button (clears the saved preference)
+### Error codes
+- `81057` — record already exists (idempotent create: treat as success)
+- `9109` — invalid/expired token
+- `9103` — insufficient permissions
+- `81044` — record not found on delete (idempotent: treat as success)
 
-**Acceptance:**
-- Domain detail page shows the LAST-DETECTED selector from
-  the most recent DNS check (read from persisted check data).
-- Provider-aware suggestions visible based on MX record analysis.
-- The saved preference vs detected state is clear at a glance.
-- Selector suggestions are clickable (pre-fill the input).
-- "Reset to auto-detect" button clears the preference.
-- The existing CSRF + RFC 1035 validation + idempotency guard
-  continue to work.
-- Tests: business-behaviour names, 100% coverage on new code.
+================================================================
+SEED TASKS (priority order)
+================================================================
 
-### TASK-167 — DMARC RUA "extend" path UX (P0, dashboard)
-
-**What the user asked for:** when a user already has active DMARC
-reports going somewhere, offer to EXTEND (add Sendvery alongside)
-rather than only REPLACE.
-
-**Current state assessment:**
-- The extend logic is already implemented in
-  `DmarcRuaInstruction.php` — it appends `mailto:reports@sendvery.com`
-  to existing rua addresses when building the recommended record.
-- But the dashboard's `DomainSetupStatus` component only shows two
-  options for `PointsAtExternal`: "connect that inbox" or "repoint
-  to Sendvery." It doesn't surface the "add Sendvery alongside
-  your existing address" path.
-- The DMARC generator tool (`/tools/dmarc-checker`) does support
-  comma-separated rua addresses, but it's a public tool page, not
-  the dashboard setup flow.
+### TASK-169 — Cloudflare DNS client service (P0, infrastructure)
 
 **Scope:**
 
-1. **Update the `PointsAtExternal` setup status row** to surface
-   the extend option prominently. When the user's DMARC record has
-   `rua=mailto:existing@example.com`, the checklist should say:
-   "Your DMARC reports go to `existing@example.com`. To also
-   receive them in Sendvery, update your rua tag to:
-   `rua=mailto:existing@example.com,mailto:reports@sendvery.com`"
-   with a copy-to-clipboard button for the full updated record.
+1. **Add env vars** to `.env` and `.env.test`:
+   ```
+   CLOUDFLARE_API_TOKEN=
+   CLOUDFLARE_ZONE_ID=
+   ```
+   In `.env.test`, set empty values (the client will be stubbed in tests).
 
-2. **Use `DmarcRuaInstruction::build()` to generate the exact
-   record the user should publish.** This logic already handles
-   appending, deduplication, and canonical tag ordering. Surface
-   the `.instruction` string in the setup status component as the
-   copy target.
+2. **Create `CloudflareDnsClient` service** (`src/Services/Dns/CloudflareDnsClient.php`):
+   - `readonly final class` with Symfony `HttpClientInterface` injected
+   - Constructor takes `#[Autowire(env: 'CLOUDFLARE_API_TOKEN')]` and
+     `#[Autowire(env: 'CLOUDFLARE_ZONE_ID')]`
+   - Methods:
+     - `createTxtRecord(string $name, string $content, string $comment = ''): ?string`
+       Returns the Cloudflare record ID on success, null on failure.
+       Handles `81057` (already exists) as idempotent success — fetch the existing
+       record ID and return it.
+     - `deleteTxtRecord(string $recordId): bool`
+       Handles `81044` (not found) as idempotent success.
+     - `findTxtRecord(string $name): ?CloudflareDnsRecord`
+       Searches by exact name + type=TXT, returns the first match or null.
+     - `listAuthorizationRecords(): array<CloudflareDnsRecord>`
+       Lists all `*._report._dmarc.{zoneDomain}` TXT records (paginated).
+   - Returns DTO `CloudflareDnsRecord(id, name, content, comment, createdOn)`
+   - Graceful error handling: log failures via `Psr\Log\LoggerInterface`,
+     never throw on API errors (callers handle null/false returns)
 
-3. **Warn about the RFC 7489 authorization record requirement.**
-   When the extend path is shown, add a note:
-   "For Sendvery to receive reports, an authorization record is
-   needed on sendvery.com's DNS. This is handled automatically
-   for SaaS customers. Self-hosters: see [docs link]."
-   (The actual automation is TASK-168; the UX warning ships first.)
+3. **Create interface** `DnsRecordPublisher` for future provider abstraction:
+   ```php
+   interface DnsRecordPublisher
+   {
+       public function publishAuthorizationRecord(string $customerDomain): ?string;
+       public function removeAuthorizationRecord(string $customerDomain): bool;
+       public function authorizationRecordExists(string $customerDomain): bool;
+   }
+   ```
+   `CloudflareDnsClient` implements this via composition with the Cloudflare
+   API — the interface method builds the full record name from the customer
+   domain + report address domain.
 
-4. **Warn about the 2-address practical limit.** If the existing
-   rua already has 2+ addresses, show a gentle warning:
-   "RFC 7489 lets receivers cap report delivery to 2 addresses.
-   Adding a third may cause some ISPs to silently drop reports.
-   Consider replacing one of your existing addresses with
-   Sendvery's instead."
+4. **Tests:** Unit tests for the client with mocked HTTP responses. Test the
+   idempotent create (81057), idempotent delete (81044), pagination, and
+   error logging.
 
 **Acceptance:**
-- The `PointsAtExternal` checklist row shows the extend option
-  with a copy-to-clipboard full DMARC record.
-- The generated record comes from `DmarcRuaInstruction::build()`.
-- Authorization-record warning is visible.
-- >2 address warning is visible when applicable.
-- "Already configured" case (Sendvery already in rua) correctly
-  shows green/configured state with no action needed.
-- Tests: business-behaviour names, 100% coverage on new code.
+- `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ZONE_ID` env vars registered
+- `CloudflareDnsClient` handles all 4 Cloudflare API operations
+- `DnsRecordPublisher` interface abstracts the provider-specific details
+- Idempotent: creating an existing record or deleting a missing one succeeds
+- Tests mock the HTTP layer, no real API calls in tests
 
-### TASK-168 — RFC 7489 `_report._dmarc` authorization record awareness (P1, dashboard + DNS)
+### TASK-170 — Persist Cloudflare record ID on MonitoredDomain (P0, entity)
 
-**What the user identified:** Sendvery can't receive DMARC reports
-unless `sendvery.com` publishes authorization TXT records for each
-customer domain. Without this, ISPs silently drop reports.
+**Scope:**
 
-**Scope (architect-first — involves DNS queries + potentially DNS
-automation):**
+1. **Add `cloudflareAuthRecordId` column** to `MonitoredDomain`:
+   - `#[ORM\Column(length: 64, nullable: true)]`
+   - `public ?string $cloudflareAuthRecordId = null;`
+   - Stores the Cloudflare DNS record ID returned from create
+   - Enables direct deletion without a lookup round-trip
 
-Phase 1 (ship in round 11 — detection + guidance):
+2. **Doctrine migration** for the new column.
 
-1. **Check for the authorization record during DNS checks.** In
-   `DnsMonitor::check()` (or a new `DmarcAuthorizationChecker`),
-   after detecting that the user's DMARC rua includes
-   `reports@sendvery.com`, query for the TXT record at:
-   `{customer-domain}._report._dmarc.sendvery.com`
-   If it exists and contains `v=DMARC1` → authorization is in place.
-   If missing → flag a warning.
+3. **Update `DomainDetailResult`** to thread the column through if needed
+   for the UI (or keep it internal-only — the UI already has
+   `reportAuthorizationFound` from the DNS check).
 
-2. **Surface the authorization status in the domain detail page.**
-   New row in DomainSetupStatus (or a sibling component): "Report
-   authorization: ✓ Configured" or "⚠ Missing — ISPs may not
-   deliver reports to Sendvery."
+**Acceptance:**
+- New nullable column on `monitored_domain`
+- Migration runs cleanly
+- Tests pass
 
-3. **When missing, show the exact TXT record needed.** The user
-   can forward this to their ops team or Jan can add it manually
-   to sendvery.com DNS:
-   `{domain}._report._dmarc.sendvery.com IN TXT "v=DMARC1;"`
+### TASK-171 — Auto-publish authorization record on domain add (P0, event handler)
 
-4. **Self-hoster guidance.** Self-hosters need the same record on
-   their own domain's DNS. The instructions should use the dynamic
-   `ReportAddressProvider::get()` domain, not hardcoded
-   `sendvery.com`.
+**Scope:**
 
-Phase 2 (deferred to future round — DNS automation):
+1. **Create `PublishAuthorizationRecordWhenDomainAdded`** event handler:
+   - `#[AsMessageHandler]` listening to `DomainAdded`
+   - Loads the `MonitoredDomain` entity
+   - Calls `DnsRecordPublisher::publishAuthorizationRecord($domain->domain)`
+   - Stores the returned Cloudflare record ID on `$domain->cloudflareAuthRecordId`
+   - If the record already exists (idempotent), fetches and stores the ID
+   - Log success/failure
 
-5. **Auto-publish authorization records via DNS provider API.**
-   When a domain is added and rua points to Sendvery, automatically
-   create the `_report._dmarc` TXT record on sendvery.com's DNS.
-   When a domain is removed, clean it up. This requires DNS
-   provider API credentials (Cloudflare, Hetzner DNS, etc.) and a
-   lifecycle management system. OUT OF SCOPE for round 11 — just
-   file as a follow-up.
+2. **This runs asynchronously** via Symfony Messenger (the `DomainAdded`
+   event is dispatched through the event subscriber → Messenger).
 
-**Acceptance (Phase 1 only):**
-- DNS checks query for the `_report._dmarc` authorization record.
-- Domain detail page shows authorization status.
-- Missing-authorization warning shows the exact TXT record needed.
-- Works for both SaaS (sendvery.com) and self-hosters.
-- Tests: business-behaviour names, 100% coverage on new code.
+3. **Graceful degradation:** If `CLOUDFLARE_API_TOKEN` is empty (self-hoster
+   without Cloudflare), the handler is a no-op. Check for empty token
+   before calling the API.
 
-### Watchlist items (no action expected unless signal emerges)
+**Acceptance:**
+- Adding a domain to Sendvery automatically publishes
+  `{domain}._report._dmarc.{reportDomain} TXT "v=DMARC1;"`
+- The Cloudflare record ID is saved on the entity
+- Empty `CLOUDFLARE_API_TOKEN` → no-op (self-hoster safe)
+- Tests with mocked DNS publisher
 
-Carried from round 10:
-- TASK-147 + TASK-151 — logo + Twitter handle
-- Marketing-page H1 register audit
-- `/app/alerts` empty-state copy
-- `IngestionPathResolver::resolveForTeams` re-measure
-- Imprint/legal entity on `/about/contact`
-- Urgent-issues framing on `/about/contact`
-- Public roadmap link
-- Dashboard `contact_inquiry` triage queue
+### TASK-172 — Periodic sync + stale record cleanup cron (P1, cron)
+
+**Scope:**
+
+1. **New command:** `sendvery:dns:sync-authorization-records`
+   - Lists ALL `_report._dmarc` TXT records from Cloudflare
+   - Cross-references with active `monitored_domain` rows
+   - For each active domain WITHOUT a Cloudflare record: creates one
+     (catches domains added before TASK-171 went live, or where the
+     DomainAdded handler failed)
+   - For each Cloudflare record WITHOUT a matching active domain:
+     deletes it (cleanup for removed/deactivated domains)
+   - Updates `cloudflareAuthRecordId` on the entity for any records
+     that were created or reconciled
+   - Logs the reconciliation summary
+
+2. **Cron schedule:** Daily at 04:00 UTC (after `dns:check-all` at 03:00):
+   ```
+   0 4 * * * — sendvery:dns:sync-authorization-records
+   ```
+   Document in CLAUDE.md cron section.
+
+3. **Idempotent by design:** Running the command twice in a row produces
+   no duplicate records (Cloudflare returns 81057 for duplicates,
+   treated as success).
+
+4. **Rate limit safe:** Even with 1000 domains, the command makes at most
+   ~1010 API calls (1 list + N creates/deletes), well within the
+   1,200/5min Cloudflare limit.
+
+**Acceptance:**
+- Command reconciles Cloudflare records with active domains
+- Creates missing authorization records
+- Removes stale records for domains no longer monitored
+- Idempotent
+- Tests with mocked DNS publisher
+
+### TASK-173 — Update domain detail UI for automated authorization (P1, dashboard)
+
+**Scope:**
+
+1. **Update the authorization card** on the domain detail page:
+   - When `CLOUDFLARE_API_TOKEN` is configured (SaaS mode):
+     - Green: "Authorization record published automatically"
+     - Yellow (missing but will be auto-published): "Authorization
+       record is being provisioned — this usually takes under a minute"
+     - If `cloudflareAuthRecordId` is set on the entity → green
+   - When `CLOUDFLARE_API_TOKEN` is empty (self-hoster mode):
+     - Keep current behavior: show the manual TXT record to publish
+
+2. **Update the TASK-167 extend panel's auth warning** to reflect
+   automation: "Authorization records are published automatically
+   when you add a domain."
+
+**Acceptance:**
+- SaaS users see "published automatically" (no manual DNS action)
+- Self-hosters see the manual instructions
+- Tests verify both modes
 
 ================================================================
-WHAT IS ALREADY DONE — DO NOT RE-PROPOSE
+SHIPPING ORDER
 ================================================================
-Skim `docs/cx-improvement-backlog.md` first. **TASK-001 through
-TASK-165 are shipped or deferred** (TASK-143 blocked/superseded;
-TASK-147 + TASK-151 deferred; everything else done). Don't re-propose
-anything in the ten historical RUN SUMMARY tables.
 
-Round 10 specifically shipped:
-- TASK-159 + 160 — `/about/contact` founder contact + GitHub card
-- TASK-161 — homepage bio CTA to `/about/contact`
-- TASK-162 — footer "Talk to Jan →" on every page
-- TASK-163 — pre-submit response-time SLA on contact page
-- TASK-164 — privacy policy enumerates contact-form data
-- TASK-165 — GitHub URL casing aligned to lowercase site-wide
+1. **TASK-169** first — the Cloudflare client + interface. Foundation.
+2. **TASK-170** second — the entity column. Simple migration.
+3. **TASK-171** third — the event handler that auto-publishes on domain add.
+4. **TASK-172** fourth — the periodic sync/cleanup cron.
+5. **TASK-173** fifth — the UI updates for automated mode.
 
-Build on top — don't duplicate.
+TASK-169 and TASK-170 can be shipped as a bundle (same commit) since
+the migration + client are tightly coupled.
 
 ================================================================
 ORCHESTRATOR LOOP
 ================================================================
-Same loop as rounds 3-10. Repeat until "Stop conditions" are met:
+Same loop as rounds 3-11. Repeat until "Stop conditions" are met:
 
-1. PLAN PHASE — file seed tasks from §SEED FOCUS AREAS.
+1. PLAN PHASE — file seed tasks from §SEED TASKS.
 2. PICK PHASE — pick highest-value proposed/planned task.
-3. DESIGN PHASE — Architect agent for non-trivial tasks
-   (TASK-166 + TASK-168 both need architect passes; TASK-167 is
-   implementable from the spec — the extend logic already exists in
-   `DmarcRuaInstruction.php`).
+3. DESIGN PHASE — Architect agent for TASK-169 (Cloudflare client is
+   the non-trivial design decision). TASK-170-173 are implementable
+   from the spec.
 4. BUILD PHASE — Developer agent.
 5. REVIEW PHASE — Reviewer agent.
 6. FIX-IF-NEEDED PHASE.
@@ -462,70 +385,52 @@ Same loop as rounds 3-10. Repeat until "Stop conditions" are met:
 8. SELF-REVIEW PHASE (every 3 shipped tasks).
 9. Go to step 1.
 
-**Shipping order:** TASK-166 (DKIM selector UX) first because it's
-self-contained and unblocks the user's dashboard frustration. Then
-TASK-167 (RUA extend UX) because it surfaces existing logic. Then
-TASK-168 (authorization record awareness) because it depends on
-understanding how RUA extension works.
-
-**Commit grain:** 1 commit per task (or per coherent bundle if
-tightly coupled). Push after every commit.
+**Commit grain:** 1 commit per task (or per coherent bundle).
+Push after every commit.
 
 ================================================================
 AGENT CONTRACTS
 ================================================================
 
-### Product agent (subagent_type: general-purpose)
-Same as rounds 3-10. Runs the final stop-condition sweep. Knows
-TASK-001 through TASK-165 are done. Proposals start at the highest
-existing TASK-NNN + 1.
-
 ### Architect agent (subagent_type: feature-dev:code-architect)
-Brief for TASK-166: "Design the DKIM selector UX improvement.
-Key files to read: `src/Services/Dns/DkimChecker.php` (how detection
-works), `src/Services/Dns/DkimSelectorRegistry.php` (provider map),
-`src/Results/DomainDetailResult.php` (what's threaded to the template),
-`templates/dashboard/domain_detail.html.twig` lines 48-86 (current
-form). Design: (1) how to persist/thread the detected selector to the
-UI, (2) provider suggestion chips from MX analysis, (3) saved vs
-detected three-state display, (4) template layout with daisyUI v5."
-
-Brief for TASK-168: "Design the RFC 7489 `_report._dmarc`
-authorization record checker. Key files:
-`src/Services/Dns/DnsMonitor.php`, `src/Services/Dns/DmarcChecker.php`,
-`src/Services/DomainSetupStatusResolver.php` (the 5-row checklist).
-Design: (1) new DNS query for `{domain}._report._dmarc.{sendvery-host}`
-TXT, (2) where to persist the check result, (3) how to surface status
-in the domain setup checklist, (4) copy for the missing-record
-guidance."
+Brief for TASK-169: "Design the Cloudflare DNS client for managing
+RFC 7489 authorization TXT records. Key files to read:
+`src/Services/Dns/DmarcReportAuthorizationChecker.php` (Phase 1
+detection), `src/Services/ReportAddressProvider.php` (report domain),
+`src/Services/Github/FileGetContentsGithubApiClient.php` (existing
+external API pattern — note: for Cloudflare, using Symfony HttpClient
+is justified). Design: (1) the `DnsRecordPublisher` interface, (2)
+the `CloudflareDnsClient` implementation, (3) the `CloudflareDnsRecord`
+DTO, (4) error handling strategy (log + return null/false), (5)
+idempotent create/delete, (6) env var wiring."
 
 ### Developer agent (subagent_type: general-purpose)
-Same conventions as rounds 3-10. Tests describe business behaviour.
-Hero/page copy leads with user value. `ClockInterface` only.
-`IdentityProvider` for all IDs. No `dark:`. No YAML configs.
+Same conventions as rounds 3-11. Tests describe business behaviour.
+`ClockInterface` only. `IdentityProvider` for all IDs. No `dark:`.
+No YAML configs.
 
 ### Reviewer agent (subagent_type: feature-dev:code-reviewer)
-Round-11-specific checks:
-- TASK-166: verify the detected-selector display reads from persisted
-  DNS check data (not a live DNS query on every page load — that
-  would be slow and rate-limit-prone). Verify the form still works
-  when no DNS check has been run yet (new domain, no detected data).
-- TASK-167: verify the extend-path copy uses `DmarcRuaInstruction::build()`
-  output (not manually building the record string). Verify the
-  2-address warning triggers at the right threshold.
-- TASK-168: verify the authorization-record check uses the dynamic
-  `ReportAddressProvider` domain (not hardcoded `sendvery.com`).
-  Verify the check doesn't fire when rua doesn't include Sendvery.
+Round-12-specific checks:
+- TASK-169: verify the client handles all Cloudflare error codes
+  (81057 duplicate, 81044 not found, 9109 bad token, 429 rate limit).
+  Verify the interface abstracts provider details.
+- TASK-170: verify the migration is idempotent (nullable column).
+- TASK-171: verify the handler is a no-op when CLOUDFLARE_API_TOKEN
+  is empty. Verify it handles API failures gracefully (doesn't crash
+  the domain-add flow).
+- TASK-172: verify the sync command handles pagination. Verify it
+  doesn't delete records for domains that are still active.
+- TASK-173: verify the UI shows the right mode (SaaS vs self-hoster)
+  based on the env var, not hardcoded.
 
 ================================================================
 QUALITY GATES (run before every commit)
 ================================================================
 All must pass — no skipping, no --no-verify:
-- docker compose exec app vendor/bin/phpunit (2326 tests at round-11 start)
+- docker compose exec app vendor/bin/phpunit (2348 tests at round-12 start)
 - docker compose exec app vendor/bin/phpstan
 - docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes
-- For UI tasks: read the page, confirm desktop AND 360px mobile render
-- 100% coverage on new code (per CLAUDE.md)
+- 100% coverage on new code
 - `ClockInterface::now()` used everywhere
 - Test naming: business behaviour, no taskNNN* prefixes
 - After each commit: `git push origin main`
@@ -535,35 +440,35 @@ AUTONOMY (do these without asking)
 ================================================================
 - Read/write any file in the repo.
 - Run docker compose / composer / phpunit / phpstan / cs-fixer.
-- Run `bin/console sendvery:*` commands including `sendvery:demo:seed`.
-- Generate + apply Doctrine migrations if needed.
-- Wire new DNS checks into the existing `DnsMonitor` pipeline.
+- Run `bin/console sendvery:*` commands.
+- Generate + apply Doctrine migrations.
+- Add new Symfony services and wire via autowiring.
 - Create commits on main AND push to origin.
 - Update docs/cx-improvement-backlog.md freely.
 - Apply small reviewer-flagged fixes directly.
+- Install `symfony/http-client` via composer if not already present.
 
 ================================================================
 DO NOT (ask first if tempted)
 ================================================================
 - Force-push, rewrite history, reset --hard, delete branches.
-- Open PRs (commit + push; user reviews locally).
+- Open PRs.
 - Touch Stripe live config, production env, or `~/www/spare.srv/deployment/`.
-- Introduce dark mode / sendvery-dark theme.
-- Re-introduce removed features (TASK-136/139/140/141/158 removals).
+- Introduce dark mode.
 - Bypass `ClockInterface` with `new \DateTimeImmutable()`.
 - Reintroduce TASK-XXX test-name prefixes.
-- Use 3rd-party CAPTCHA on any form.
-- **Auto-publish DNS records to sendvery.com** — Phase 2 of TASK-168
-  (DNS automation) is OUT OF SCOPE for round 11. Round 11 ships
-  detection + guidance only.
-- **Hardcode `sendvery.com`** in the authorization-record logic —
-  self-hosters override the report address domain via
-  `SENDVERY_REPORT_ADDRESS` env. Use `ReportAddressProvider`.
+- **Make real Cloudflare API calls in tests** — always mock the HTTP layer.
+- **Store Cloudflare API credentials in committed files** — env vars only.
+- **Hardcode `sendvery.com`** in the authorization logic — use
+  `ReportAddressProvider` to derive the domain dynamically.
+- **Delete monitored_domain rows** — the "never delete user data" principle
+  applies. If a domain removal flow is needed, use soft-delete pattern
+  (add `deactivatedAt` column, not `DELETE FROM`).
 
 ================================================================
 STOP CONDITIONS
 ================================================================
-Same as rounds 3-10:
+Same as rounds 3-11:
 - Backlog drained + Product sweep returns no new proposals.
 - A task blocked 3 times.
 - Quality gates fail unfixably.
@@ -573,35 +478,30 @@ Same as rounds 3-10:
 When you stop, append a RUN SUMMARY to `docs/cx-improvement-backlog.md`.
 
 ================================================================
-KICKOFF
+ENV VARS THE USER WILL PROVIDE
 ================================================================
-1. Read `docs/cx-improvement-backlog.md` for the latest state.
-2. File TASK-166 through TASK-168 during PLAN PHASE.
-3. **Ship TASK-166 FIRST** (DKIM selector UX — architect-first).
-4. **Ship TASK-167 SECOND** (RUA extend UX — straight to Build).
-5. **Ship TASK-168 THIRD** (authorization record — architect-first).
-6. Run self-review after every 3 ships.
-7. Final Product-agent sweep as stop-condition check.
-8. Write the RUN SUMMARY.
+The user said they will provide the production values themselves.
+Your job is to:
+1. Add `CLOUDFLARE_API_TOKEN=` and `CLOUDFLARE_ZONE_ID=` to `.env`
+   (with helpful comments explaining what they are)
+2. Add empty values in `.env.test`
+3. Wire them into the service via Symfony `#[Autowire(env: '...')]`
+4. Make the service gracefully no-op when either is empty
+
+The user will set the real values in `.env.local` or production env.
 
 ================================================================
-LESSONS FROM ROUNDS 4-10 — APPLY HERE
+LESSONS FROM ROUNDS 4-11 — APPLY HERE
 ================================================================
 - **Editor-revert race** (round 4): prefer `Write` over `Edit`.
 - **Parallel agents**: 3 concurrent is the sweet spot.
 - **Self-review every 3 ships** — even clean passes are signal.
-- **Don't over-architect small tasks** (TASK-167 is implementable
-  from the spec — skip Architect, go straight to Build).
+- **Don't over-architect small tasks.**
 - **Commit per task or per coherent bundle.**
 - **Reviewer agents net real findings >50% of the time.**
 - **Push continuously, not in a batch.**
 - **Tests describe business behaviour, not ticket numbers.**
-- **Marketing copy ≠ tech stack** — dashboard copy should describe
-  what's happening in user terms ("We found your DKIM key at
-  selector `google`") not implementation terms ("DkimChecker
-  brute-force resolved selector1 via MX→provider mapping").
-- **Hero leads with user value** — dashboard section headers
-  should describe the benefit, not the technical mechanism.
-- **Trust + transparency conventions** — the DKIM selector display
-  and RUA extend path are about building confidence: "we see your
-  setup, we understand your existing config, we'll coexist."
+- **Docker DB flakiness** (round 11): if `getent hosts database` fails
+  from the app container, do `docker compose down && docker compose up -d`
+  and wait for all containers to be healthy. Check for port conflicts
+  with other compose projects (especially port 5432).
