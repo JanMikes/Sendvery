@@ -220,7 +220,7 @@ final class DomainSetupStatusResolverRuaTest extends TestCase
         self::assertFalse($status->ruaRoutedToConnectedMailbox);
         $rua = $this->ruaRow($status->protocols);
         self::assertSame(ProtocolState::Invalid, $rua->state);
-        self::assertStringContainsString('Pointing at reports@acme.com', $rua->statusLine);
+        self::assertStringContainsString('reports@acme.com', $rua->statusLine);
     }
 
     private function resolver(bool $matcherReturns = false): DomainSetupStatusResolver

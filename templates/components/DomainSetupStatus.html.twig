@@ -3,7 +3,7 @@
    all-Unknown info card with a Re-check now form button. All copy and state
    are pre-computed on DomainSetupStatus; this template is a props-only
    renderer with zero conditional logic beyond branch selection. #}
-{% props status, domainId %}
+{% props status, domainId, ruaExtendInstruction = null, ruaAddressCount = 0 %}
 
 {# TASK-097: `banner_only` (the all-green state) suppresses the panel — the
    one-line "Monitoring active" banner above is enough; the all-green
@@ -141,10 +141,34 @@
                             </div>
                             {% if protocol.nextStep is not null %}
                                 <p class="text-sm text-base-content/60 mt-1">{{ protocol.nextStep }}</p>
-                                <a href="{{ path('dashboard_domain_health', {id: domainId}) }}#{{ protocol.healthAnchor }}"
-                                   class="link link-primary text-sm mt-1 inline-block">
-                                    Fix this →
-                                </a>
+                                {% if isRuaRow and ruaExtendInstruction is not null and not ruaExtendInstruction.alreadyConfigured %}
+                                    <div class="mt-3 rounded-lg border border-info/30 bg-info/5 p-3" data-testid="rua-extend-option">
+                                        <p class="text-sm font-medium text-base-content mb-2">Add Sendvery alongside your existing address</p>
+                                        <p class="text-xs text-base-content/60 mb-2">Update your <code>_dmarc</code> TXT record to:</p>
+                                        <div class="flex items-start gap-2">
+                                            <code class="text-xs font-mono bg-base-200 px-2 py-1.5 rounded break-all flex-1" data-testid="rua-extend-record">{{ ruaExtendInstruction.finalRecord }}</code>
+                                            <button
+                                                type="button"
+                                                class="btn btn-xs btn-outline shrink-0"
+                                                data-testid="rua-extend-copy"
+                                                onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim()); this.textContent = 'Copied!'; setTimeout(() => this.textContent = 'Copy', 2000);"
+                                            >Copy</button>
+                                        </div>
+                                        {% if ruaAddressCount >= 2 %}
+                                            <p class="text-xs text-warning mt-2" data-testid="rua-address-limit-warning">
+                                                Your rua tag already has {{ ruaAddressCount }} addresses. RFC 7489 lets receivers cap delivery to 2 addresses — adding another may cause some ISPs to silently drop reports. Consider replacing one of your existing addresses with Sendvery's instead.
+                                            </p>
+                                        {% endif %}
+                                        <p class="text-xs text-base-content/50 mt-2" data-testid="rua-authorization-warning">
+                                            For Sendvery to receive reports, an authorization record is needed on Sendvery's DNS. This is handled automatically for SaaS customers. Self-hosters: publish a TXT record at <code class="font-mono text-xs">yourdomain._report._dmarc.your-sendvery-host</code>.
+                                        </p>
+                                    </div>
+                                {% else %}
+                                    <a href="{{ path('dashboard_domain_health', {id: domainId}) }}#{{ protocol.healthAnchor }}"
+                                       class="link link-primary text-sm mt-1 inline-block">
+                                        Fix this →
+                                    </a>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </li>

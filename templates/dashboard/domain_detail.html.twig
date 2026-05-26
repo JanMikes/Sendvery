@@ -43,7 +43,7 @@
        banner. Renders one of three states: all-green confirmation, partial
        checklist with Fix-this deep-links, or "no DNS check yet" with a
        re-check button. #}
-    <twig:DomainSetupStatus :status="domainSetupStatus" :domainId="domain.domainId" />
+    <twig:DomainSetupStatus :status="domainSetupStatus" :domainId="domain.domainId" :ruaExtendInstruction="ruaExtendInstruction" :ruaAddressCount="ruaAddressCount" />
 
     <div class="card bg-base-100 border border-base-200 shadow-sm mb-6" data-testid="domain-dkim-selector-card">
         <div class="card-body p-5">

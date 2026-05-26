@@ -18,7 +18,10 @@ use App\Services\DmarcPolicyAdvisor;
 use App\Services\Dns\DkimSelectorRegistry;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\DomainSetupStatusResolver;
+use App\Services\ReportAddressProvider;
 use App\Value\DmarcPolicy;
+use App\Value\Dns\DmarcRuaInstruction;
+use App\Value\Dns\RuaScenario;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -41,6 +44,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
         private readonly GetLatestDkimDetection $getLatestDkimDetection,
         private readonly DkimSelectorRegistry $dkimSelectorRegistry,
+        private readonly ReportAddressProvider $reportAddressProvider,
     ) {
     }
 
@@ -155,6 +159,11 @@ final class ShowDomainDetailController extends AbstractController
 
         $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($id)->toTwigArray();
 
+        $ruaExtendInstruction = null;
+        if (RuaScenario::PointsAtExternal === $ruaScenario->scenario && null !== $ruaScenario->rawDmarcRecord) {
+            $ruaExtendInstruction = DmarcRuaInstruction::build($ruaScenario->rawDmarcRecord, $this->reportAddressProvider->get());
+        }
+
         $dkimDetection = $this->getLatestDkimDetection->forDomain($id, $teamIds);
         $dkimSuggestedSelectors = [];
         if (null !== $dkimDetection && [] !== $dkimDetection->detectedProviders) {
@@ -176,6 +185,8 @@ final class ShowDomainDetailController extends AbstractController
             'tabCounts' => $tabCounts,
             'dkimDetection' => $dkimDetection,
             'dkimSuggestedSelectors' => $dkimSuggestedSelectors,
+            'ruaExtendInstruction' => $ruaExtendInstruction,
+            'ruaAddressCount' => $ruaScenario->ruaAddressCount,
         ]);
     }
 }

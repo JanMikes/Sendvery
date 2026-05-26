@@ -374,13 +374,13 @@ final readonly class DomainSetupStatusResolver
                     name: 'RUA destination',
                     state: ProtocolState::Invalid,
                     statusLine: sprintf(
-                        'Pointing at %s — connect that inbox or repoint to Sendvery',
+                        'Reports going to %s — Sendvery isn\'t receiving them yet',
                         $ruaScenario->ruaEmail ?? '',
                     ),
                     nextStep: sprintf(
-                        'Decide: poll the inbox at %s, or replace the rua= target with `mailto:%s`',
-                        $ruaScenario->ruaEmail ?? '',
+                        'You can add Sendvery alongside your existing address, replace it with `mailto:%s`, or connect the inbox at %s so Sendvery can poll it.',
                         $reportAddress,
+                        $ruaScenario->ruaEmail ?? '',
                     ),
                     kbSlug: null,
                     healthAnchor: 'health-dmarc',

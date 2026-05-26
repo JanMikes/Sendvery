@@ -167,14 +167,14 @@ readonly class RuaScenarioResolver
             return new RuaScenarioResult(RuaScenario::NoRecord, null);
         }
 
+        $addressCount = count($parsed->ruaAddresses);
+
         foreach ($parsed->ruaAddresses as $address) {
             if ($this->isSendveryAddress($address)) {
-                return new RuaScenarioResult(RuaScenario::PointsAtSendvery, $address);
+                return new RuaScenarioResult(RuaScenario::PointsAtSendvery, $address, $rawRecord, $addressCount);
             }
         }
 
-        // No Sendvery address found — first rua= entry is the one we name in
-        // the user-facing CTA copy ("Connect the inbox at <first>").
-        return new RuaScenarioResult(RuaScenario::PointsAtExternal, $parsed->ruaAddresses[0]);
+        return new RuaScenarioResult(RuaScenario::PointsAtExternal, $parsed->ruaAddresses[0], $rawRecord, $addressCount);
     }
 }

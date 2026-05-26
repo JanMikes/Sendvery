@@ -17,6 +17,8 @@ final readonly class RuaScenarioResult
     public function __construct(
         public RuaScenario $scenario,
         public ?string $ruaEmail,
+        public ?string $rawDmarcRecord = null,
+        public int $ruaAddressCount = 0,
     ) {
     }
 }
