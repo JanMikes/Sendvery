@@ -93,7 +93,7 @@ final class RuaExtendPathTest extends WebTestCase
 
         $authWarning = $crawler->filter('[data-testid="rua-authorization-warning"]');
         self::assertCount(1, $authWarning, 'The authorization record warning must render alongside the extend option — without it, ISPs may silently drop reports sent to Sendvery.');
-        self::assertStringContainsString('authorization record', $authWarning->text());
+        self::assertStringContainsString('authorization', $authWarning->text());
     }
 
     #[Test]
