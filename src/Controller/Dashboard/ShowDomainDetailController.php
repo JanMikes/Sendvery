@@ -187,6 +187,8 @@ final class ShowDomainDetailController extends AbstractController
             'dkimSuggestedSelectors' => $dkimSuggestedSelectors,
             'ruaExtendInstruction' => $ruaExtendInstruction,
             'ruaAddressCount' => $ruaScenario->ruaAddressCount,
+            'reportAuthorizationFound' => $ruaScenario->reportAuthorizationFound,
+            'reportDomain' => $this->reportAddressProvider->get(),
         ]);
     }
 }

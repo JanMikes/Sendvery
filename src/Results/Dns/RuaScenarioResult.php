@@ -19,6 +19,7 @@ final readonly class RuaScenarioResult
         public ?string $ruaEmail,
         public ?string $rawDmarcRecord = null,
         public int $ruaAddressCount = 0,
+        public ?bool $reportAuthorizationFound = null,
     ) {
     }
 }

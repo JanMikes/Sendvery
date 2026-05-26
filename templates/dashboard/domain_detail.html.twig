@@ -45,6 +45,48 @@
        re-check button. #}
     <twig:DomainSetupStatus :status="domainSetupStatus" :domainId="domain.domainId" :ruaExtendInstruction="ruaExtendInstruction" :ruaAddressCount="ruaAddressCount" />
 
+    {% if reportAuthorizationFound is not null %}
+        {% set reportHost = reportDomain ? reportDomain|split('@')|last : 'sendvery.com' %}
+        {% if reportAuthorizationFound %}
+            <div class="rounded-2xl border border-success/30 bg-success/5 p-5 mb-6" data-testid="report-authorization-row">
+                <div class="flex items-start gap-3">
+                    <div class="w-9 h-9 rounded-full bg-success/15 text-success flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-semibold text-base-content mb-1">Report authorization</div>
+                        <p class="text-sm text-base-content/70" data-testid="report-authorization-configured">
+                            Authorization record published — ISPs will deliver DMARC reports to Sendvery for this domain.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="rounded-2xl border border-warning/30 bg-warning/5 p-5 mb-6" data-testid="report-authorization-row">
+                <div class="flex items-start gap-3">
+                    <div class="w-9 h-9 rounded-full bg-warning/15 text-warning flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-semibold text-base-content mb-1">Report authorization missing</div>
+                        <p class="text-sm text-base-content/70 mb-2" data-testid="report-authorization-missing">
+                            Missing — ISPs may silently drop DMARC reports sent to Sendvery for this domain.
+                        </p>
+                        <p class="text-sm text-base-content/60 mb-1">
+                            Publish this TXT record on <strong>{{ reportHost }}</strong>'s DNS:
+                        </p>
+                        <code class="text-xs font-mono bg-base-200 px-2 py-1.5 rounded break-all block" data-testid="report-authorization-record">{{ domain.domainName }}._report._dmarc.{{ reportHost }} IN TXT "v=DMARC1;"</code>
+                        <p class="text-xs text-base-content/50 mt-2">SaaS customers: this is handled automatically. Self-hosters: add this record to your report address domain's DNS.</p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
+
     <div class="card bg-base-100 border border-base-200 shadow-sm mb-6" data-testid="domain-dkim-selector-card">
         <div class="card-body p-5">
             <div class="flex items-start gap-3 mb-3">

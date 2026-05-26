@@ -48,7 +48,17 @@ readonly class RuaScenarioResolver
             return new RuaScenarioResult(RuaScenario::NoRecord, null);
         }
 
-        return $this->classifyRawRecord($check->rawRecord);
+        $result = $this->classifyRawRecord($check->rawRecord);
+
+        $authFound = $check->details['report_authorization_found'] ?? null;
+
+        return new RuaScenarioResult(
+            $result->scenario,
+            $result->ruaEmail,
+            $result->rawDmarcRecord,
+            $result->ruaAddressCount,
+            is_bool($authFound) ? $authFound : null,
+        );
     }
 
     /**

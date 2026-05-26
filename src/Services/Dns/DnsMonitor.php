@@ -18,6 +18,7 @@ final readonly class DnsMonitor
         private DkimChecker $dkimChecker,
         private DmarcChecker $dmarcChecker,
         private MxChecker $mxChecker,
+        private DmarcReportAuthorizationChecker $authorizationChecker,
         private DnsCheckResultRepository $dnsCheckResultRepository,
         private IdentityProvider $identityProvider,
         private ClockInterface $clock,
@@ -53,6 +54,7 @@ final readonly class DnsMonitor
 
         $dmarcResult = $this->dmarcChecker->check($domain->domain);
         $isValidDmarc = $dmarcResult->hasRecord() && null !== $dmarcResult->policy;
+        $reportAuthorizationFound = $this->authorizationChecker->check($domain->domain, $dmarcResult->rawRecord);
         $results[] = $this->buildCheckResult($domain, DnsCheckType::Dmarc, $dmarcResult->rawRecord, $isValidDmarc, $dmarcResult->issues, [
             'policy' => $dmarcResult->policy,
             'subdomain_policy' => $dmarcResult->subdomainPolicy,
@@ -61,6 +63,7 @@ final readonly class DnsMonitor
             'adkim' => $dmarcResult->adkim,
             'aspf' => $dmarcResult->aspf,
             'pct' => $dmarcResult->pct,
+            'report_authorization_found' => $reportAuthorizationFound,
         ], $now);
 
         $mxResult = $this->mxChecker->check($domain->domain);
