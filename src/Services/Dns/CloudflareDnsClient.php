@@ -201,7 +201,11 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
     {
         $reportDomain = $this->getReportDomain();
 
-        return sprintf('%s._report._dmarc.%s', strtolower($customerDomain), $reportDomain ?? 'sendvery.com');
+        if (null === $reportDomain) {
+            throw new \RuntimeException('SENDVERY_REPORT_ADDRESS is missing or malformed — cannot build authorization record name.');
+        }
+
+        return sprintf('%s._report._dmarc.%s', strtolower($customerDomain), $reportDomain);
     }
 
     private function getReportDomain(): ?string

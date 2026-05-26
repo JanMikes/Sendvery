@@ -39,5 +39,6 @@ final readonly class PublishAuthorizationRecordWhenDomainAdded
         }
 
         $domain->cloudflareAuthRecordId = $recordId;
+        $this->entityManager->flush();
     }
 }

@@ -97,9 +97,11 @@ final class SyncAuthorizationRecordsCommand extends Command
     /** @return list<array{id: string, domain: string, cloudflare_auth_record_id: ?string}> */
     private function getActiveDomains(): array
     {
-        /* @var list<array{id: string, domain: string, cloudflare_auth_record_id: ?string}> */
-        return $this->database->executeQuery(
+        /** @var list<array{id: string, domain: string, cloudflare_auth_record_id: ?string}> $rows */
+        $rows = $this->database->executeQuery(
             'SELECT id, domain, cloudflare_auth_record_id FROM monitored_domain ORDER BY created_at',
         )->fetchAllAssociative();
+
+        return $rows;
     }
 }
