@@ -5639,6 +5639,54 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ---
 
+## RUN SUMMARY — 2026-05-26 round 11 autonomous CX loop (DKIM selector UX + DMARC RUA extend + RFC 7489 authorization record)
+
+### Shipped (3 tasks across 3 code commits + 1 self-review fix)
+
+| # | Task | Commit | Area | Headline change |
+|---|---|---|---|---|
+| 166 | DKIM selector UX improvement | `584e8bd` | dashboard / dns | Redesigned the DKIM selector card on `/app/domains/{id}`: persists `detected_providers` + `matched_providers` in DKIM dns_check_result details JSON, new DBAL query `GetLatestDkimDetection` reads the latest DKIM check without live DNS, detection status shows found/not-found with selector name + key strength + provider, provider-aware suggestion chips from `DkimSelectorRegistry` (clickable pre-fill), saved-vs-detected mismatch warning when the two selectors differ, "Reset to auto-detect" button when a selector is locked, auto-detect vs locked mode label in card header. Reviewer caught XSS context mismatch in inline `onclick` (Twig `|escape('js')` applied) and `key_found` type annotation corrected to `bool\|string` per DBAL convention. 10 new integration tests. |
+| 167 | DMARC RUA "extend" path UX | `16dc0f7` | dashboard / dns | Surfaces the "add Sendvery alongside your existing address" option in the PointsAtExternal checklist row. Added `rawDmarcRecord` + `ruaAddressCount` to `RuaScenarioResult` so the controller can compute `DmarcRuaInstruction::build()` without a second query. RUA row shows the full extended DMARC record with copy-to-clipboard button, RFC 7489 2-address limit warning when rua already has 2+ addresses, authorization record warning (forward-references the TASK-168 live card). Updated PointsAtExternal status copy from "connect/repoint" to three-option next step (extend, replace, or connect inbox). 7 new integration tests, 1 existing test updated for new copy. |
+| 168 | RFC 7489 `_report._dmarc` authorization record awareness (Phase 1) | `6bab334` | dashboard / dns | New `DmarcReportAuthorizationChecker` service queries for the RFC 7489 authorization TXT record at `{domain}._report._dmarc.{reportHost}`. Integrated into `DnsMonitor` — runs after DMARC analysis and persists result in DMARC details JSON (`report_authorization_found: bool\|null`). `RuaScenarioResolver` reads the auth status from persisted data for the per-domain path. Domain detail page renders a standalone authorization card: green "published" when the record exists, yellow "missing" warning with the exact TXT record to publish, hidden when the check doesn't apply (same-domain rua or no rua). Uses dynamic `ReportAddressProvider` domain, not hardcoded `sendvery.com`. Works for both SaaS and self-hosters. 5 new integration tests. Phase 2 (DNS automation) deferred. |
+
+### Self-review fix
+
+| Commit | Finding | Fix |
+|---|---|---|
+| `25a0f63` | TASK-167 extend panel said "handled automatically for SaaS customers" while TASK-168 card could show "authorization record missing" — a direct contradiction. | Replaced the unconditional promise with a forward reference to the live authorization status card: "Check the authorization status card below." |
+
+### Deferred to round-12 watchlist (not shipped, with reasons)
+
+- **TASK-147** (Organization JSON-LD logo field) — carried from round 9. Still no square logo asset.
+- **TASK-151** (`twitter:site` handle) — carried from round 9. Still no verified `@sendvery` Twitter/X account.
+- **Marketing-page H1 register audit** — carried from round 9. No user signal.
+- **`/app/alerts` empty-state copy** — carried since round 5 with no user signal.
+- **TASK-168 Phase 2: DNS automation** — auto-publish `_report._dmarc` TXT records via DNS provider API (Cloudflare, Hetzner DNS, etc.). Requires DNS provider API credentials + lifecycle management. Deferred per round-11 brief.
+- **Imprint / legal entity on `/about/contact`** — German Impressumspflicht. Low-priority until first EU-enterprise buyer.
+
+### Suite growth (round-10 baseline → round-11 finish)
+
+| Metric | Round 10 finish | Round 11 finish | Delta |
+|---|---|---|---|
+| Tests | 2326 | 2348 | +22 |
+| Assertions | 7041 | 7106 | +65 |
+
+### Self-review findings (after 3 shipped tasks)
+
+Cross-surface review caught one genuine user-facing consistency defect (the TASK-167/168 auth warning contradiction, fixed inline). All other checklist items passed:
+- TASK-166 detection data reads from persisted JSON (no live DNS on page load)
+- TASK-167 extend instruction uses `DmarcRuaInstruction::build()` from controller
+- TASK-168 uses dynamic `ReportAddressProvider` domain throughout
+- TASK-168 auth check correctly returns null when rua doesn't include Sendvery
+- Authorization card renders outside `DomainSetupStatus` component (visible in BannerOnly mode)
+- JSON operators (`->` for arrays, `->>` for scalars) are correct for PostgreSQL
+
+### Stop signal
+
+Backlog drained against the round-11 user-driven scope (TASK-166/167/168). No `proposed` or `planned` tasks remain. TASK-147 + TASK-151 + the round-9 watchlist items remain `deferred — future-watchlist` with clear prerequisite notes. TASK-168 Phase 2 (DNS automation) filed as new deferred item.
+
+---
+
 ## RUN SUMMARY — 2026-05-26 round 10 autonomous CX loop (founder-contact + GitHub-feedback transparency surface + round-10 trust polish)
 
 ### Shipped (7 tasks across 4 code commits)
