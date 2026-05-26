@@ -10,10 +10,12 @@ use App\Query\GetDomainDetail;
 use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainWorkspaceTabCounts;
+use App\Query\GetLatestDkimDetection;
 use App\Query\GetTopSendersForDomain;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
 use App\Services\DmarcPolicyAdvisor;
+use App\Services\Dns\DkimSelectorRegistry;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\DomainSetupStatusResolver;
 use App\Value\DmarcPolicy;
@@ -37,6 +39,8 @@ final class ShowDomainDetailController extends AbstractController
         private readonly RuaScenarioResolver $ruaScenarioResolver,
         private readonly GetDomainOverview $getDomainOverview,
         private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
+        private readonly GetLatestDkimDetection $getLatestDkimDetection,
+        private readonly DkimSelectorRegistry $dkimSelectorRegistry,
     ) {
     }
 
@@ -151,6 +155,12 @@ final class ShowDomainDetailController extends AbstractController
 
         $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($id)->toTwigArray();
 
+        $dkimDetection = $this->getLatestDkimDetection->forDomain($id, $teamIds);
+        $dkimSuggestedSelectors = [];
+        if (null !== $dkimDetection && [] !== $dkimDetection->detectedProviders) {
+            $dkimSuggestedSelectors = $this->dkimSelectorRegistry->selectorsFor($dkimDetection->detectedProviders);
+        }
+
         return $this->render('dashboard/domain_detail.html.twig', [
             'domain' => $domain,
             'reports' => $reports,
@@ -164,6 +174,8 @@ final class ShowDomainDetailController extends AbstractController
             'domainSetupStatus' => $domainSetupStatus,
             'hasPublishedDmarcRecord' => $hasPublishedDmarcRecord,
             'tabCounts' => $tabCounts,
+            'dkimDetection' => $dkimDetection,
+            'dkimSuggestedSelectors' => $dkimSuggestedSelectors,
         ]);
     }
 }

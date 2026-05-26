@@ -45,10 +45,6 @@
        re-check button. #}
     <twig:DomainSetupStatus :status="domainSetupStatus" :domainId="domain.domainId" />
 
-    {# TASK-146 — Per-domain DKIM selector preference. When the team's selector
-       isn't in DkimSelectorRegistry::PROVIDER_SELECTORS the brute-force
-       fallback can't find the key — this form lets the team teach the
-       dashboard the right selector. Empty input reverts to brute-force. #}
     <div class="card bg-base-100 border border-base-200 shadow-sm mb-6" data-testid="domain-dkim-selector-card">
         <div class="card-body p-5">
             <div class="flex items-start gap-3 mb-3">
@@ -60,17 +56,73 @@
                 <div class="flex-1">
                     <h3 class="text-sm font-semibold">DKIM selector</h3>
                     <p class="text-xs text-base-content/60 mt-0.5">
-                        Sendvery normally brute-forces common selectors (default, google, k1, s1…). If your DKIM key uses a custom selector that isn't in our registry, set it here so the next DNS check finds it.
+                        {% if domain.dkimSelector %}
+                            Locked to <code class="font-mono text-xs bg-base-200 px-1 rounded">{{ domain.dkimSelector }}</code> — Sendvery checks this selector on every DNS scan.
+                        {% else %}
+                            Auto-detect mode — Sendvery tries common selectors from our registry on each DNS scan.
+                        {% endif %}
                     </p>
                 </div>
             </div>
+
+            {# Detection result from the last DNS check #}
+            {% if dkimDetection is not null %}
+                <div class="rounded-lg border px-3 py-2 mb-3 text-xs {{ dkimDetection.keyFound ? 'border-success/30 bg-success/5' : 'border-warning/30 bg-warning/5' }}" data-testid="dkim-detection-status">
+                    {% if dkimDetection.keyFound %}
+                        <span class="font-semibold text-success">Found</span> — DKIM key at selector
+                        <code class="font-mono bg-base-200 px-1 rounded" data-testid="dkim-detected-selector">{{ dkimDetection.selector }}</code>
+                        {% if dkimDetection.keyBits %}
+                            <span class="text-base-content/60">({{ dkimDetection.keyBits }}-bit {{ dkimDetection.keyType|default('RSA')|upper }})</span>
+                        {% endif %}
+                        {% if dkimDetection.matchedProviders is not empty %}
+                            <span class="text-base-content/60">· {{ dkimDetection.matchedProviders|join(', ') }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="font-semibold text-warning">Not found</span> — no DKIM key detected on common selectors.
+                        {% if dkimDetection.detectedProviders is not empty %}
+                            We see <strong>{{ dkimDetection.detectedProviders|join(', ') }}</strong> MX records — try one of the suggested selectors below.
+                        {% else %}
+                            Set a custom selector if your provider isn't in our registry.
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                {# Saved vs detected mismatch warning #}
+                {% if domain.dkimSelector and dkimDetection.keyFound and domain.dkimSelector != dkimDetection.selector %}
+                    <div class="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 mb-3 text-xs" data-testid="dkim-selector-mismatch">
+                        <span class="font-semibold text-warning">Mismatch</span> — saved selector is <code class="font-mono bg-base-200 px-1 rounded">{{ domain.dkimSelector }}</code> but the key was found at <code class="font-mono bg-base-200 px-1 rounded">{{ dkimDetection.selector }}</code>. Consider updating.
+                    </div>
+                {% endif %}
+            {% endif %}
+
+            {# Provider-aware selector suggestions #}
+            {% if dkimSuggestedSelectors is not empty %}
+                <div class="mb-3" data-testid="dkim-suggested-selectors">
+                    <span class="text-xs text-base-content/60 mr-1">
+                        {% if dkimDetection is not null and dkimDetection.detectedProviders is not empty %}
+                            Suggestions for {{ dkimDetection.detectedProviders|join(', ') }}:
+                        {% else %}
+                            Common selectors:
+                        {% endif %}
+                    </span>
+                    {% for sel in dkimSuggestedSelectors|slice(0, 8) %}
+                        <button
+                            type="button"
+                            class="badge badge-sm badge-outline cursor-pointer hover:badge-primary mr-1 mb-1 {{ domain.dkimSelector == sel ? 'badge-primary' : '' }}"
+                            data-testid="dkim-suggestion-chip"
+                            onclick="document.querySelector('[data-testid=domain-dkim-selector-input]').value = '{{ sel|escape('js') }}';"
+                        >{{ sel }}</button>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
             <form method="post" action="{{ path('dashboard_domain_set_dkim_selector', {id: domain.domainId}) }}" class="flex flex-col sm:flex-row gap-2">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dkim_selector') }}">
                 <input
                     type="text"
                     name="selector"
                     value="{{ domain.dkimSelector ?? '' }}"
-                    placeholder="e.g. selector1 — leave empty to brute-force"
+                    placeholder="e.g. selector1 — leave empty for auto-detect"
                     maxlength="63"
                     pattern="[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
                     title="A DKIM selector is a single DNS label: alphanumeric and hyphens only, not starting or ending with a hyphen."
@@ -81,6 +133,17 @@
                 <button type="submit" class="btn btn-sm btn-primary" data-testid="domain-dkim-selector-submit">
                     Save & re-check DNS
                 </button>
+                {% if domain.dkimSelector %}
+                    <button
+                        type="submit"
+                        name="selector"
+                        value=""
+                        class="btn btn-sm btn-ghost"
+                        data-testid="dkim-reset-auto-detect"
+                    >
+                        Reset to auto-detect
+                    </button>
+                {% endif %}
             </form>
         </div>
     </div>

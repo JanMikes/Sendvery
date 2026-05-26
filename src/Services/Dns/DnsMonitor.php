@@ -47,6 +47,8 @@ final readonly class DnsMonitor
             'key_type' => $dkimResult->keyType,
             'key_bits' => $dkimResult->keyBits,
             'selector' => $dkimResult->selector,
+            'detected_providers' => $dkimResult->detectedProviders,
+            'matched_providers' => $dkimResult->matchedProviders,
         ], $now);
 
         $dmarcResult = $this->dmarcChecker->check($domain->domain);
