@@ -413,6 +413,9 @@ return App::config([
                 'alias' => 'App\Services\Dns\FakeDnsRecordPublisher',
                 'public' => true,
             ],
+            'App\Services\Dns\CloudflareDnsClient' => [
+                'public' => true,
+            ],
             'App\Twig\OpenSourceExtension' => [
                 'public' => true,
             ],

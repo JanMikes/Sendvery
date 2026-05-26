@@ -15,6 +15,7 @@ use App\Query\GetTopSendersForDomain;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Services\DashboardContext;
 use App\Services\DmarcPolicyAdvisor;
+use App\Services\Dns\CloudflareDnsClient;
 use App\Services\Dns\DkimSelectorRegistry;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\DomainSetupStatusResolver;
@@ -45,6 +46,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly GetLatestDkimDetection $getLatestDkimDetection,
         private readonly DkimSelectorRegistry $dkimSelectorRegistry,
         private readonly ReportAddressProvider $reportAddressProvider,
+        private readonly CloudflareDnsClient $cloudflareClient,
     ) {
     }
 
@@ -189,6 +191,7 @@ final class ShowDomainDetailController extends AbstractController
             'ruaAddressCount' => $ruaScenario->ruaAddressCount,
             'reportAuthorizationFound' => $ruaScenario->reportAuthorizationFound,
             'reportDomain' => $this->reportAddressProvider->get(),
+            'dnsAutomationConfigured' => $this->cloudflareClient->isConfigured(),
         ]);
     }
 }

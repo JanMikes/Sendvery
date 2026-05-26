@@ -3,7 +3,7 @@
    all-Unknown info card with a Re-check now form button. All copy and state
    are pre-computed on DomainSetupStatus; this template is a props-only
    renderer with zero conditional logic beyond branch selection. #}
-{% props status, domainId, ruaExtendInstruction = null, ruaAddressCount = 0 %}
+{% props status, domainId, ruaExtendInstruction = null, ruaAddressCount = 0, dnsAutomationConfigured = false %}
 
 {# TASK-097: `banner_only` (the all-green state) suppresses the panel — the
    one-line "Monitoring active" banner above is enough; the all-green
@@ -160,7 +160,11 @@
                                             </p>
                                         {% endif %}
                                         <p class="text-xs text-base-content/50 mt-2" data-testid="rua-authorization-warning">
-                                            For Sendvery to receive reports, an authorization TXT record is needed on Sendvery's DNS for your domain. Check the authorization status card below.
+                                            {% if dnsAutomationConfigured %}
+                                                Authorization records are published automatically when you add a domain.
+                                            {% else %}
+                                                For Sendvery to receive reports, an authorization TXT record is needed on Sendvery's DNS for your domain. Check the authorization status card below.
+                                            {% endif %}
                                         </p>
                                     </div>
                                 {% else %}
