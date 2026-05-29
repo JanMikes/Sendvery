@@ -7,6 +7,7 @@ namespace App\Services\Stripe;
 use App\Entity\Team;
 use App\Message\DowngradeTeamPlan;
 use App\Message\UpgradeTeamPlan;
+use App\Repository\TeamRepository;
 use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
 use Psr\Log\LoggerInterface;
@@ -22,6 +23,7 @@ final readonly class SubscriptionManager
         private StripeClient $stripeClient,
         private MessageBusInterface $commandBus,
         private StripePriceResolver $priceResolver,
+        private TeamRepository $teamRepository,
         private LoggerInterface $logger,
         private string $defaultUri,
     ) {
@@ -29,30 +31,69 @@ final readonly class SubscriptionManager
 
     public function createCheckoutSession(Team $team, SubscriptionPlan $plan, BillingInterval $interval): string
     {
+        // Same identifiers go on both the Checkout Session (read by
+        // checkout.session.completed) AND the Subscription via
+        // subscription_data.metadata. Stripe does NOT copy session metadata
+        // onto the subscription, so without the latter the
+        // customer.subscription.updated/deleted webhooks — e.g. a
+        // Customer-Portal cancellation — arrive with empty metadata and the
+        // team never gets downgraded.
+        $metadata = [
+            'team_id' => $team->id->toString(),
+            'plan' => $plan->value,
+            'interval' => $interval->value,
+        ];
+
         $params = [
             'mode' => 'subscription',
             'line_items' => [[
-                'price' => $this->priceResolver->getPriceId($plan, $interval),
+                'price' => $this->resolvePriceId($plan, $interval),
                 'quantity' => 1,
             ]],
             'success_url' => $this->defaultUri.'/app/settings/billing/success?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $this->defaultUri.'/app/settings/billing/cancel',
-            'metadata' => [
-                'team_id' => $team->id->toString(),
-                'plan' => $plan->value,
-                'interval' => $interval->value,
+            'metadata' => $metadata,
+            'subscription_data' => [
+                'metadata' => $metadata,
             ],
         ];
 
+        // In subscription mode Stripe always creates a Customer, so
+        // `customer_creation` is invalid here — only pass an existing customer
+        // to attach the subscription to it.
         if (null !== $team->stripeCustomerId) {
             $params['customer'] = $team->stripeCustomerId;
-        } else {
-            $params['customer_creation'] = 'always';
         }
 
         $session = $this->stripeClient->checkout->sessions->create($params);
 
         return (string) $session->url;
+    }
+
+    /**
+     * Resolve a (plan, interval) tuple to a concrete Stripe price ID via its
+     * lookup key. Checkout/subscription line items require a price ID — lookup
+     * keys can't be passed directly — so we query the Prices API by key. This
+     * keeps the app mode-agnostic: the same lookup keys resolve to the right
+     * price IDs in sandbox and live without any per-environment price-ID env
+     * vars (DEC-053..057, docs/14-stripe-setup.md).
+     */
+    private function resolvePriceId(SubscriptionPlan $plan, BillingInterval $interval): string
+    {
+        $lookupKey = $this->priceResolver->getLookupKey($plan, $interval);
+
+        $prices = $this->stripeClient->prices->all([
+            'lookup_keys' => [$lookupKey],
+            'active' => true,
+            'limit' => 1,
+        ]);
+
+        $price = $prices->data[0] ?? null;
+        if (null === $price) {
+            throw new \RuntimeException(sprintf('No active Stripe price found for lookup key "%s". Provision products + prices first (see docs/14-stripe-setup.md).', $lookupKey));
+        }
+
+        return (string) $price->id;
     }
 
     /**
@@ -71,7 +112,7 @@ final readonly class SubscriptionManager
             throw new \RuntimeException('Team has no active Stripe subscription to update.');
         }
 
-        $newPriceId = $this->priceResolver->getPriceId($plan, $interval);
+        $newPriceId = $this->resolvePriceId($plan, $interval);
         $subscription = $this->stripeClient->subscriptions->retrieve($team->stripeSubscriptionId);
 
         // Subscriptions have a single price item under our model (no add-ons
@@ -244,12 +285,26 @@ final readonly class SubscriptionManager
         $metadata = $subscription['metadata'] ?? null;
         $teamId = $metadata['team_id'] ?? null;
 
-        if (!\is_string($teamId)) {
+        if (\is_string($teamId)) {
+            $this->commandBus->dispatch(new DowngradeTeamPlan(
+                teamId: Uuid::fromString($teamId),
+            ));
+
             return;
         }
 
-        $this->commandBus->dispatch(new DowngradeTeamPlan(
-            teamId: Uuid::fromString($teamId),
-        ));
+        // Fallback: a Customer-Portal cancellation can arrive without our
+        // metadata (e.g. a subscription created before subscription_data
+        // metadata was attached). Resolve the team by the subscription ID we
+        // stored at checkout so the downgrade still happens.
+        $subscriptionId = $subscription['id'] ?? null;
+        if (\is_string($subscriptionId)) {
+            $team = $this->teamRepository->findByStripeSubscriptionId($subscriptionId);
+            if (null !== $team) {
+                $this->commandBus->dispatch(new DowngradeTeamPlan(
+                    teamId: $team->id,
+                ));
+            }
+        }
     }
 }

@@ -31,4 +31,9 @@ final readonly class TeamRepository
     {
         return $this->entityManager->getRepository(Team::class)->findOneBy(['slug' => $slug]);
     }
+
+    public function findByStripeSubscriptionId(string $stripeSubscriptionId): ?Team
+    {
+        return $this->entityManager->getRepository(Team::class)->findOneBy(['stripeSubscriptionId' => $stripeSubscriptionId]);
+    }
 }

@@ -104,6 +104,48 @@ final class SubscriptionManagerTest extends IntegrationTestCase
         self::assertSame(SubscriptionPlan::Free->value, $reloaded->plan);
     }
 
+    public function testSubscriptionDeletedFallsBackToSubscriptionIdWhenMetadataMissing(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $manager = $this->getService(SubscriptionManager::class);
+
+        // A Customer-Portal cancellation can arrive with no metadata on the
+        // subscription object. The team must still be downgraded by matching
+        // the subscription ID we stored at checkout.
+        $team = $this->createTeam($em, plan: SubscriptionPlan::Pro);
+        $team->stripeSubscriptionId = 'sub_portal_cancel';
+        $em->flush();
+
+        $manager->dispatchStripeEvent('customer.subscription.deleted', [
+            'id' => 'sub_portal_cancel',
+        ]);
+
+        $em->clear();
+        $reloaded = $em->find(Team::class, $team->id);
+        self::assertNotNull($reloaded);
+        self::assertSame(SubscriptionPlan::Free->value, $reloaded->plan);
+    }
+
+    public function testSubscriptionDeletedIgnoredWhenNeitherMetadataNorKnownSubscription(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $manager = $this->getService(SubscriptionManager::class);
+
+        $team = $this->createTeam($em, plan: SubscriptionPlan::Pro);
+        $em->flush();
+
+        // No metadata, and the subscription ID matches no team — must no-op
+        // rather than blow up or touch unrelated teams.
+        $manager->dispatchStripeEvent('customer.subscription.deleted', [
+            'id' => 'sub_unknown_to_us',
+        ]);
+
+        $em->clear();
+        $reloaded = $em->find(Team::class, $team->id);
+        self::assertNotNull($reloaded);
+        self::assertSame('pro', $reloaded->plan);
+    }
+
     public function testInvoicePaymentFailedIsLogOnly(): void
     {
         $em = $this->getService(EntityManagerInterface::class);

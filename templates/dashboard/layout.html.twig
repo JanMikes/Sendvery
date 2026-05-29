@@ -14,7 +14,8 @@
            {{ stimulus_target('sidebar', 'sidebar') }}>
         {# Logo + Team #}
         <div class="p-4 border-b border-base-300">
-            <a href="{{ path('dashboard_overview') }}" class="text-xl font-bold text-primary tracking-tight">
+            <a href="{{ path('dashboard_overview') }}" class="inline-flex items-center gap-2 text-xl font-bold text-primary tracking-tight">
+                {{ include('components/_logo_mark.html.twig', { class: 'w-7 h-7' }) }}
                 Sendvery
             </a>
             <p class="text-xs text-base-content/50 mt-0.5">Email Health Dashboard</p>

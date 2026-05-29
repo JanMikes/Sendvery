@@ -15,6 +15,12 @@
        override this block with noindex,follow so they don't compete for ranking signal. #}
     {% block robots %}{% endblock %}
 
+    {# Favicon set — served from the public/ web root (not AssetMapper), so use root-absolute
+       paths. SVG for modern browsers, PNG fallback, apple-touch for iOS home-screen. #}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
     <meta property="og:title" content="{% block og_title %}{{ block('title') }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}{{ block('meta_description') }}{% endblock %}">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">

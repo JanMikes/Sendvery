@@ -13,38 +13,26 @@ use PHPUnit\Framework\TestCase;
 
 final class StripePriceResolverTest extends TestCase
 {
-    public function testResolvesPriceFromMapForEveryCombination(): void
+    public function testProducesTheCanonicalLookupKeyForEveryCombination(): void
     {
-        $resolver = new StripePriceResolver(
-            aiPurchasable: true,
-            priceMap: [
-                'personal_monthly' => 'price_personal_m',
-                'personal_annual' => 'price_personal_y',
-                'personal_ai_monthly' => 'price_personal_ai_m',
-                'personal_ai_annual' => 'price_personal_ai_y',
-                'pro_monthly' => 'price_pro_m',
-                'pro_annual' => 'price_pro_y',
-                'pro_ai_monthly' => 'price_pro_ai_m',
-                'pro_ai_annual' => 'price_pro_ai_y',
-                'business_monthly' => 'price_business_m',
-                'business_annual' => 'price_business_y',
-                'business_ai_monthly' => 'price_business_ai_m',
-                'business_ai_annual' => 'price_business_ai_y',
-            ],
-        );
+        // These keys are the contract with Stripe: provisioning creates prices
+        // with exactly these lookup keys (see docs/14-stripe-setup.md), and the
+        // app resolves the runtime price ID from them. The same keys work in
+        // sandbox and live, which is the whole point of keying on lookups.
+        $resolver = new StripePriceResolver(aiPurchasable: true);
 
-        self::assertSame('price_personal_m', $resolver->getPriceId(SubscriptionPlan::Personal, BillingInterval::Monthly));
-        self::assertSame('price_personal_y', $resolver->getPriceId(SubscriptionPlan::Personal, BillingInterval::Annual));
-        self::assertSame('price_personal_ai_m', $resolver->getPriceId(SubscriptionPlan::PersonalAi, BillingInterval::Monthly));
-        self::assertSame('price_personal_ai_y', $resolver->getPriceId(SubscriptionPlan::PersonalAi, BillingInterval::Annual));
-        self::assertSame('price_pro_m', $resolver->getPriceId(SubscriptionPlan::Pro, BillingInterval::Monthly));
-        self::assertSame('price_pro_y', $resolver->getPriceId(SubscriptionPlan::Pro, BillingInterval::Annual));
-        self::assertSame('price_pro_ai_m', $resolver->getPriceId(SubscriptionPlan::ProAi, BillingInterval::Monthly));
-        self::assertSame('price_pro_ai_y', $resolver->getPriceId(SubscriptionPlan::ProAi, BillingInterval::Annual));
-        self::assertSame('price_business_m', $resolver->getPriceId(SubscriptionPlan::Business, BillingInterval::Monthly));
-        self::assertSame('price_business_y', $resolver->getPriceId(SubscriptionPlan::Business, BillingInterval::Annual));
-        self::assertSame('price_business_ai_m', $resolver->getPriceId(SubscriptionPlan::BusinessAi, BillingInterval::Monthly));
-        self::assertSame('price_business_ai_y', $resolver->getPriceId(SubscriptionPlan::BusinessAi, BillingInterval::Annual));
+        self::assertSame('sendvery_personal_monthly', $resolver->getLookupKey(SubscriptionPlan::Personal, BillingInterval::Monthly));
+        self::assertSame('sendvery_personal_annual', $resolver->getLookupKey(SubscriptionPlan::Personal, BillingInterval::Annual));
+        self::assertSame('sendvery_personal_ai_monthly', $resolver->getLookupKey(SubscriptionPlan::PersonalAi, BillingInterval::Monthly));
+        self::assertSame('sendvery_personal_ai_annual', $resolver->getLookupKey(SubscriptionPlan::PersonalAi, BillingInterval::Annual));
+        self::assertSame('sendvery_pro_monthly', $resolver->getLookupKey(SubscriptionPlan::Pro, BillingInterval::Monthly));
+        self::assertSame('sendvery_pro_annual', $resolver->getLookupKey(SubscriptionPlan::Pro, BillingInterval::Annual));
+        self::assertSame('sendvery_pro_ai_monthly', $resolver->getLookupKey(SubscriptionPlan::ProAi, BillingInterval::Monthly));
+        self::assertSame('sendvery_pro_ai_annual', $resolver->getLookupKey(SubscriptionPlan::ProAi, BillingInterval::Annual));
+        self::assertSame('sendvery_business_monthly', $resolver->getLookupKey(SubscriptionPlan::Business, BillingInterval::Monthly));
+        self::assertSame('sendvery_business_annual', $resolver->getLookupKey(SubscriptionPlan::Business, BillingInterval::Annual));
+        self::assertSame('sendvery_business_ai_monthly', $resolver->getLookupKey(SubscriptionPlan::BusinessAi, BillingInterval::Monthly));
+        self::assertSame('sendvery_business_ai_annual', $resolver->getLookupKey(SubscriptionPlan::BusinessAi, BillingInterval::Annual));
     }
 
     public function testFreePlanThrowsException(): void
@@ -53,7 +41,7 @@ final class StripePriceResolverTest extends TestCase
 
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('Free plan does not have a Stripe price.');
-        $resolver->getPriceId(SubscriptionPlan::Free, BillingInterval::Monthly);
+        $resolver->getLookupKey(SubscriptionPlan::Free, BillingInterval::Monthly);
     }
 
     public function testUnlimitedPlanThrowsException(): void
@@ -62,7 +50,7 @@ final class StripePriceResolverTest extends TestCase
 
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('Unlimited plan is internal-only');
-        $resolver->getPriceId(SubscriptionPlan::Unlimited, BillingInterval::Annual);
+        $resolver->getLookupKey(SubscriptionPlan::Unlimited, BillingInterval::Annual);
     }
 
     #[DataProvider('aiVariantsProvider')]
@@ -73,7 +61,7 @@ final class StripePriceResolverTest extends TestCase
         $this->expectException(AiNotYetPurchasable::class);
 
         try {
-            $resolver->getPriceId($plan, BillingInterval::Monthly);
+            $resolver->getLookupKey($plan, BillingInterval::Monthly);
         } catch (AiNotYetPurchasable $e) {
             self::assertSame($plan, $e->plan);
 
@@ -89,27 +77,13 @@ final class StripePriceResolverTest extends TestCase
         yield 'business_ai' => [SubscriptionPlan::BusinessAi];
     }
 
-    public function testFallsBackToEnvVarWhenNotInPriceMap(): void
+    #[DataProvider('aiVariantsProvider')]
+    public function testAiVariantResolvesWhenPurchasable(SubscriptionPlan $plan): void
     {
-        $_ENV['STRIPE_PRICE_PRO_ANNUAL'] = 'price_from_env_xyz';
-
-        try {
-            $resolver = new StripePriceResolver(aiPurchasable: true);
-            self::assertSame('price_from_env_xyz', $resolver->getPriceId(SubscriptionPlan::Pro, BillingInterval::Annual));
-        } finally {
-            unset($_ENV['STRIPE_PRICE_PRO_ANNUAL']);
-        }
-    }
-
-    public function testMissingEnvVarThrowsRuntimeException(): void
-    {
-        // Ensure neither $_ENV nor $_SERVER has the value.
-        unset($_ENV['STRIPE_PRICE_PERSONAL_MONTHLY'], $_SERVER['STRIPE_PRICE_PERSONAL_MONTHLY']);
-
         $resolver = new StripePriceResolver(aiPurchasable: true);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('STRIPE_PRICE_PERSONAL_MONTHLY');
-        $resolver->getPriceId(SubscriptionPlan::Personal, BillingInterval::Monthly);
+        // When AI is purchasable the gate is lifted and the key resolves
+        // normally — proving the gate is the only thing the flag controls.
+        self::assertStringStartsWith('sendvery_', $resolver->getLookupKey($plan, BillingInterval::Annual));
     }
 }

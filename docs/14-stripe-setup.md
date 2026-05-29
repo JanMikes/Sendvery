@@ -5,6 +5,9 @@
 
 This doc is the source of truth for what to create in Stripe — three products, twelve prices, one webhook endpoint, and the Customer Portal configuration. Follow it top-to-bottom in **test mode** first, smoke-test via the Stripe CLI, then mirror in **live mode** when ready to take real charges.
 
+> **Prices are provisioned by script, not by hand, and keyed by lookup key.**
+> Run `scripts/provision-stripe.sh` (idempotent) — it creates the 3 products + 12 prices with stable lookup keys. The app resolves the runtime price ID from the lookup key via the Prices API (`SubscriptionManager::resolvePriceId`), so **there are no `STRIPE_PRICE_*` env vars** and the same code + same lookup keys work in sandbox and live. The only Stripe env vars are `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`. The secret-key prefix (`sk_test_` vs `sk_live_`) decides the mode. The manual dashboard steps below are kept as a fallback/reference.
+
 ---
 
 ## Prerequisites
@@ -95,13 +98,24 @@ Each product gets 4 recurring prices: monthly base, annual base, monthly + AI, a
 
 ### Why lookup keys?
 
-Lookup keys are stable, human-readable identifiers that survive price re-creation. Today `StripePriceResolver` reads `price_xxx` IDs from env vars; if you ever lose the env or need to recreate prices, you can recover the right ID from the dashboard by searching the lookup key. Worth setting even though we don't currently look up by key at runtime — they cost nothing to add and save a lot of stress later.
+Lookup keys are stable, human-readable identifiers that are **identical across the sandbox and live catalogs** (unlike `price_xxx` IDs, which differ per mode). The app keys on them at runtime: `StripePriceResolver` maps `(plan, interval)` → lookup key, and `SubscriptionManager::resolvePriceId` queries the Prices API by that key to get the concrete price ID for Checkout. That means one set of code + lookup keys covers both modes with **zero per-environment price-ID env vars** to keep in sync. The `App env var` column in the tables above is historical — those env vars no longer exist.
 
 ---
 
-## Step-by-step in the dashboard
+## Provisioning (scripted — recommended)
 
-For each of the three products:
+```bash
+# Auto-loads STRIPE_SECRET_KEY from .env.local (sandbox), or pass it explicitly:
+scripts/provision-stripe.sh
+# live:
+STRIPE_SECRET_KEY=sk_live_... scripts/provision-stripe.sh   # prompts for confirmation
+```
+
+The script is idempotent: it reuses an existing product (matched via an existing price's lookup key, then via product metadata) and skips any price whose lookup key already exists, so re-running is safe. It sets `transfer_lookup_key=true` so a re-run can move a key onto a corrected price. Amounts, metadata, and lookup keys all come from the tables above.
+
+## Step-by-step in the dashboard (manual fallback)
+
+Only needed if you can't run the script. For each of the three products:
 
 1. **Products** (left nav) → **Add product**.
 2. Set the Stripe-visible name (e.g., "Sendvery Personal").
@@ -113,9 +127,8 @@ For each of the three products:
    - Expand **Advanced** → set the lookup key (e.g., `sendvery_personal_monthly`).
 6. **Save product**. Stripe creates the first Price.
 7. Open the saved product → **Add another price**. Repeat for the remaining 3 (Annual, AI-Monthly, AI-Annual) cadence/AI combinations of that product. Each gets its own lookup key.
-8. Copy the resulting Price ID (`price_xxx`) into the corresponding env var listed above.
 
-When all twelve prices exist, you'll have 12 distinct `price_xxx` IDs to populate the `STRIPE_PRICE_*` env vars.
+The lookup key is what matters — there are no price IDs to copy anywhere.
 
 ---
 
@@ -172,14 +185,13 @@ Then walk a real test-card subscription start-to-finish:
 
 When test-mode is validated end-to-end:
 
-1. Switch Stripe Dashboard to **Live mode**.
-2. **Recreate** all 3 products + 12 prices (live mode has its own catalog separate from test). Same lookup keys, same amounts, same metadata.
+1. Switch Stripe Dashboard to **Live mode** (or just use a live secret key — the dashboard mode is only for the webhook/portal UI).
+2. **Recreate** the catalog in live mode: `STRIPE_SECRET_KEY=sk_live_... scripts/provision-stripe.sh`. Same lookup keys, same amounts, same metadata — guaranteed, because it's the same script.
 3. **Recreate** the webhook endpoint pointing at the production URL — capture the new signing secret.
-4. Set the production env vars:
+4. Set the production env vars (no price IDs — the app resolves by lookup key):
    - `STRIPE_SECRET_KEY=sk_live_...`
    - `STRIPE_PUBLISHABLE_KEY=pk_live_...`
    - `STRIPE_WEBHOOK_SECRET=whsec_...` (live-mode endpoint secret)
-   - All 12 `STRIPE_PRICE_*` env vars (live-mode `price_xxx` IDs)
    - `ANTHROPIC_API_KEY=sk-ant-...` if AI variants should be purchasable. Leave unset to hide the AI toggle and refuse AI checkout.
 5. Deploy.
 6. Walk one real subscription end-to-end on Jan's personal card. Confirm:

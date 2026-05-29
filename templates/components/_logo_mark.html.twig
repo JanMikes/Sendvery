@@ -1,0 +1,10 @@
+{# Sendvery brand mark — envelope + heartbeat pulse (email health monitoring).
+   Single source of truth for the icon across the web UI. Uses currentColor, so
+   colour it by setting a text-* class on the caller (e.g. text-primary), and pass
+   `class` to size it (defaults to w-6 h-6). The filled-tile / wordmark variants
+   live in assets/logo/{icon,mark,logo}.svg and public/ favicons. #}
+<svg class="{{ class|default('w-6 h-6') }}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="4" y="7" width="16" height="10" rx="2" stroke-width="1.6"/>
+    <path d="M5.5 12.5 L8.5 12.5 L10 9.5 L12 16 L13.5 12.5 L18.5 12.5" stroke-width="1.8"/>
+</svg>

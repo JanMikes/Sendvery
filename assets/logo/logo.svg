@@ -1,0 +1,10 @@
+<svg width="248" height="64" viewBox="0 0 248 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sendvery">
+  <!-- Horizontal lockup: line mark + wordmark. -->
+  <g transform="translate(2 4) scale(0.86)">
+    <rect x="11" y="18" width="42" height="28" rx="5.5" stroke="#0F766E" stroke-width="2.8" fill="none"/>
+    <path d="M14 34 L23 34 L27 26 L32 43 L36 34 L50 34" stroke="#0F766E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+  <text x="68" y="42" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="32" font-weight="700" letter-spacing="-0.6">
+    <tspan fill="#16202B">Send</tspan><tspan fill="#0F766E">very</tspan>
+  </text>
+</svg>

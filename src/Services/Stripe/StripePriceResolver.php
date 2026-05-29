@@ -9,8 +9,14 @@ use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
 
 /**
- * Maps (plan, interval) → Stripe price ID. Twelve mappings total:
- * three paid tiers × two AI variants × two cadences.
+ * Maps (plan, interval) → the Stripe **lookup key** for that price. Twelve
+ * mappings total: three paid tiers × two AI variants × two cadences.
+ *
+ * We key on Stripe lookup keys rather than price IDs because lookup keys are
+ * stable, human-readable, and identical across the sandbox and live catalogs
+ * — so the exact same code works in both modes with no per-environment price
+ * ID env vars to keep in sync. The runtime price ID is resolved from the key
+ * via the Stripe Prices API in `SubscriptionManager::resolvePriceId`.
  *
  * Free and Unlimited never have prices (no Stripe). AI variants throw
  * `AiNotYetPurchasable` when `ANTHROPIC_API_KEY` is unset so callers can
@@ -19,14 +25,12 @@ use App\Value\SubscriptionPlan;
  */
 final readonly class StripePriceResolver
 {
-    /** @param array<string, string> $priceMap optional override (test/local) */
     public function __construct(
         private bool $aiPurchasable = false,
-        private array $priceMap = [],
     ) {
     }
 
-    public function getPriceId(SubscriptionPlan $plan, BillingInterval $interval): string
+    public function getLookupKey(SubscriptionPlan $plan, BillingInterval $interval): string
     {
         if (SubscriptionPlan::Free === $plan) {
             throw new \LogicException('Free plan does not have a Stripe price.');
@@ -40,43 +44,20 @@ final readonly class StripePriceResolver
             throw new AiNotYetPurchasable($plan);
         }
 
-        $mapKey = $plan->value.'_'.$interval->value;
-        if (isset($this->priceMap[$mapKey])) {
-            return $this->priceMap[$mapKey];
-        }
-
-        return $this->requireEnv($this->envVarFor($plan, $interval));
+        return sprintf('sendvery_%s_%s', $this->planSegment($plan), $interval->value);
     }
 
-    private function envVarFor(SubscriptionPlan $plan, BillingInterval $interval): string
+    private function planSegment(SubscriptionPlan $plan): string
     {
-        $planSegment = match ($plan) {
-            SubscriptionPlan::Personal => 'PERSONAL',
-            SubscriptionPlan::PersonalAi => 'PERSONAL_AI',
-            SubscriptionPlan::Pro => 'PRO',
-            SubscriptionPlan::ProAi => 'PRO_AI',
-            SubscriptionPlan::Business => 'BUSINESS',
-            SubscriptionPlan::BusinessAi => 'BUSINESS_AI',
-            // Free/Unlimited are handled above.
+        return match ($plan) {
+            SubscriptionPlan::Personal => 'personal',
+            SubscriptionPlan::PersonalAi => 'personal_ai',
+            SubscriptionPlan::Pro => 'pro',
+            SubscriptionPlan::ProAi => 'pro_ai',
+            SubscriptionPlan::Business => 'business',
+            SubscriptionPlan::BusinessAi => 'business_ai',
+            // Free/Unlimited are guarded above.
             SubscriptionPlan::Free, SubscriptionPlan::Unlimited => throw new \LogicException('Unreachable.'),
         };
-
-        $intervalSegment = match ($interval) {
-            BillingInterval::Monthly => 'MONTHLY',
-            BillingInterval::Annual => 'ANNUAL',
-        };
-
-        return sprintf('STRIPE_PRICE_%s_%s', $planSegment, $intervalSegment);
-    }
-
-    private function requireEnv(string $name): string
-    {
-        $value = $_ENV[$name] ?? $_SERVER[$name] ?? '';
-
-        if ('' === $value) {
-            throw new \RuntimeException(sprintf('Environment variable "%s" is not set.', $name));
-        }
-
-        return $value;
     }
 }

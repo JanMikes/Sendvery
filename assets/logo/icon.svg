@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sendvery">
+  <defs>
+    <linearGradient id="sv-tile" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10A18C"/>
+      <stop offset="1" stop-color="#00775E"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#sv-tile)"/>
+  <!-- envelope + heartbeat: email health monitoring -->
+  <rect x="11" y="18" width="42" height="28" rx="5.5" stroke="#FFFFFF" stroke-width="2.8" fill="none"/>
+  <path d="M14 34 L23 34 L27 26 L32 43 L36 34 L50 34" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
