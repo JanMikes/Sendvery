@@ -60,16 +60,22 @@ return App::config([
                 '$aiPurchasable' => '%env(bool:ANTHROPIC_API_KEY)%',
             ],
         ],
-        // AI Insights wiring (DEC-057): the interface resolves to the
-        // PlanGatedAiInsightsService decorator, which wraps the stub. When
-        // real AI lands, only the $inner binding swaps to
-        // AnthropicAiInsightsService — gating and quota plumbing stay put.
+        // AI Insights wiring (DEC-057): interface → Caching → PlanGated → Anthropic.
+        // Caching sits OUTSIDE the gate so cache hits cost nothing and burn no
+        // on-demand quota; PlanGated enforces plan + quota; AnthropicAiInsightsService
+        // is the real implementation. AnthropicClient autowires HttpClientInterface
+        // and the ANTHROPIC_* env vars (see .env).
         'App\Services\Ai\AiInsightsService' => [
-            'alias' => 'App\Services\Ai\PlanGatedAiInsightsService',
+            'alias' => 'App\Services\Ai\CachingAiInsightsService',
+        ],
+        'App\Services\Ai\CachingAiInsightsService' => [
+            'arguments' => [
+                '$inner' => '@App\Services\Ai\PlanGatedAiInsightsService',
+            ],
         ],
         'App\Services\Ai\PlanGatedAiInsightsService' => [
             'arguments' => [
-                '$inner' => '@App\Services\Ai\StubAiInsightsService',
+                '$inner' => '@App\Services\Ai\AnthropicAiInsightsService',
             ],
         ],
         'App\Controller\Webhook\StripeWebhookController' => [
@@ -374,14 +380,50 @@ return App::config([
             'App\Services\Ai\StubAiInsightsService' => [
                 'public' => true,
             ],
+            // .env.test sets ANTHROPIC_API_KEY, so the real chain is wired in
+            // tests too — but AnthropicClient gets a MockHttpClient, so no test
+            // ever reaches the network (the "tests never hit a real API" rule).
+            'App\Tests\TestSupport\AnthropicMockHttpClient' => [
+                'public' => true,
+            ],
+            'App\Services\Ai\Client\AnthropicClient' => [
+                'public' => true,
+                'arguments' => [
+                    '$httpClient' => '@App\Tests\TestSupport\AnthropicMockHttpClient',
+                ],
+            ],
+            'App\Services\Ai\AnthropicAiInsightsService' => [
+                'public' => true,
+            ],
             'App\Services\Ai\PlanGatedAiInsightsService' => [
                 'public' => true,
                 'arguments' => [
-                    '$inner' => '@App\Services\Ai\StubAiInsightsService',
+                    '$inner' => '@App\Services\Ai\AnthropicAiInsightsService',
+                ],
+            ],
+            'App\Services\Ai\CachingAiInsightsService' => [
+                'public' => true,
+                'arguments' => [
+                    '$inner' => '@App\Services\Ai\PlanGatedAiInsightsService',
                 ],
             ],
             'App\Services\Ai\AiInsightsService' => [
-                'alias' => 'App\Services\Ai\PlanGatedAiInsightsService',
+                'alias' => 'App\Services\Ai\CachingAiInsightsService',
+                'public' => true,
+            ],
+            'App\Repository\AiInsightRepository' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\AlertOnFailureSpike' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\GenerateAnomalyInsightWhenSpikeDetected' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\GenerateRemediationInsightWhenDnsCheckFails' => [
+                'public' => true,
+            ],
+            'App\MessageHandler\GenerateRemediationInsightHandler' => [
                 'public' => true,
             ],
             'App\Command\ResetMonthlyUsageCountersCommand' => [

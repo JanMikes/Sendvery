@@ -7,7 +7,9 @@ namespace App\Tests\Integration\Services\Ai;
 use App\Entity\Team;
 use App\Exceptions\AiNotEnabledForPlan;
 use App\Exceptions\AiQuotaExceeded;
+use App\Exceptions\ReportNotAnalyzable;
 use App\Services\Ai\AiInsightsService;
+use App\Services\Ai\CachingAiInsightsService;
 use App\Services\Ai\Input\DnsCheckFailure;
 use App\Services\Ai\PlanGatedAiInsightsService;
 use App\Services\Stripe\PlanEnforcement;
@@ -18,11 +20,13 @@ use Ramsey\Uuid\Uuid;
 
 final class PlanGatedAiInsightsServiceTest extends IntegrationTestCase
 {
-    public function testInterfaceResolvesToGatedDecorator(): void
+    public function testInterfaceResolvesToTheCachingDecoratorSoCacheHitsBypassTheGate(): void
     {
         $service = $this->getService(AiInsightsService::class);
 
-        self::assertInstanceOf(PlanGatedAiInsightsService::class, $service);
+        // Caching is the outermost decorator: a cache hit returns before the
+        // plan/quota gate is entered, so re-views cost nothing and burn no quota.
+        self::assertInstanceOf(CachingAiInsightsService::class, $service);
     }
 
     public function testExplainReportFailsWhenPlanHasNoAi(): void
@@ -61,7 +65,7 @@ final class PlanGatedAiInsightsServiceTest extends IntegrationTestCase
         $gated->explainAnomaly(Uuid::uuid7(), $team->id);
     }
 
-    public function testExplainReportSucceedsAndIncrementsQuotaOnAiPlan(): void
+    public function testExplainReportDoesNotChargeQuotaWhenTheReportCannotBeAnalyzed(): void
     {
         $em = $this->getService(EntityManagerInterface::class);
         $enforcement = $this->getService(PlanEnforcement::class);
@@ -72,10 +76,15 @@ final class PlanGatedAiInsightsServiceTest extends IntegrationTestCase
 
         self::assertSame(0, $enforcement->getOnDemandAiUsage($teamId));
 
-        $result = $gated->explainReport(Uuid::uuid7(), $team->id);
+        try {
+            $gated->explainReport(Uuid::uuid7(), $team->id);
+            self::fail('Expected ReportNotAnalyzable.');
+        } catch (ReportNotAnalyzable) {
+            // expected — the report doesn't exist for this team.
+        }
 
-        self::assertNotSame('', $result->explanation);
-        self::assertSame(1, $enforcement->getOnDemandAiUsage($teamId));
+        // Quota is charged only on a real generation, never when analysis fails.
+        self::assertSame(0, $enforcement->getOnDemandAiUsage($teamId));
     }
 
     public function testExplainReportThrowsQuotaExceededAtLimit(): void
@@ -113,16 +122,18 @@ final class PlanGatedAiInsightsServiceTest extends IntegrationTestCase
         self::assertNotSame('', $result->summaryMarkdown);
     }
 
-    public function testExplainAnomalySucceedsOnAiPlan(): void
+    public function testExplainAnomalyPassesTheGateThenFailsAnalysisForAnUnknownReport(): void
     {
         $em = $this->getService(EntityManagerInterface::class);
         $gated = $this->getService(PlanGatedAiInsightsService::class);
 
         $team = $this->createTeam($em, SubscriptionPlan::BusinessAi);
 
-        $result = $gated->explainAnomaly(Uuid::uuid7(), $team->id);
+        // Plan gate passes (BusinessAi has AI); the inner orchestrator then can't
+        // analyze a non-existent report and throws.
+        $this->expectException(ReportNotAnalyzable::class);
 
-        self::assertNotSame('', $result->explanation);
+        $gated->explainAnomaly(Uuid::uuid7(), $team->id);
     }
 
     public function testRemediationGuidancePassesThroughWithoutQuotaCheck(): void

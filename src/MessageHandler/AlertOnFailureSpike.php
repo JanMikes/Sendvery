@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\MessageHandler;
 
 use App\Events\DmarcReportProcessed;
+use App\Message\GenerateAnomalyInsight;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\AlertEngine;
 use App\Value\AlertSeverity;
 use App\Value\AlertType;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 #[AsMessageHandler]
 final readonly class AlertOnFailureSpike
@@ -21,6 +23,7 @@ final readonly class AlertOnFailureSpike
         private AlertEngine $alertEngine,
         private MonitoredDomainRepository $monitoredDomainRepository,
         private Connection $database,
+        private MessageBusInterface $commandBus,
     ) {
     }
 
@@ -48,7 +51,7 @@ final readonly class AlertOnFailureSpike
 
         $domain = $this->monitoredDomainRepository->get($event->domainId);
 
-        $this->alertEngine->createAlert(
+        $alert = $this->alertEngine->createAlert(
             team: $domain->team,
             monitoredDomain: $domain,
             type: AlertType::FailureSpike,
@@ -74,6 +77,17 @@ final readonly class AlertOnFailureSpike
                 'reporter_org' => $event->reporterOrg,
             ],
         );
+
+        // Only when an alert actually materialized (not muted) do we spend an
+        // AI call to pre-explain it. Routed to async, so the Anthropic call is
+        // off the report-ingestion path.
+        if (null !== $alert) {
+            $this->commandBus->dispatch(new GenerateAnomalyInsight(
+                reportId: $event->reportId,
+                teamId: $domain->team->id,
+                alertId: $alert->id,
+            ));
+        }
     }
 
     private function getAverageFailRate(string $domainId, string $excludeReportId): ?float

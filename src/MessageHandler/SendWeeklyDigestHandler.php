@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\MessageHandler;
 
+use App\Entity\Team;
 use App\Message\SendWeeklyDigest;
 use App\Repository\TeamRepository;
+use App\Services\Ai\AiInsightsService;
+use App\Services\Ai\Result\WeeklyDigestResult;
 use App\Services\Digest\WeeklyDigestGenerator;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Mailer\MailerInterface;
@@ -20,6 +23,7 @@ final readonly class SendWeeklyDigestHandler
     public function __construct(
         private TeamRepository $teamRepository,
         private WeeklyDigestGenerator $digestGenerator,
+        private AiInsightsService $aiService,
         private MailerInterface $mailer,
         private Environment $twig,
         private Connection $database,
@@ -52,13 +56,19 @@ final readonly class SendWeeklyDigestHandler
 
         $subject = sprintf('Sendvery Weekly Report — %s — %s', $digestData->teamName, $dateRange);
 
+        // AI summary is additive and AI-plan-only; non-AI teams get the existing
+        // digest unchanged. Computed after the recipients check so we never spend
+        // an AI call for a team with no digest subscribers.
+        $aiSummary = $this->aiSummary($team, $message);
+
         $html = $this->twig->render('emails/weekly_digest.html.twig', [
             'digest' => $digestData,
             'dashboardUrl' => $dashboardUrl,
             'dateRange' => $dateRange,
+            'aiSummary' => $aiSummary,
         ]);
 
-        $plainText = $this->renderPlainText($digestData, $dashboardUrl, $dateRange);
+        $plainText = $this->renderPlainText($digestData, $dashboardUrl, $dateRange, $aiSummary);
 
         foreach ($recipients as $recipientEmail) {
             $email = (new Email())
@@ -86,13 +96,33 @@ final readonly class SendWeeklyDigestHandler
         )->fetchFirstColumn();
     }
 
-    private function renderPlainText(\App\Value\WeeklyDigestData $digest, string $dashboardUrl, string $dateRange): string
+    private function aiSummary(Team $team, SendWeeklyDigest $message): ?WeeklyDigestResult
+    {
+        // Plan-gated: only AI teams get a summary. The hasAi() guard means the
+        // gated service won't refuse, so no AiNotEnabledForPlan handling is needed.
+        if (!$team->getSubscriptionPlan()->hasAi()) {
+            return null;
+        }
+
+        return $this->aiService->generateWeeklyDigest($message->teamId);
+    }
+
+    private function renderPlainText(\App\Value\WeeklyDigestData $digest, string $dashboardUrl, string $dateRange, ?WeeklyDigestResult $aiSummary): string
     {
         $lines = [];
         $lines[] = "Sendvery Weekly Report — {$digest->teamName}";
         $lines[] = $dateRange;
         $lines[] = str_repeat('=', 50);
         $lines[] = '';
+
+        if (null !== $aiSummary) {
+            $lines[] = $aiSummary->summaryMarkdown;
+            foreach ($aiSummary->recommendations as $recommendation) {
+                $lines[] = '  • '.$recommendation;
+            }
+            $lines[] = '';
+        }
+
         $lines[] = 'Summary:';
         $lines[] = "  Domains monitored: {$digest->totalDomains}";
         $lines[] = "  Total messages: {$digest->totalMessages}";

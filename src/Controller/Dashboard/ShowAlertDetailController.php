@@ -6,7 +6,11 @@ namespace App\Controller\Dashboard;
 
 use App\Message\MarkAlertAsRead;
 use App\Query\GetAlertDetail;
+use App\Repository\AiInsightRepository;
 use App\Repository\MutedAlertRepository;
+use App\Services\Ai\AiInsightCacheKey;
+use App\Services\Ai\AiInsightContent;
+use App\Services\Ai\Result\AnomalyExplanationResult;
 use App\Services\DashboardContext;
 use App\Value\AlertType;
 use Ramsey\Uuid\Uuid;
@@ -22,6 +26,7 @@ final class ShowAlertDetailController extends AbstractController
         private readonly GetAlertDetail $getAlertDetail,
         private readonly MutedAlertRepository $mutedAlertRepository,
         private readonly MessageBusInterface $commandBus,
+        private readonly AiInsightRepository $insights,
     ) {
     }
 
@@ -64,6 +69,30 @@ final class ShowAlertDetailController extends AbstractController
         return $this->render('dashboard/alert_detail.html.twig', [
             'alert' => $alert,
             'existingMute' => $existingMute,
+            'aiAnomaly' => $this->anomalyInsight($alert->type, $alert->data),
         ]);
+    }
+
+    /**
+     * Failure-spike alerts pre-compute an AI explanation (async, keyed by the
+     * report that tripped the spike). Surface it when present; absence is fine —
+     * the worker may still be running, or the team has no AI plan.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function anomalyInsight(string $type, array $data): ?AnomalyExplanationResult
+    {
+        if (AlertType::FailureSpike !== AlertType::from($type)) {
+            return null;
+        }
+
+        $reportId = $data['report_id'] ?? null;
+        if (!is_string($reportId)) {
+            return null;
+        }
+
+        $cached = $this->insights->findByCacheKey(AiInsightCacheKey::anomalyExplanation($reportId));
+
+        return null !== $cached ? AiInsightContent::anomaly($cached->content) : null;
     }
 }

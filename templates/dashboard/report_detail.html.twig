@@ -86,6 +86,28 @@
         </div>
     </div>
 
+    {% if aiEnabled %}
+        <turbo-frame id="report-explanation">
+            <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+                <div class="card-body p-4">
+                    <h3 class="text-sm font-semibold mb-2">AI explanation</h3>
+                    {% if cachedExplanation is not null %}
+                        <div class="text-sm whitespace-pre-line">{{ cachedExplanation }}</div>
+                    {% elseif routineExplanation is not null %}
+                        <div class="text-sm whitespace-pre-line">{{ routineExplanation }}</div>
+                    {% elseif showExplainButton %}
+                        <p class="text-sm text-base-content/60 mb-3">Get a plain-language explanation of this report.</p>
+                        <form method="post" action="{{ path('dashboard_report_explain', { id: report.reportId }) }}" data-turbo-frame="report-explanation">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token('explain_report') }}">
+                            <button type="submit" class="btn btn-primary btn-sm">Explain this report</button>
+                            <span class="text-xs text-base-content/50 ml-2">{{ aiRemaining }} of {{ aiLimit }} left this month</span>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </turbo-frame>
+    {% endif %}
+
     {# By sender grouped view #}
     <div class="mb-6">
         <h2 class="text-lg font-semibold mb-3">By sender</h2>
