@@ -44,6 +44,23 @@
         </tr>
     </table>
 
+    {# AI summary — AI plans only; additive, non-AI teams get the digest unchanged. #}
+    {% if aiSummary is defined and aiSummary is not null %}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 24px 0;">
+            <tr><td style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px;">
+                <div style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">AI summary</div>
+                <div style="font-size: 14px; color: #0f172a; line-height: 1.6; white-space: pre-line;">{{ aiSummary.summaryMarkdown }}</div>
+                {% if aiSummary.recommendations|length > 0 %}
+                    <ul style="margin: 12px 0 0 0; padding-left: 18px; font-size: 14px; color: #0f172a; line-height: 1.6;">
+                        {% for recommendation in aiSummary.recommendations %}
+                            <li>{{ recommendation }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </td></tr>
+        </table>
+    {% endif %}
+
     {# Per-domain breakdown #}
     {% if digest.domains|length > 0 %}
         {{ ui.subheading('Domain breakdown') }}

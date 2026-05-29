@@ -29,7 +29,14 @@ return App::config([
                 'failed' => ['dsn' => 'doctrine://default?queue_name=failed'],
                 'async' => ['dsn' => '%env(MESSENGER_TRANSPORT_DSN)%'],
             ],
-            'routing' => [],
+            'routing' => [
+                // Decouple the Anthropic call for anomaly insights from report
+                // ingestion. The prod `worker` container already consumes `async`
+                // (Doctrine transport); a slow/failing API call can't roll back
+                // the parse, and exhausted retries land in `failed`.
+                \App\Message\GenerateAnomalyInsight::class => 'async',
+                \App\Message\GenerateRemediationInsight::class => 'async',
+            ],
         ],
     ],
 ]);

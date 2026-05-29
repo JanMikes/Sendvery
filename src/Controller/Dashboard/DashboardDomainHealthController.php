@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace App\Controller\Dashboard;
 
+use App\Entity\DnsCheckResult;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainHealthHistory;
 use App\Query\GetDomainWorkspaceTabCounts;
+use App\Repository\AiInsightRepository;
 use App\Repository\DnsCheckResultRepository;
+use App\Services\Ai\AiInsightCacheKey;
+use App\Services\Ai\AiInsightContent;
+use App\Services\Ai\Result\RemediationResult;
 use App\Services\DashboardContext;
 use App\Services\Dns\DnsRecordRecommender;
 use App\Services\ReportAddressProvider;
@@ -28,6 +33,7 @@ final class DashboardDomainHealthController extends AbstractController
         private readonly ReportAddressProvider $reportAddressProvider,
         private readonly DnsRecordRecommender $dnsRecordRecommender,
         private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
+        private readonly AiInsightRepository $insights,
     ) {
     }
 
@@ -92,6 +98,45 @@ final class DashboardDomainHealthController extends AbstractController
             'ruaInstruction' => $ruaInstruction,
             'dnsRecommendations' => $dnsRecommendations,
             'tabCounts' => $tabCounts,
+            'aiRemediation' => $this->cachedRemediation($id, $latestByType),
         ]);
+    }
+
+    /**
+     * Read-only: surface AI remediation guidance ONLY if it's already cached. It's
+     * generated off the request path by {@see \App\MessageHandler\GenerateRemediationInsightHandler}
+     * when a DNS check fails — never synchronously here, so this core page never
+     * blocks on a live Anthropic call. Non-AI teams never have a cached row.
+     *
+     * @param array<value-of<DnsCheckType>, ?DnsCheckResult> $latestByType
+     */
+    private function cachedRemediation(string $domainId, array $latestByType): ?RemediationResult
+    {
+        $type = $this->firstFailingType($latestByType);
+        if (null === $type) {
+            return null;
+        }
+
+        $cached = $this->insights->findByCacheKey(AiInsightCacheKey::remediation($domainId, $type->value));
+
+        return null !== $cached ? AiInsightContent::remediation($cached->content) : null;
+    }
+
+    /**
+     * The first failing record in priority order (DMARC → SPF → DKIM). MX is out
+     * of scope — Sendvery doesn't run inbound mail.
+     *
+     * @param array<value-of<DnsCheckType>, ?DnsCheckResult> $latestByType
+     */
+    private function firstFailingType(array $latestByType): ?DnsCheckType
+    {
+        foreach ([DnsCheckType::Dmarc, DnsCheckType::Spf, DnsCheckType::Dkim] as $type) {
+            $result = $latestByType[$type->value] ?? null;
+            if (null === $result || !$result->isValid) {
+                return $type;
+            }
+        }
+
+        return null;
     }
 }
