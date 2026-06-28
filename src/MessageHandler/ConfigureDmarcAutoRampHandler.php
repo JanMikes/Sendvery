@@ -17,6 +17,9 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 #[AsMessageHandler]
 final readonly class ConfigureDmarcAutoRampHandler
 {
+    /** Reason recorded when the customer pauses the ramp themselves — distinguishes it from a safety-rail pause so we don't email a "regression". */
+    public const string USER_PAUSE_REASON = 'Paused by you';
+
     public function __construct(
         private MonitoredDomainRepository $monitoredDomainRepository,
         private GetTeamPlan $getTeamPlan,
@@ -50,7 +53,7 @@ final readonly class ConfigureDmarcAutoRampHandler
         match ($message->action) {
             AutoRampAction::Enable => $domain->enableAutoRamp($now),
             AutoRampAction::Disable => $domain->disableAutoRamp(),
-            AutoRampAction::Pause => $domain->pauseAutoRamp('Paused by you', $now),
+            AutoRampAction::Pause => $domain->pauseAutoRamp(self::USER_PAUSE_REASON, $now),
             AutoRampAction::Resume => $domain->resumeAutoRamp(),
         };
     }

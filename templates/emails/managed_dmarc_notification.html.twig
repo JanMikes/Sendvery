@@ -1,0 +1,30 @@
+{% extends 'emails/_layout.html.twig' %}
+{% import 'emails/_components.html.twig' as ui %}
+
+{#
+    Shared layout for the six managed-DMARC transactional emails (DEC-058). Each
+    handler passes a distinct pretitle / heading / body / CTA; the informational
+    touchpoints route through here directly because the generic critical-only
+    alert mailer would drop them.
+#}
+
+{% set accent = '#0d9488' %}
+
+{% block subject %}{{ subject }}{% endblock %}
+{% block preheader %}{{ heading }}{% if domainName %} — {{ domainName }}{% endif %}{% endblock %}
+{% block accent_color %}{{ accent }}{% endblock %}
+
+{% block content %}
+    {{ ui.pretitle(pretitle, accent) }}
+    {{ ui.heading(heading|e) }}
+
+    {% if domainName %}
+        {{ ui.muted('Domain: <strong style="color:#0f172a;font-family:\'JetBrains Mono\',ui-monospace,Menlo,Consolas,monospace;">' ~ domainName|e ~ '</strong>') }}
+    {% endif %}
+
+    {{ ui.paragraph(body|e) }}
+
+    {{ ui.button(ctaLabel, ctaUrl, accent) }}
+
+    {{ ui.callout('info', 'You’re receiving this because Sendvery manages DMARC for this domain. Manage notification preferences in your dashboard settings.') }}
+{% endblock %}
