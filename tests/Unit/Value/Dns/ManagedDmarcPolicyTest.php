@@ -31,4 +31,11 @@ final class ManagedDmarcPolicyTest extends TestCase
         self::assertFalse($base->equals(new ManagedDmarcPolicy(DmarcPolicy::Quarantine, null, 100)));
         self::assertFalse($base->equals(new ManagedDmarcPolicy(DmarcPolicy::Quarantine, DmarcPolicy::Quarantine, 50)));
     }
+
+    #[Test]
+    public function labelIsCompactAndOmitsDefaults(): void
+    {
+        self::assertSame('reject', (new ManagedDmarcPolicy(DmarcPolicy::Reject))->label());
+        self::assertSame('quarantine; pct=50; sp=reject', (new ManagedDmarcPolicy(DmarcPolicy::Quarantine, DmarcPolicy::Reject, 50))->label());
+    }
 }

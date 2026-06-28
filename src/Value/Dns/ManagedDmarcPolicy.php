@@ -38,4 +38,20 @@ final readonly class ManagedDmarcPolicy
             && $this->sp === $other->sp
             && $this->pct === $other->pct;
     }
+
+    /** A compact human label for the audit trail, e.g. "quarantine; pct=50; sp=reject". */
+    public function label(): string
+    {
+        $parts = [$this->p->value];
+
+        if (100 !== $this->pct) {
+            $parts[] = 'pct='.$this->pct;
+        }
+
+        if (null !== $this->sp) {
+            $parts[] = 'sp='.$this->sp->value;
+        }
+
+        return implode('; ', $parts);
+    }
 }
