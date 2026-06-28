@@ -61,5 +61,9 @@ final readonly class AdvanceDmarcPolicyHandler
             $message->actorUserId,
             $this->clock->now(),
         );
+
+        // Clear any pending auto-ramp schedule now that the tier is published, so
+        // the cron re-evaluates from scratch for the next rung (no-op for guided).
+        $domain->clearAutoRampSchedule();
     }
 }
