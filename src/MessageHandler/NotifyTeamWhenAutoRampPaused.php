@@ -28,7 +28,9 @@ final readonly class NotifyTeamWhenAutoRampPaused
 
     public function __invoke(AutoRampPaused $event): void
     {
-        if (ConfigureDmarcAutoRampHandler::USER_PAUSE_REASON === $event->reason) {
+        // Administrative pauses (the customer paused it themselves, or a downgrade
+        // froze it) are not regressions — no scary "we paused enforcement" alert.
+        if (in_array($event->reason, [ConfigureDmarcAutoRampHandler::USER_PAUSE_REASON, DowngradeTeamPlanHandler::FREEZE_REASON], true)) {
             return;
         }
 
