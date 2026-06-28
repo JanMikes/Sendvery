@@ -97,6 +97,25 @@ final class PlanEnforcementTest extends IntegrationTestCase
         self::assertTrue($enforcement->canAccessFeature(SubscriptionPlan::BusinessAi, 'ai_insights'));
     }
 
+    public function testManagedDmarcIsAvailableOnEveryPaidPlanButNotFree(): void
+    {
+        $enforcement = $this->getService(PlanEnforcement::class);
+
+        self::assertFalse($enforcement->canUseManagedDmarc(SubscriptionPlan::Free));
+        self::assertTrue($enforcement->canUseManagedDmarc(SubscriptionPlan::Personal));
+        self::assertTrue($enforcement->canUseManagedDmarc(SubscriptionPlan::Pro));
+        self::assertTrue($enforcement->canUseManagedDmarc(SubscriptionPlan::Business));
+        self::assertTrue($enforcement->canUseManagedDmarc(SubscriptionPlan::Unlimited));
+    }
+
+    public function testAutoDriveTracksManagedDmarcForNow(): void
+    {
+        $enforcement = $this->getService(PlanEnforcement::class);
+
+        self::assertFalse($enforcement->canUseDmarcAutoRamp(SubscriptionPlan::Free));
+        self::assertTrue($enforcement->canUseDmarcAutoRamp(SubscriptionPlan::Pro));
+    }
+
     // ─── Monthly report cap ──────────────────────────────────────────────
 
     public function testCanParseReportWhenUnderCap(): void

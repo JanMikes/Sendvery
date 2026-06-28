@@ -446,6 +446,8 @@ Current entries (kept in sync with `crontab`):
 - `45 4 * * *` — `sendvery:dmarc:purge` (per-team DMARC report retention purge from `PlanLimits::getRetentionDays`)
 - `0 8 * * *` — `sendvery:plan-limits:warn-approaching` (email team owners crossing 80% of any plan cap; deduped by `team.plan_warning_at`)
 - `0 4 * * *` — `sendvery:dns:sync-authorization-records` (reconcile Cloudflare RFC 7489 TXT records with active domains; creates missing, deletes stale)
+- `30 5 * * *` — `sendvery:dmarc:auto-ramp` (DEC-058 auto-drive: safely advance managed DMARC policies with readiness gates + rollback; runs after the 03:00 DNS sweep refreshes cnameVerifiedAt, clear of the 04:xx purge window)
+- `45 5 * * *` — `sendvery:dmarc:sync-hosted-records` (reconcile hosted managed-DMARC policy records: recreate/repair drift, dangling-safe teardown)
 - Blacklist checks: daily (later phase)
 
 Ops:

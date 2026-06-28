@@ -35,6 +35,29 @@ final class SeedDemoDataCommandTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function seedsOneManagedMidRampDomain(): void
+    {
+        $this->commandTester()->execute([]);
+
+        $em = $this->getService(EntityManagerInterface::class);
+        $managed = $em->getRepository(\App\Entity\MonitoredDomain::class)->findOneBy(['domain' => 'okay.example']);
+
+        self::assertNotNull($managed);
+        self::assertSame(\App\Value\Dns\DmarcSetupMode::ManagedCname, $managed->dmarcSetupMode, 'A demo domain must be managed so the managed card has data to render.');
+        self::assertSame(\App\Value\DmarcPolicy::Quarantine, $managed->managedPolicyP);
+        self::assertTrue($managed->autoRampEnabled);
+        self::assertNotNull($managed->cnameVerifiedAt);
+        self::assertNotNull($managed->autoRampScheduledAdvanceAt, 'Mid-ramp: the next advance is scheduled.');
+        self::assertNotNull($managed->cloudflareHostedDmarcRecordId);
+
+        $audit = (int) $em->getConnection()->fetchOne(
+            'SELECT COUNT(*) FROM managed_dmarc_policy_change WHERE monitored_domain_id = ?',
+            [$managed->id->toString()],
+        );
+        self::assertGreaterThan(0, $audit, 'The managed demo domain has a policy-change audit trail.');
+    }
+
+    #[Test]
     public function isIdempotentAcrossMultipleRuns(): void
     {
         $tester = $this->commandTester();

@@ -9,7 +9,6 @@ use App\Value\Dns\DkimLookupOutcome;
 use App\Value\Dns\DnsIssue;
 use App\Value\Dns\IssueSeverity;
 use Spatie\Dns\Dns;
-use Spatie\Dns\Records\CNAME;
 
 final readonly class DkimChecker
 {
@@ -17,6 +16,7 @@ final readonly class DkimChecker
         private Dns $dns,
         private EmailProviderDetector $providerDetector,
         private DkimSelectorRegistry $selectorRegistry,
+        private CnameResolver $cnameResolver,
     ) {
     }
 
@@ -51,7 +51,7 @@ final readonly class DkimChecker
     {
         $dkimDomain = "{$selector}._domainkey.{$domain}";
 
-        $cnameTarget = $this->lookupCnameTarget($dkimDomain);
+        $cnameTarget = $this->cnameResolver->resolve($dkimDomain);
         $txtRecords = $this->lookupTxtRecords($dkimDomain);
 
         $rawRecord = null;
@@ -68,26 +68,6 @@ final readonly class DkimChecker
         }
 
         return $this->buildKeyResult($selector, $rawRecord, $cnameTarget);
-    }
-
-    private function lookupCnameTarget(string $name): ?string
-    {
-        try {
-            $records = $this->dns->getRecords($name, 'CNAME');
-        } catch (\Throwable) {
-            return null;
-        }
-
-        foreach ($records as $record) {
-            if ($record instanceof CNAME) {
-                $target = rtrim($record->target(), '.');
-                if ('' !== $target) {
-                    return $target;
-                }
-            }
-        }
-
-        return null;
     }
 
     /** @return list<string> */

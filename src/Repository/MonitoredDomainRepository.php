@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Entity\MonitoredDomain;
 use App\Exceptions\MonitoredDomainNotFound;
+use App\Value\Dns\DmarcSetupMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\UuidInterface;
 
@@ -59,6 +60,28 @@ final readonly class MonitoredDomainRepository
         }
 
         return null;
+    }
+
+    /**
+     * All managed-CNAME domains owned by a team. Used by the downgrade-freeze
+     * handler to pause auto-ramp on every managed domain (never loosening).
+     *
+     * @return list<MonitoredDomain>
+     */
+    public function findManagedDomainsForTeam(UuidInterface $teamId): array
+    {
+        /** @var list<MonitoredDomain> $domains */
+        $domains = $this->entityManager->createQueryBuilder()
+            ->select('d')
+            ->from(MonitoredDomain::class, 'd')
+            ->where('d.team = :teamId')
+            ->andWhere('d.dmarcSetupMode = :mode')
+            ->setParameter('teamId', $teamId->toString())
+            ->setParameter('mode', DmarcSetupMode::ManagedCname->value)
+            ->getQuery()
+            ->getResult();
+
+        return $domains;
     }
 
     public function findByDomain(string $domain, UuidInterface $teamId): ?MonitoredDomain

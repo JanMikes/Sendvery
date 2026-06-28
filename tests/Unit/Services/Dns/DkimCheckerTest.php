@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Services\Dns;
 
+use App\Services\Dns\CnameResolver;
 use App\Services\Dns\DkimChecker;
 use App\Services\Dns\DkimSelectorRegistry;
 use App\Services\Dns\EmailProviderDetector;
@@ -161,7 +162,7 @@ final class DkimCheckerTest extends TestCase
         $registry = new DkimSelectorRegistry();
         $detector = new EmailProviderDetector($dns, $organizationMapper);
 
-        return new DkimChecker($dns, $detector, $registry);
+        return new DkimChecker($dns, $detector, $registry, new CnameResolver($dns));
     }
 
     private function fakePublicKey(int $bits): string

@@ -174,6 +174,13 @@ final class PlanLimitsTest extends TestCase
         yield 'business no AI' => [SubscriptionPlan::Business, 'ai_insights', false];
         yield 'business_ai has AI' => [SubscriptionPlan::BusinessAi, 'ai_insights', true];
 
+        // managed_dmarc (DEC-058): every paid plan, never Free.
+        yield 'free no managed_dmarc' => [SubscriptionPlan::Free, 'managed_dmarc', false];
+        yield 'personal has managed_dmarc' => [SubscriptionPlan::Personal, 'managed_dmarc', true];
+        yield 'personal_ai has managed_dmarc' => [SubscriptionPlan::PersonalAi, 'managed_dmarc', true];
+        yield 'pro has managed_dmarc' => [SubscriptionPlan::Pro, 'managed_dmarc', true];
+        yield 'business has managed_dmarc' => [SubscriptionPlan::Business, 'managed_dmarc', true];
+
         // white_label_pdf: Business + BusinessAi only.
         yield 'free no white_label' => [SubscriptionPlan::Free, 'white_label_pdf', false];
         yield 'personal no white_label' => [SubscriptionPlan::Personal, 'white_label_pdf', false];
@@ -187,7 +194,7 @@ final class PlanLimitsTest extends TestCase
 
     public function testUnlimitedHasAllKnownFeatures(): void
     {
-        $features = ['dns_monitoring', 'alerts', 'digest', 'api_access', 'blacklist_monitoring', 'ai_insights', 'pdf_export', 'sender_inventory', 'white_label_pdf'];
+        $features = ['dns_monitoring', 'alerts', 'digest', 'api_access', 'blacklist_monitoring', 'ai_insights', 'pdf_export', 'sender_inventory', 'white_label_pdf', 'managed_dmarc'];
 
         foreach ($features as $feature) {
             self::assertTrue(

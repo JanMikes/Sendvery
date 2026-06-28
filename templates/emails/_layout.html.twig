@@ -3,8 +3,13 @@
 
     Email clients (Outlook, Gmail webmail, Apple Mail, mobile) only reliably
     render a small subset of HTML/CSS, so this layout stays table-based with
-    inline styles. Keep external assets, web fonts, and <style> blocks out —
-    use the design tokens defined here as inline values in each child template.
+    inline styles. Keep web fonts and <style> blocks out — use the design
+    tokens defined here as inline values in each child template. The only
+    external asset is the brand logo PNG in the header; it sits inside a teal
+    CSS box (background-color, not an image) so the header still reads as
+    Sendvery even when a client blocks images. Its URL is absolute against the
+    production host because queued emails render without an HTTP request
+    context (same reason the footer hardcodes sendvery.com).
 
     Blocks a child template fills:
       - subject       <title> and email subject (optional)
@@ -53,7 +58,7 @@
                                     <td style="vertical-align: middle;">
                                         <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                                             <tr>
-                                                <td style="width: 36px; height: 36px; background-color: #0f766e; border-radius: 9px; color: #ffffff; font-size: 17px; font-weight: 700; text-align: center; vertical-align: middle; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; letter-spacing: -0.02em;">S</td>
+                                                <td align="center" style="width: 36px; height: 36px; line-height: 36px; background-color: #0f766e; border-radius: 9px; text-align: center; vertical-align: middle;"><img src="https://sendvery.com/email-logo-mark.png" width="24" height="24" alt="Sendvery" style="border: 0; vertical-align: middle;"></td>
                                                 <td style="padding-left: 12px; vertical-align: middle; font-size: 18px; font-weight: 700; color: #0f172a; letter-spacing: -0.015em;">Sendvery</td>
                                             </tr>
                                         </table>

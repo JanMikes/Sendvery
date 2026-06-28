@@ -46,6 +46,46 @@ final class AlertOnDnsChangeTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function suppressesDmarcChangeAlertsForManagedDomains(): void
+    {
+        [$team, $domain] = $this->createTeamAndDomain();
+        $em = $this->getService(EntityManagerInterface::class);
+        $domain->dmarcSetupMode = \App\Value\Dns\DmarcSetupMode::ManagedCname;
+        $em->flush();
+
+        // Sendvery ramped the hosted policy → the DMARC record "changed". This must
+        // NOT raise a generic DnsRecordChanged alert for a domain we manage.
+        $this->getService(AlertOnDnsChange::class)(new DnsCheckCompleted(
+            dnsCheckResultId: Uuid::uuid7(),
+            domainId: $domain->id,
+            teamId: $team->id,
+            type: DnsCheckType::Dmarc,
+            hasChanged: true,
+            isValid: true,
+            rawRecord: 'v=DMARC1; p=quarantine; rua=mailto:reports@sendvery.test',
+            previousRawRecord: 'v=DMARC1; p=none; rua=mailto:reports@sendvery.test',
+        ));
+        $em->flush();
+
+        self::assertCount(0, $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]));
+
+        // A self-TXT domain (SPF here) still alerts normally.
+        $this->getService(AlertOnDnsChange::class)(new DnsCheckCompleted(
+            dnsCheckResultId: Uuid::uuid7(),
+            domainId: $domain->id,
+            teamId: $team->id,
+            type: DnsCheckType::Spf,
+            hasChanged: true,
+            isValid: true,
+            rawRecord: 'v=spf1 include:new ~all',
+            previousRawRecord: 'v=spf1 ~all',
+        ));
+        $em->flush();
+
+        self::assertCount(1, $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]));
+    }
+
+    #[Test]
     public function createsMissingAlertWhenRecordDisappears(): void
     {
         [$team, $domain] = $this->createTeamAndDomain();

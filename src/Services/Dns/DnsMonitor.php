@@ -8,6 +8,7 @@ use App\Entity\DnsCheckResult;
 use App\Entity\MonitoredDomain;
 use App\Repository\DnsCheckResultRepository;
 use App\Services\IdentityProvider;
+use App\Value\Dns\DmarcSetupMode;
 use App\Value\DnsCheckType;
 use Psr\Clock\ClockInterface;
 
@@ -64,6 +65,10 @@ final readonly class DnsMonitor
             'aspf' => $dmarcResult->aspf,
             'pct' => $dmarcResult->pct,
             'report_authorization_found' => $reportAuthorizationFound,
+            // Managed DMARC (DEC-058): the DMARC record at _dmarc.<domain> is
+            // Sendvery's hosted policy, reached via the customer's CNAME. Flagged
+            // so the pipeline narrates "managed by Sendvery" instead of "drift".
+            'managed' => DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode,
         ], $now);
 
         $mxResult = $this->mxChecker->check($domain->domain);

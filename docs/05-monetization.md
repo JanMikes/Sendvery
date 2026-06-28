@@ -29,6 +29,7 @@ Four public tiers (Free + 3 paid) plus Enterprise. Each paid tier has a paired i
 | **Seats** | 1 | 1 | 3 | 10 |
 | **Retention** | 30 days | 1 year | 2 years | unlimited |
 | **DMARC + DNS monitoring** | ✓ | ✓ | ✓ | ✓ |
+| **Managed DMARC + auto-drive** (CNAME, DEC-058) | – | ✓ | ✓ | ✓ |
 | **Real-time alerts** | – | ✓ | ✓ | ✓ |
 | **Blacklist monitoring** | – | ✓ | ✓ | ✓ |
 | **Sender inventory** | – | ✓ | ✓ | ✓ |

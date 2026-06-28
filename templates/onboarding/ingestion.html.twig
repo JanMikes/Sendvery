@@ -103,6 +103,61 @@
         </div>
     </div>
 
+    {# Managed DMARC (DEC-058) — the hands-off alternative to self-TXT. Hidden for
+       self-hosters with no Cloudflare zone (dnsAutomationConfigured = false). #}
+    {% if dnsAutomationConfigured and domainName is not null %}
+        <div class="card bg-base-100 shadow-xl border border-base-200" data-testid="onboarding-managed-option">
+            <div class="card-body p-6 sm:p-8 space-y-5">
+                <div class="flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                            <h2 class="text-xl font-bold">Let Sendvery manage it (CNAME)</h2>
+                            <span class="badge badge-primary badge-sm">Premium · hands-off</span>
+                        </div>
+                        <p class="text-sm text-base-content/60">
+                            Set one CNAME once, then never touch DNS again. We host your DMARC policy and — when your mail is
+                            consistently passing — <strong>auto-drive</strong> safely ramps you from monitoring to full enforcement.
+                        </p>
+                    </div>
+                </div>
+
+                {% if isManaged %}
+                    <twig:DnsRecordInstruction
+                        recordType="CNAME"
+                        host="_dmarc.{{ domainName }}"
+                        finalValue="{{ managedCnameTarget }}"
+                        whatText="Point your DMARC record at Sendvery"
+                        whyText="This single record never changes — we update the policy behind it for you."
+                        ttl="300"
+                        :copyable="true" />
+
+                    <turbo-frame id="managed-cname-verify" src="{{ path('onboarding_ingestion_managed_verify') }}" loading="lazy">
+                        <div class="rounded-2xl border border-base-300 bg-base-200/50 p-5 text-sm text-base-content/70">
+                            <span class="loading loading-dots loading-sm align-middle"></span> Checking your CNAME…
+                        </div>
+                    </turbo-frame>
+                {% elseif managedDmarcAvailable %}
+                    <div class="rounded-xl bg-base-200/50 p-4 text-sm text-base-content/70">
+                        <span class="font-semibold text-base-content/80">Best if you want</span> hands-off enforcement, to never edit DNS again,
+                        and auto-ramp with safety rails &amp; rollback. Requires no existing <span class="font-mono">_dmarc</span> TXT
+                        (a CNAME can’t coexist with one). Either way, report collection and AI insights work identically — you can switch anytime.
+                    </div>
+                    <form method="post" action="{{ path('onboarding_ingestion') }}">
+                        <input type="hidden" name="method" value="managed">
+                        <button type="submit" class="btn btn-primary w-full">Let Sendvery manage DMARC</button>
+                    </form>
+                {% else %}
+                    <div class="alert alert-info">
+                        <span>Managed DMARC with auto-drive is a paid feature. <a href="{{ path('pricing') }}" class="link link-primary font-semibold">Upgrade to enable it →</a></span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
     {# Divider #}
     <div class="flex items-center gap-3 text-xs uppercase tracking-wide text-base-content/40">
         <div class="flex-1 h-px bg-base-300"></div>

@@ -505,4 +505,75 @@ Track key decisions, their rationale, and any alternatives considered.
 
 ---
 
+### DEC-058: Managed DMARC — CNAME delegation, paid-only, additive auto-ramp
+**Date:** 2026-06-28
+**Status:** Decided
+**Decision:** Offer "Managed DMARC" as a NEW, opt-in alternative to the self-TXT default
+(no NS delegation). The customer sets ONE immutable CNAME `_dmarc.<domain>` →
+`<domain>._dmarc.sendvery.com`; Sendvery publishes and MUTATES a full-policy TXT at that
+target inside its own Cloudflare zone. The RFC 7489 `_report._dmarc` authorization record
+is still required and stays automated — managed runs in addition to it. Policy control v1
+is a fully-automatic ramp delivered as three ADDITIVE layers: (1) instant manual
+selector (p/pct/sp), (2) one-click guided advance with a readiness recommendation,
+(3) opt-in scheduled auto-ramp (none→quarantine→reject) with a 48h advance notice,
+pause/opt-out, and safety rails (thin-data gates, regression detection, rollback).
+Sub-decisions:
+  (a) Hosted-record `rua` is Sendvery-ONLY. Switchover preserves enforcement strength
+      (p/sp/pct carried forward) but does NOT keep an external rua — an external report
+      destination cannot be authorized from a zone we don't control, and a second rua to a
+      third party would silently fail. Customers who must keep an external rua stay on
+      self-TXT; the managed-enable flow warns when it detects an external rua.
+  (b) Auto-ramp uses STRICTER thresholds than the manual advisor (none→quarantine 95%/30d/
+      ≥3 reports/≥2 sources/0 authorized-failures; quarantine→reject 99%/60d; plus verified-
+      CNAME + 7-day dwell). The softer `DmarcPolicyAdvisor` (90/95) still drives manual
+      "you could move up" hints. Looser advice vs. stricter automatic action is intentional.
+  (c) Availability = paid plans only (`managed_dmarc` feature on PlanLimits, `Free !== plan`)
+      AND `CloudflareDnsClient::isConfigured()`. Self-hosted operators who configure their own
+      Cloudflare zone get managed via the existing `Unlimited` staff-grant; no `self_hosted`
+      flag is invented. No Cloudflare → the option is hidden for everyone.
+**Rationale:** CNAME delegation is the standard, low-risk way to host a customer's DMARC
+without taking over their zone (the target lives in our zone — no subdomain-takeover vector).
+Paid-only mirrors how every other convenience feature is gated. Stricter auto thresholds and
+publish-before-CNAME / dangling-safe-teardown rails honor "never break a customer's live DMARC"
+and "never delete user data." Sendvery-only rua is the only reliably-deliverable option.
+**Alternatives considered:** NS delegation (rejected — takes over the whole zone, high blast
+radius); multi-value rua incl. the customer's external address (rejected — fails silently
+without a remote §7.1 authorization record); a single shared threshold set for advice and
+automation (rejected — automation must be more conservative than a hint); a `self_hosted`
+entitlement flag (rejected — `Unlimited` already covers it).
+**Impact:** 13 new `MonitoredDomain` columns + a `managed_dmarc_policy_change` audit table
+(`Version20260628120000`); new value objects/enums in `src/Value/Dns`; a full-policy publish
+path on `DnsRecordPublisher`/`CloudflareDnsClient` (upsert via GET→PATCH→POST, low TTL,
+`_report._dmarc` exclusion); `ManagedDmarcCnameChecker`; `DmarcRampReadinessEvaluator`;
+five write controllers/commands; `<twig:ManagedDmarcCard>`; onboarding managed tab; six
+transactional emails + four `AlertType` cases; two daily crons (`sendvery:dmarc:auto-ramp`,
+`sendvery:dmarc:sync-hosted-records`) with Sentry monitors; downgrade-freeze wiring; demo seed;
+`PlanLimits` `managed_dmarc` feature; docs 02/03/04/05/15.
+**Post-review hardening (adversarial review round):** five substantive fixes on top of the
+build. (1) `CloudflareDnsClient::publishPolicyRecord` now distinguishes a *failed* lookup from
+"no record exists" and aborts rather than POSTing — a transient GET error could otherwise create
+a second TXT and PERMERROR (disable) the customer's DMARC. (2) The ramp now carries the
+customer's `sp`/`pct` through every advance and rollback (`AutoRampStage::targetPolicy(?current)`)
+instead of resetting them to `sp=null; pct=100` — previously a deliberate subdomain exemption
+could be silently tightened. (3) `MonitoredDomain::changeManagedPolicy` is guarded to a no-op on
+self-TXT domains and cancels any pending auto-ramp schedule on a real change. (4) The
+hosted-record sync reports a distinct `delete_failed` outcome instead of counting a failed
+Cloudflare delete as torn-down. (5) The dashboard `DnsRecordInstruction` copy button now copies
+the bare CNAME target (was wrapped in literal quotes); the active card leads with auto-drive (the
+premium hero) and demotes manual policy control into a disclosure.
+A second round (after `/code-review high` + `/security-review`) added: (6) a new
+`CnameVerificationOutcome::LookupFailed` (distinct from `Missing`) so a transient DNS error is
+never read as "the customer removed their CNAME" — both teardown sites (the disable event handler
+and the sync cron) now DEFER rather than delete on an unconfirmed lookup, and the daily sweep no
+longer un-verifies a live CNAME (which would have spuriously frozen the ramp) on a blip; (7)
+`EnableManagedDmarcHandler::seedFromLiveRecord` carries `sp`/`pct` forward even when `p=none` (a
+customer with `p=none; sp=quarantine` no longer silently loses subdomain enforcement at
+switchover); (8) the sync cron reports `publish_failed`/`delete_failed`/`lookup_failed` as a single
+`deferred` (retried-next-run) count instead of overstating success. Auto-drive deliberately
+controls `p` only — it preserves the customer's `sp`/`pct` on BOTH advance and rollback (the system
+never auto-overrides their explicit subdomain policy; a regression pauses + alerts the human to
+adjust `sp` if a subdomain is implicated).
+
+---
+
 *Add new decisions above this line*

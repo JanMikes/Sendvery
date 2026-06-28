@@ -1,0 +1,248 @@
+{# Managed DMARC control surface (DEC-058). One card, six states, driven by
+   ManagedDmarcCardResult. Auto-drive is the premium hero — it carries a Premium
+   badge and the Free-plan nudge names it explicitly. Semantic daisyUI tokens
+   only; never assert raw Tailwind classes in tests.
+
+   Props:
+     - card (ManagedDmarcCardResult)
+     - domainId (string)
+     - domainName (string)
+     - history (list<ManagedDmarcPolicyChangeResult>)
+     - nextTier (?SubscriptionPlan)  upgrade target for the Free-plan nudge
+#}
+{% props card, domainId, domainName, history = [], nextTier = null %}
+
+{% set state = card.state.value %}
+
+<div class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl" data-testid="managed-dmarc-card" data-managed-state="{{ state }}">
+    <div class="card-body p-5 sm:p-6 space-y-4">
+
+        {# Header #}
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+            <h2 class="font-bold text-lg flex items-center gap-2">
+                Managed DMARC
+                <span class="badge badge-primary badge-sm">Premium</span>
+            </h2>
+            {% if state == 'active' %}
+                <span class="badge badge-success gap-1">● Active</span>
+            {% elseif state == 'cname_pending' %}
+                <span class="badge badge-warning gap-1">● CNAME pending</span>
+            {% elseif state == 'preparing' %}
+                <span class="badge badge-ghost gap-1">Preparing…</span>
+            {% elseif state == 'error' %}
+                <span class="badge badge-error gap-1">● Needs attention</span>
+            {% elseif state == 'frozen' %}
+                <span class="badge badge-warning gap-1">● Frozen</span>
+            {% endif %}
+        </div>
+
+        {# ── NOT ENABLED ─────────────────────────────────────────────── #}
+        {% if state == 'not_enabled' %}
+            <h3 class="font-semibold">Hand off DMARC enforcement</h3>
+            <p class="text-sm text-base-content/70 leading-relaxed">
+                Set one CNAME and Sendvery hosts your DMARC policy — then <strong>auto-drive</strong> safely
+                moves you to full enforcement (<span class="font-mono">p=reject</span>) when your mail is ready.
+                You never edit DNS again.
+            </p>
+            {% if card.available %}
+                <form method="post" action="{{ path('dashboard_domain_enable_managed_dmarc', { id: domainId }) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_enable') }}">
+                    <button type="submit" class="btn btn-primary">Let Sendvery manage DMARC</button>
+                </form>
+            {% else %}
+                <div class="alert alert-info">
+                    <span>
+                        Managed DMARC{% if nextTier %} is available on {{ nextTier.value|capitalize }} and up{% endif %}.
+                        <a href="{{ path('pricing') }}" class="link link-primary font-semibold">Upgrade to enable auto-drive →</a>
+                    </span>
+                </div>
+            {% endif %}
+
+        {# ── FROZEN (downgrade) ──────────────────────────────────────── #}
+        {% elseif state == 'frozen' %}
+            <div class="alert alert-warning">
+                <span>
+                    Managed DMARC is frozen on your current policy
+                    (<span class="font-mono">p={{ card.policyP ? card.policyP.value : 'none' }}</span>).
+                    Your protection keeps working.
+                    <a href="{{ path('pricing') }}" class="link font-semibold">Upgrade to change policy or resume auto-drive →</a>
+                </span>
+            </div>
+            <form method="post" action="{{ path('dashboard_domain_switch_to_self_txt', { id: domainId }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_to_self') }}">
+                <button type="submit" class="btn btn-ghost btn-sm">Prefer to take it back over? Switch to a self-managed record →</button>
+            </form>
+
+        {# ── PREPARING ───────────────────────────────────────────────── #}
+        {% elseif state == 'preparing' %}
+            <div class="flex items-center gap-3 text-base-content/70">
+                <span class="loading loading-dots loading-md"></span>
+                <span>Preparing your managed DMARC record… this only takes a moment.</span>
+            </div>
+
+        {# ── CNAME PENDING / ERROR ───────────────────────────────────── #}
+        {% elseif state == 'cname_pending' or state == 'error' %}
+            {% if state == 'error' %}
+                <div class="alert alert-error">
+                    <span>
+                        We can’t see your CNAME anymore. <span class="font-mono">_dmarc.{{ domainName }}</span> no longer
+                        points to Sendvery, so your DMARC policy isn’t being served. Re-add the CNAME below, or switch to
+                        managing the record yourself.
+                    </span>
+                </div>
+            {% else %}
+                <p class="text-sm text-base-content/70">
+                    Add this CNAME at your DNS host. We re-check your DNS automatically every day — or reload this page once you’ve added it.
+                    We’ve already published your starting policy (<span class="font-mono">p=none</span>, monitor-only), so nothing changes for your senders yet.
+                </p>
+            {% endif %}
+
+            <twig:DnsRecordInstruction
+                recordType="CNAME"
+                host="_dmarc.{{ domainName }}"
+                finalValue="{{ card.cnameTarget }}"
+                whatText="Point your DMARC record at Sendvery"
+                whyText="This single record never changes — we update the policy behind it so you never edit DNS again."
+                ttl="300"
+                :copyable="true" />
+
+            <form method="post" action="{{ path('dashboard_domain_switch_to_self_txt', { id: domainId }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_to_self') }}">
+                <button type="submit" class="btn btn-ghost btn-sm">Switch back to managing the record yourself →</button>
+            </form>
+
+        {# ── ACTIVE ──────────────────────────────────────────────────── #}
+        {% elseif state == 'active' %}
+            <p class="text-sm text-base-content/60">
+                Sendvery is hosting and enforcing DMARC for {{ domainName }}.
+                CNAME verified · <span class="font-mono">_dmarc.{{ domainName }} → {{ card.cnameTarget }}</span>
+            </p>
+
+            {# Auto-drive (the premium hero) — lead with the hands-off path #}
+            <div class="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="font-semibold text-sm flex items-center gap-2">
+                        Auto-drive
+                        <span class="badge badge-primary badge-xs">Premium</span>
+                    </div>
+                    <span class="badge {{ card.autoRampEnabled and not card.autoRampPaused ? 'badge-success' : 'badge-ghost' }} badge-sm">
+                        {{ card.autoRampEnabled and not card.autoRampPaused ? 'On' : (card.autoRampPaused ? 'Paused' : 'Off') }}
+                    </span>
+                </div>
+                {% if card.autoRampEnabled %}
+                    <p class="text-sm text-base-content/70">
+                        Goal: <span class="font-mono">reject</span> · Sendvery advances you when each tier is safe,
+                        and emails you 48 hours before every change. Safety rails: never tighten on thin data,
+                        auto-pause &amp; roll back on alignment drops.
+                    </p>
+                    {% if card.scheduledStage and card.scheduledAdvanceAt %}
+                        <p class="text-sm">Next step scheduled: <strong>{{ card.scheduledStage.value }}</strong>, {{ card.scheduledAdvanceAt|date('D j M, H:i') }}.</p>
+                    {% endif %}
+                    <div class="flex gap-2 flex-wrap">
+                        {% if card.autoRampPaused %}
+                            {{ _self.autoRampButton(domainId, 'resume', 'Resume auto-drive', 'btn-primary') }}
+                        {% else %}
+                            {{ _self.autoRampButton(domainId, 'pause', 'Pause', 'btn-outline') }}
+                        {% endif %}
+                        {{ _self.autoRampButton(domainId, 'disable', 'Turn off', 'btn-ghost') }}
+                    </div>
+                {% else %}
+                    <p class="text-sm text-base-content/70">
+                        Let Sendvery move you to full enforcement automatically — safely, one tier at a time, with a 48-hour
+                        heads-up and instant rollback if anything regresses.
+                    </p>
+                    {{ _self.autoRampButton(domainId, 'enable', 'Turn on auto-drive', 'btn-primary') }}
+                {% endif %}
+            </div>
+
+            {# Readiness hint + one-click advance #}
+            <div class="rounded-xl border border-base-200 p-4 space-y-2">
+                <div class="font-semibold text-sm">Readiness</div>
+                <p class="text-sm text-base-content/70">{{ _self.readinessHint(card) }}</p>
+                {% if card.recommendedNextPolicy %}
+                    <form method="post" action="{{ path('dashboard_domain_advance_dmarc', { id: domainId }) }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dmarc_advance') }}">
+                        <button type="submit"
+                                class="btn btn-sm btn-primary {{ card.eligibleForNextTier ? '' : 'btn-disabled' }}"
+                                {{ card.eligibleForNextTier ? '' : 'disabled' }}
+                                title="{{ card.eligibleForNextTier ? '' : 'Not ready yet — see readiness above' }}">
+                            ⤴ Advance to {{ card.recommendedNextPolicy.value }} now
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+
+            {# Manual override — demoted below the hands-off path #}
+            <details class="rounded-xl bg-base-200/60 p-4">
+                <summary class="font-semibold text-sm cursor-pointer">Advanced: set policy manually</summary>
+                <form method="post" action="{{ path('dashboard_domain_set_dmarc_policy', { id: domainId }) }}" class="space-y-3 mt-3">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dmarc_policy') }}">
+                    <p class="text-xs text-base-content/60">Publishes instantly — and cancels any scheduled auto-drive advance.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label class="form-control">
+                            <span class="label-text text-xs">Policy (p)</span>
+                            <select name="policy" class="select select-bordered select-sm">
+                                <option value="none" {{ card.policyP and card.policyP.value == 'none' ? 'selected' }}>none</option>
+                                <option value="quarantine" {{ card.policyP and card.policyP.value == 'quarantine' ? 'selected' }}>quarantine</option>
+                                <option value="reject" {{ card.policyP and card.policyP.value == 'reject' ? 'selected' }}>reject</option>
+                            </select>
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">Subdomains (sp)</span>
+                            <select name="subdomain_policy" class="select select-bordered select-sm">
+                                <option value="same" {{ card.policySp is null ? 'selected' }}>same as policy</option>
+                                <option value="none" {{ card.policySp and card.policySp.value == 'none' ? 'selected' }}>none</option>
+                                <option value="quarantine" {{ card.policySp and card.policySp.value == 'quarantine' ? 'selected' }}>quarantine</option>
+                                <option value="reject" {{ card.policySp and card.policySp.value == 'reject' ? 'selected' }}>reject</option>
+                            </select>
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">Coverage (pct)</span>
+                            <input type="number" name="pct" min="1" max="100" value="{{ card.policyPct ?? 100 }}" class="input input-bordered input-sm">
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-outline">Publish now</button>
+                </form>
+            </details>
+
+            {% if history is not empty %}
+                <div class="text-sm">
+                    <div class="font-semibold mb-1">Recent changes</div>
+                    <ul class="space-y-1 text-base-content/70">
+                        {% for change in history|slice(0, 5) %}
+                            <li>
+                                <span class="font-mono">{{ change.fromPolicy ?? '—' }} → {{ change.toPolicy }}</span>
+                                <span class="text-base-content/50">({{ change.source.value|replace({'_': ' '}) }} · {{ change.createdAt|date('j M') }})</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <form method="post" action="{{ path('dashboard_domain_switch_to_self_txt', { id: domainId }) }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_to_self') }}">
+                <button type="submit" class="btn btn-ghost btn-xs">Switch back to managing the record yourself →</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+{% macro readinessHint(card) %}
+    {%- if card.eligibleForNextTier and card.recommendedNextPolicy -%}
+        {{ card.passRate|number_format(1) }}% of your real mail has passed DMARC for {{ card.daysOfData }} days straight, across {{ card.distinctSources }} known senders. You’re ready to move to {{ card.recommendedNextPolicy.value }}.
+    {%- elseif 'thin_data' in card.blockingReasons -%}
+        We’re still gathering data — we’ve seen {{ card.daysOfData }} days of reports. Auto-drive stays paused until your traffic is well understood.
+    {%- elseif card.recommendedNextPolicy -%}
+        Alignment is {{ card.passRate|number_format(1) }}% over {{ card.daysOfData }} days. We hold steady until it’s safe to tighten — we’ll let you know the moment you’re ready.
+    {%- else -%}
+        You’re at full enforcement (reject). Sendvery keeps your policy hosted and monitored.
+    {%- endif -%}
+{% endmacro %}
+
+{% macro autoRampButton(domainId, action, label, variant) %}
+    <form method="post" action="{{ path('dashboard_domain_set_auto_ramp', { id: domainId }) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dmarc_autoramp') }}">
+        <input type="hidden" name="action" value="{{ action }}">
+        <button type="submit" class="btn btn-sm {{ variant }}">{{ label }}</button>
+    </form>
+{% endmacro %}

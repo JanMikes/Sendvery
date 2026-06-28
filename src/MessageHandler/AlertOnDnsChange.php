@@ -10,6 +10,8 @@ use App\Repository\TeamRepository;
 use App\Services\AlertEngine;
 use App\Value\AlertSeverity;
 use App\Value\AlertType;
+use App\Value\Dns\DmarcSetupMode;
+use App\Value\DnsCheckType;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
@@ -25,6 +27,16 @@ final readonly class AlertOnDnsChange
     public function __invoke(DnsCheckCompleted $event): void
     {
         $domain = $this->monitoredDomainRepository->get($event->domainId);
+
+        // Managed DMARC (DEC-058): Sendvery owns the hosted DMARC record, so a
+        // change/invalid/missing on the DMARC check reflects our own policy
+        // ramp or a CNAME issue — both are narrated by the managed card and the
+        // dangling alert. Suppress the generic DNS-change alerts so we never nag
+        // the customer about a record we manage.
+        if (DnsCheckType::Dmarc === $event->type && DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode) {
+            return;
+        }
+
         $team = $this->teamRepository->get($event->teamId);
         $typeName = strtoupper($event->type->value);
 
