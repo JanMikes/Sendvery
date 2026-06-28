@@ -98,6 +98,176 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
         return null !== $this->findTxtRecord($name);
     }
 
+    public function publishPolicyRecord(string $customerDomain, string $policyContent): ?string
+    {
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
+        $name = $this->buildPolicyRecordName($customerDomain);
+        $existing = $this->findTxtRecord($name);
+
+        // Strict upsert with a single-record invariant: never POST-on-change
+        // (Cloudflare allows multiple TXT at one name; two DMARC records make
+        // receivers permerror and silently break the policy).
+        if (null !== $existing) {
+            if (trim($existing->content) === trim($policyContent)) {
+                return $existing->id;
+            }
+
+            $response = $this->apiRequest('PATCH', sprintf('%s/%s', $this->dnsRecordsUrl(), $existing->id), [
+                'type' => 'TXT',
+                'name' => $name,
+                'content' => $policyContent,
+                'ttl' => 1,
+                'comment' => sprintf('Managed DMARC policy for %s', $customerDomain),
+            ]);
+
+            if (null !== $response && isset($response['result']['id'])) {
+                $this->logger->info('Updated managed DMARC policy record for {domain}', ['domain' => $customerDomain]);
+
+                return $response['result']['id'];
+            }
+
+            $this->capturePolicyFailure('update', $customerDomain, $response);
+
+            return null;
+        }
+
+        $response = $this->apiRequest('POST', $this->dnsRecordsUrl(), [
+            'type' => 'TXT',
+            'name' => $name,
+            'content' => $policyContent,
+            'ttl' => 1,
+            'comment' => sprintf('Managed DMARC policy for %s', $customerDomain),
+        ]);
+
+        if (null !== $response && isset($response['result']['id'])) {
+            $this->logger->info('Published managed DMARC policy record for {domain}', ['domain' => $customerDomain]);
+
+            return $response['result']['id'];
+        }
+
+        // A concurrent publish may have created the record first — clean down to one.
+        if (null !== $response && $this->isDuplicateError($response)) {
+            $existing = $this->findTxtRecord($name);
+            if (null !== $existing) {
+                return $existing->id;
+            }
+        }
+
+        $this->capturePolicyFailure('publish', $customerDomain, $response);
+
+        return null;
+    }
+
+    public function removePolicyRecord(string $customerDomain): bool
+    {
+        if (!$this->isConfigured()) {
+            return false;
+        }
+
+        $record = $this->findTxtRecord($this->buildPolicyRecordName($customerDomain));
+        if (null === $record) {
+            return true;
+        }
+
+        $deleted = $this->deleteRecordById($record->id);
+        if (!$deleted) {
+            $this->capturePolicyFailure('delete', $customerDomain, null);
+        }
+
+        return $deleted;
+    }
+
+    public function policyRecordExists(string $customerDomain): bool
+    {
+        if (!$this->isConfigured()) {
+            return false;
+        }
+
+        return null !== $this->findTxtRecord($this->buildPolicyRecordName($customerDomain));
+    }
+
+    public function findPolicyRecord(string $customerDomain): ?CloudflareDnsRecord
+    {
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
+        return $this->findTxtRecord($this->buildPolicyRecordName($customerDomain));
+    }
+
+    /**
+     * List every hosted managed DMARC policy record. Explicitly excludes the
+     * `._report._dmarc` authorization records, which collide on the
+     * `._dmarc.<reportDomain>` suffix.
+     *
+     * @return array<CloudflareDnsRecord>
+     */
+    public function listPolicyRecords(): array
+    {
+        $reportDomain = $this->getReportDomain();
+        if (null === $reportDomain) {
+            return [];
+        }
+
+        $records = [];
+        $page = 1;
+
+        do {
+            $response = $this->apiRequest('GET', $this->dnsRecordsUrl(), query: [
+                'type' => 'TXT',
+                'name' => sprintf('contains:._dmarc.%s', $reportDomain),
+                'per_page' => 100,
+                'page' => $page,
+            ]);
+
+            if (null === $response || !isset($response['result']) || !is_array($response['result'])) {
+                break;
+            }
+
+            foreach ($response['result'] as $record) {
+                if (is_array($record) && isset($record['id'], $record['name'], $record['content'])) {
+                    /** @var array{id: string, name: string, content: string, comment?: string, created_on?: string} $record */
+                    if (str_contains($record['name'], '._report._dmarc.')) {
+                        continue;
+                    }
+
+                    $records[] = CloudflareDnsRecord::fromApiResponse($record);
+                }
+            }
+
+            $totalPages = $response['result_info']['total_pages'] ?? 1;
+            ++$page;
+        } while ($page <= $totalPages);
+
+        return $records;
+    }
+
+    public function extractPolicyCustomerDomain(CloudflareDnsRecord $record): ?string
+    {
+        $reportDomain = $this->getReportDomain();
+        if (null === $reportDomain) {
+            return null;
+        }
+
+        // Never mistake an authorization record for a policy record (the
+        // `._report._dmarc.<reportDomain>` name ends with `._dmarc.<reportDomain>`).
+        if (str_contains($record->name, '._report._dmarc.')) {
+            return null;
+        }
+
+        $suffix = sprintf('._dmarc.%s', $reportDomain);
+        if (!str_ends_with($record->name, $suffix)) {
+            return null;
+        }
+
+        $domain = substr($record->name, 0, -strlen($suffix));
+
+        return '' !== $domain ? $domain : null;
+    }
+
     public function deleteRecordById(string $recordId): bool
     {
         $response = $this->apiRequest('DELETE', sprintf('%s/%s', $this->dnsRecordsUrl(), $recordId));
@@ -206,6 +376,31 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
         }
 
         return sprintf('%s._report._dmarc.%s', strtolower($customerDomain), $reportDomain);
+    }
+
+    private function buildPolicyRecordName(string $customerDomain): string
+    {
+        $reportDomain = $this->getReportDomain();
+
+        if (null === $reportDomain) {
+            throw new \RuntimeException('SENDVERY_REPORT_ADDRESS is missing or malformed — cannot build policy record name.');
+        }
+
+        return sprintf('%s._dmarc.%s', strtolower($customerDomain), $reportDomain);
+    }
+
+    /** @param array<string, mixed>|null $response */
+    private function capturePolicyFailure(string $action, string $customerDomain, ?array $response): void
+    {
+        $this->logger->error('Failed to {action} managed DMARC policy record for {domain}', [
+            'action' => $action,
+            'domain' => $customerDomain,
+            'response' => $response,
+        ]);
+
+        // Surface to Sentry so a stuck publish is observable — the record id
+        // stays unset and the sync cron retries, but we must not fail silently.
+        \Sentry\captureException(new \RuntimeException(sprintf('Cloudflare managed DMARC %s failed for %s', $action, $customerDomain)));
     }
 
     private function getReportDomain(): ?string
