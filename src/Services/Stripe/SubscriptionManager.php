@@ -7,6 +7,7 @@ namespace App\Services\Stripe;
 use App\Entity\Team;
 use App\Message\DowngradeTeamPlan;
 use App\Message\UpgradeTeamPlan;
+use App\Repository\TeamMembershipRepository;
 use App\Repository\TeamRepository;
 use App\Value\BillingInterval;
 use App\Value\SubscriptionPlan;
@@ -24,6 +25,7 @@ final readonly class SubscriptionManager
         private MessageBusInterface $commandBus,
         private StripePriceResolver $priceResolver,
         private TeamRepository $teamRepository,
+        private TeamMembershipRepository $teamMembershipRepository,
         private LoggerInterface $logger,
         private string $defaultUri,
     ) {
@@ -58,16 +60,43 @@ final readonly class SubscriptionManager
             ],
         ];
 
-        // In subscription mode Stripe always creates a Customer, so
-        // `customer_creation` is invalid here — only pass an existing customer
-        // to attach the subscription to it.
-        if (null !== $team->stripeCustomerId) {
-            $params['customer'] = $team->stripeCustomerId;
-        }
+        // Always attach an explicit Customer. In subscription mode Stripe
+        // would auto-create one, but it'd carry no metadata and there's no
+        // `customer_data` param on Checkout to fix that — so we pre-create it
+        // with our internal IDs (`customer_creation` is also invalid for
+        // subscription mode).
+        $params['customer'] = $this->ensureCustomer($team);
 
         $session = $this->stripeClient->checkout->sessions->create($params);
 
         return (string) $session->url;
+    }
+
+    /**
+     * Return the team's Stripe customer ID, creating the Customer first when
+     * the team doesn't have one yet. New customers carry our internal IDs in
+     * metadata (`team_id` plus the owner's `user_id`) so a Stripe Customer can
+     * always be reconciled back to our records from the dashboard or in
+     * support/finance work.
+     */
+    private function ensureCustomer(Team $team): string
+    {
+        if (null !== $team->stripeCustomerId) {
+            return $team->stripeCustomerId;
+        }
+
+        $metadata = ['team_id' => $team->id->toString()];
+
+        $owner = $this->teamMembershipRepository->findOwnerForTeam($team->id);
+        if (null !== $owner) {
+            $metadata['user_id'] = $owner->user->id->toString();
+        }
+
+        $customer = $this->stripeClient->customers->create([
+            'metadata' => $metadata,
+        ]);
+
+        return (string) $customer->id;
     }
 
     /**
