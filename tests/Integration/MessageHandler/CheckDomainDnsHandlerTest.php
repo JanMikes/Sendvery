@@ -296,6 +296,45 @@ final class CheckDomainDnsHandlerTest extends IntegrationTestCase
         self::assertNotNull($updatedDomain->dkimVerifiedAt, 'A valid DKIM check using the team\'s custom selector must mark the domain DKIM-verified.');
     }
 
+    #[Test]
+    public function refreshesCnameVerifiedAtForManagedDomainsOnTheSweep(): void
+    {
+        // Managed domain whose CNAME resolves to us — the sweep must set cnameVerifiedAt.
+        $this->scriptDns()->withCname('_dmarc.managed.example', 'managed.example._dmarc.sendvery.test');
+
+        $em = $this->getService(EntityManagerInterface::class);
+        $team = new Team(id: Uuid::uuid7(), name: 'Managed', slug: 'managed-'.Uuid::uuid7()->toString(), createdAt: new \DateTimeImmutable());
+        $team->popEvents();
+        $em->persist($team);
+
+        $domainId = Uuid::uuid7();
+        $domain = new MonitoredDomain(id: $domainId, team: $team, domain: 'managed.example', createdAt: new \DateTimeImmutable());
+        $domain->dmarcSetupMode = \App\Value\Dns\DmarcSetupMode::ManagedCname;
+        $domain->managedPolicyP = \App\Value\DmarcPolicy::None;
+        $domain->popEvents();
+        $em->persist($domain);
+        $em->flush();
+        $em->clear();
+
+        $this->getService(CheckDomainDnsHandler::class)(new CheckDomainDns(domainId: $domainId));
+        $em->flush();
+        $em->clear();
+
+        $updated = $em->find(MonitoredDomain::class, $domainId);
+        self::assertNotNull($updated);
+        self::assertNotNull($updated->cnameVerifiedAt, 'A managed domain whose CNAME points at us must be marked CNAME-verified by the sweep.');
+
+        // Now the customer's CNAME disappears — the next sweep clears the flag (freezes the ramp).
+        $this->scriptDns()->reset();
+        $this->getService(CheckDomainDnsHandler::class)(new CheckDomainDns(domainId: $domainId));
+        $em->flush();
+        $em->clear();
+
+        $afterLoss = $em->find(MonitoredDomain::class, $domainId);
+        self::assertNotNull($afterLoss);
+        self::assertNull($afterLoss->cnameVerifiedAt, 'Losing the CNAME must clear cnameVerifiedAt.');
+    }
+
     private function createDomain(string $domain, ?string $dkimSelector = null): UuidInterface
     {
         $em = $this->getService(EntityManagerInterface::class);

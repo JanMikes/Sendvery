@@ -7,8 +7,11 @@ namespace App\MessageHandler;
 use App\Message\CheckDomainDns;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\Dns\DnsMonitor;
+use App\Services\Dns\ManagedDmarcCnameChecker;
+use App\Value\Dns\DmarcSetupMode;
 use App\Value\DnsCheckType;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 #[AsMessageHandler]
@@ -18,6 +21,8 @@ final readonly class CheckDomainDnsHandler
         private EntityManagerInterface $entityManager,
         private MonitoredDomainRepository $monitoredDomainRepository,
         private DnsMonitor $dnsMonitor,
+        private ManagedDmarcCnameChecker $cnameChecker,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -39,6 +44,13 @@ final readonly class CheckDomainDnsHandler
                 DnsCheckType::Dmarc => $domain->markDmarcVerified($result->checkedAt),
                 DnsCheckType::Mx => null,
             };
+        }
+
+        // Managed DMARC (DEC-058): keep cnameVerifiedAt fresh on the daily sweep.
+        // A non-verified outcome clears the flag, which freezes the auto-ramp
+        // until the CNAME is restored.
+        if (DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode) {
+            $domain->markCnameVerified($this->cnameChecker->verify($domain->domain), $this->clock->now());
         }
     }
 }
