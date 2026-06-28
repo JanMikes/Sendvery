@@ -46,7 +46,7 @@ final readonly class DmarcRuaInstruction
 
         return new self(
             currentRecord: $currentTrimmed,
-            finalRecord: self::rebuildRecord($tags),
+            finalRecord: (new DmarcRecordSerializer())->rebuildRecord($tags),
             alreadyConfigured: false,
         );
     }
@@ -88,27 +88,5 @@ final readonly class DmarcRuaInstruction
         }
 
         return $addresses;
-    }
-
-    /** @param array<string, string> $tags */
-    private static function rebuildRecord(array $tags): string
-    {
-        // Preserve canonical ordering: v, p, rua come first, then the rest.
-        $ordered = [];
-        foreach (['v', 'p', 'sp', 'rua', 'ruf', 'adkim', 'aspf', 'pct', 'fo', 'rf', 'ri'] as $key) {
-            if (array_key_exists($key, $tags)) {
-                $ordered[$key] = $tags[$key];
-                unset($tags[$key]);
-            }
-        }
-
-        $ordered = [...$ordered, ...$tags];
-
-        $parts = [];
-        foreach ($ordered as $key => $value) {
-            $parts[] = sprintf('%s=%s', $key, $value);
-        }
-
-        return implode('; ', $parts);
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Value\Dns;
 
+use App\Value\DmarcPolicy;
+use App\Value\Dns\AutoRampStage;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -12,24 +14,36 @@ final class AutoRampStageTest extends TestCase
     #[Test]
     public function climbsTheLadderMonitoringToComplete(): void
     {
-        self::markTestIncomplete('Skeleton from TASK-174; implemented in its build task.');
+        self::assertSame(AutoRampStage::Quarantine, AutoRampStage::Monitoring->next());
+        self::assertSame(AutoRampStage::Reject, AutoRampStage::Quarantine->next());
+        self::assertSame(AutoRampStage::Complete, AutoRampStage::Reject->next());
+        self::assertNull(AutoRampStage::Complete->next());
     }
 
     #[Test]
     public function previousWalksBackForRollback(): void
     {
-        self::markTestIncomplete('Skeleton from TASK-174; implemented in its build task.');
+        self::assertSame(AutoRampStage::Reject, AutoRampStage::Complete->previous());
+        self::assertSame(AutoRampStage::Quarantine, AutoRampStage::Reject->previous());
+        self::assertSame(AutoRampStage::Monitoring, AutoRampStage::Quarantine->previous());
+        self::assertNull(AutoRampStage::Monitoring->previous());
     }
 
     #[Test]
     public function fromPolicyMapsDmarcPolicyToStage(): void
     {
-        self::markTestIncomplete('Skeleton from TASK-174; implemented in its build task.');
+        self::assertSame(AutoRampStage::Monitoring, AutoRampStage::fromPolicy(null));
+        self::assertSame(AutoRampStage::Monitoring, AutoRampStage::fromPolicy(DmarcPolicy::None));
+        self::assertSame(AutoRampStage::Quarantine, AutoRampStage::fromPolicy(DmarcPolicy::Quarantine));
+        self::assertSame(AutoRampStage::Reject, AutoRampStage::fromPolicy(DmarcPolicy::Reject));
     }
 
     #[Test]
     public function targetPolicyResolvesPerStage(): void
     {
-        self::markTestIncomplete('Skeleton from TASK-174; implemented in its build task.');
+        self::assertSame(DmarcPolicy::None, AutoRampStage::Monitoring->targetPolicy()->p);
+        self::assertSame(DmarcPolicy::Quarantine, AutoRampStage::Quarantine->targetPolicy()->p);
+        self::assertSame(DmarcPolicy::Reject, AutoRampStage::Reject->targetPolicy()->p);
+        self::assertSame(DmarcPolicy::Reject, AutoRampStage::Complete->targetPolicy()->p);
     }
 }
