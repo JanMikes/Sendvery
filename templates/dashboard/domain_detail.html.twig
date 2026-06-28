@@ -45,6 +45,19 @@
        re-check button. #}
     <twig:DomainSetupStatus :status="domainSetupStatus" :domainId="domain.domainId" :ruaExtendInstruction="ruaExtendInstruction" :ruaAddressCount="ruaAddressCount" :dnsAutomationConfigured="dnsAutomationConfigured" />
 
+    {# Managed DMARC (DEC-058) — the control surface; only when DNS automation is
+       configured (self-hosters without Cloudflare never see it). #}
+    {% if dnsAutomationConfigured and managedDmarcCard is not null %}
+        <div class="mt-4">
+            <twig:ManagedDmarcCard
+                :card="managedDmarcCard"
+                domainId="{{ domain.domainId }}"
+                domainName="{{ domain.domainName }}"
+                :history="managedDmarcHistory"
+                :nextTier="managedDmarcNextTier" />
+        </div>
+    {% endif %}
+
     {% if reportAuthorizationFound is not null %}
         {% set reportHost = reportDomain ? reportDomain|split('@')|last : 'sendvery.com' %}
         {% if reportAuthorizationFound %}

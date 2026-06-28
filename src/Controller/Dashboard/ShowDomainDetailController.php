@@ -9,21 +9,31 @@ use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainDetail;
 use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
+use App\Query\GetDomainReadinessSignals;
 use App\Query\GetDomainWorkspaceTabCounts;
 use App\Query\GetLatestDkimDetection;
+use App\Query\GetManagedDmarcPolicyHistory;
+use App\Query\GetTeamPlan;
 use App\Query\GetTopSendersForDomain;
+use App\Repository\MonitoredDomainRepository;
 use App\Repository\QuarantinedDmarcReportRepository;
+use App\Results\ManagedDmarcCardResult;
 use App\Services\DashboardContext;
 use App\Services\DmarcPolicyAdvisor;
 use App\Services\Dns\CloudflareDnsClient;
 use App\Services\Dns\DkimSelectorRegistry;
+use App\Services\Dns\DmarcRampReadinessEvaluator;
+use App\Services\Dns\ManagedDmarcCnameChecker;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\DomainSetupStatusResolver;
 use App\Services\ReportAddressProvider;
+use App\Services\Stripe\PlanEnforcement;
 use App\Value\DmarcPolicy;
 use App\Value\Dns\DmarcRuaInstruction;
+use App\Value\Dns\DmarcSetupMode;
 use App\Value\Dns\RuaScenario;
 use Ramsey\Uuid\Uuid;
+use Ramsey\Uuid\UuidInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -47,6 +57,13 @@ final class ShowDomainDetailController extends AbstractController
         private readonly DkimSelectorRegistry $dkimSelectorRegistry,
         private readonly ReportAddressProvider $reportAddressProvider,
         private readonly CloudflareDnsClient $cloudflareClient,
+        private readonly MonitoredDomainRepository $monitoredDomainRepository,
+        private readonly GetTeamPlan $getTeamPlan,
+        private readonly PlanEnforcement $planEnforcement,
+        private readonly GetDomainReadinessSignals $getDomainReadinessSignals,
+        private readonly DmarcRampReadinessEvaluator $dmarcRampReadinessEvaluator,
+        private readonly GetManagedDmarcPolicyHistory $getManagedDmarcPolicyHistory,
+        private readonly ManagedDmarcCnameChecker $managedDmarcCnameChecker,
     ) {
     }
 
@@ -172,6 +189,32 @@ final class ShowDomainDetailController extends AbstractController
             $dkimSuggestedSelectors = $this->dkimSelectorRegistry->selectorsFor($dkimDetection->detectedProviders);
         }
 
+        // Managed DMARC (DEC-058) — assemble the card from the loaded entity, its
+        // readiness verdict, and the team's entitlement.
+        $domainEntity = $this->monitoredDomainRepository->findForTeams(Uuid::fromString($id), $this->teamUuids($teamIds));
+        $plan = $this->getTeamPlan->forTeam($this->dashboardContext->getTeamId()->toString());
+        $managedDmarcAvailable = $this->cloudflareClient->isConfigured() && $this->planEnforcement->canUseManagedDmarc($plan);
+
+        $managedReadiness = null;
+        if (null !== $domainEntity && DmarcSetupMode::ManagedCname === $domainEntity->dmarcSetupMode) {
+            $managedReadiness = $this->dmarcRampReadinessEvaluator->evaluate(
+                $domainEntity,
+                $this->getDomainReadinessSignals->forDomain($domainEntity->id, $this->teamUuids($teamIds)),
+            );
+        }
+
+        $managedDmarcCard = null !== $domainEntity
+            ? ManagedDmarcCardResult::build(
+                $domainEntity,
+                $managedReadiness,
+                $managedDmarcAvailable,
+                $this->managedDmarcCnameChecker->expectedTarget($domainEntity->domain) ?? '',
+            )
+            : null;
+        $managedHistory = null !== $domainEntity
+            ? $this->getManagedDmarcPolicyHistory->forDomain($domainEntity->id, $this->teamUuids($teamIds))
+            : [];
+
         return $this->render('dashboard/domain_detail.html.twig', [
             'domain' => $domain,
             'reports' => $reports,
@@ -192,6 +235,20 @@ final class ShowDomainDetailController extends AbstractController
             'reportAuthorizationFound' => $ruaScenario->reportAuthorizationFound,
             'reportDomain' => $this->reportAddressProvider->get(),
             'dnsAutomationConfigured' => $this->cloudflareClient->isConfigured(),
+            'managedDmarcCard' => $managedDmarcCard,
+            'managedDmarcHistory' => $managedHistory,
+            'managedDmarcAvailable' => $managedDmarcAvailable,
+            'managedDmarcNextTier' => $plan->nextTier(),
         ]);
+    }
+
+    /**
+     * @param list<string> $teamIds
+     *
+     * @return list<UuidInterface>
+     */
+    private function teamUuids(array $teamIds): array
+    {
+        return array_map(static fn (string $teamId): UuidInterface => Uuid::fromString($teamId), $teamIds);
     }
 }
