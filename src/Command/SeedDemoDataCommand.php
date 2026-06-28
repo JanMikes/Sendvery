@@ -8,6 +8,7 @@ use App\Entity\Alert;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DomainHealthSnapshot;
+use App\Entity\ManagedDmarcPolicyChange;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
@@ -19,6 +20,9 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\Dns\AutoRampStage;
+use App\Value\Dns\DmarcSetupMode;
+use App\Value\Dns\PolicyChangeSource;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
@@ -248,8 +252,23 @@ final class SeedDemoDataCommand extends Command
             dmarcVerifiedAt: $now->modify('-30 days'),
             firstReportAt: $now->modify('-29 days'),
         );
+        // DEC-058: okay.example is the managed-DMARC demo — verified CNAME,
+        // hosted at quarantine, auto-drive on with the next advance to reject
+        // scheduled, so the dashboard managed card renders in its active state.
+        $okay->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+        $okay->managedPolicyP = DmarcPolicy::Quarantine;
+        $okay->managedPolicyPct = 100;
+        $okay->autoRampStage = AutoRampStage::Quarantine;
+        $okay->autoRampEnabled = true;
+        $okay->managedDmarcEnabledAt = $now->modify('-25 days');
+        $okay->cnameVerifiedAt = $now->modify('-24 days');
+        $okay->lastPolicyChangeAt = $now->modify('-10 days');
+        $okay->autoRampScheduledStage = AutoRampStage::Reject;
+        $okay->autoRampScheduledAdvanceAt = $now->modify('+36 hours');
+        $okay->cloudflareHostedDmarcRecordId = 'demo-cf-hosted-okay';
         $okay->popEvents();
         $this->entityManager->persist($okay);
+        $this->seedManagedAuditTrail($okay, $now);
 
         $broken = new MonitoredDomain(
             id: $this->identityProvider->nextIdentity(),
@@ -287,6 +306,21 @@ final class SeedDemoDataCommand extends Command
                 'scores' => ['spf' => 0, 'dkim' => 0, 'dmarc' => 50, 'mx' => 60, 'blacklist' => 80],
             ],
         ];
+    }
+
+    private function seedManagedAuditTrail(MonitoredDomain $domain, \DateTimeImmutable $now): void
+    {
+        $this->entityManager->persist(new ManagedDmarcPolicyChange(
+            id: $this->identityProvider->nextIdentity(),
+            domain: $domain,
+            teamId: $domain->team->id,
+            actorUserId: null,
+            source: PolicyChangeSource::AutoRamp,
+            fromPolicy: 'none',
+            toPolicy: 'quarantine',
+            reason: null,
+            createdAt: $now->modify('-10 days'),
+        ));
     }
 
     private function createReports(MonitoredDomain $domain, float $passRatio): int
