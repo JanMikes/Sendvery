@@ -101,6 +101,27 @@ External services:
   └──────────────────┘
 ```
 
+## Managed DMARC (DEC-058)
+
+A paid, opt-in alternative to the self-TXT default: the customer points one
+immutable CNAME `_dmarc.<domain>` → `<domain>._dmarc.sendvery.com`, and Sendvery
+hosts + safely auto-ramps a full-policy TXT in its own Cloudflare zone
+(none → quarantine → reject) behind readiness gates, a 48h advance notice, and
+rollback. Built on the existing CQRS/event conventions, the Cloudflare RFC 7489
+plumbing, the plan-entitlement layer, and the DNS-check pipeline. Two daily crons
+(separate Sentry monitors):
+
+- `30 5 * * *` — `sendvery:dmarc:auto-ramp` (slug `sendvery-dmarc-auto-ramp`):
+  per managed domain, evaluate readiness, trip safety rails (pause/rollback),
+  schedule + execute advances, nudge guided domains.
+- `45 5 * * *` — `sendvery:dmarc:sync-hosted-records` (slug
+  `sendvery-dmarc-sync-hosted-records`): reconcile drifted/missing hosted
+  records and tear down offboarded ones dangling-safe (only once the CNAME is
+  gone).
+
+**Ops:** create the two Sentry monitors for the slugs above; the crontab lines
+live in `~/www/spare.srv/deployment/crontab` (separate repo, already pushed).
+
 ## Docker Compose Structure
 
 ```yaml

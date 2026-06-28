@@ -20,21 +20,21 @@ This document is the build plan for **Managed DMARC** — a new, opt-in "let Sen
 
 > When a future session asks "what's left on managed DMARC?", read this section first.
 
-**Last touched:** 2026-06-28 (plan written; nothing implemented yet).
+**Last touched:** 2026-06-28 (fully implemented, TASK-174→193; branch `feat/managed-dmarc-cname`).
 
 | Phase / Task | Status | Notes |
 |---|---|---|
-| 0 — Plan doc + DEC-058 + test skeletons (TASK-174) | ⬜ todo | This document + the decision-log entry + failing test files. |
-| 1 — Shared DNS foundations (TASK-175..176) | ⬜ todo | Centralize report-domain derivation, extract `CnameResolver`, value objects, `DmarcRecordSerializer`. |
-| 2 — Entity + publisher + composer (TASK-177..178) | ⬜ todo | 13 new `MonitoredDomain` fields + migration; full-policy TXT publish path (upsert via GET→PATCH→POST); `ManagedDmarcPolicyComposer`. |
-| 3 — Write side: commands/handlers/events + audit (TASK-179..180) | ⬜ todo | Tenant-scoped handlers, enforcement-preserving enable, single republish path, audit trail. |
-| 4 — CNAME verification + managed-aware DNS pipeline (TASK-181..182) | ⬜ todo | Three-state CNAME check, live coexistence TXT check, alert suppression for managed domains. |
-| 5 — Readiness engine + entitlement (TASK-183..184) | ⬜ todo | `GetDomainReadinessSignals` + `DmarcRampReadinessEvaluator` (strict auto thresholds); `managed_dmarc` feature. |
-| 6 — Alerts + transactional emails (TASK-185..186) | ⬜ todo | New `AlertType` cases + severity; six dedicated managed email handlers/templates. |
-| 7 — Dashboard card + onboarding chooser (TASK-187..188) | ⬜ todo | `<twig:ManagedDmarcCard>`, five write controllers, onboarding managed tab + three-state verify. |
-| 8 — Crons (TASK-189..190) | ⬜ todo | `sendvery:dmarc:auto-ramp` + `sendvery:dmarc:sync-hosted-records`. |
-| 9 — Downgrade freeze + demo seed (TASK-191..192) | ⬜ todo | Freeze auto-ramp on downgrade; managed sample data so demo surfaces aren't empty. |
-| 10 — Docs finalize (TASK-193) | ⬜ todo | docs/02/03/04/05 + CLAUDE.md crons + DEC-058 confirm; full suite green at `--coverage-min=100`. |
+| 0 — Plan doc + DEC-058 + test skeletons (TASK-174) | ✅ done | Plan + DEC-058 + §4 skeletons. |
+| 1 — Shared DNS foundations (TASK-175..176) | ✅ done | `ReportAddressProvider::getReportDomain()`, `CnameResolver`, value objects/enums, `DmarcRecordSerializer`. |
+| 2 — Entity + publisher + composer (TASK-177..178) | ✅ done | 14 `MonitoredDomain` columns + `Version20260628120000`; full-policy upsert (GET→PATCH→POST, ttl=1, `_report._dmarc` exclusion, Sentry); `ManagedDmarcPolicyComposer`. |
+| 3 — Write side: commands/handlers/events + audit (TASK-179..180) | ✅ done | 7 commands/handlers (tenant-scoped `findForTeams`, hard-refuse), 3 DNS-side-effect handlers, `ManagedDmarcPolicyChange` audit + history query. |
+| 4 — CNAME verification + managed-aware DNS pipeline (TASK-181..182) | ✅ done | `ManagedDmarcCnameChecker` (3-state + coexistence), sweep keeps `cnameVerifiedAt` fresh, alert suppression for managed domains. |
+| 5 — Readiness engine + entitlement (TASK-183..184) | ✅ done | `GetDomainReadinessSignals` + `DmarcRampReadinessEvaluator` (95/30/≥3/≥2/0 → quarantine; 99/60 → reject; cname/dwell gates); `managed_dmarc` + `canUseDmarcAutoRamp`. |
+| 6 — Alerts + transactional emails (TASK-185..186) | ✅ done | 4 `AlertType` cases + `defaultSeverity()`; 6 touchpoints (4 dedicated emails + 2 Critical-alert path) via `ManagedDmarcMailer`. |
+| 7 — Dashboard card + onboarding chooser (TASK-187..188) | ✅ done | `<twig:ManagedDmarcCard>` (6 states), 5 write controllers, onboarding managed option + 3-state verify route. |
+| 8 — Crons (TASK-189..190) | ✅ done | `sendvery:dmarc:auto-ramp` + `sendvery:dmarc:sync-hosted-records` (crontab pushed to spare.srv; Sentry monitors are a manual ops step). |
+| 9 — Downgrade freeze + demo seed (TASK-191..192) | ✅ done | Downgrade freezes auto-ramp (never loosens); `okay.example` is the managed mid-ramp demo. |
+| 10 — Docs finalize (TASK-193) | ✅ done | docs/02/03/04/05 + CLAUDE.md crons + DEC-058. Full suite green; new code fully covered (see PR note on the global-coverage drift). |
 
 ---
 

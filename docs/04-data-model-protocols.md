@@ -204,6 +204,28 @@ DMARC policy is a TXT record at `_dmarc.<domain>`. Key things to validate:
 └─────────────────────────────────────────────────────────┘
 ```
 
+### Managed DMARC (DEC-058, `Version20260628120000`)
+
+`MonitoredDomain` gains 14 property-initialized columns (all NULL/default-safe on
+existing rows, like `cloudflare_auth_record_id`):
+
+- `dmarc_setup_mode` (`DmarcSetupMode`: `self_txt` default / `managed_cname`)
+- `cloudflare_hosted_dmarc_record_id` — id of the hosted full-policy TXT
+- `managed_policy_p` / `managed_policy_sp` (`DmarcPolicy`) / `managed_policy_pct` (int) — the hosted policy
+- `auto_ramp_enabled` (bool, default false), `auto_ramp_stage` / `auto_ramp_scheduled_stage` (`AutoRampStage`)
+- `auto_ramp_scheduled_advance_at`, `auto_ramp_paused_at`, `managed_dmarc_enabled_at`, `cname_verified_at`, `last_policy_change_at` (dwell anchor), `hosted_dmarc_teardown_at` (offboard marker)
+
+New ORM entity **`managed_dmarc_policy_change`** (immutable audit): `id`,
+`monitored_domain_id` (FK CASCADE), `team_id`, `actor_user_id` (nullable),
+`source` (`PolicyChangeSource`: manual/guided/auto_ramp/rollback/downgrade_freeze),
+`from_policy`/`to_policy` (labels), `reason`, `created_at`.
+
+Value objects/enums in `src/Value/Dns`: `DmarcSetupMode`, `AutoRampStage`
+(next/previous/fromPolicy/targetPolicy), `ManagedDmarcPolicy` (equals/label),
+`CnameVerificationOutcome`, `PolicyChangeSource`, `AutoRampAction`,
+`ManagedDmarcCardState`, `DmarcRecordSerializer`. The published policy
+(`managed_policy_p`) is the single source of truth for the current ramp stage.
+
 ### Team-scoping strategy (Symfony implementation)
 
 Every Doctrine query must be scoped to the current user's team. Options:

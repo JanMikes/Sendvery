@@ -144,6 +144,7 @@ The `src/ApiResource/` directory exists from the original API Platform install b
 | Dedicated RUA address | | | ✓ | ✓ | ✓ |
 | SPF/DKIM/DMARC validation | | ✓ | ✓ | ✓ | ✓ |
 | DNS change monitoring | | | ✓ | ✓ | ✓ |
+| Managed DMARC + auto-drive (CNAME, DEC-058) | | | ✓ | ✓ | ✓ |
 | Basic alerts | | | ✓ | ✓ | ✓ |
 | User authentication | | | ✓ | ✓ | ✓ |
 | Credential encryption | | | ✓ | ✓ | ✓ |

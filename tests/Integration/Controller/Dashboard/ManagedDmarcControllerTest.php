@@ -140,6 +140,23 @@ final class ManagedDmarcControllerTest extends WebTestCase
     }
 
     #[Test]
+    public function configureAutoRampControllerHandlesEveryAction(): void
+    {
+        [$client, $domainId] = $this->activeManagedDomain();
+
+        foreach (['enable', 'pause', 'resume', 'disable'] as $action) {
+            $crawler = $client->request('GET', sprintf('/app/domains/%s', $domainId->toString()));
+            $token = (string) $crawler->filter('form[action$="/managed-dmarc/auto-ramp"] input[name="_csrf_token"]')->first()->attr('value');
+
+            $client->request('POST', sprintf('/app/domains/%s/managed-dmarc/auto-ramp', $domainId->toString()), [
+                '_csrf_token' => $token,
+                'action' => $action,
+            ]);
+            self::assertSame(302, $client->getResponse()->getStatusCode(), sprintf('auto-ramp action %s must redirect.', $action));
+        }
+    }
+
+    #[Test]
     public function switchToSelfTxtControllerDisablesManaged(): void
     {
         [$client, $domainId] = $this->activeManagedDomain();
