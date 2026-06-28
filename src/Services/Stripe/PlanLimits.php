@@ -96,7 +96,7 @@ final readonly class PlanLimits
         }
 
         return match ($feature) {
-            'dns_monitoring', 'alerts', 'blacklist_monitoring', 'sender_inventory', 'pdf_export' => SubscriptionPlan::Free !== $plan,
+            'dns_monitoring', 'alerts', 'blacklist_monitoring', 'sender_inventory', 'pdf_export', 'managed_dmarc' => SubscriptionPlan::Free !== $plan,
             'digest' => true,
             'api_access' => in_array(
                 $plan->baseTier(),

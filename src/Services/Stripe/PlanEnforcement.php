@@ -63,6 +63,29 @@ final readonly class PlanEnforcement
         return $this->planLimits->hasFeature($plan, $feature);
     }
 
+    // ─── Managed DMARC (DEC-058) ──────────────────────────────────────────
+
+    /**
+     * Whether the plan may use managed DMARC at all (CNAME hosting + manual
+     * policy control). Paid plans only; Unlimited short-circuits true.
+     */
+    public function canUseManagedDmarc(SubscriptionPlan $plan): bool
+    {
+        return $this->planLimits->hasFeature($plan, 'managed_dmarc');
+    }
+
+    /**
+     * Whether the plan may use auto-drive (the automatic scheduled ramp) — the
+     * premium hero. Delegates to the same feature for v1; kept as its own seam
+     * so auto-drive can later be gated to a HIGHER paid tier than manual managed
+     * control by changing only PlanLimits + this method (§3.7), with no
+     * call-site churn.
+     */
+    public function canUseDmarcAutoRamp(SubscriptionPlan $plan): bool
+    {
+        return $this->canUseManagedDmarc($plan);
+    }
+
     // ─── Monthly report cap ───────────────────────────────────────────────
 
     public function canParseReport(string $teamId, SubscriptionPlan $plan): bool
