@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Value\Dns;
 
 use App\Value\DmarcPolicy;
 use App\Value\Dns\AutoRampStage;
+use App\Value\Dns\ManagedDmarcPolicy;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -45,5 +46,29 @@ final class AutoRampStageTest extends TestCase
         self::assertSame(DmarcPolicy::Quarantine, AutoRampStage::Quarantine->targetPolicy()->p);
         self::assertSame(DmarcPolicy::Reject, AutoRampStage::Reject->targetPolicy()->p);
         self::assertSame(DmarcPolicy::Reject, AutoRampStage::Complete->targetPolicy()->p);
+    }
+
+    #[Test]
+    public function targetPolicyDefaultsToFullCoverageAndNoSubdomainOverride(): void
+    {
+        $target = AutoRampStage::Quarantine->targetPolicy();
+
+        self::assertNull($target->sp);
+        self::assertSame(100, $target->pct);
+    }
+
+    #[Test]
+    public function targetPolicyCarriesTheCustomersSubdomainPolicyAndCoverageAcrossAStep(): void
+    {
+        // A ramp step must change only `p` — the customer's explicit sp=none
+        // (subdomains intentionally exempt) and pct<100 must survive, or the
+        // ramp would silently tighten enforcement against their stated intent.
+        $current = new ManagedDmarcPolicy(DmarcPolicy::None, DmarcPolicy::None, 50);
+
+        $target = AutoRampStage::Quarantine->targetPolicy($current);
+
+        self::assertSame(DmarcPolicy::Quarantine, $target->p);
+        self::assertSame(DmarcPolicy::None, $target->sp);
+        self::assertSame(50, $target->pct);
     }
 }

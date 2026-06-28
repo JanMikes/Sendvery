@@ -549,6 +549,18 @@ five write controllers/commands; `<twig:ManagedDmarcCard>`; onboarding managed t
 transactional emails + four `AlertType` cases; two daily crons (`sendvery:dmarc:auto-ramp`,
 `sendvery:dmarc:sync-hosted-records`) with Sentry monitors; downgrade-freeze wiring; demo seed;
 `PlanLimits` `managed_dmarc` feature; docs 02/03/04/05/15.
+**Post-review hardening (adversarial review round):** five substantive fixes on top of the
+build. (1) `CloudflareDnsClient::publishPolicyRecord` now distinguishes a *failed* lookup from
+"no record exists" and aborts rather than POSTing — a transient GET error could otherwise create
+a second TXT and PERMERROR (disable) the customer's DMARC. (2) The ramp now carries the
+customer's `sp`/`pct` through every advance and rollback (`AutoRampStage::targetPolicy(?current)`)
+instead of resetting them to `sp=null; pct=100` — previously a deliberate subdomain exemption
+could be silently tightened. (3) `MonitoredDomain::changeManagedPolicy` is guarded to a no-op on
+self-TXT domains and cancels any pending auto-ramp schedule on a real change. (4) The
+hosted-record sync reports a distinct `delete_failed` outcome instead of counting a failed
+Cloudflare delete as torn-down. (5) The dashboard `DnsRecordInstruction` copy button now copies
+the bare CNAME target (was wrapped in literal quotes); the active card leads with auto-drive (the
+premium hero) and demotes manual policy control into a disclosure.
 
 ---
 

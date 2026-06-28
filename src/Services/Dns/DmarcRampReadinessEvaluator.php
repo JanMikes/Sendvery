@@ -106,7 +106,7 @@ final readonly class DmarcRampReadinessEvaluator
 
         return new RampReadinessResult(
             currentStage: $currentStage,
-            recommendedNextPolicy: $nextStage->targetPolicy(),
+            recommendedNextPolicy: $nextStage->targetPolicy($domain->currentManagedPolicy()),
             ready: $ready,
             eligibleForNextTier: $eligibleForNextTier,
             regressionDetected: $regressionDetected,

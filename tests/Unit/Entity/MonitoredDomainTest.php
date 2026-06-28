@@ -158,6 +158,61 @@ final class MonitoredDomainTest extends TestCase
     }
 
     #[Test]
+    public function changeManagedPolicyIsAGuardedNoOpOnASelfTxtDomain(): void
+    {
+        // A stray manual SetDmarcPolicy on a self-TXT domain must never publish a
+        // hosted record for a domain that never delegated DMARC to Sendvery.
+        $domain = $this->domain();
+
+        $domain->changeManagedPolicy(new ManagedDmarcPolicy(DmarcPolicy::Reject), PolicyChangeSource::Manual, null, $this->at('2026-06-12 09:00:00'));
+
+        self::assertSame(DmarcSetupMode::SelfTxt, $domain->dmarcSetupMode);
+        self::assertNull($domain->managedPolicyP);
+        self::assertSame([], $domain->popEvents());
+    }
+
+    #[Test]
+    public function changeManagedPolicyCancelsAnyPendingAutoRampSchedule(): void
+    {
+        // A published change supersedes a stale scheduled advance, so it can't
+        // later trip a spurious pause when it comes due.
+        $domain = $this->managed(DmarcPolicy::None);
+        $domain->scheduleAutoRampAdvance(AutoRampStage::Quarantine, $this->at('2026-06-20 09:00:00'));
+        $domain->popEvents();
+        self::assertNotNull($domain->autoRampScheduledAdvanceAt);
+
+        $domain->changeManagedPolicy(new ManagedDmarcPolicy(DmarcPolicy::Quarantine), PolicyChangeSource::Manual, null, $this->at('2026-06-15 09:00:00'));
+
+        self::assertNull($domain->autoRampScheduledStage);
+        self::assertNull($domain->autoRampScheduledAdvanceAt);
+    }
+
+    #[Test]
+    public function changeManagedPolicyPreservesSubdomainPolicyAndCoverage(): void
+    {
+        $domain = $this->managed(DmarcPolicy::None);
+
+        $domain->changeManagedPolicy(new ManagedDmarcPolicy(DmarcPolicy::Quarantine, DmarcPolicy::None, 25), PolicyChangeSource::Manual, null, $this->at('2026-06-15 09:00:00'));
+
+        self::assertSame(DmarcPolicy::Quarantine, $domain->managedPolicyP);
+        self::assertSame(DmarcPolicy::None, $domain->managedPolicySp);
+        self::assertSame(25, $domain->managedPolicyPct);
+    }
+
+    #[Test]
+    public function reEnablingManagedDmarcClearsAStaleTeardownMarker(): void
+    {
+        $domain = $this->managed(DmarcPolicy::Quarantine);
+        $domain->disableManagedDmarc($this->at('2026-06-20 09:00:00'));
+        self::assertNotNull($domain->hostedDmarcTeardownAt);
+        $domain->popEvents();
+
+        $domain->enableManagedDmarc(new ManagedDmarcPolicy(DmarcPolicy::None), $this->at('2026-06-21 09:00:00'));
+
+        self::assertNull($domain->hostedDmarcTeardownAt);
+    }
+
+    #[Test]
     public function rollbackResetsAutoRampStageToMatchThePublishedPolicy(): void
     {
         $domain = $this->managed(DmarcPolicy::Reject);

@@ -44,7 +44,26 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
         $domain = $this->reload($domainId);
         self::assertSame(AutoRampStage::Quarantine, $domain->autoRampScheduledStage);
         self::assertNotNull($domain->autoRampScheduledAdvanceAt);
+        // The 48h heads-up is the core auto-drive safety promise — pin it to a
+        // tight window so a regression to a different interval can't slip through.
         self::assertGreaterThan(new \DateTimeImmutable('+47 hours'), $domain->autoRampScheduledAdvanceAt);
+        self::assertLessThan(new \DateTimeImmutable('+49 hours'), $domain->autoRampScheduledAdvanceAt);
+    }
+
+    #[Test]
+    public function executingAnAdvancePreservesTheCustomersSubdomainPolicyAndCoverage(): void
+    {
+        // Only `p` should ramp — an explicit sp=none / pct<100 must survive the
+        // advance, proving the evaluator threads the current policy through.
+        $dueAt = new \DateTimeImmutable('-1 hour');
+        $domainId = $this->managedDomain('pro', DmarcPolicy::None, autoRampEnabled: true, ready: true, scheduledAdvanceAt: $dueAt, scheduledStage: AutoRampStage::Quarantine, sp: DmarcPolicy::None, pct: 50);
+
+        $this->runSweep();
+
+        $domain = $this->reload($domainId);
+        self::assertSame(DmarcPolicy::Quarantine, $domain->managedPolicyP);
+        self::assertSame(DmarcPolicy::None, $domain->managedPolicySp);
+        self::assertSame(50, $domain->managedPolicyPct);
     }
 
     #[Test]
@@ -232,6 +251,8 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
         ?AutoRampStage $scheduledStage = null,
         bool $cnameVerified = true,
         bool $paused = false,
+        ?DmarcPolicy $sp = null,
+        int $pct = 100,
     ): UuidInterface {
         $em = $this->getService(EntityManagerInterface::class);
         $now = new \DateTimeImmutable();
@@ -249,6 +270,8 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
         );
         $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
         $domain->managedPolicyP = $policy;
+        $domain->managedPolicySp = $sp;
+        $domain->managedPolicyPct = $pct;
         $domain->autoRampStage = AutoRampStage::fromPolicy($policy);
         $domain->autoRampEnabled = $autoRampEnabled;
         $domain->cnameVerifiedAt = $cnameVerified ? $now->modify('-60 days') : null;

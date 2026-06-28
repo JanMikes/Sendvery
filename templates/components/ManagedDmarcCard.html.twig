@@ -92,7 +92,7 @@
                 </div>
             {% else %}
                 <p class="text-sm text-base-content/70">
-                    Add this CNAME at your DNS host. We’re checking every few seconds — this can take up to an hour to propagate.
+                    Add this CNAME at your DNS host. We re-check your DNS automatically every day — or reload this page once you’ve added it.
                     We’ve already published your starting policy (<span class="font-mono">p=none</span>, monitor-only), so nothing changes for your senders yet.
                 </p>
             {% endif %}
@@ -103,7 +103,8 @@
                 finalValue="{{ card.cnameTarget }}"
                 whatText="Point your DMARC record at Sendvery"
                 whyText="This single record never changes — we update the policy behind it so you never edit DNS again."
-                ttl="300" />
+                ttl="300"
+                :copyable="true" />
 
             <form method="post" action="{{ path('dashboard_domain_switch_to_self_txt', { id: domainId }) }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_to_self') }}">
@@ -117,59 +118,12 @@
                 CNAME verified · <span class="font-mono">_dmarc.{{ domainName }} → {{ card.cnameTarget }}</span>
             </p>
 
-            {# Policy selector — publishes instantly #}
-            <form method="post" action="{{ path('dashboard_domain_set_dmarc_policy', { id: domainId }) }}" class="rounded-xl bg-base-200/60 p-4 space-y-3">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dmarc_policy') }}">
-                <div class="font-semibold text-sm">Set policy manually (publishes instantly)</div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <label class="form-control">
-                        <span class="label-text text-xs">Policy (p)</span>
-                        <select name="policy" class="select select-bordered select-sm">
-                            <option value="none" {{ card.policyP and card.policyP.value == 'none' ? 'selected' }}>none</option>
-                            <option value="quarantine" {{ card.policyP and card.policyP.value == 'quarantine' ? 'selected' }}>quarantine</option>
-                            <option value="reject" {{ card.policyP and card.policyP.value == 'reject' ? 'selected' }}>reject</option>
-                        </select>
-                    </label>
-                    <label class="form-control">
-                        <span class="label-text text-xs">Subdomains (sp)</span>
-                        <select name="subdomain_policy" class="select select-bordered select-sm">
-                            <option value="same" {{ card.policySp is null ? 'selected' }}>same as policy</option>
-                            <option value="none" {{ card.policySp and card.policySp.value == 'none' ? 'selected' }}>none</option>
-                            <option value="quarantine" {{ card.policySp and card.policySp.value == 'quarantine' ? 'selected' }}>quarantine</option>
-                            <option value="reject" {{ card.policySp and card.policySp.value == 'reject' ? 'selected' }}>reject</option>
-                        </select>
-                    </label>
-                    <label class="form-control">
-                        <span class="label-text text-xs">Coverage (pct)</span>
-                        <input type="number" name="pct" min="1" max="100" value="{{ card.policyPct ?? 100 }}" class="input input-bordered input-sm">
-                    </label>
-                </div>
-                <button type="submit" class="btn btn-sm btn-outline">Publish now</button>
-            </form>
-
-            {# Readiness hint + one-click advance #}
-            <div class="rounded-xl border border-base-200 p-4 space-y-2">
-                <div class="font-semibold text-sm">💡 Readiness</div>
-                <p class="text-sm text-base-content/70">{{ _self.readinessHint(card) }}</p>
-                {% if card.recommendedNextPolicy %}
-                    <form method="post" action="{{ path('dashboard_domain_advance_dmarc', { id: domainId }) }}">
-                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dmarc_advance') }}">
-                        <button type="submit"
-                                class="btn btn-sm btn-primary {{ card.eligibleForNextTier ? '' : 'btn-disabled' }}"
-                                {{ card.eligibleForNextTier ? '' : 'disabled' }}
-                                title="{{ card.eligibleForNextTier ? '' : 'Not ready yet — see readiness above' }}">
-                            ⤴ Advance to {{ card.recommendedNextPolicy.value }} now
-                        </button>
-                    </form>
-                {% endif %}
-            </div>
-
-            {# Auto-drive (the premium hero) #}
+            {# Auto-drive (the premium hero) — lead with the hands-off path #}
             <div class="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
                 <div class="flex items-center justify-between gap-2 flex-wrap">
                     <div class="font-semibold text-sm flex items-center gap-2">
                         Auto-drive
-                        <span class="badge badge-secondary badge-xs">Premium</span>
+                        <span class="badge badge-primary badge-xs">Premium</span>
                     </div>
                     <span class="badge {{ card.autoRampEnabled and not card.autoRampPaused ? 'badge-success' : 'badge-ghost' }} badge-sm">
                         {{ card.autoRampEnabled and not card.autoRampPaused ? 'On' : (card.autoRampPaused ? 'Paused' : 'Off') }}
@@ -200,6 +154,56 @@
                     {{ _self.autoRampButton(domainId, 'enable', 'Turn on auto-drive', 'btn-primary') }}
                 {% endif %}
             </div>
+
+            {# Readiness hint + one-click advance #}
+            <div class="rounded-xl border border-base-200 p-4 space-y-2">
+                <div class="font-semibold text-sm">Readiness</div>
+                <p class="text-sm text-base-content/70">{{ _self.readinessHint(card) }}</p>
+                {% if card.recommendedNextPolicy %}
+                    <form method="post" action="{{ path('dashboard_domain_advance_dmarc', { id: domainId }) }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dmarc_advance') }}">
+                        <button type="submit"
+                                class="btn btn-sm btn-primary {{ card.eligibleForNextTier ? '' : 'btn-disabled' }}"
+                                {{ card.eligibleForNextTier ? '' : 'disabled' }}
+                                title="{{ card.eligibleForNextTier ? '' : 'Not ready yet — see readiness above' }}">
+                            ⤴ Advance to {{ card.recommendedNextPolicy.value }} now
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+
+            {# Manual override — demoted below the hands-off path #}
+            <details class="rounded-xl bg-base-200/60 p-4">
+                <summary class="font-semibold text-sm cursor-pointer">Advanced: set policy manually</summary>
+                <form method="post" action="{{ path('dashboard_domain_set_dmarc_policy', { id: domainId }) }}" class="space-y-3 mt-3">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_dmarc_policy') }}">
+                    <p class="text-xs text-base-content/60">Publishes instantly — and cancels any scheduled auto-drive advance.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label class="form-control">
+                            <span class="label-text text-xs">Policy (p)</span>
+                            <select name="policy" class="select select-bordered select-sm">
+                                <option value="none" {{ card.policyP and card.policyP.value == 'none' ? 'selected' }}>none</option>
+                                <option value="quarantine" {{ card.policyP and card.policyP.value == 'quarantine' ? 'selected' }}>quarantine</option>
+                                <option value="reject" {{ card.policyP and card.policyP.value == 'reject' ? 'selected' }}>reject</option>
+                            </select>
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">Subdomains (sp)</span>
+                            <select name="subdomain_policy" class="select select-bordered select-sm">
+                                <option value="same" {{ card.policySp is null ? 'selected' }}>same as policy</option>
+                                <option value="none" {{ card.policySp and card.policySp.value == 'none' ? 'selected' }}>none</option>
+                                <option value="quarantine" {{ card.policySp and card.policySp.value == 'quarantine' ? 'selected' }}>quarantine</option>
+                                <option value="reject" {{ card.policySp and card.policySp.value == 'reject' ? 'selected' }}>reject</option>
+                            </select>
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text text-xs">Coverage (pct)</span>
+                            <input type="number" name="pct" min="1" max="100" value="{{ card.policyPct ?? 100 }}" class="input input-bordered input-sm">
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-outline">Publish now</button>
+                </form>
+            </details>
 
             {% if history is not empty %}
                 <div class="text-sm">

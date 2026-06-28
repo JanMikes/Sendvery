@@ -118,6 +118,28 @@ final class SyncHostedDmarcRecordsCommandTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function reportsDeleteFailedAndRetainsMarkersWhenTheTeardownDeleteFails(): void
+    {
+        // CNAME is gone (safe to delete) but Cloudflare rejects the delete. We must
+        // NOT report it as torn down, and must leave the DB markers set so the next
+        // sweep retries.
+        $domainId = $this->offboardedDomain('acme.example', cnamePointsAtUs: false);
+        $this->publisher()->simulateFailure();
+
+        $tester = new CommandTester($this->getService(SyncHostedDmarcRecordsCommand::class));
+        $tester->execute([]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        // SymfonyStyle wraps the summary line, so normalise whitespace first.
+        $display = (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
+        self::assertStringContainsString('1 delete-failed', $display);
+
+        $domain = $this->reload($domainId);
+        self::assertNotNull($domain->cloudflareHostedDmarcRecordId);
+        self::assertNotNull($domain->hostedDmarcTeardownAt);
+    }
+
+    #[Test]
     public function neverDeletesAHostedTxtWhileTheCnameStillPointsAtUs(): void
     {
         $domainId = $this->offboardedDomain('acme.example', cnamePointsAtUs: true);

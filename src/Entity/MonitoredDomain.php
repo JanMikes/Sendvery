@@ -209,6 +209,9 @@ final class MonitoredDomain implements EntityWithEvents
         $this->autoRampStage = AutoRampStage::fromPolicy($seed->p);
         $this->managedDmarcEnabledAt = $now;
         $this->lastPolicyChangeAt = $now;
+        // Re-enabling after a prior teardown clears the stale offboard marker so
+        // the hosted record is never read as "pending teardown" again.
+        $this->hostedDmarcTeardownAt = null;
 
         $this->recordThat(new ManagedDmarcEnabled($this->id, $this->team->id, $this->domain));
     }
@@ -222,6 +225,13 @@ final class MonitoredDomain implements EntityWithEvents
      */
     public function changeManagedPolicy(ManagedDmarcPolicy $policy, PolicyChangeSource $source, ?UuidInterface $actorUserId, \DateTimeImmutable $now): void
     {
+        // Only a managed-CNAME domain has a hosted policy to change. Guard the
+        // funnel so a stray manual SetDmarcPolicy on a self-TXT domain can't
+        // publish a hosted record for a domain that never delegated DMARC to us.
+        if (DmarcSetupMode::ManagedCname !== $this->dmarcSetupMode) {
+            return;
+        }
+
         $current = $this->currentManagedPolicy();
 
         if (null !== $current && $current->equals($policy)) {
@@ -233,6 +243,12 @@ final class MonitoredDomain implements EntityWithEvents
         $this->managedPolicyPct = $policy->pct;
         $this->autoRampStage = AutoRampStage::fromPolicy($policy->p);
         $this->lastPolicyChangeAt = $now;
+
+        // A published change supersedes any pending auto-ramp schedule — the cron
+        // re-evaluates and re-schedules the next rung from the new tier. Without
+        // this, a manual set mid-schedule would later trip a spurious pause when
+        // the now-stale scheduled advance came due.
+        $this->clearAutoRampSchedule();
 
         $this->recordThat(new DmarcPolicyChanged($this->id, $this->team->id, $this->domain, $current, $policy, $source, $actorUserId));
     }

@@ -68,6 +68,7 @@ final class SyncHostedDmarcRecordsCommand extends Command
         $reconciled = 0;
         $tornDown = 0;
         $dangling = 0;
+        $deleteFailed = 0;
 
         foreach ($this->domainIdsToSync() as $id) {
             try {
@@ -75,13 +76,20 @@ final class SyncHostedDmarcRecordsCommand extends Command
                 $reconciled += 'reconciled' === $outcome ? 1 : 0;
                 $tornDown += 'torn_down' === $outcome ? 1 : 0;
                 $dangling += 'dangling' === $outcome ? 1 : 0;
+                $deleteFailed += 'delete_failed' === $outcome ? 1 : 0;
             } catch (\Throwable $e) {
                 \Sentry\captureException($e);
                 $io->warning(sprintf('Hosted-record sync failed for domain %s: %s', $id, $e->getMessage()));
             }
         }
 
-        $io->success(sprintf('Hosted-record sync complete: %d reconciled, %d torn down, %d dangling.', $reconciled, $tornDown, $dangling));
+        $io->success(sprintf(
+            'Hosted-record sync complete: %d reconciled, %d torn down, %d dangling, %d delete-failed.',
+            $reconciled,
+            $tornDown,
+            $dangling,
+            $deleteFailed,
+        ));
 
         return Command::SUCCESS;
     }
@@ -143,11 +151,16 @@ final class SyncHostedDmarcRecordsCommand extends Command
             return 'dangling';
         }
 
-        if ($this->dnsRecordPublisher->removePolicyRecord($domain->domain)) {
-            $domain->cloudflareHostedDmarcRecordId = null;
-            $domain->hostedDmarcTeardownAt = null;
-            $this->entityManager->flush();
+        if (!$this->dnsRecordPublisher->removePolicyRecord($domain->domain)) {
+            // The delete failed (already logged + Sentry-captured by the client).
+            // Leave the DB markers set so domainIdsToSync() re-selects this domain
+            // next run, and report it distinctly so the summary isn't misleading.
+            return 'delete_failed';
         }
+
+        $domain->cloudflareHostedDmarcRecordId = null;
+        $domain->hostedDmarcTeardownAt = null;
+        $this->entityManager->flush();
 
         return 'torn_down';
     }

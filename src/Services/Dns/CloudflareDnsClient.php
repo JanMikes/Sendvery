@@ -105,7 +105,25 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
         }
 
         $name = $this->buildPolicyRecordName($customerDomain);
-        $existing = $this->findTxtRecord($name);
+
+        // Tri-state lookup. A *failed* GET must never be read as "no record
+        // exists" — otherwise a transient Cloudflare error on the update path
+        // would fall through to POST and create a SECOND TXT at the same name.
+        // Two DMARC records => receivers PERMERROR => the customer's policy
+        // silently breaks. So: lookup failed -> abort (the sync cron retries);
+        // lookup succeeded with a record -> PATCH in place; succeeded empty -> POST.
+        $lookup = $this->apiRequest('GET', $this->dnsRecordsUrl(), query: [
+            'type' => 'TXT',
+            'name' => $name,
+        ]);
+
+        if (null === $lookup || !isset($lookup['result']) || !is_array($lookup['result'])) {
+            $this->capturePolicyFailure('lookup', $customerDomain, $lookup);
+
+            return null;
+        }
+
+        $existing = $this->firstTxtRecord($lookup['result']);
 
         // Strict upsert with a single-record invariant: never POST-on-change
         // (Cloudflare allows multiple TXT at one name; two DMARC records make
@@ -303,7 +321,19 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
             return null;
         }
 
-        foreach ($response['result'] as $record) {
+        return $this->firstTxtRecord($response['result']);
+    }
+
+    /**
+     * The first well-formed TXT record from a Cloudflare list `result`, or null
+     * if none. Shared by findTxtRecord and the policy upsert so both interpret a
+     * list payload identically.
+     *
+     * @param array<mixed> $result
+     */
+    private function firstTxtRecord(array $result): ?CloudflareDnsRecord
+    {
+        foreach ($result as $record) {
             if (is_array($record) && isset($record['id'], $record['name'], $record['content'])) {
                 /* @var array{id: string, name: string, content: string, comment?: string, created_on?: string} $record */
                 return CloudflareDnsRecord::fromApiResponse($record);

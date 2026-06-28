@@ -42,14 +42,23 @@ enum AutoRampStage: string
         };
     }
 
-    /** The policy that represents being AT this stage (Complete maps to reject). */
-    public function targetPolicy(): ManagedDmarcPolicy
+    /**
+     * The policy that represents being AT this stage (Complete maps to reject).
+     * Carries the customer's subdomain policy (`sp`) and coverage (`pct`) from
+     * `$current` — only the top-level `p` changes per rung. Without this, an
+     * explicit `sp=none` (subdomains intentionally exempt) or `pct<100` would be
+     * silently dropped on the first ramp step, tightening enforcement against the
+     * customer's stated intent.
+     */
+    public function targetPolicy(?ManagedDmarcPolicy $current = null): ManagedDmarcPolicy
     {
-        return match ($this) {
-            self::Monitoring => new ManagedDmarcPolicy(DmarcPolicy::None),
-            self::Quarantine => new ManagedDmarcPolicy(DmarcPolicy::Quarantine),
-            self::Reject, self::Complete => new ManagedDmarcPolicy(DmarcPolicy::Reject),
+        $p = match ($this) {
+            self::Monitoring => DmarcPolicy::None,
+            self::Quarantine => DmarcPolicy::Quarantine,
+            self::Reject, self::Complete => DmarcPolicy::Reject,
         };
+
+        return new ManagedDmarcPolicy($p, $current?->sp, null !== $current ? $current->pct : 100);
     }
 
     /** Derive the stage from the currently published top-level policy. */

@@ -312,6 +312,78 @@ final class CloudflareDnsClientTest extends TestCase
         self::assertNull($client->publishPolicyRecord('acme.org', 'v=DMARC1; p=none'));
     }
 
+    public function testPublishPolicyRecordAbortsWithoutPostingWhenTheLookupFails(): void
+    {
+        // A failed GET must never be read as "no record exists": publishing would
+        // then POST a second TXT at the same name and silently PERMERROR (and so
+        // disable) the customer's DMARC. On a failed lookup we abort and let the
+        // sync cron retry — crucially without ever issuing a POST.
+        $methods = [];
+        $httpClient = new MockHttpClient(function (string $method, string $url, array $options) use (&$methods): MockResponse {
+            $methods[] = $method;
+
+            // Cloudflare 5xx: a body with no usable `result`.
+            return new MockResponse($this->json(['success' => false, 'errors' => [['code' => 10000, 'message' => 'server error']]]), ['http_code' => 502]);
+        });
+
+        $client = $this->createClient($httpClient);
+
+        self::assertNull($client->publishPolicyRecord('acme.org', 'v=DMARC1; p=quarantine; rua=mailto:reports@sendvery.test'));
+        self::assertSame(['GET'], $methods);
+    }
+
+    public function testPublishPolicyRecordPostsTtlOneWithExactContentWhenAbsent(): void
+    {
+        $postBody = null;
+        $httpClient = new MockHttpClient(function (string $method, string $url, array $options) use (&$postBody): MockResponse {
+            if ('POST' === $method) {
+                $postBody = json_decode($options['body'] ?? '{}', true, flags: \JSON_THROW_ON_ERROR);
+
+                return new MockResponse($this->json(['success' => true, 'result' => ['id' => 'policy-1']]));
+            }
+
+            return new MockResponse($this->json(['success' => true, 'result' => []]));
+        });
+
+        $client = $this->createClient($httpClient);
+        $content = 'v=DMARC1; p=quarantine; rua=mailto:reports@sendvery.test';
+
+        self::assertSame('policy-1', $client->publishPolicyRecord('acme.org', $content));
+        self::assertIsArray($postBody);
+        self::assertSame('TXT', $postBody['type']);
+        self::assertSame('acme.org._dmarc.sendvery.test', $postBody['name']);
+        self::assertSame($content, $postBody['content']);
+        // ttl=1 is Cloudflare "automatic" — ramp changes must propagate fast.
+        self::assertSame(1, $postBody['ttl']);
+    }
+
+    public function testPublishPolicyRecordPatchesTtlOneWithNewContentWhenDrifts(): void
+    {
+        $patchBody = null;
+        $patchUrl = null;
+        $httpClient = new MockHttpClient(function (string $method, string $url, array $options) use (&$patchBody, &$patchUrl): MockResponse {
+            if ('PATCH' === $method) {
+                $patchBody = json_decode($options['body'] ?? '{}', true, flags: \JSON_THROW_ON_ERROR);
+                $patchUrl = $url;
+
+                return new MockResponse($this->json(['success' => true, 'result' => ['id' => 'policy-9']]));
+            }
+
+            return new MockResponse($this->json(['success' => true, 'result' => [
+                ['id' => 'policy-9', 'name' => 'acme.org._dmarc.sendvery.test', 'content' => 'v=DMARC1; p=none; rua=mailto:reports@sendvery.test', 'comment' => ''],
+            ]]));
+        });
+
+        $client = $this->createClient($httpClient);
+        $content = 'v=DMARC1; p=quarantine; rua=mailto:reports@sendvery.test';
+
+        self::assertSame('policy-9', $client->publishPolicyRecord('acme.org', $content));
+        self::assertIsArray($patchBody);
+        self::assertStringContainsString('/policy-9', (string) $patchUrl);
+        self::assertSame($content, $patchBody['content']);
+        self::assertSame(1, $patchBody['ttl']);
+    }
+
     public function testPublishPolicyRecordReturnsNullWhenPostFails(): void
     {
         $httpClient = new MockHttpClient([

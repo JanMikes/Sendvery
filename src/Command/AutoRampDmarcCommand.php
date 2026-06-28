@@ -164,7 +164,7 @@ final class AutoRampDmarcCommand extends Command
         $previous = $currentStage->previous();
         assert(null !== $previous);
 
-        $target = $previous->targetPolicy();
+        $target = $previous->targetPolicy($domain->currentManagedPolicy());
         $this->commandBus->dispatch(new SetDmarcPolicy(
             $domain->id,
             $teamId,

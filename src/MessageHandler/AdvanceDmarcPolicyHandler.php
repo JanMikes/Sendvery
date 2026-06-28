@@ -55,15 +55,13 @@ final readonly class AdvanceDmarcPolicyHandler
             return;
         }
 
+        // changeManagedPolicy clears any pending auto-ramp schedule on a real
+        // change, so the cron re-evaluates from scratch for the next rung.
         $domain->changeManagedPolicy(
             $readiness->recommendedNextPolicy,
             $message->source,
             $message->actorUserId,
             $this->clock->now(),
         );
-
-        // Clear any pending auto-ramp schedule now that the tier is published, so
-        // the cron re-evaluates from scratch for the next rung (no-op for guided).
-        $domain->clearAutoRampSchedule();
     }
 }

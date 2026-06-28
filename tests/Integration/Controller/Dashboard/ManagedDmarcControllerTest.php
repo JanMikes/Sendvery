@@ -157,6 +157,22 @@ final class ManagedDmarcControllerTest extends WebTestCase
     }
 
     #[Test]
+    public function configureAutoRampControllerRejectsAnUnknownAction(): void
+    {
+        [$client, $domainId] = $this->activeManagedDomain();
+
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $domainId->toString()));
+        $token = (string) $crawler->filter('form[action$="/managed-dmarc/auto-ramp"] input[name="_csrf_token"]')->first()->attr('value');
+
+        $client->request('POST', sprintf('/app/domains/%s/managed-dmarc/auto-ramp', $domainId->toString()), [
+            '_csrf_token' => $token,
+            'action' => 'bogus',
+        ]);
+
+        self::assertSame(404, $client->getResponse()->getStatusCode());
+    }
+
+    #[Test]
     public function switchToSelfTxtControllerDisablesManaged(): void
     {
         [$client, $domainId] = $this->activeManagedDomain();
@@ -266,6 +282,65 @@ final class ManagedDmarcControllerTest extends WebTestCase
             $client->request('POST', sprintf('/app/domains/%s/managed-dmarc/%s', $persona->domain->id->toString(), $route));
             self::assertSame(403, $client->getResponse()->getStatusCode(), sprintf('POST /managed-dmarc/%s without a CSRF token must be refused.', $route));
         }
+    }
+
+    #[Test]
+    public function enableControllerShowsTheUpgradeNudgeWhenEntitlementIsLost(): void
+    {
+        $client = self::createClient();
+        $persona = TestFixtures::fromContainer(self::getContainer())->persona()->plan('pro')->build();
+        assert(null !== $persona->domain);
+        $domainId = $persona->domain->id;
+        $client->loginUser($persona->user);
+
+        // Grab a valid CSRF token while still entitled, then lose entitlement: the
+        // server-side gate (DEC-058c) must reject the forged enable with a nudge,
+        // never switch the domain to managed.
+        $token = $this->enableToken($client, $persona);
+        $this->downgradeTeamToFree($domainId);
+
+        $client->request('POST', sprintf('/app/domains/%s/managed-dmarc/enable', $domainId->toString()), ['_csrf_token' => $token]);
+
+        self::assertSame(302, $client->getResponse()->getStatusCode());
+        self::assertSame(DmarcSetupMode::SelfTxt, $this->reload($domainId)->dmarcSetupMode);
+    }
+
+    #[Test]
+    public function policyAdvanceAndAutoRampControllersRefuseAForgedPostWhenEntitlementIsLost(): void
+    {
+        [$client, $domainId] = $this->activeManagedDomain();
+
+        // Capture valid tokens from the active card, then drop the team to Free.
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $domainId->toString()));
+        $policyToken = (string) $crawler->filter('form[action$="/managed-dmarc/policy"] input[name="_csrf_token"]')->attr('value');
+        $advanceToken = (string) $crawler->filter('form[action$="/managed-dmarc/advance"] input[name="_csrf_token"]')->attr('value');
+        $autoRampToken = (string) $crawler->filter('form[action$="/managed-dmarc/auto-ramp"] input[name="_csrf_token"]')->first()->attr('value');
+        $this->downgradeTeamToFree($domainId);
+
+        $client->request('POST', sprintf('/app/domains/%s/managed-dmarc/policy', $domainId->toString()), ['_csrf_token' => $policyToken, 'policy' => 'reject', 'subdomain_policy' => 'same', 'pct' => '100']);
+        self::assertSame(302, $client->getResponse()->getStatusCode());
+        self::assertSame(\App\Value\DmarcPolicy::None, $this->reload($domainId)->managedPolicyP, 'A non-entitled manual policy change must be refused.');
+
+        $client->request('POST', sprintf('/app/domains/%s/managed-dmarc/advance', $domainId->toString()), ['_csrf_token' => $advanceToken]);
+        self::assertSame(302, $client->getResponse()->getStatusCode());
+        self::assertSame(\App\Value\DmarcPolicy::None, $this->reload($domainId)->managedPolicyP);
+
+        $client->request('POST', sprintf('/app/domains/%s/managed-dmarc/auto-ramp', $domainId->toString()), ['_csrf_token' => $autoRampToken, 'action' => 'enable']);
+        self::assertSame(302, $client->getResponse()->getStatusCode());
+        self::assertFalse($this->reload($domainId)->autoRampEnabled, 'A non-entitled auto-drive enable must be refused.');
+    }
+
+    private function downgradeTeamToFree(\Ramsey\Uuid\UuidInterface $domainId): void
+    {
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $domain = $em->find(MonitoredDomain::class, $domainId);
+        assert(null !== $domain);
+        $em->getConnection()->executeStatement(
+            'UPDATE team SET plan = :plan WHERE id = :id',
+            ['plan' => 'free', 'id' => $domain->team->id->toString()],
+        );
+        $em->clear();
     }
 
     private function enableToken(KernelBrowser $client, \App\Tests\Fixtures\Persona $persona): string

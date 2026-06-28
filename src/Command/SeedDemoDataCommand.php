@@ -23,6 +23,7 @@ use App\Value\DmarcPolicy;
 use App\Value\Dns\AutoRampStage;
 use App\Value\Dns\DmarcSetupMode;
 use App\Value\Dns\PolicyChangeSource;
+use App\Value\SubscriptionPlan;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
@@ -203,6 +204,9 @@ final class SeedDemoDataCommand extends Command
             name: self::DEMO_TEAM_NAME,
             slug: self::DEMO_TEAM_SLUG,
             createdAt: $now,
+            // Staff-grant tier so the demo surfaces every paid feature (managed
+            // DMARC, AI insights, …) without a Stripe subscription.
+            plan: SubscriptionPlan::Unlimited->value,
         );
         $team->popEvents();
         $this->entityManager->persist($team);
