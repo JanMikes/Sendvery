@@ -118,6 +118,7 @@
                     {% if nextTier is not null %}
                         <div class="mt-4">
                             <a href="{{ path('dashboard_billing_upgrade', {plan: nextTier.value, interval: 'annual'}) }}"
+                               data-turbo="false"
                                class="btn btn-primary btn-sm">
                                 Upgrade to {{ nextTier.value|capitalize }}
                             </a>

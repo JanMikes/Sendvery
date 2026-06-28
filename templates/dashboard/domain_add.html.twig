@@ -45,7 +45,7 @@
                                 {% endif %}
                             </p>
                             {% if nextTier is not null %}
-                                <a href="{{ path('dashboard_billing_upgrade', {plan: nextTier.value, interval: 'annual'}) }}" class="btn btn-sm btn-primary mt-2">Upgrade plan</a>
+                                <a href="{{ path('dashboard_billing_upgrade', {plan: nextTier.value, interval: 'annual'}) }}" data-turbo="false" class="btn btn-sm btn-primary mt-2">Upgrade plan</a>
                             {% else %}
                                 <a href="mailto:jan.mikes@sendvery.com?subject=Enterprise%20inquiry" class="btn btn-sm btn-primary mt-2">Contact us</a>
                             {% endif %}

@@ -130,6 +130,7 @@
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
+                        data-turbo="false"{# checkout 302 → Stripe carries a #fragment; Turbo's fetch-redirect would strip it, so force a native navigation #}
                         href="{{ path('dashboard_billing_upgrade', {plan: 'personal', interval: 'annual'}) }}"
                         data-href-monthly="{{ path('dashboard_billing_upgrade', {plan: 'personal', interval: 'monthly'}) }}"
                         data-href-annual="{{ path('dashboard_billing_upgrade', {plan: 'personal', interval: 'annual'}) }}"
@@ -191,6 +192,7 @@
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
+                        data-turbo="false"{# checkout 302 → Stripe carries a #fragment; Turbo's fetch-redirect would strip it, so force a native navigation #}
                         href="{{ path('dashboard_billing_upgrade', {plan: 'pro', interval: 'annual'}) }}"
                         data-href-monthly="{{ path('dashboard_billing_upgrade', {plan: 'pro', interval: 'monthly'}) }}"
                         data-href-annual="{{ path('dashboard_billing_upgrade', {plan: 'pro', interval: 'annual'}) }}"
@@ -252,6 +254,7 @@
                 <div class="card-actions mt-6">
                     <a
                         data-pricing-target="cta"
+                        data-turbo="false"{# checkout 302 → Stripe carries a #fragment; Turbo's fetch-redirect would strip it, so force a native navigation #}
                         href="{{ path('dashboard_billing_upgrade', {plan: 'business', interval: 'annual'}) }}"
                         data-href-monthly="{{ path('dashboard_billing_upgrade', {plan: 'business', interval: 'monthly'}) }}"
                         data-href-annual="{{ path('dashboard_billing_upgrade', {plan: 'business', interval: 'annual'}) }}"
