@@ -10,6 +10,7 @@ use App\Services\AlertEngine;
 use App\Value\AlertSeverity;
 use App\Value\AlertType;
 use App\Value\DmarcPolicy;
+use App\Value\Dns\DmarcSetupMode;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
@@ -26,6 +27,12 @@ final readonly class RecommendPolicyUpgrade
     public function __invoke(DmarcReportProcessed $event): void
     {
         $domain = $this->monitoredDomainRepository->get($event->domainId);
+
+        // Managed DMARC (DEC-058): Sendvery already drives the policy ramp — never
+        // nag the customer to "tighten" a domain we manage for them.
+        if (DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode) {
+            return;
+        }
 
         if (DmarcPolicy::Reject === $domain->dmarcPolicy) {
             return;
