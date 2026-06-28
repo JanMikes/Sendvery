@@ -63,13 +63,12 @@ final readonly class EnableManagedDmarcHandler
     {
         $check = $this->dmarcChecker->check($domainName);
 
+        // Enforcement-preserving: carry the live p AND sp/pct forward. Even at
+        // p=none the customer may run a stricter sp (e.g. subdomains quarantined) —
+        // dropping it would silently downgrade their subdomain protection.
         $p = null !== $check->policy ? DmarcPolicy::tryFrom($check->policy) : null;
-        if (null === $p || DmarcPolicy::None === $p) {
-            return ManagedDmarcPolicy::monitoring();
-        }
-
         $sp = null !== $check->subdomainPolicy ? DmarcPolicy::tryFrom($check->subdomainPolicy) : null;
 
-        return new ManagedDmarcPolicy($p, $sp, $check->pct ?? 100);
+        return new ManagedDmarcPolicy($p ?? DmarcPolicy::None, $sp, $check->pct ?? 100);
     }
 }

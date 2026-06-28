@@ -68,7 +68,7 @@ final class SyncHostedDmarcRecordsCommand extends Command
         $reconciled = 0;
         $tornDown = 0;
         $dangling = 0;
-        $deleteFailed = 0;
+        $deferred = 0;
 
         foreach ($this->domainIdsToSync() as $id) {
             try {
@@ -76,7 +76,9 @@ final class SyncHostedDmarcRecordsCommand extends Command
                 $reconciled += 'reconciled' === $outcome ? 1 : 0;
                 $tornDown += 'torn_down' === $outcome ? 1 : 0;
                 $dangling += 'dangling' === $outcome ? 1 : 0;
-                $deleteFailed += 'delete_failed' === $outcome ? 1 : 0;
+                // publish/delete failures and unconfirmed lookups all leave the DB
+                // markers in place so the domain is re-selected and retried next run.
+                $deferred += in_array($outcome, ['publish_failed', 'delete_failed', 'lookup_failed'], true) ? 1 : 0;
             } catch (\Throwable $e) {
                 \Sentry\captureException($e);
                 $io->warning(sprintf('Hosted-record sync failed for domain %s: %s', $id, $e->getMessage()));
@@ -84,11 +86,11 @@ final class SyncHostedDmarcRecordsCommand extends Command
         }
 
         $io->success(sprintf(
-            'Hosted-record sync complete: %d reconciled, %d torn down, %d dangling, %d delete-failed.',
+            'Hosted-record sync complete: %d reconciled, %d torn down, %d dangling, %d deferred (retried next run).',
             $reconciled,
             $tornDown,
             $dangling,
-            $deleteFailed,
+            $deferred,
         ));
 
         return Command::SUCCESS;
@@ -121,10 +123,14 @@ final class SyncHostedDmarcRecordsCommand extends Command
         if (null === $current || trim($current->content) !== trim($expected)) {
             // Missing (recover a dropped enable side-effect) or drifted — (re)publish.
             $recordId = $this->dnsRecordPublisher->publishPolicyRecord($domain->domain, $expected);
-            if (null !== $recordId) {
-                $domain->cloudflareHostedDmarcRecordId = $recordId;
-                $this->entityManager->flush();
+            if (null === $recordId) {
+                // Publish failed/aborted (already logged + Sentry-captured). Report it
+                // distinctly instead of counting a no-op as reconciled; retried next run.
+                return 'publish_failed';
             }
+
+            $domain->cloudflareHostedDmarcRecordId = $recordId;
+            $this->entityManager->flush();
 
             return 'reconciled';
         }
@@ -143,12 +149,19 @@ final class SyncHostedDmarcRecordsCommand extends Command
     {
         // Dangling-safe: never delete while the CNAME still resolves to us — that
         // would NXDOMAIN the customer's _dmarc and break live DMARC.
-        if (CnameVerificationOutcome::Verified === $this->cnameChecker->verify($domain->domain)) {
+        $outcome = $this->cnameChecker->verify($domain->domain);
+        if (CnameVerificationOutcome::Verified === $outcome) {
             if (!$this->hasRecentDanglingAlert($domain->id->toString())) {
                 $this->bus->dispatch(new ManagedDmarcDanglingDetected($domain->id, $domain->team->id, $domain->domain));
             }
 
             return 'dangling';
+        }
+
+        if (CnameVerificationOutcome::LookupFailed === $outcome) {
+            // Could not confirm the CNAME is gone — deleting now could dark a still-
+            // delegated customer's DMARC. Defer; the next run retries once DNS answers.
+            return 'lookup_failed';
         }
 
         if (!$this->dnsRecordPublisher->removePolicyRecord($domain->domain)) {

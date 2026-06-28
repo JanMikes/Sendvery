@@ -35,7 +35,13 @@ final readonly class ManagedDmarcCnameChecker
             return CnameVerificationOutcome::Missing;
         }
 
-        $target = $this->cnameResolver->resolve(sprintf('_dmarc.%s', $customerDomain));
+        try {
+            $target = $this->cnameResolver->resolveOrThrow(sprintf('_dmarc.%s', $customerDomain));
+        } catch (\Throwable) {
+            // Inconclusive — never treat a transient DNS error as "no CNAME".
+            return CnameVerificationOutcome::LookupFailed;
+        }
+
         if (null === $target) {
             return CnameVerificationOutcome::Missing;
         }

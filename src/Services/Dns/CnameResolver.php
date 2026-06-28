@@ -24,10 +24,22 @@ final readonly class CnameResolver
     public function resolve(string $name): ?string
     {
         try {
-            $records = $this->dns->getRecords($name, 'CNAME');
+            return $this->resolveOrThrow($name);
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Like {@see resolve()} but lets a lookup FAILURE propagate: a returned null
+     * means "looked up successfully, no CNAME", whereas an exception means "could
+     * not look up at all". Callers that must not conflate the two (managed-DMARC
+     * verification + teardown) use this so a transient blip never reads as
+     * "the CNAME is gone".
+     */
+    public function resolveOrThrow(string $name): ?string
+    {
+        $records = $this->dns->getRecords($name, 'CNAME');
 
         foreach ($records as $record) {
             if ($record instanceof CNAME) {

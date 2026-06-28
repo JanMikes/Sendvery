@@ -118,7 +118,7 @@ final class SyncHostedDmarcRecordsCommandTest extends IntegrationTestCase
     }
 
     #[Test]
-    public function reportsDeleteFailedAndRetainsMarkersWhenTheTeardownDeleteFails(): void
+    public function deferAndRetainMarkersWhenTheTeardownDeleteFails(): void
     {
         // CNAME is gone (safe to delete) but Cloudflare rejects the delete. We must
         // NOT report it as torn down, and must leave the DB markers set so the next
@@ -132,11 +132,44 @@ final class SyncHostedDmarcRecordsCommandTest extends IntegrationTestCase
         self::assertSame(0, $tester->getStatusCode());
         // SymfonyStyle wraps the summary line, so normalise whitespace first.
         $display = (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
-        self::assertStringContainsString('1 delete-failed', $display);
+        self::assertStringContainsString('1 deferred', $display);
 
         $domain = $this->reload($domainId);
         self::assertNotNull($domain->cloudflareHostedDmarcRecordId);
         self::assertNotNull($domain->hostedDmarcTeardownAt);
+    }
+
+    #[Test]
+    public function defersTeardownWhenTheCnameLookupFailsRatherThanDeleting(): void
+    {
+        // CNAME is gone per the stored state, but the live lookup ERRORS this run.
+        // We must not delete on an unconfirmed lookup — the CNAME may still point at
+        // us, and deleting would dark a live _dmarc. Defer to the next run.
+        $domainId = $this->offboardedDomain('acme.example', cnamePointsAtUs: false);
+        $this->scriptDns()->throwOn('_dmarc.acme.example', 'CNAME');
+
+        $tester = new CommandTester($this->getService(SyncHostedDmarcRecordsCommand::class));
+        $tester->execute([]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertStringContainsString('1 deferred', (string) preg_replace('/\s+/', ' ', $tester->getDisplay()));
+        self::assertTrue($this->publisher()->policyRecordExists('acme.example'), 'Must not delete on an unconfirmed CNAME lookup.');
+        self::assertNotNull($this->reload($domainId)->cloudflareHostedDmarcRecordId);
+    }
+
+    #[Test]
+    public function defersWhenRepublishingAMissingRecordFails(): void
+    {
+        $domainId = $this->managedDomain('acme.example', DmarcPolicy::Quarantine);
+        $this->publisher()->simulateFailure();
+
+        $tester = new CommandTester($this->getService(SyncHostedDmarcRecordsCommand::class));
+        $tester->execute([]);
+
+        self::assertSame(0, $tester->getStatusCode());
+        self::assertStringContainsString('1 deferred', (string) preg_replace('/\s+/', ' ', $tester->getDisplay()));
+        self::assertFalse($this->publisher()->policyRecordExists('acme.example'));
+        self::assertNull($this->reload($domainId)->cloudflareHostedDmarcRecordId);
     }
 
     #[Test]

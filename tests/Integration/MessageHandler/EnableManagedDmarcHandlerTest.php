@@ -64,6 +64,21 @@ final class EnableManagedDmarcHandlerTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function preservesSubdomainPolicyEvenWhenTheTopLevelPolicyIsNone(): void
+    {
+        // p=none but sp=quarantine — subdomains deliberately enforced. The switchover
+        // must NOT silently drop that to monitor-only.
+        $this->scriptDns()->withTxt('_dmarc.acme.example', 'v=DMARC1; p=none; sp=quarantine; rua=mailto:old@acme.example');
+        $domainId = $this->createDomain('acme.example', plan: 'pro');
+
+        $this->handle(new EnableManagedDmarc($domainId, $this->teamIdFor($domainId), null));
+
+        $domain = $this->getService(MonitoredDomainRepository::class)->get($domainId);
+        self::assertSame(DmarcPolicy::None, $domain->managedPolicyP);
+        self::assertSame(DmarcPolicy::Quarantine, $domain->managedPolicySp, 'A stricter sp must survive a p=none switchover.');
+    }
+
+    #[Test]
     public function marksCnameVerifiedWhenItAlreadyPointsAtUs(): void
     {
         // A customer who pre-pointed the CNAME before enabling — verify immediately.

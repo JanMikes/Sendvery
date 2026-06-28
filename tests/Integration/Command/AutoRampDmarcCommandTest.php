@@ -115,6 +115,23 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function rollbackPreservesTheCustomersSubdomainPolicyAndCoverage(): void
+    {
+        // Auto-drive controls `p` only — a rollback loosens p but leaves the
+        // customer's explicit sp/pct intact (the system never auto-overrides their
+        // subdomain policy; the human is paused + alerted to adjust it if needed).
+        $domainId = $this->managedDomain('pro', DmarcPolicy::Reject, autoRampEnabled: true, ready: true, withAuthorizedFailure: true, sp: DmarcPolicy::Quarantine, pct: 50);
+
+        $this->runSweep();
+
+        $domain = $this->reload($domainId);
+        self::assertSame(DmarcPolicy::Quarantine, $domain->managedPolicyP, 'Hard regression rolls p back to the looser tier.');
+        self::assertSame(DmarcPolicy::Quarantine, $domain->managedPolicySp);
+        self::assertSame(50, $domain->managedPolicyPct);
+        self::assertNotNull($domain->autoRampPausedAt);
+    }
+
+    #[Test]
     public function nudgesGuidedDomainsThatBecomeReady(): void
     {
         $domainId = $this->managedDomain('pro', DmarcPolicy::None, autoRampEnabled: false, ready: true);

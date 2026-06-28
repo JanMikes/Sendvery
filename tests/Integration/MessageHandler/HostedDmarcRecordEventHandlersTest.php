@@ -13,6 +13,7 @@ use App\MessageHandler\PublishHostedDmarcRecordWhenManagedEnabled;
 use App\MessageHandler\RemoveHostedDmarcRecordWhenManagedDisabled;
 use App\MessageHandler\UpdateHostedDmarcRecordWhenPolicyChanged;
 use App\Repository\MonitoredDomainRepository;
+use App\Services\Dns\FakeDns;
 use App\Services\Dns\FakeDnsRecordPublisher;
 use App\Tests\IntegrationTestCase;
 use App\Value\DmarcPolicy;
@@ -60,6 +61,25 @@ final class HostedDmarcRecordEventHandlersTest extends IntegrationTestCase
         $this->getService(RemoveHostedDmarcRecordWhenManagedDisabled::class)(new ManagedDmarcDisabled($missing, Uuid::uuid7(), 'gone.example', 'some-id'));
 
         $this->expectNotToPerformAssertions();
+    }
+
+    #[Test]
+    public function removeKeepsTheHostedRecordWhenTheCnameLookupFails(): void
+    {
+        // The disable teardown must NOT delete on an unconfirmed CNAME lookup — the
+        // CNAME may still point at us, so deleting would dark a live _dmarc. Keep the
+        // record + id; the sync cron tears down once the lookup confirms it's gone.
+        $domainId = $this->managedDomain(DmarcPolicy::Quarantine, hostedRecordId: 'kept-id');
+        $publisher = $this->getService(FakeDnsRecordPublisher::class);
+        $publisher->publishPolicyRecord('acme.example', 'v=DMARC1; p=quarantine');
+        $this->getService(FakeDns::class)->throwOn('_dmarc.acme.example', 'CNAME');
+
+        $this->getService(RemoveHostedDmarcRecordWhenManagedDisabled::class)(
+            new ManagedDmarcDisabled($domainId, $this->teamIdFor($domainId), 'acme.example', 'kept-id'),
+        );
+
+        self::assertTrue($publisher->policyRecordExists('acme.example'));
+        self::assertSame('kept-id', $this->reload($domainId)->cloudflareHostedDmarcRecordId);
     }
 
     #[Test]

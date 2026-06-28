@@ -32,4 +32,21 @@ final class CnameResolverTest extends TestCase
 
         self::assertNull((new CnameResolver($dns))->resolve('_dmarc.acme.com'));
     }
+
+    #[Test]
+    public function resolveOrThrowReturnsNullForAGenuineNoCname(): void
+    {
+        // A successful lookup that finds no CNAME returns null (NOT an exception),
+        // so callers can tell "looked up, none there" from "couldn't look up".
+        self::assertNull((new CnameResolver(new FakeDns()))->resolveOrThrow('_dmarc.acme.com'));
+    }
+
+    #[Test]
+    public function resolveOrThrowLetsTheLookupFailurePropagate(): void
+    {
+        $dns = (new FakeDns())->throwOn('_dmarc.acme.com', 'CNAME');
+
+        $this->expectException(\Throwable::class);
+        (new CnameResolver($dns))->resolveOrThrow('_dmarc.acme.com');
+    }
 }

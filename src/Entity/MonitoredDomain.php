@@ -261,6 +261,13 @@ final class MonitoredDomain implements EntityWithEvents
      */
     public function markCnameVerified(CnameVerificationOutcome $outcome, \DateTimeImmutable $now): void
     {
+        // A failed lookup is inconclusive — never flip verification state on it, or
+        // a transient DNS blip during the daily sweep would spuriously un-verify a
+        // live CNAME and freeze the ramp.
+        if (CnameVerificationOutcome::LookupFailed === $outcome) {
+            return;
+        }
+
         if (CnameVerificationOutcome::Verified !== $outcome) {
             $this->cnameVerifiedAt = null;
 

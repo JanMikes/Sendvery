@@ -37,6 +37,16 @@ final class ManagedDmarcCnameCheckerTest extends TestCase
     }
 
     #[Test]
+    public function lookupFailedWhenTheCnameResolutionErrors(): void
+    {
+        // A transient resolver error must be distinct from a confirmed "no CNAME",
+        // so teardown/verification never treat a blip as "the customer removed it".
+        $dns = (new FakeDns())->throwOn('_dmarc.acme.example', 'CNAME');
+
+        self::assertSame(CnameVerificationOutcome::LookupFailed, $this->checker($dns)->verify('acme.example'));
+    }
+
+    #[Test]
     public function matchIsCaseInsensitiveAndIgnoresTrailingDot(): void
     {
         $dns = (new FakeDns())->withCname('_dmarc.acme.example', 'ACME.example._DMARC.Sendvery.test.');

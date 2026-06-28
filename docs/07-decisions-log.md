@@ -561,6 +561,18 @@ hosted-record sync reports a distinct `delete_failed` outcome instead of countin
 Cloudflare delete as torn-down. (5) The dashboard `DnsRecordInstruction` copy button now copies
 the bare CNAME target (was wrapped in literal quotes); the active card leads with auto-drive (the
 premium hero) and demotes manual policy control into a disclosure.
+A second round (after `/code-review high` + `/security-review`) added: (6) a new
+`CnameVerificationOutcome::LookupFailed` (distinct from `Missing`) so a transient DNS error is
+never read as "the customer removed their CNAME" — both teardown sites (the disable event handler
+and the sync cron) now DEFER rather than delete on an unconfirmed lookup, and the daily sweep no
+longer un-verifies a live CNAME (which would have spuriously frozen the ramp) on a blip; (7)
+`EnableManagedDmarcHandler::seedFromLiveRecord` carries `sp`/`pct` forward even when `p=none` (a
+customer with `p=none; sp=quarantine` no longer silently loses subdomain enforcement at
+switchover); (8) the sync cron reports `publish_failed`/`delete_failed`/`lookup_failed` as a single
+`deferred` (retried-next-run) count instead of overstating success. Auto-drive deliberately
+controls `p` only — it preserves the customer's `sp`/`pct` on BOTH advance and rollback (the system
+never auto-overrides their explicit subdomain policy; a regression pauses + alerts the human to
+adjust `sp` if a subdomain is implicated).
 
 ---
 

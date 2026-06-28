@@ -35,9 +35,11 @@ final readonly class RemoveHostedDmarcRecordWhenManagedDisabled
             return;
         }
 
-        if (CnameVerificationOutcome::Verified === $this->cnameChecker->verify($domain->domain)) {
-            // CNAME still points at us — keep serving DMARC; the sync cron tears
-            // down once the customer removes the CNAME.
+        $outcome = $this->cnameChecker->verify($domain->domain);
+        if (CnameVerificationOutcome::Verified === $outcome || CnameVerificationOutcome::LookupFailed === $outcome) {
+            // Still points at us, or we couldn't confirm it's gone — keep serving
+            // DMARC; the sync cron tears down once the CNAME is confirmed removed.
+            // Deleting on an unconfirmed lookup could NXDOMAIN a live _dmarc.
             return;
         }
 

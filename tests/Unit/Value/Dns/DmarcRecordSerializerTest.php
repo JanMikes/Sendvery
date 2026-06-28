@@ -75,17 +75,17 @@ final class DmarcRecordSerializerTest extends TestCase
     #[Test]
     public function dmarcRuaInstructionOutputIsByteIdenticalAfterDelegating(): void
     {
-        $instruction = DmarcRuaInstruction::build('v=DMARC1; aspf=r; pct=100; p=reject', 'reports@sendvery.com');
+        $instruction = DmarcRuaInstruction::build('v=DMARC1; aspf=r; pct=100; p=reject', 'reports@sendvery.test');
 
         $expected = (new DmarcRecordSerializer())->rebuildRecord([
             'v' => 'DMARC1',
             'aspf' => 'r',
             'pct' => '100',
             'p' => 'reject',
-            'rua' => 'mailto:reports@sendvery.com',
+            'rua' => 'mailto:reports@sendvery.test',
         ]);
 
-        self::assertSame('v=DMARC1; p=reject; rua=mailto:reports@sendvery.com; aspf=r; pct=100', $expected);
+        self::assertSame('v=DMARC1; p=reject; rua=mailto:reports@sendvery.test; aspf=r; pct=100', $expected);
         self::assertSame($expected, $instruction->finalRecord);
     }
 
@@ -94,10 +94,10 @@ final class DmarcRecordSerializerTest extends TestCase
     {
         // `np` (non-existent-subdomain policy) is not in the canonical list, so
         // it must be appended verbatim after the known tags, never dropped.
-        $instruction = DmarcRuaInstruction::build('v=DMARC1; p=none; np=quarantine', 'reports@sendvery.com');
+        $instruction = DmarcRuaInstruction::build('v=DMARC1; p=none; np=quarantine', 'reports@sendvery.test');
 
         self::assertSame(
-            'v=DMARC1; p=none; rua=mailto:reports@sendvery.com; np=quarantine',
+            'v=DMARC1; p=none; rua=mailto:reports@sendvery.test; np=quarantine',
             $instruction->finalRecord,
         );
     }

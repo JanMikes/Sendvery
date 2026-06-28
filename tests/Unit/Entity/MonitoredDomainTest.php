@@ -246,6 +246,23 @@ final class MonitoredDomainTest extends TestCase
     }
 
     #[Test]
+    public function markCnameVerifiedLeavesAVerifiedCnameUntouchedOnAFailedLookup(): void
+    {
+        // A transient DNS failure during the daily sweep must NOT un-verify a live
+        // CNAME — that would spuriously freeze the ramp on every blip.
+        $domain = $this->managed(DmarcPolicy::None);
+        $domain->markCnameVerified(CnameVerificationOutcome::Verified, $this->at('2026-06-12 09:00:00'));
+        $domain->popEvents();
+        $verifiedAt = $domain->cnameVerifiedAt;
+        self::assertNotNull($verifiedAt);
+
+        $domain->markCnameVerified(CnameVerificationOutcome::LookupFailed, $this->at('2026-06-13 09:00:00'));
+
+        self::assertSame($verifiedAt, $domain->cnameVerifiedAt);
+        self::assertSame([], $domain->popEvents());
+    }
+
+    #[Test]
     public function autoRampEnableDisablePauseResumeBehaveAndEmit(): void
     {
         $domain = $this->managed(DmarcPolicy::None);
