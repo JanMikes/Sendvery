@@ -15,4 +15,25 @@ final class ReportAddressProviderTest extends TestCase
 
         self::assertSame('reports@example.com', $provider->get());
     }
+
+    public function testDerivesTheReportDomainFromTheAddress(): void
+    {
+        $provider = new ReportAddressProvider('reports@sendvery.test');
+
+        self::assertSame('sendvery.test', $provider->getReportDomain());
+    }
+
+    public function testReportDomainIsNullWhenTheAddressHasNoAtSign(): void
+    {
+        $provider = new ReportAddressProvider('not-an-email');
+
+        self::assertNull($provider->getReportDomain());
+    }
+
+    public function testReportDomainIsNullWhenThereIsNoDomainAfterTheAtSign(): void
+    {
+        $provider = new ReportAddressProvider('reports@');
+
+        self::assertNull($provider->getReportDomain());
+    }
 }

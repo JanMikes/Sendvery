@@ -58,3 +58,4 @@ Thumbs.db
 ###> claude code ###
 /.claude/scheduled_tasks.lock
 ###< claude code ###
+/coverage.xml

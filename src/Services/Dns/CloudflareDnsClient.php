@@ -210,15 +210,7 @@ final readonly class CloudflareDnsClient implements DnsRecordPublisher
 
     private function getReportDomain(): ?string
     {
-        $email = $this->reportAddressProvider->get();
-        $atPos = strrpos($email, '@');
-        if (false === $atPos) {
-            return null;
-        }
-
-        $domain = substr($email, $atPos + 1);
-
-        return '' !== $domain ? $domain : null;
+        return $this->reportAddressProvider->getReportDomain();
     }
 
     private function dnsRecordsUrl(): string

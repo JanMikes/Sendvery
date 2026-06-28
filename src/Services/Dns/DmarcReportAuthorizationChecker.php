@@ -35,7 +35,7 @@ final readonly class DmarcReportAuthorizationChecker
     public function check(string $monitoredDomain, ?string $dmarcRawRecord): ?bool
     {
         $reportAddress = $this->reportAddressProvider->get();
-        $reportDomain = $this->extractDomain($reportAddress);
+        $reportDomain = $this->reportAddressProvider->getReportDomain();
 
         if (null === $reportDomain) {
             return null;
@@ -56,7 +56,7 @@ final readonly class DmarcReportAuthorizationChecker
 
     public function getReportDomain(): ?string
     {
-        return $this->extractDomain($this->reportAddressProvider->get());
+        return $this->reportAddressProvider->getReportDomain();
     }
 
     private function queryAuthorizationRecord(string $name): bool
@@ -95,18 +95,6 @@ final readonly class DmarcReportAuthorizationChecker
         }
 
         return false;
-    }
-
-    private function extractDomain(string $email): ?string
-    {
-        $atPos = strrpos($email, '@');
-        if (false === $atPos) {
-            return null;
-        }
-
-        $domain = substr($email, $atPos + 1);
-
-        return '' !== $domain ? $domain : null;
     }
 
     private function extractTxtValue(string $record): string

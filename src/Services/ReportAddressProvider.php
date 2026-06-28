@@ -23,4 +23,24 @@ final readonly class ReportAddressProvider
     {
         return $this->reportAddress;
     }
+
+    /**
+     * The domain portion of the report address — the zone Sendvery hosts DMARC
+     * authorization and managed-policy records in. Returns null when the
+     * address is missing or malformed (no `@`). This is the single source of
+     * truth for report-domain derivation across the DNS services (the
+     * Cloudflare client, the §7.1 authorization checker, and the managed-CNAME
+     * checker). Prod resolves to `sendvery.com`; tests to `sendvery.test`.
+     */
+    public function getReportDomain(): ?string
+    {
+        $atPos = strrpos($this->reportAddress, '@');
+        if (false === $atPos) {
+            return null;
+        }
+
+        $domain = substr($this->reportAddress, $atPos + 1);
+
+        return '' !== $domain ? $domain : null;
+    }
 }
