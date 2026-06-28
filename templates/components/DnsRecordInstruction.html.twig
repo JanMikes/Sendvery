@@ -15,7 +15,7 @@
      - ttl (int)                  Recommended TTL in seconds (default 3600).
      - alreadyConfigured (bool)   When true, render a success state instead of instructions.
 #}
-{% props recordType, host, finalValue, whatText, whyText, currentValue = null, ttl = 3600, alreadyConfigured = false %}
+{% props recordType, host, finalValue, whatText, whyText, currentValue = null, ttl = 3600, alreadyConfigured = false, copyable = false %}
 
 {% set isEdit = currentValue is not null and currentValue != '' %}
 {% set actionLabel = isEdit ? 'Edit existing record' : 'Add a new record' %}
@@ -96,10 +96,15 @@
                         {% endif %}
                     </div>
                 </div>
-                <div class="rounded-xl border border-primary/30 bg-primary/5 overflow-hidden">
+                <div class="rounded-xl border border-primary/30 bg-primary/5 overflow-hidden" {{ copyable ? 'data-controller=clipboard-copy data-clipboard-copy-text-value="' ~ finalValue ~ '"' : '' }}>
                     <div class="px-3 py-2 bg-primary/10 text-xs uppercase tracking-wide font-semibold text-primary flex items-center gap-2">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                         Final value (paste this)
+                        {% if copyable %}
+                            <button type="button" class="btn btn-xs btn-ghost ml-auto" data-action="clipboard-copy#copy">
+                                <span data-clipboard-copy-target="label">Copy</span>
+                            </button>
+                        {% endif %}
                     </div>
                     <div class="p-3 font-mono text-xs break-all min-h-[3.5rem] flex items-center select-all">
                         <span class="text-base-content">{{ finalValue }}</span>

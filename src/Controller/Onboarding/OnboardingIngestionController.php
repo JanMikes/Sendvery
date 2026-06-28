@@ -6,13 +6,19 @@ namespace App\Controller\Onboarding;
 
 use App\Entity\User;
 use App\Message\ConnectMailbox;
+use App\Message\EnableManagedDmarc;
+use App\Query\GetTeamPlan;
 use App\Repository\MonitoredDomainRepository;
+use App\Services\Dns\CloudflareDnsClient;
 use App\Services\Dns\DmarcChecker;
+use App\Services\Dns\ManagedDmarcCnameChecker;
 use App\Services\Dns\RuaScenarioResolver;
 use App\Services\IdentityProvider;
 use App\Services\ReportAddressProvider;
+use App\Services\Stripe\PlanEnforcement;
 use App\Services\TeamProvisioner;
 use App\Value\Dns\DmarcRuaInstruction;
+use App\Value\Dns\DmarcSetupMode;
 use App\Value\Dns\RuaScenario;
 use App\Value\MailboxEncryption;
 use App\Value\MailboxType;
@@ -32,6 +38,10 @@ final class OnboardingIngestionController extends AbstractController
         private readonly DmarcChecker $dmarcChecker,
         private readonly ReportAddressProvider $reportAddressProvider,
         private readonly RuaScenarioResolver $ruaScenarioResolver,
+        private readonly CloudflareDnsClient $cloudflareClient,
+        private readonly GetTeamPlan $getTeamPlan,
+        private readonly PlanEnforcement $planEnforcement,
+        private readonly ManagedDmarcCnameChecker $cnameChecker,
     ) {
     }
 
@@ -56,9 +66,25 @@ final class OnboardingIngestionController extends AbstractController
         $errors = [];
         $method = $request->request->getString('method');
 
+        $managedAvailable = $this->cloudflareClient->isConfigured()
+            && $this->planEnforcement->canUseManagedDmarc($this->getTeamPlan->forTeam($teamId->toString()));
+
         if ($request->isMethod('POST')) {
             if ('forward' === $method) {
                 return $this->redirectToRoute('onboarding_complete');
+            }
+
+            if ('managed' === $method && $managedAvailable) {
+                // Publish-first: enable hosts the policy record before the user
+                // points the CNAME at us. Back on GET we render the CNAME
+                // instruction + the three-state managed verify frame.
+                $this->commandBus->dispatch(new EnableManagedDmarc(
+                    domainId: $primaryDomain->id,
+                    teamId: $teamId->toString(),
+                    actorUserId: $user->id,
+                ));
+
+                return $this->redirectToRoute('onboarding_ingestion');
             }
 
             if ('mailbox' === $method) {
@@ -121,6 +147,10 @@ final class OnboardingIngestionController extends AbstractController
             'domainName' => $primaryDomain->domain,
             'ruaInstruction' => DmarcRuaInstruction::build($dmarcCheck->rawRecord, $reportAddress),
             'reportAddress' => $reportAddress,
+            'managedDmarcAvailable' => $managedAvailable,
+            'dnsAutomationConfigured' => $this->cloudflareClient->isConfigured(),
+            'isManaged' => DmarcSetupMode::ManagedCname === $primaryDomain->dmarcSetupMode,
+            'managedCnameTarget' => $this->cnameChecker->expectedTarget($primaryDomain->domain) ?? '',
         ]);
     }
 }

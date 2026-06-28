@@ -22,6 +22,7 @@ final readonly class OnboardingRedirectListener
         'onboarding_domain',
         'onboarding_ingestion',
         'onboarding_ingestion_verify',
+        'onboarding_ingestion_managed_verify',
         'onboarding_complete',
     ];
 

@@ -1,0 +1,57 @@
+{# Three-state managed-CNAME verify panel, rendered inside a turbo-frame from
+   onboarding/ingestion.html.twig. Polls via the same dns-verify-poll controller
+   as the self-TXT panel; stops once the CNAME is verified. #}
+<turbo-frame id="managed-cname-verify"
+             src="{{ path('onboarding_ingestion_managed_verify') }}"
+             data-controller="dns-verify-poll"
+             data-dns-verify-poll-verified-value="{{ verified ? 'true' : 'false' }}"
+             data-dns-verify-poll-url-value="{{ path('onboarding_ingestion_managed_verify') }}">
+    {% if hasConflictingTxt %}
+        <div class="rounded-2xl border border-warning/30 bg-warning/5 p-5">
+            <div class="font-semibold text-base-content">Remove your existing DMARC TXT first</div>
+            <p class="text-sm text-base-content/70 mt-1">
+                {{ domainName }} already has a <span class="font-mono">_dmarc</span> TXT record. A CNAME can’t sit
+                alongside it (DNS doesn’t allow it). Delete that TXT, then add the CNAME above — we’ll keep the
+                same protection, your current policy is mirrored into the managed record.
+            </p>
+            <a href="{{ path('onboarding_ingestion_managed_verify') }}" class="btn btn-sm btn-warning btn-outline mt-3">Re-check</a>
+        </div>
+    {% elseif verified %}
+        <div class="rounded-2xl border border-success/30 bg-success/5 p-5">
+            <div class="flex items-center gap-2 flex-wrap">
+                <div class="font-semibold text-base-content">Managed DMARC is live for {{ domainName }}</div>
+                <span class="text-xs text-base-content/50">Checked just now</span>
+            </div>
+            <p class="text-sm text-base-content/70 mt-1">
+                We can see your CNAME — Sendvery is now hosting your DMARC policy in monitor-only mode
+                (<span class="font-mono">p=none</span>), so nothing changes for your senders yet.
+            </p>
+            <a href="{{ path('onboarding_complete') }}" class="btn btn-sm btn-success mt-3" data-turbo-frame="_top">Continue</a>
+        </div>
+    {% elseif pointsElsewhere %}
+        <div class="rounded-2xl border border-warning/30 bg-warning/5 p-5">
+            <div class="font-semibold text-base-content">Your <span class="font-mono">_dmarc</span> points somewhere else</div>
+            <p class="text-sm text-base-content/70 mt-1">
+                <span class="font-mono">_dmarc.{{ domainName }}</span> resolves to a different target. Point it at
+                <span class="font-mono">{{ cnameTarget }}</span> so Sendvery can host your policy.
+            </p>
+            <a href="{{ path('onboarding_ingestion_managed_verify') }}" class="btn btn-sm btn-warning btn-outline mt-3">Re-check</a>
+        </div>
+    {% else %}
+        <div class="rounded-2xl border border-info/30 bg-info/5 p-5">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-info animate-spin shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-dns-verify-poll-target="spinner">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v2m0 12v2m8-8h-2M6 12H4m13.657-5.657l-1.414 1.414M7.757 16.243l-1.414 1.414m0-11.314l1.414 1.414m9.9 9.9l1.414 1.414"/>
+                </svg>
+                <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-base-content">Checking your CNAME…</div>
+                    <p class="text-sm text-base-content/70 mt-1">
+                        Not visible yet — DNS can take up to an hour. We’ll keep checking —
+                        <span data-dns-verify-poll-target="status">retrying soon…</span>
+                    </p>
+                    <a href="{{ path('onboarding_ingestion_managed_verify') }}" class="btn btn-sm btn-info btn-outline mt-3">Retry now</a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</turbo-frame>
