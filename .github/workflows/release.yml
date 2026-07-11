@@ -1,9 +1,17 @@
-name: Release
+# Release — build the image and deploy to lily via the shared reusable workflow
+# (TheDevs-cz/ci). No more SSH-to-spare: the job calls `_ship.yml`, which
+# builds+pushes ghcr.io/janmikes/sendvery and then HMAC-POSTs
+# https://deploy.lily.srv.thedevs.cz/hooks/sendvery (per-app secret). The box
+# executor runs /srv/sendvery/deploy.sh (dump_secrets -> migrate-on-boot -> rollout).
+#
+# Trigger: only after the `CI` workflow succeeds on main (keeps the tests-must-pass
+# gate the old SSH pipeline had).
+#
+# Secret (set on this repo): DEPLOY_WEBHOOK_SECRET (the per-app HMAC key, mirrored
+# from the box /srv/webhook/secrets.env). Passed EXPLICITLY because the reusable
+# workflow lives under a different owner (secrets: inherit can't cross owners).
 
-permissions:
-    contents: read
-    deployments: write
-    packages: write
+name: Release
 
 on:
     workflow_run:
@@ -13,68 +21,19 @@ on:
         branches:
             - main
 
+permissions:
+    contents: read
+    packages: write
+
 jobs:
-    docker:
-        name: "Docker images"
-        runs-on: ubuntu-latest
+    ship-production:
         if: ${{ github.event.workflow_run.conclusion == 'success' }}
-        steps:
-            -   name: Checkout
-                uses: actions/checkout@v5
-
-            -   name: Docker meta
-                id: meta
-                uses: docker/metadata-action@v6
-                with:
-                    images: ghcr.io/janmikes/sendvery
-                    tags: |
-                        type=ref,event=branch
-                        type=sha
-
-            -   name: Set up Docker Buildx
-                uses: docker/setup-buildx-action@v4
-
-            -   name: Login to GHCR
-                uses: docker/login-action@v4
-                with:
-                    registry: ghcr.io
-                    username: ${{ github.repository_owner }}
-                    password: ${{ secrets.GITHUB_TOKEN }}
-
-            -   name: Build and push
-                uses: docker/build-push-action@v7
-                with:
-                    push: true
-                    tags: ${{ steps.meta.outputs.tags }}
-                    labels: ${{ steps.meta.outputs.labels }}
-                    cache-from: type=gha, scope=${{ github.workflow }}
-                    cache-to: type=gha, scope=${{ github.workflow }}
-                    build-args: APP_VERSION=${{ github.sha }}
-
-    deploy:
-        runs-on: ubuntu-latest
-        if: ${{ github.event.workflow_run.conclusion == 'success' }}
-        needs:
-            - docker
-        environment:
-            name: production
-            url: ${{ steps.env-url.outputs.url }}
-        # Serialize production deploys. Without this, two CI runs finishing seconds apart
-        # SSH in and run deploy.sh in parallel — the second one's cleanup pass kills the
-        # first's new container mid-healthcheck (`disappeared mid-healthcheck`).
-        # cancel-in-progress: false → running deploys are never cancelled; newer runs queue.
-        concurrency:
-            group: sendvery-deploy-production
-            cancel-in-progress: false
-        steps:
-            -   name: Resolve environment URL
-                id: env-url
-                run: echo "url=https://sendvery.com" >> "$GITHUB_OUTPUT"
-
-            -   name: Deploy to production
-                uses: appleboy/ssh-action@master
-                with:
-                    host: ${{ secrets.DEPLOY_HOST }}
-                    username: ${{ secrets.DEPLOY_USERNAME }}
-                    key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
-                    script: cd /deployment/sendvery && ./deploy.sh
+        uses: TheDevs-cz/ci/.github/workflows/_ship.yml@v1
+        secrets:
+            DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+        with:
+            app: sendvery
+            image: ghcr.io/janmikes/sendvery
+            deploy_host: lily.srv.thedevs.cz
+            build_args: APP_VERSION=${{ github.event.workflow_run.head_sha }}
+            await_deploy: false
