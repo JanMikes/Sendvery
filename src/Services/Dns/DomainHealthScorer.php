@@ -150,18 +150,20 @@ final readonly class DomainHealthScorer
 
         $score = 40;
 
-        $anyReachable = false;
+        // Score on what DNS proves (records resolve), not on port-25 probes —
+        // a blocked outbound 25 on the checking host must not tank the grade.
+        $anyResolvable = false;
         $allTls = true;
         foreach ($mx->records as $record) {
-            if ($record->reachable) {
-                $anyReachable = true;
+            if (null !== $record->ip) {
+                $anyResolvable = true;
             }
             if ($record->reachable && true !== $record->tlsSupported) {
                 $allTls = false;
             }
         }
 
-        if ($anyReachable) {
+        if ($anyResolvable) {
             $score += 30;
         }
 

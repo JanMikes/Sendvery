@@ -156,6 +156,45 @@ final class DkimCheckerTest extends TestCase
         self::assertSame('google._domainkey.elsewhere.com', $result->cnameTarget);
     }
 
+    #[Test]
+    public function wildcardDnsDoesNotFakeABrokenDkimSetup(): void
+    {
+        // `*.wild.example CNAME wild.example` makes EVERY selector resolve to
+        // the apex, whose TXT records are the site's, not a DKIM key. The
+        // checker must recognise the wildcard (via a selector that cannot
+        // exist) and report "cannot auto-detect" instead of "DKIM is broken".
+        $dns = (new FakeDns())
+            ->withCname('google._domainkey.wild.example', 'wild.example')
+            ->withCname(DkimChecker::WILDCARD_PROBE_SELECTOR.'._domainkey.wild.example', 'wild.example')
+            ->withTxt('wild.example', 'v=spf1 -all');
+
+        $checker = $this->checker($dns);
+
+        $result = $checker->check('wild.example');
+
+        self::assertSame(DkimLookupOutcome::NoRecord, $result->outcome);
+        self::assertFalse($result->keyExists);
+        self::assertStringContainsString('wildcard DNS', $result->issues[0]->message);
+    }
+
+    #[Test]
+    public function wildcardDnsStillFindsARealKeyAtAKnownSelector(): void
+    {
+        // The wildcard guard must only disable the CNAME early-stop — a real
+        // key published at a known selector still wins.
+        $dns = (new FakeDns())
+            ->withCname(DkimChecker::WILDCARD_PROBE_SELECTOR.'._domainkey.wild.example', 'wild.example')
+            ->withTxt('google._domainkey.wild.example', 'v=DKIM1; k=rsa; p='.$this->fakePublicKey(2048));
+
+        $checker = $this->checker($dns);
+
+        $result = $checker->check('wild.example');
+
+        self::assertSame(DkimLookupOutcome::KeyFound, $result->outcome);
+        self::assertTrue($result->keyExists);
+        self::assertSame('google', $result->selector);
+    }
+
     private function checker(FakeDns $dns): DkimChecker
     {
         $organizationMapper = new OrganizationMapper();

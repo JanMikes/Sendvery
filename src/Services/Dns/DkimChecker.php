@@ -12,6 +12,13 @@ use Spatie\Dns\Dns;
 
 final readonly class DkimChecker
 {
+    /**
+     * Selector that cannot legitimately exist — if `<this>._domainkey.<domain>`
+     * resolves anyway, the zone has wildcard DNS and every selector probe
+     * "resolves" regardless of whether DKIM is configured.
+     */
+    public const string WILDCARD_PROBE_SELECTOR = 'sendvery-wildcard-probe';
+
     public function __construct(
         private Dns $dns,
         private EmailProviderDetector $providerDetector,
@@ -31,6 +38,15 @@ final readonly class DkimChecker
         $providers = $this->providerDetector->detect($domain);
         $selectors = $this->selectorRegistry->selectorsFor($providers);
 
+        // Wildcard DNS makes every brute-forced selector resolve (a CNAME to
+        // the wildcard target whose TXT records are the site's, not a DKIM
+        // key). Without this guard the first candidate selector "finds" that
+        // bogus CNAME and we falsely report DKIM as broken — hit in production
+        // on a domain with `*.example.com CNAME example.com`.
+        $hasWildcard = null !== $this->cnameResolver->resolve(
+            self::WILDCARD_PROBE_SELECTOR.'._domainkey.'.$domain,
+        );
+
         foreach ($selectors as $candidate) {
             $result = $this->checkSelector($domain, $candidate);
 
@@ -38,13 +54,15 @@ final readonly class DkimChecker
                 return $this->withMatchedProviders($this->withDetectedProviders($result, $providers));
             }
 
-            // Stop early if we found a CNAME at this selector — strong signal it's the right one
-            if (null !== $result->cnameTarget) {
+            // Stop early if we found a CNAME at this selector — strong signal
+            // it's the right one. Meaningless under wildcard DNS, where every
+            // selector yields a CNAME.
+            if (!$hasWildcard && null !== $result->cnameTarget) {
                 return $this->withMatchedProviders($this->withDetectedProviders($result, $providers));
             }
         }
 
-        return $this->withDetectedProviders($this->buildNotFoundFallback('default', $providers), $providers);
+        return $this->withDetectedProviders($this->buildNotFoundFallback('default', $providers, $hasWildcard), $providers);
     }
 
     private function checkSelector(string $domain, string $selector): DkimCheckResult
@@ -179,9 +197,12 @@ final readonly class DkimChecker
     }
 
     /** @param list<string> $providers */
-    private function buildNotFoundFallback(string $selector, array $providers): DkimCheckResult
+    private function buildNotFoundFallback(string $selector, array $providers, bool $hasWildcard = false): DkimCheckResult
     {
-        if ([] === $providers) {
+        if ($hasWildcard) {
+            $message = 'This domain uses wildcard DNS, so we cannot detect your DKIM selector automatically — every selector name resolves whether or not a key is published there.';
+            $help = 'Set the exact DKIM selector from your email provider on this domain so we can check the real record.';
+        } elseif ([] === $providers) {
             $message = 'No DKIM key found for common selectors. You may need to specify the selector used by your email provider.';
             $help = 'Check with your email provider for the correct DKIM selector. Common selectors include: google, selector1, selector2, k1, default.';
         } else {

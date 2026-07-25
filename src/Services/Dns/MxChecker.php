@@ -56,7 +56,11 @@ final readonly class MxChecker
         }
 
         if (!$anyReachable) {
-            $issues[] = new DnsIssue(IssueSeverity::Warning, 'None of the MX servers responded on port 25. Mail delivery may be impaired.', 'Verify your mail servers are running and accepting connections.');
+            // When NOT EVEN ONE server answers, the far more likely explanation
+            // is that our own egress on port 25 is filtered (standard on cloud
+            // hosts) — we genuinely cannot tell the difference from here. Say
+            // so honestly instead of accusing the user's mail servers.
+            $issues[] = new DnsIssue(IssueSeverity::Info, 'We could not reach any MX server on port 25 from our checker. This is usually a network restriction on the checking side rather than a problem with your mail servers.', 'Only investigate if you are actually seeing inbound mail delivery problems.');
         }
 
         $anyTlsMissing = false;

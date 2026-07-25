@@ -178,11 +178,12 @@ final class CheckDomainDnsHandlerTest extends IntegrationTestCase
     }
 
     #[Test]
-    public function mxRecordWithUnreachableServerSurfacesWarning(): void
+    public function mxRecordWithUnreachableServerStaysValidButSurfacesProbeNote(): void
     {
         // Same MX + A scripting, but the SMTP probe returns unreachable. The
-        // check must capture reachable=false and the issues list must include
-        // the "responded on port 25" warning.
+        // check captures reachable=false and surfaces an informational note —
+        // but stays VALID: outbound port 25 is blocked on many checker hosts,
+        // so an unanswered probe must never mark a resolvable MX setup broken.
         $this->scriptDns()
             ->withMx('mxhost.example', 'mail.mxhost.example', priority: 10)
             ->withA('mail.mxhost.example', '192.0.2.10');
@@ -205,9 +206,10 @@ final class CheckDomainDnsHandlerTest extends IntegrationTestCase
         $records = $mx->details['records'] ?? [];
         self::assertCount(1, $records);
         self::assertFalse($records[0]['reachable']);
+        self::assertTrue($mx->isValid, 'A resolvable MX setup must stay valid even when the port-25 probe gets no answer.');
 
         $messages = array_map(static fn (array $issue): string => $issue['message'], $mx->issues);
-        self::assertNotEmpty(array_filter($messages, static fn (string $m): bool => str_contains($m, 'responded on port 25')));
+        self::assertNotEmpty(array_filter($messages, static fn (string $m): bool => str_contains($m, 'port 25')));
     }
 
     #[Test]

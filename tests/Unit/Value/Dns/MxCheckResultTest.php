@@ -31,9 +31,20 @@ final class MxCheckResultTest extends TestCase
     }
 
     #[Test]
-    public function isNotPassingWhenAllUnreachable(): void
+    public function isPassingWhenResolvableButUnreachableOnPort25(): void
     {
+        // Outbound port 25 is blocked on many hosts (including ours) — a failed
+        // probe says nothing about the domain, so DNS-valid MX must still pass.
         $records = [new MxRecord('mail.example.com', 10, '1.2.3.4', false, null)];
+        $result = new MxCheckResult($records, []);
+
+        self::assertTrue($result->isPassing());
+    }
+
+    #[Test]
+    public function isNotPassingWhenNoRecordResolvesToAnIp(): void
+    {
+        $records = [new MxRecord('mail.example.com', 10, null, false, null)];
         $result = new MxCheckResult($records, []);
 
         self::assertFalse($result->isPassing());

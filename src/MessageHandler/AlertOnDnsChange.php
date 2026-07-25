@@ -40,11 +40,15 @@ final readonly class AlertOnDnsChange
         $team = $this->teamRepository->get($event->teamId);
         $typeName = strtoupper($event->type->value);
 
-        // First check ever for this domain+type and it's already broken — alert immediately.
-        // Without this, a domain added with a pre-existing misconfiguration (e.g. a CNAME
-        // pointing at a selector the provider hasn't published yet) would never trigger a
-        // change-based alert, since there's no prior state to compare against.
-        if ($event->isFirstCheck && !$event->isValid) {
+        // First check ever for this domain+type and a record EXISTS but fails
+        // validation — that's a genuinely broken pre-existing setup, alert
+        // immediately (a change-based alert would never fire without prior
+        // state to compare against). A missing record on the first check is
+        // NOT an incident: freshly added domains are usually mid-setup, and
+        // firing "X is broken" criticals for records the user never published
+        // flooded real users with false alarms the moment the first check ran.
+        // The setup checklist and health page own the "missing" guidance.
+        if ($event->isFirstCheck && !$event->isValid && null !== $event->rawRecord) {
             $this->alertEngine->createAlert(
                 team: $team,
                 monitoredDomain: $domain,

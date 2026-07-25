@@ -164,11 +164,43 @@ final class AlertOnDnsChangeTest extends IntegrationTestCase
     }
 
     #[Test]
-    public function firesAlertOnFirstCheckWhenAlreadyBroken(): void
+    public function firesAlertOnFirstCheckWhenAnExistingRecordIsBroken(): void
     {
-        // Domain added with a pre-existing DKIM misconfiguration (CNAME pointing at a
-        // selector the provider has not published). Without first-check alerting this
+        // Domain added with a pre-existing misconfiguration — a record IS
+        // published but fails validation. Without first-check alerting this
         // would silently sit in the dashboard until something else changed.
+        [$team, $domain] = $this->createTeamAndDomain();
+        $em = $this->getService(EntityManagerInterface::class);
+        $handler = $this->getService(AlertOnDnsChange::class);
+
+        $event = new DnsCheckCompleted(
+            dnsCheckResultId: Uuid::uuid7(),
+            domainId: $domain->id,
+            teamId: $team->id,
+            type: DnsCheckType::Spf,
+            hasChanged: false,
+            isValid: false,
+            rawRecord: 'v=spf1 include:a include:b include:c include:d include:e include:f include:g include:h include:i include:j include:k -all',
+            previousRawRecord: null,
+            isFirstCheck: true,
+        );
+
+        $handler($event);
+        $em->flush();
+
+        $alerts = $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]);
+        self::assertCount(1, $alerts);
+        self::assertSame(AlertType::DnsRecordInvalid, $alerts[0]->type);
+        self::assertStringContainsString('broken for dns-alert-test.com', $alerts[0]->title);
+    }
+
+    #[Test]
+    public function noAlertOnFirstCheckWhenTheRecordIsSimplyMissing(): void
+    {
+        // A record that was never published is a setup task, not an incident —
+        // freshly added domains are usually mid-setup, and a critical
+        // "X is broken" email for every unpublished record floods the user
+        // moments after they add a domain. The setup checklist owns this state.
         [$team, $domain] = $this->createTeamAndDomain();
         $em = $this->getService(EntityManagerInterface::class);
         $handler = $this->getService(AlertOnDnsChange::class);
@@ -189,9 +221,7 @@ final class AlertOnDnsChangeTest extends IntegrationTestCase
         $em->flush();
 
         $alerts = $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]);
-        self::assertCount(1, $alerts);
-        self::assertSame(AlertType::DnsRecordInvalid, $alerts[0]->type);
-        self::assertStringContainsString('broken for dns-alert-test.com', $alerts[0]->title);
+        self::assertCount(0, $alerts);
     }
 
     #[Test]

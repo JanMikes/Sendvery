@@ -21,6 +21,14 @@ final readonly class MxCheckResult
         return [] !== $this->records;
     }
 
+    /**
+     * Validity is a DNS claim: MX records exist and at least one resolves to
+     * an IP. Port-25 reachability deliberately does NOT gate this — many
+     * hosting providers (including ours) block outbound port 25, so a failed
+     * probe usually describes OUR network, not the domain's mail servers.
+     * Treating it as failure produced false "MX is broken" critical alerts
+     * for perfectly healthy domains.
+     */
     public function isPassing(): bool
     {
         if (!$this->hasRecords()) {
@@ -28,7 +36,7 @@ final readonly class MxCheckResult
         }
 
         foreach ($this->records as $record) {
-            if ($record->reachable) {
+            if (null !== $record->ip) {
                 return true;
             }
         }
