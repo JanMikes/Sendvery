@@ -45,7 +45,9 @@ final readonly class DkimSelectorRegistry
         'Yandex' => ['mail'],
         'Apple' => ['sig1'],
         'Proton Mail' => ['protonmail', 'protonmail2', 'protonmail3'],
-        'Seznam' => ['szn-2022', 'szn20221014', 'szn20231014', 'szn20241014', 'szn20251014'],
+        // szn1–szn3 are Seznam's current (2026) selector scheme; the date-based
+        // names are the legacy generation still published for older setups.
+        'Seznam' => ['szn1', 'szn2', 'szn3', 'szn-2022', 'szn20221014', 'szn20231014', 'szn20241014', 'szn20251014'],
         'Elastic Email' => ['api'],
         'SendPulse' => ['sendpulse'],
         'MessageBird' => ['messagebird'],

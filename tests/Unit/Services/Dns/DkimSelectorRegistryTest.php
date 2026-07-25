@@ -31,6 +31,25 @@ final class DkimSelectorRegistryTest extends TestCase
     }
 
     #[Test]
+    public function seznamIncludesTheCurrentSzn1To3SelectorsBeforeTheLegacyDateBasedOnes(): void
+    {
+        // Seznam migrated from date-based selectors (szn20221014, ...) to
+        // szn1/szn2/szn3 in 2026 — freshly configured domains only publish the
+        // new names, so they must be probed (and probed first).
+        $selectors = $this->registry->selectorsFor(['Seznam']);
+
+        foreach (['szn1', 'szn2', 'szn3'] as $current) {
+            self::assertContains($current, $selectors);
+        }
+
+        $szn1Index = array_search('szn1', $selectors, true);
+        $legacyIndex = array_search('szn20221014', $selectors, true);
+        self::assertIsInt($szn1Index);
+        self::assertIsInt($legacyIndex);
+        self::assertLessThan($legacyIndex, $szn1Index, 'Current-generation szn1 should be probed before legacy date-based selectors');
+    }
+
+    #[Test]
     public function unknownProviderFallsBackToGenericList(): void
     {
         $selectors = $this->registry->selectorsFor(['NeverHeardOfThisProvider']);
