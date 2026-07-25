@@ -6,7 +6,9 @@ namespace App\Command;
 
 use App\Message\CheckDomainDns;
 use App\Message\SnapshotDomainHealth;
+use App\MessageHandler\CheckDomainDnsHandler;
 use Doctrine\DBAL\Connection;
+use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -17,13 +19,15 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 #[AsCommand(
     name: 'sendvery:dns:check-all',
-    description: 'Dispatch DNS checks for all monitored domains',
+    description: 'Run DNS checks and health snapshots for all monitored domains',
 )]
 final class CheckAllDomainsDnsCommand extends Command
 {
     public function __construct(
         private readonly Connection $database,
         private readonly MessageBusInterface $commandBus,
+        private readonly CheckDomainDnsHandler $checkDomainDnsHandler,
+        private readonly EntityManagerInterface $entityManager,
     ) {
         parent::__construct();
     }
@@ -44,15 +48,22 @@ final class CheckAllDomainsDnsCommand extends Command
 
         foreach ($domainIds as $domainId) {
             $domainUuid = Uuid::fromString($domainId);
-            $this->commandBus->dispatch(new CheckDomainDns(
-                domainId: $domainUuid,
-            ));
+
+            // CheckDomainDns is routed to the async transport (so the
+            // add-domain flow can queue a first check without blocking the web
+            // request), but the nightly sweep must stay synchronous: the
+            // snapshot below reads the check results this run just wrote, and
+            // the wrapping Sentry monitor should measure the actual work.
+            // Direct invocation + explicit flush mirrors ReverifyDomainController.
+            ($this->checkDomainDnsHandler)(new CheckDomainDns(domainId: $domainUuid));
+            $this->entityManager->flush();
+
             $this->commandBus->dispatch(new SnapshotDomainHealth(
                 domainId: $domainUuid,
             ));
         }
 
-        $io->success(sprintf('Dispatched DNS checks for %d domain(s).', count($domainIds)));
+        $io->success(sprintf('Checked DNS for %d domain(s).', count($domainIds)));
 
         return Command::SUCCESS;
     }

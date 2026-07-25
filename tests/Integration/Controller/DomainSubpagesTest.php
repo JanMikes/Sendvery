@@ -145,6 +145,38 @@ final class DomainSubpagesTest extends WebTestCase
     }
 
     #[Test]
+    public function reverifyPostReturnsToTheRefererPage(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+
+        assert(null !== $persona->domain);
+        $healthUrl = 'http://localhost/app/domains/'.$persona->domain->id.'/health';
+        $client->request('POST', '/app/domains/'.$persona->domain->id.'/reverify', server: ['HTTP_REFERER' => $healthUrl]);
+
+        // "Re-check now" buttons live on several pages — the user returns to
+        // the page they clicked from and sees the fresh result there.
+        self::assertResponseRedirects($healthUrl);
+    }
+
+    #[Test]
+    public function reverifyPostIgnoresAForeignRefererHost(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+
+        assert(null !== $persona->domain);
+        $client->request('POST', '/app/domains/'.$persona->domain->id.'/reverify', server: ['HTTP_REFERER' => 'https://evil.example/phish']);
+
+        // A cross-host referer must never become a redirect target.
+        self::assertResponseRedirects('/app/domains/'.$persona->domain->id);
+    }
+
+    #[Test]
     public function adminCanAccessDomainSubpages(): void
     {
         $client = self::createClient();

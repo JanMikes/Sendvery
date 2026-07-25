@@ -231,6 +231,31 @@ final class ManagedDmarcControllerTest extends WebTestCase
     }
 
     #[Test]
+    public function cnamePendingCardOffersAManualVerifyAction(): void
+    {
+        $client = self::createClient();
+        $persona = TestFixtures::fromContainer(self::getContainer())->persona()->plan('pro')->build();
+        assert(null !== $persona->domain);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $domain = $em->find(MonitoredDomain::class, $persona->domain->id);
+        assert(null !== $domain);
+        $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+        $domain->managedPolicyP = \App\Value\DmarcPolicy::None;
+        $domain->cloudflareHostedDmarcRecordId = 'cf-1';
+        $em->flush();
+        $client->loginUser($persona->user);
+
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+
+        // The user just added the CNAME at their DNS host — they must be able
+        // to trigger verification immediately instead of waiting for a sweep.
+        $verifyForm = $crawler->filter('[data-testid="managed-dmarc-verify-now"]');
+        self::assertCount(1, $verifyForm, 'CNAME-pending card must offer a "Verify now" action.');
+        self::assertStringContainsString('/reverify', (string) $verifyForm->attr('action'));
+    }
+
+    #[Test]
     public function cardRendersFrozenStateForADowngradedManagedDomain(): void
     {
         $client = self::createClient();

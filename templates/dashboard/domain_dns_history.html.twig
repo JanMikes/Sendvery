@@ -22,7 +22,10 @@
 {% block content %}
     <twig:DomainWorkspaceTabs :domain="domain" active="history" :tabCounts="tabCounts" />
 
-    {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
+    {# hasAnyHistory gate: before the first DNS check the instruction card
+       would claim "No record exists yet" about a record we never looked at.
+       The empty state below (with its Re-check button) owns that state. #}
+    {% if hasAnyHistory and ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
         <div class="mb-6">
             <twig:DnsRecordInstruction
                 recordType="TXT"
@@ -227,7 +230,7 @@
     {% else %}
         <twig:EmptyState
             title="No DNS checks yet"
-            message="DNS checks run automatically once a day. Trigger one now to see results immediately."
+            message="Your first DNS check was queued when the domain was added and usually completes within a few minutes — after that we re-check once a day. Trigger one now to see results immediately."
         />
         <div class="flex justify-center -mt-4">
             <form method="post" action="{{ path('dashboard_domain_reverify', { id: domain.domainId }) }}">

@@ -1,0 +1,30 @@
+{# Info banner for the "first DNS check hasn't completed yet" state.
+
+   Rendered wherever the page would otherwise present per-record verdicts
+   ("you have no SPF record", "no record exists yet") that we can't actually
+   claim before the first check has run. Mirrors the info-blue pending card in
+   DomainSetupStatus so the state reads identically across pages, and offers
+   the same manual escape hatch (POST to dashboard_domain_reverify).
+
+   Props:
+     - domainId (string)
+     - message (string)  One-sentence explanation below the headline.
+#}
+{% props domainId, message = "We queued your first DNS check when this domain was added — it usually completes within a few minutes. Check now to see your current records immediately." %}
+
+<div class="rounded-2xl border border-info/30 bg-info/5 p-5 mb-6" data-testid="dns-check-pending-banner">
+    <div class="flex items-start gap-3">
+        <div class="w-9 h-9 rounded-full bg-info/15 text-info flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </div>
+        <div class="flex-1">
+            <div class="font-semibold text-base-content mb-1">DNS check pending</div>
+            <p class="text-sm text-base-content/70">{{ message }}</p>
+        </div>
+        <form method="post" action="{{ path('dashboard_domain_reverify', {id: domainId}) }}" class="shrink-0">
+            <button type="submit" class="btn btn-sm btn-info btn-outline">Check now</button>
+        </form>
+    </div>
+</div>

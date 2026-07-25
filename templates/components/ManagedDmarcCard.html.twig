@@ -92,7 +92,8 @@
                 </div>
             {% else %}
                 <p class="text-sm text-base-content/70">
-                    Add this CNAME at your DNS host. We re-check your DNS automatically every day — or reload this page once you’ve added it.
+                    Add this CNAME at your DNS host, then click <strong>Verify now</strong> — we also re-check automatically
+                    a few times over the next couple of hours, and daily after that.
                     We’ve already published your starting policy (<span class="font-mono">p=none</span>, monitor-only), so nothing changes for your senders yet.
                 </p>
             {% endif %}
@@ -103,13 +104,19 @@
                 finalValue="{{ card.cnameTarget }}"
                 whatText="Point your DMARC record at Sendvery"
                 whyText="This single record never changes — we update the policy behind it so you never edit DNS again."
+                currentValuePlaceholder="Not verified yet — add the record, then click Verify now"
                 ttl="300"
                 :copyable="true" />
 
-            <form method="post" action="{{ path('dashboard_domain_switch_to_self_txt', { id: domainId }) }}">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_to_self') }}">
-                <button type="submit" class="btn btn-ghost btn-sm">Switch back to managing the record yourself →</button>
-            </form>
+            <div class="flex items-center gap-2 flex-wrap">
+                <form method="post" action="{{ path('dashboard_domain_reverify', { id: domainId }) }}" data-testid="managed-dmarc-verify-now">
+                    <button type="submit" class="btn btn-primary btn-sm">Verify now</button>
+                </form>
+                <form method="post" action="{{ path('dashboard_domain_switch_to_self_txt', { id: domainId }) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_to_self') }}">
+                    <button type="submit" class="btn btn-ghost btn-sm">Switch back to managing the record yourself →</button>
+                </form>
+            </div>
 
         {# ── ACTIVE ──────────────────────────────────────────────────── #}
         {% elseif state == 'active' %}

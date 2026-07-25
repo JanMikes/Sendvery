@@ -36,6 +36,12 @@ return App::config([
                 // the parse, and exhausted retries land in `failed`.
                 \App\Message\GenerateAnomalyInsight::class => 'async',
                 \App\Message\GenerateRemediationInsight::class => 'async',
+                // A DNS check can take a while (DKIM selector brute-force,
+                // slow nameservers) — never run it inside a web request. The
+                // sync call sites (re-verify button, onboarding verify, the
+                // nightly sweep) invoke CheckDomainDnsHandler directly and are
+                // unaffected by this routing.
+                \App\Message\CheckDomainDns::class => 'async',
             ],
         ],
     ],

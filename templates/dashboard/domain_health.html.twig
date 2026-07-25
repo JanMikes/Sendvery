@@ -41,7 +41,14 @@
         </div>
     {% endif %}
 
-    {% if ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
+    {# First DNS check hasn't completed yet — showing the record cards below
+       would falsely claim "no record exists". Be transparent about the real
+       state instead and offer the manual check. #}
+    {% if dnsCheckPending is defined and dnsCheckPending %}
+        <twig:DnsCheckPendingBanner :domainId="domain.domainId" />
+    {% endif %}
+
+    {% if (dnsCheckPending is not defined or not dnsCheckPending) and ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
         <div class="mb-6">
             <twig:DnsRecordInstruction
                 recordType="TXT"

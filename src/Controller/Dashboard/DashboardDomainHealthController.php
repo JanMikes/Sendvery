@@ -67,7 +67,15 @@ final class DashboardDomainHealthController extends AbstractController
             $this->reportAddressProvider->get(),
         );
 
-        $dnsRecommendations = $this->dnsRecordRecommender->recommendForDomain($domain->domainName, $latestByType);
+        // No stored check for ANY record type means the first DNS check hasn't
+        // completed yet. In that state every "you have no X record" claim below
+        // would be a guess presented as fact — render a pending banner instead
+        // and hold the recommendations until real data exists (TASK: first-check UX).
+        $dnsCheckPending = [] === array_filter($latestByType);
+
+        $dnsRecommendations = $dnsCheckPending
+            ? []
+            : $this->dnsRecordRecommender->recommendForDomain($domain->domainName, $latestByType);
 
         $trendChartConfig = null;
         if (count($history) > 1) {
@@ -97,6 +105,7 @@ final class DashboardDomainHealthController extends AbstractController
             'trendChartConfig' => $trendChartConfig,
             'ruaInstruction' => $ruaInstruction,
             'dnsRecommendations' => $dnsRecommendations,
+            'dnsCheckPending' => $dnsCheckPending,
             'tabCounts' => $tabCounts,
             'aiRemediation' => $this->cachedRemediation($id, $latestByType),
         ]);

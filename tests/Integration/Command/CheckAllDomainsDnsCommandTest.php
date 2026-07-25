@@ -62,6 +62,6 @@ final class CheckAllDomainsDnsCommandTest extends IntegrationTestCase
         $tester->execute([]);
 
         self::assertSame(0, $tester->getStatusCode());
-        self::assertStringContainsString('Dispatched DNS checks for', $tester->getDisplay());
+        self::assertStringContainsString('Checked DNS for', $tester->getDisplay());
     }
 }

@@ -615,7 +615,7 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
-    public function reverifyEndpointRedirectsBackToDashboard(): void
+    public function reverifyEndpointRedirectsBackToTheDomain(): void
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -631,7 +631,9 @@ final class OnboardingTest extends WebTestCase
         $client->loginUser($user);
         $client->request('POST', '/app/domains/'.$domain->id->toString().'/reverify');
 
-        self::assertResponseRedirects('/app');
+        // Without a referer the user lands on the domain they just re-checked,
+        // where the fresh result is visible — not on the dashboard overview.
+        self::assertResponseRedirects('/app/domains/'.$domain->id->toString());
     }
 
     #[Test]

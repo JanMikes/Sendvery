@@ -12,10 +12,14 @@
      - whatText (string)          Short imperative title — what we're asking for.
      - whyText (string)           One-sentence explanation in plain language.
      - currentValue (?string)     Existing value, or null when no record exists.
+     - currentValuePlaceholder (string)  Shown in the "Current value" box when no
+                                  value is known. Override when "no record exists"
+                                  hasn't actually been verified (e.g. the managed
+                                  CNAME card before the first check).
      - ttl (int)                  Recommended TTL in seconds (default 3600).
      - alreadyConfigured (bool)   When true, render a success state instead of instructions.
 #}
-{% props recordType, host, finalValue, whatText, whyText, currentValue = null, ttl = 3600, alreadyConfigured = false, copyable = false %}
+{% props recordType, host, finalValue, whatText, whyText, currentValue = null, currentValuePlaceholder = 'No record exists yet', ttl = 3600, alreadyConfigured = false, copyable = false %}
 
 {% set isEdit = currentValue is not null and currentValue != '' %}
 {% set actionLabel = isEdit ? 'Edit existing record' : 'Add a new record' %}
@@ -92,7 +96,7 @@
                         {% if isEdit %}
                             <span class="text-base-content/80">{{ currentValue }}</span>
                         {% else %}
-                            <span class="italic text-base-content/40">No record exists yet</span>
+                            <span class="italic text-base-content/40">{{ currentValuePlaceholder }}</span>
                         {% endif %}
                     </div>
                 </div>

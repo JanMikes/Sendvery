@@ -11,6 +11,7 @@ use App\Services\DashboardContext;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -25,7 +26,7 @@ final class ReverifyDomainController extends AbstractController
     }
 
     #[Route('/app/domains/{id}/reverify', name: 'dashboard_domain_reverify', methods: ['POST'])]
-    public function __invoke(string $id): Response
+    public function __invoke(string $id, Request $request): Response
     {
         $domain = $this->monitoredDomainRepository->findForTeams(
             Uuid::fromString($id),
@@ -41,6 +42,15 @@ final class ReverifyDomainController extends AbstractController
         ($this->checkDomainDnsHandler)(new CheckDomainDns(domainId: $domain->id));
         $this->entityManager->flush();
 
-        return $this->redirectToRoute('dashboard_overview');
+        // "Re-check now" buttons live on the domain overview, health and DNS
+        // history pages — send the user back to the page they clicked from so
+        // they immediately see the fresh result. Same-host check keeps this
+        // from becoming an open redirect; fall back to the domain detail page.
+        $referer = $request->headers->get('referer');
+        if (null !== $referer && parse_url($referer, \PHP_URL_HOST) === $request->getHost()) {
+            return $this->redirect($referer);
+        }
+
+        return $this->redirectToRoute('dashboard_domain_detail', ['id' => $domain->id]);
     }
 }
