@@ -138,9 +138,10 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
         self::assertNotNull($envelope);
         self::assertSame(17, $envelope->imapUid);
         self::assertSame(555, $envelope->imapUidvalidity);
-        // The synchronous bus runs ProcessReceivedReportEmail inline; the empty-body
-        // fixture has no DMARC attachments, so the envelope ends up ignored, not pending.
-        self::assertSame(EnvelopeProcessingStatus::Ignored, $envelope->processingStatus);
+        // ProcessReceivedReportEmail is routed to the async transport
+        // (in-memory in tests), so ingestion leaves the envelope pending —
+        // the worker owns the status transition.
+        self::assertSame(EnvelopeProcessingStatus::Pending, $envelope->processingStatus);
     }
 
     private function envelope(int $uid, string $messageId, ?int $uidvalidity = 1): FetchedEnvelope

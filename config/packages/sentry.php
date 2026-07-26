@@ -69,9 +69,10 @@ return App::config([
 
         'messenger' => [
             'enabled' => true,
-            // Report failures even when the message will be retried — better to over-report
-            // than miss a permanently-failing handler.
-            'capture_soft_fails' => true,
+            // Only report messages whose retries are exhausted. Transient upstream
+            // blips (SMTP 421 throttling, IMAP timeouts) resolve via the async
+            // transport's backoff retries — paging on every soft fail is noise.
+            'capture_soft_fails' => false,
             // Critical for long-running messenger workers: prevents breadcrumb leakage
             // between consumed messages in the same PHP process.
             'isolate_breadcrumbs_by_message' => true,
