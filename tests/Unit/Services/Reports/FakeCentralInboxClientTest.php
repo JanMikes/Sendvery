@@ -22,16 +22,29 @@ final class FakeCentralInboxClientTest extends TestCase
         self::assertSame([], $client->fetchPending(), 'second fetch returns empty — envelopes drain on fetch');
     }
 
-    public function testTracksMovesPerUid(): void
+    public function testTracksSeenUids(): void
     {
         $client = new FakeCentralInboxClient();
 
-        $client->moveToFolder(7, CentralInboxFolder::Processed);
-        $client->moveToFolder(8, CentralInboxFolder::Failed);
+        $client->markSeen(7);
+        $client->markSeen(8);
+
+        self::assertSame([7, 8], $client->getSeenUids());
+    }
+
+    public function testTracksProcessedMoves(): void
+    {
+        $client = new FakeCentralInboxClient();
+
+        $client->moveProcessed(7, 555, '<a@x>', CentralInboxFolder::Processed);
+        $client->moveProcessed(null, null, '<b@x>', CentralInboxFolder::Junk);
 
         self::assertSame(
-            [7 => CentralInboxFolder::Processed, 8 => CentralInboxFolder::Failed],
-            $client->getMovedUids(),
+            [
+                ['uid' => 7, 'uidvalidity' => 555, 'messageId' => '<a@x>', 'destination' => CentralInboxFolder::Processed],
+                ['uid' => null, 'uidvalidity' => null, 'messageId' => '<b@x>', 'destination' => CentralInboxFolder::Junk],
+            ],
+            $client->getMovedProcessed(),
         );
     }
 
@@ -81,14 +94,16 @@ final class FakeCentralInboxClientTest extends TestCase
     {
         $client = new FakeCentralInboxClient();
         $client->addEnvelope($this->makeEnvelope(uid: 1));
-        $client->moveToFolder(1, CentralInboxFolder::Junk);
+        $client->markSeen(1);
+        $client->moveProcessed(1, 1, '<msg-1@example.com>', CentralInboxFolder::Junk);
         $client->close();
         $client->simulateFailure('x');
 
         $client->reset();
 
         self::assertSame([], $client->fetchPending());
-        self::assertSame([], $client->getMovedUids());
+        self::assertSame([], $client->getSeenUids());
+        self::assertSame([], $client->getMovedProcessed());
         self::assertSame(0, $client->getClosedTimes());
         self::assertTrue($client->testConnection()->success);
     }

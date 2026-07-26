@@ -12,8 +12,10 @@ use App\Entity\Team;
 use App\Message\ProcessReceivedReportEmail;
 use App\MessageHandler\ProcessReceivedReportEmailHandler;
 use App\Services\IdentityProvider;
+use App\Services\Reports\FakeCentralInboxClient;
 use App\Services\Stripe\PlanEnforcement;
 use App\Tests\IntegrationTestCase;
+use App\Value\Reports\CentralInboxFolder;
 use App\Value\Reports\EnvelopeProcessingStatus;
 use App\Value\Reports\QuarantineReason;
 use App\Value\Reports\ReportSource;
@@ -25,6 +27,7 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
     private EntityManagerInterface $em;
     private ProcessReceivedReportEmailHandler $handler;
     private IdentityProvider $identityProvider;
+    private FakeCentralInboxClient $inboxClient;
 
     protected function setUp(): void
     {
@@ -32,6 +35,17 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         $this->em = $this->getService(EntityManagerInterface::class);
         $this->handler = $this->getService(ProcessReceivedReportEmailHandler::class);
         $this->identityProvider = $this->getService(IdentityProvider::class);
+        $this->inboxClient = $this->getService(FakeCentralInboxClient::class);
+        $this->inboxClient->reset();
+    }
+
+    /** @return list<CentralInboxFolder> */
+    private function movedDestinations(): array
+    {
+        return array_map(
+            static fn (array $move): CentralInboxFolder => $move['destination'],
+            $this->inboxClient->getMovedProcessed(),
+        );
     }
 
     public function testRoutesReportToVerifiedTeam(): void
@@ -54,6 +68,15 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
             ->findOneBy(['monitoredDomain' => $domain->id->toString()]);
         self::assertNotNull($report);
         self::assertSame($domain->id->toString(), $report->monitoredDomain->id->toString());
+
+        self::assertSame(
+            [CentralInboxFolder::Processed],
+            $this->movedDestinations(),
+            'parsed envelope is filed into the Processed folder in the mailbox',
+        );
+        $move = $this->inboxClient->getMovedProcessed()[0];
+        self::assertSame(42, $move['uid'], 'move targets the UID captured at fetch time, not a Message-ID search');
+        self::assertSame(555, $move['uidvalidity']);
     }
 
     public function testQuarantinesReportForUnverifiedDomain(): void
@@ -138,6 +161,12 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
         self::assertNotNull($reloaded);
         self::assertSame(EnvelopeProcessingStatus::Ignored, $reloaded->processingStatus);
         self::assertNotNull($reloaded->processingError);
+
+        self::assertSame(
+            [CentralInboxFolder::Junk],
+            $this->movedDestinations(),
+            'non-report mail is filed into the Junk folder in the mailbox',
+        );
     }
 
     public function testIncrementsAttemptsOnEachInvocation(): void
@@ -197,6 +226,8 @@ final class ProcessReceivedReportEmailHandlerTest extends IntegrationTestCase
             ingestedAt: new \DateTimeImmutable(),
             sizeBytes: strlen($rawEml),
             rawEml: $rawEml,
+            imapUidvalidity: 555,
+            imapUid: 42,
         );
         $this->em->persist($envelope);
 

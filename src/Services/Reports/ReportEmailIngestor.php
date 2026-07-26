@@ -8,7 +8,6 @@ use App\Entity\ReceivedReportEmail;
 use App\Message\ProcessReceivedReportEmail;
 use App\Repository\ReceivedReportEmailRepository;
 use App\Services\IdentityProvider;
-use App\Value\Reports\CentralInboxFolder;
 use App\Value\Reports\FetchedEnvelope;
 use App\Value\Reports\ReportSource;
 use Doctrine\ORM\EntityManagerInterface;
@@ -18,12 +17,14 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Pulls one batch of envelopes from the central inbox, persists each as a
- * ReceivedReportEmail in pending state, and moves the IMAP message to
- * Sendvery/Pending so it isn't re-fetched on the next poll.
+ * ReceivedReportEmail in pending state, and flags the IMAP message \Seen so
+ * it isn't re-fetched on the next poll. The message itself stays in INBOX
+ * (keeping its UID valid) until ProcessReceivedReportEmailHandler moves it
+ * to its destination folder.
  *
- * Ordering invariant: persist BEFORE moving in IMAP. If we move first and
+ * Ordering invariant: persist BEFORE flagging in IMAP. If we flag first and
  * crash before persisting, the envelope is lost forever. Persist first and
- * the message stays in INBOX on retry — the unique (source, message_id)
+ * the message stays unseen on retry — the unique (source, message_id)
  * constraint dedupes the second insert.
  */
 final readonly class ReportEmailIngestor
@@ -62,7 +63,7 @@ final readonly class ReportEmailIngestor
                     $this->commandBus->dispatch(new ProcessReceivedReportEmail(envelopeId: $entity->id));
                 }
 
-                $this->client->moveToFolder($envelope->uid, CentralInboxFolder::Pending);
+                $this->client->markSeen($envelope->uid);
             }
 
             if (0 !== $persisted) {

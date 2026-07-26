@@ -68,7 +68,7 @@ final readonly class ProcessReceivedReportEmailHandler
         $destination = $this->processEnvelope($envelope, $now);
 
         try {
-            $this->client->moveByMessageId($envelope->messageId, CentralInboxFolder::Pending, $destination);
+            $this->client->moveProcessed($envelope->imapUid, $envelope->imapUidvalidity, $envelope->messageId, $destination);
         } catch (\Throwable $e) {
             // IMAP move is best-effort: the envelope is fully processed regardless.
             $this->logger->warning('Failed to move envelope {msgId} to {folder}: {error}', [

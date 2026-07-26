@@ -12,7 +12,6 @@ use App\Services\Reports\FakeCentralInboxClient;
 use App\Services\Reports\ReportEmailIngestor;
 use App\Tests\IntegrationTestCase;
 use App\Value\MailboxEncryption;
-use App\Value\Reports\CentralInboxFolder;
 use App\Value\Reports\EnvelopeProcessingStatus;
 use App\Value\Reports\FetchedEnvelope;
 use App\Value\Reports\ReportSource;
@@ -40,7 +39,7 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
         $this->client->reset();
     }
 
-    public function testPersistsNewEnvelopeAndMovesToPending(): void
+    public function testPersistsNewEnvelopeAndFlagsItSeen(): void
     {
         $envelope = $this->envelope(uid: 42, messageId: '<google-001@google.com>');
         $this->client->addEnvelope($envelope);
@@ -48,10 +47,7 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
         $persisted = $this->ingestor->ingestBatch();
 
         self::assertSame(1, $persisted);
-        self::assertSame(
-            [42 => CentralInboxFolder::Pending],
-            $this->client->getMovedUids(),
-        );
+        self::assertSame([42], $this->client->getSeenUids(), 'message stays in INBOX but is flagged seen so it is not re-fetched');
         self::assertTrue(
             $this->envelopeRepository->existsForSourceAndMessageId(ReportSource::CentralInbox, '<google-001@google.com>'),
         );
@@ -69,7 +65,7 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
         $persisted = $this->ingestor->ingestBatch();
 
         self::assertSame(0, $persisted, 'duplicate message_id is not persisted again');
-        self::assertArrayHasKey(99, $this->client->getMovedUids(), 'IMAP move still happens so duplicate exits INBOX');
+        self::assertContains(99, $this->client->getSeenUids(), 'duplicate is still flagged seen so it stops being re-fetched');
     }
 
     public function testClosesClientEvenIfWorkFails(): void
@@ -94,7 +90,6 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
             username: '',
             password: 'pass',
             encryption: MailboxEncryption::Ssl->value,
-            pendingFolder: 'Sendvery/Pending',
             processedFolder: 'Sendvery/Processed',
             failedFolder: 'Sendvery/Failed',
             junkFolder: 'Sendvery/Junk',
@@ -118,7 +113,7 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
         $persisted = $ingestor->ingestBatch();
 
         self::assertSame(0, $persisted);
-        self::assertSame([], $this->client->getMovedUids());
+        self::assertSame([], $this->client->getSeenUids());
     }
 
     public function testEmptyInboxIsANoop(): void

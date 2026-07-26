@@ -18,11 +18,11 @@ final class FakeCentralInboxClient implements CentralInboxClient
     /** @var list<FetchedEnvelope> */
     private array $pending = [];
 
-    /** @var array<int, CentralInboxFolder> */
-    private array $moved = [];
+    /** @var list<int> */
+    private array $seenUids = [];
 
-    /** @var array<string, array{from: CentralInboxFolder, to: CentralInboxFolder}> */
-    private array $movedByMessageId = [];
+    /** @var list<array{uid: ?int, uidvalidity: ?int, messageId: string, destination: CentralInboxFolder}> */
+    private array $movedProcessed = [];
 
     private bool $shouldFail = false;
     private string $failureMessage = '';
@@ -41,14 +41,19 @@ final class FakeCentralInboxClient implements CentralInboxClient
         return $batch;
     }
 
-    public function moveToFolder(int $uid, CentralInboxFolder $folder): void
+    public function markSeen(int $uid): void
     {
-        $this->moved[$uid] = $folder;
+        $this->seenUids[] = $uid;
     }
 
-    public function moveByMessageId(string $messageId, CentralInboxFolder $from, CentralInboxFolder $to): void
+    public function moveProcessed(?int $uid, ?int $uidvalidity, string $messageId, CentralInboxFolder $destination): void
     {
-        $this->movedByMessageId[$messageId] = ['from' => $from, 'to' => $to];
+        $this->movedProcessed[] = [
+            'uid' => $uid,
+            'uidvalidity' => $uidvalidity,
+            'messageId' => $messageId,
+            'destination' => $destination,
+        ];
     }
 
     public function close(): void
@@ -76,16 +81,16 @@ final class FakeCentralInboxClient implements CentralInboxClient
         $this->failureMessage = $message;
     }
 
-    /** @return array<int, CentralInboxFolder> */
-    public function getMovedUids(): array
+    /** @return list<int> */
+    public function getSeenUids(): array
     {
-        return $this->moved;
+        return $this->seenUids;
     }
 
-    /** @return array<string, array{from: CentralInboxFolder, to: CentralInboxFolder}> */
-    public function getMovedByMessageId(): array
+    /** @return list<array{uid: ?int, uidvalidity: ?int, messageId: string, destination: CentralInboxFolder}> */
+    public function getMovedProcessed(): array
     {
-        return $this->movedByMessageId;
+        return $this->movedProcessed;
     }
 
     public function getClosedTimes(): int
@@ -96,8 +101,8 @@ final class FakeCentralInboxClient implements CentralInboxClient
     public function reset(): void
     {
         $this->pending = [];
-        $this->moved = [];
-        $this->movedByMessageId = [];
+        $this->seenUids = [];
+        $this->movedProcessed = [];
         $this->closedTimes = 0;
         $this->shouldFail = false;
         $this->failureMessage = '';

@@ -53,7 +53,8 @@ final class ImapCentralInboxClient implements CentralInboxClient
             assert($message instanceof Message);
 
             try {
-                $size = strlen((string) $message->getRawBody());
+                $rawEml = self::fullRawEml($message);
+                $size = strlen($rawEml);
                 if ($size > $this->config->maxMessageBytes) {
                     $this->logger->warning('Skipping oversized message in central inbox ({size} bytes).', [
                         'size' => $size,
@@ -65,7 +66,7 @@ final class ImapCentralInboxClient implements CentralInboxClient
                     continue;
                 }
 
-                $envelopes[] = $this->envelopeFromMessage($message, $uidvalidity);
+                $envelopes[] = $this->envelopeFromMessage($message, $uidvalidity, $rawEml);
             } catch (\Throwable $e) {
                 $this->logger->warning('Failed to read message from central inbox: {error}', [
                     'error' => $e->getMessage(),
@@ -77,48 +78,54 @@ final class ImapCentralInboxClient implements CentralInboxClient
         return $envelopes;
     }
 
-    public function moveToFolder(int $uid, CentralInboxFolder $folder): void
+    public function markSeen(int $uid): void
     {
         $client = $this->connect();
         $inbox = $this->openFolder($client, 'INBOX');
 
         try {
-            $message = $inbox->messages()->getMessageByUid($uid);
+            $inbox->messages()->getMessageByUid($uid)->setFlag('Seen');
         } catch (\Throwable $e) {
-            $this->logger->info('Cannot move IMAP UID {uid}: {error}', ['uid' => $uid, 'error' => $e->getMessage()]);
-
-            return;
+            // Worst case the message is re-fetched next poll and deduped by
+            // the (source, message_id) constraint — but log it, a recurring
+            // failure here means every poll re-downloads the whole INBOX.
+            $this->logger->warning('Failed to flag INBOX UID {uid} as seen: {error}', [
+                'uid' => $uid,
+                'error' => $e->getMessage(),
+            ]);
         }
-
-        $this->moveMessage($message, $folder);
     }
 
-    public function moveByMessageId(string $messageId, CentralInboxFolder $from, CentralInboxFolder $to): void
+    public function moveProcessed(?int $uid, ?int $uidvalidity, string $messageId, CentralInboxFolder $destination): void
     {
         $client = $this->connect();
-        $fromPath = $this->config->folderPath($from);
-        $folder = $client->getFolderByPath($fromPath);
+        $inbox = $this->openFolder($client, 'INBOX');
 
-        if (null === $folder) {
-            $this->logger->info('Cannot move message {msgId}: source folder {folder} missing.', [
-                'msgId' => $messageId,
-                'folder' => $fromPath,
-            ]);
+        if (null !== $uid && null !== $uidvalidity && $this->inboxUidvalidityMatches($inbox, $uidvalidity)) {
+            try {
+                $message = $inbox->messages()->getMessageByUid($uid);
+                $this->moveMessage($message, $destination);
 
-            return;
+                return;
+            } catch (\Throwable $e) {
+                $this->logger->warning('INBOX UID {uid} fetch failed, falling back to Message-ID lookup: {error}', [
+                    'uid' => $uid,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
-        $message = $folder->messages()->whereMessageId($messageId)->get()->first();
+        $message = $inbox->messages()->whereMessageId($messageId)->get()->first();
         if (!$message instanceof Message) {
-            $this->logger->info('Cannot move message {msgId}: not found in folder {folder}.', [
+            $this->logger->warning('Cannot move processed message {msgId} to {folder}: not found in INBOX.', [
                 'msgId' => $messageId,
-                'folder' => $fromPath,
+                'folder' => $destination->name,
             ]);
 
             return;
         }
 
-        $this->moveMessage($message, $to);
+        $this->moveMessage($message, $destination);
     }
 
     public function close(): void
@@ -229,7 +236,27 @@ final class ImapCentralInboxClient implements CentralInboxClient
         }
     }
 
-    private function envelopeFromMessage(Message $message, ?int $uidvalidity): FetchedEnvelope
+    private function inboxUidvalidityMatches(Folder $inbox, int $uidvalidity): bool
+    {
+        $status = $inbox->status();
+
+        return isset($status['uidvalidity']) && (int) $status['uidvalidity'] === $uidvalidity;
+    }
+
+    /**
+     * Reassembles the complete RFC 822 message from a fetched Message.
+     *
+     * Webklex's getRawBody() returns ONLY the body section — no headers. A
+     * blob persisted without headers has no top-level Content-Type, so a
+     * later Message::fromString() finds no MIME structure and therefore no
+     * attachments. Header + CRLFCRLF + body reproduces the original bytes.
+     */
+    public static function fullRawEml(Message $message): string
+    {
+        return $message->getHeader()?->raw."\r\n\r\n".$message->getRawBody();
+    }
+
+    private function envelopeFromMessage(Message $message, ?int $uidvalidity, string $rawEml): FetchedEnvelope
     {
         $messageIdHeader = $message->getMessageId()->toString();
         $fallbackUid = (string) $message->getUid();
@@ -252,7 +279,7 @@ final class ImapCentralInboxClient implements CentralInboxClient
             fromAddress: $from,
             subject: $message->getSubject()->toString(),
             receivedAt: $receivedAt,
-            rawEml: (string) $message->getRawBody(),
+            rawEml: $rawEml,
             uid: (int) $message->getUid(),
             uidvalidity: $uidvalidity,
         );

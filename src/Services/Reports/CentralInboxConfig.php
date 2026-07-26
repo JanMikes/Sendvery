@@ -24,7 +24,6 @@ final readonly class CentralInboxConfig
     public string $username;
     public string $password;
     public MailboxEncryption $encryption;
-    public string $pendingFolder;
     public string $processedFolder;
     public string $failedFolder;
     public string $junkFolder;
@@ -42,8 +41,6 @@ final readonly class CentralInboxConfig
         string $password,
         #[Autowire(env: 'SENDVERY_REPORTS_INBOX_ENCRYPTION')]
         string $encryption,
-        #[Autowire(env: 'SENDVERY_REPORTS_INBOX_PENDING_FOLDER')]
-        string $pendingFolder,
         #[Autowire(env: 'SENDVERY_REPORTS_INBOX_PROCESSED_FOLDER')]
         string $processedFolder,
         #[Autowire(env: 'SENDVERY_REPORTS_INBOX_FAILED_FOLDER')]
@@ -61,7 +58,6 @@ final readonly class CentralInboxConfig
         $this->username = $username;
         $this->password = $password;
         $this->encryption = MailboxEncryption::from($encryption);
-        $this->pendingFolder = $pendingFolder;
         $this->processedFolder = $processedFolder;
         $this->failedFolder = $failedFolder;
         $this->junkFolder = $junkFolder;
@@ -72,7 +68,6 @@ final readonly class CentralInboxConfig
     public function folderPath(CentralInboxFolder $folder): string
     {
         return match ($folder) {
-            CentralInboxFolder::Pending => $this->pendingFolder,
             CentralInboxFolder::Processed => $this->processedFolder,
             CentralInboxFolder::Failed => $this->failedFolder,
             CentralInboxFolder::Junk => $this->junkFolder,

@@ -6,7 +6,6 @@ namespace App\Tests\Integration\Command;
 
 use App\Services\Reports\FakeCentralInboxClient;
 use App\Tests\IntegrationTestCase;
-use App\Value\Reports\CentralInboxFolder;
 use App\Value\Reports\FetchedEnvelope;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -44,10 +43,7 @@ final class PollReportsInboxCommandTest extends IntegrationTestCase
 
         self::assertSame(0, $exit);
         self::assertStringContainsString('Ingested 1 new envelope(s).', $tester->getDisplay());
-        self::assertSame(
-            [5 => CentralInboxFolder::Pending],
-            $client->getMovedUids(),
-        );
+        self::assertSame([5], $client->getSeenUids(), 'ingested message is flagged seen so the next poll skips it');
     }
 
     private function commandTester(): CommandTester

@@ -20,7 +20,6 @@ final class CentralInboxConfigTest extends IntegrationTestCase
         self::assertSame(993, $config->port);
         self::assertSame('reports@sendvery.test', $config->username);
         self::assertSame(MailboxEncryption::Ssl, $config->encryption);
-        self::assertSame('Sendvery/Pending', $config->pendingFolder);
         self::assertSame(50, $config->batchSize);
     }
 
@@ -28,7 +27,6 @@ final class CentralInboxConfigTest extends IntegrationTestCase
     {
         $config = $this->getService(CentralInboxConfig::class);
 
-        self::assertSame('Sendvery/Pending', $config->folderPath(CentralInboxFolder::Pending));
         self::assertSame('Sendvery/Processed', $config->folderPath(CentralInboxFolder::Processed));
         self::assertSame('Sendvery/Failed', $config->folderPath(CentralInboxFolder::Failed));
         self::assertSame('Sendvery/Junk', $config->folderPath(CentralInboxFolder::Junk));
