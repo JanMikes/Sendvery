@@ -507,8 +507,9 @@ Current entries (kept in sync with `apps/sendvery/cron.d/sendvery`):
 - `30 5 * * *` — `sendvery:dmarc:auto-ramp` (DEC-058 auto-drive: safely advance managed DMARC policies with readiness gates + rollback; runs after the 03:00 DNS sweep refreshes cnameVerifiedAt, clear of the 04:xx purge window)
 - `45 5 * * *` — `sendvery:dmarc:sync-hosted-records` (reconcile hosted managed-DMARC policy records: recreate/repair drift, dangling-safe teardown)
 - `15 8 * * 1` — `sendvery:senders:review-reminder` (email team owners when senders awaiting review cross a volume threshold; deduped 30 days by a `NewUnknownSender` alert stamped `data.notification = 'senders_awaiting_review'`)
+- `30 6 * * *` — `sendvery:ingestion:check-health` (W2: raise `AlertType::ReportsStopped` for domains silent past `max(3 × their own observed report cadence, 72h)`, and resolve the alert when reports resume). **Refuses to run unless `ingestion_source_status` proves our own central-inbox poll succeeded within the hour** — otherwise every domain looks silent for a reason that is ours, and the alert would send users to fix correct DNS. `--ignore-pipeline-health` overrides this for drills only, never for the cron row.
 - `0 */6 * * *` — `sendvery:opensource:refresh-github-stats` (refresh cached GitHub stars/forks for the open-source page)
-- Blacklist checks: daily (later phase)
+- `0 2 * * *` — `sendvery:blacklist:check-all` (W1/DEC-062: queue DNSBL lookups for the sending IPs of every paid-plan domain). Bounded three ways because public DNSBLs rate-limit and will null-route a noisy resolver: paid teams only, a **global** per-IP 24h freshness window (shared sending infrastructure is checked once, not once per customer), and a per-domain cap of 10 newest senders plus a 500-check sweep ceiling. Runs at 02:00, before the 03:00 DNS sweep, so a fresh listing is in place when the nightly snapshot is composed.
 
 Ops:
 - Re-run a failed envelope after a parser fix: `bin/console sendvery:reports:reprocess <envelope-id>`

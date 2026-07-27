@@ -727,4 +727,144 @@ columns in one pass.
 
 ---
 
+### DEC-061: Silence is evidence about us until we can prove otherwise
+**Date:** 2026-07-28
+**Status:** Decided
+**Trigger:** The product's promise is monitoring, and it could not notice its own
+monitoring stopping. `DomainVerificationEvaluator` only evaluated "no reports have
+arrived" while `monitored_domain.first_report_at` was NULL, so the branch became
+unreachable the moment a domain's first report landed — a domain that reported daily for a
+year and then went completely silent produced no alert, no email and no badge. The message
+it *did* produce for new domains ("no reports have arrived after 48 hours — check that the
+rua= tag points at Sendvery") was derived from nothing but the absence of reports, so a
+user whose DNS was already correct was sent to re-audit it whenever our own poller ran
+behind. Nothing anywhere recorded whether our central inbox poll had ever succeeded.
+**Decision:** Answers to D1–D4 of `docs/17-product-hardening-plan.md`, and the ordering
+principle behind them: **before the product attributes silence to a customer, it must hold
+positive evidence that its own pipeline is working.**
+  (a) **D4 — alert on stopped ingestion, cadence-aware with a floor.**
+      `AlertType::ReportsStopped` fires when a domain is quiet longer than
+      `max(3 × its own observed median inter-report gap, 72h)`. The multiple is per-domain
+      because a six-hourly reporter is broken after a day and a weekly one is not; one
+      global threshold has to pick which of those to serve. The 72h floor only ever makes
+      the evaluator quieter — aggregate reporting is bursty enough that a tight measured
+      cadence would otherwise fire on ordinary jitter. Severity is **Warning, not
+      Critical**: a domain may legitimately have stopped sending mail, so this is a
+      question for the owner rather than a fault we assert.
+  (b) **Proof of our own health gates the whole command.** `ingestion_source_status`
+      stores one timestamp per shared pipeline — when it last provably succeeded — and
+      `sendvery:ingestion:check-health` refuses to raise anything unless the central inbox
+      poll succeeded within the hour. A poll that connects and finds nothing counts as
+      success; an empty inbox is exactly the proof required.
+  (c) **Success only, no stored error string.** The poll runs inside a Messenger
+      transaction, so any failure detail written on the way out is rolled back on precisely
+      the runs it was meant to describe. Staleness of a success timestamp is rollback-proof
+      because it is the *absence* of a write. Failure detail already has two owners that
+      survive a rollback — the `lily-cron-run` wrapper and Sentry's monitor. A column that
+      only sometimes holds the truth is worse than no column.
+  (d) **Three states, not a bool.** `IngestionIntakeState` separates Healthy / Stale /
+      NeverPolled. `false` would collapse "our poller died six hours ago" into "this
+      deployment has never polled" — the state of every fresh install and every local
+      environment with an unconfigured inbox. Painting the second red is *"Unknown Is Not
+      Failure"* broken on the surface built to explain unknowns. The customer-facing path
+      deliberately keeps the bool, because the only question it may ask is "are we entitled
+      to blame the user", and both non-healthy states answer no.
+  (e) **Alerts are resolved when reports resume**, and deduped by that lifecycle rather
+      than by a timestamp. A daily cron restating the same unresolved silence every morning
+      is how an alert becomes a mail filter.
+  (f) **DMARC policy is not a disposition.** `<twig:PolicyBadge>` splits off from
+      `StatusBadge`, whose colour map is keyed for what a receiver *did* to a message. The
+      two vocabularies share the words none/quarantine/reject and mean opposite things by
+      them, so `p=reject` — full enforcement, the destination DEC-058's auto-ramp drives
+      customers toward — rendered as a red error badge beside the domain name, while
+      `p=none`, whose own explainer says "anyone can spoof your domain right now", rendered
+      neutral grey. Severity now ascends with protection. Found by clicking the page, not
+      by a test.
+**Impact:** `IngestionSourceStatus` + `Version20260728100000`, `IngestionSource`,
+`IngestionHealthRecorder` (write) / `IngestionHealthReader` (read-only façade, so
+rendering a page can never conjure evidence), `IngestionSilenceEvaluator`,
+`GetDomainReportCadence` + `DomainReportCadenceResult`, `CheckIngestionHealthCommand`,
+`NoReportsExplanation` extracted from `DomainAttentionResolver`,
+`IngestionIntakeState` + `IngestionIntakeHealthResult` + `<twig:IngestionIntakeHealth>` on
+`/app/mailboxes`, `<twig:PolicyBadge>` + `PolicyBadgeVocabularyGuardTest`.
+**Ops:** new cron row `30 6 * * * sendvery:ingestion:check-health` — **deploy the image
+before pushing the cron row**. The migration is additive and the table is empty until the
+first poll; an empty table reads as "unproven", which suppresses alerting rather than
+triggering it, so the ordering is safe in either direction.
+**Detail:** `docs/17-product-hardening-plan.md` §W2
+
+---
+
+### DEC-062: A grade may only be composed of things actually measured
+**Date:** 2026-07-28
+**Status:** Decided
+**Trigger:** Blacklist monitoring was sold, priced, scored, rendered and marked done on the
+roadmap — and never once ran. `CheckBlacklist`, its handler, the DNSBL client,
+`blacklist_check_result`, `AlertOnBlacklisting`, the dashboard tab and the plan gate all
+existed; nothing anywhere dispatched the message, so the table was permanently empty. The
+gap was filled by `$blScore = $blacklistScore ?? 100`, a fabricated perfect result carrying
+**20% of every domain's grade** — enough to show an F-grade domain a D — on a number
+published to an unauthenticated share page, a PDF customers forward to their own
+stakeholders, and the REST API. A previous pass had already fixed the *display* ("Not
+checked"), which made the contradiction sharper rather than better: the bar admitted we had
+never looked while the number beside it still banked a perfect score.
+**Decision:** D1 = **ship it**, D2 = **renormalise and backfill**.
+  (a) **`sendvery:blacklist:check-all` is the missing dispatcher**, and rate limits are its
+      design constraint rather than an afterthought. Public DNSBLs are a shared resource
+      Sendvery does not own, and Spamhaus and Barracuda will null-route a noisy resolver —
+      breaking the feature for every customer at once, in a way no retry fixes. Bounded
+      three ways: paid teams only (matching `PlanLimits`, derived from it rather than
+      hardcoded), a **global** per-IP 24h freshness window, and a per-domain cap of 10
+      newest senders under a 500-check sweep ceiling. Global freshness matters because
+      shared sending infrastructure is the norm: deduping per domain would ask the identical
+      question once per customer.
+  (b) **Which IPs: `known_sender`, newest first.** These are the addresses the domain's own
+      DMARC reports show sending as it — what a customer means by "is my mail getting
+      blocked" — and reusing collected evidence beats guessing at hosts. MX and A records
+      were considered and rejected: MX hosts receive rather than send, so their listing says
+      little about the domain's outbound deliverability, and including them roughly doubles
+      query volume against a rate-limited resource.
+  (c) **The grade is renormalised over measured categories.** `DomainHealthScorer` divides
+      by the weight it actually used, so an unmeasured category neither helps nor hurts: a
+      perfect domain still scores 100 with or without a blacklist check, and every imperfect
+      one drops to the grade it always had on the evidence collected. `HealthCategory::$score`
+      and `HealthSnapshotComposition::$blacklistScore` are now `?int`, and the status enum
+      gained an `unknown` arm so "not looked at" cannot land in `fail`.
+  (d) **History is backfilled, not left alone.** `Version20260728110000` recomputes stored
+      `score`/`grade` from the four per-category columns each row already holds. It reads no
+      new data and estimates nothing — the same arithmetic, applied to numbers already on
+      disk. Leaving history alone would have put a cliff in every trend chart on deploy day
+      that no reader could distinguish from a real change in their mail. Scoped to domains
+      with no `blacklist_check_result` so a replay after the checker is live cannot corrupt a
+      genuine score. Observed on demo data: A 99→99 (unchanged), C 74→72, **D 38→F 27**.
+  (e) **The null had to survive the read path too, and initially did not.** Three separate
+      surfaces coerced it back to a number: `DomainHealthSnapshotResult` and
+      `HealthScoreProvider` both did `(int) $row['blacklist_score']`, turning "never checked"
+      into **0** — which on a 0-100 scale where 100 is clean means "listed on every list we
+      query". Fixing the write path alone would have replaced a fabricated clean result with
+      a fabricated catastrophic one. Both are CLAUDE.md's non-nullable-numeric tell.
+  (f) **Honesty runs in both directions.** The health surfaces hard-coded the words "Not
+      checked", so once the sweep produced real results they would have gone on saying so
+      forever. Saying "not checked" about a check that ran is the same class of untruth as
+      claiming one that did not.
+  (g) **Pricing copy now matches the product.** The FAQ claimed continuous checking of
+      *every* sending IP against "dozens" of lists; it is daily, ten senders per domain,
+      eight lists. Those bounds are not going to loosen, so the copy describes them.
+**Impact:** `CheckAllBlacklistsCommand`, `GetBlacklistCheckCandidates` +
+`BlacklistCheckCandidate`, `CheckBlacklist` routed to `async` (16 blocking DNS queries per
+check must not run in the cron container), `DomainHealthScorer` renormalised,
+`HealthSnapshotComposer`, `HealthCategory`, `HealthSnapshotComposition`,
+`DomainHealthSnapshot.blacklistScore` nullable (`Version20260728110000`),
+`DomainHealthSnapshotResult`, `HealthScoreResource::fromDatabaseRow()` extracted from
+`HealthScoreProvider`, public + dashboard health templates, the PDF export, `PricingFaq`,
+and the demo seeder (which now writes `blacklist_check_result` rows so the health page and
+the Blacklist tab cannot disagree).
+**Ops:** new cron row `0 2 * * * sendvery:blacklist:check-all` — **deploy the image before
+pushing the cron row**. The migration re-grades history on the way up; grades drop for every
+imperfect domain, which is the point. Expect customer-visible grade changes on the public
+share page and in PDF exports.
+**Detail:** `docs/17-product-hardening-plan.md` §W1
+
+---
+
 *Add new decisions above this line*
