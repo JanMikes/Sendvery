@@ -24,6 +24,9 @@ return App::config([
         'App\Services\Dns\SmtpProbe' => [
             'alias' => 'App\Services\Dns\SocketSmtpProbe',
         ],
+        'App\Services\Dns\ReverseDnsResolver' => [
+            'alias' => 'App\Services\Dns\SystemReverseDnsResolver',
+        ],
         'SPFLib\Decoder' => [
             'autoconfigure' => true,
         ],
@@ -112,6 +115,16 @@ return App::config([
                 'alias' => 'App\Services\Dns\FakeSmtpProbe',
             ],
             'App\Services\Dns\FakeSmtpProbe' => [
+                'public' => true,
+            ],
+            // Reverse DNS: production calls the system resolver. Tests must
+            // never do that (DEC-059 requires rDNS behind a faked interface),
+            // so the interface resolves to the scriptable in-memory fake.
+            'App\Services\Dns\ReverseDnsResolver' => [
+                'alias' => 'App\Services\Dns\FakeReverseDnsResolver',
+                'public' => true,
+            ],
+            'App\Services\Dns\FakeReverseDnsResolver' => [
                 'public' => true,
             ],
             // SPFLib uses its own DNS resolver, outside the App namespace and
@@ -345,6 +358,21 @@ return App::config([
                 'public' => true,
             ],
             'App\Services\OrganizationMapper' => [
+                'public' => true,
+            ],
+            'App\Services\SenderIdentityResolver' => [
+                'public' => true,
+            ],
+            'App\Services\SenderRoleClassifier' => [
+                'public' => true,
+            ],
+            'App\Services\RegistrableDomainExtractor' => [
+                'public' => true,
+            ],
+            'App\Services\ForwarderRegistry' => [
+                'public' => true,
+            ],
+            'App\Repository\SenderIdentityRepository' => [
                 'public' => true,
             ],
             'App\Services\BlacklistChecker' => [
