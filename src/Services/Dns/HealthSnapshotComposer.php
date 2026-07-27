@@ -9,26 +9,36 @@ use App\Value\Dns\HealthSnapshotComposition;
 
 final readonly class HealthSnapshotComposer
 {
+    /**
+     * @param int|null $blacklistScore null when no blacklist check has run for
+     *                                 this domain. It used to default to 100,
+     *                                 so every nightly snapshot ever written
+     *                                 banked a perfect fifth of its grade for a
+     *                                 lookup that had not happened.
+     */
     public function compose(
         ?DnsCheckResult $spf,
         ?DnsCheckResult $dkim,
         ?DnsCheckResult $dmarc,
         ?DnsCheckResult $mx,
-        int $blacklistScore = 100,
+        ?int $blacklistScore = null,
     ): HealthSnapshotComposition {
         $spfScore = $this->scoreFor($spf);
         $dkimScore = $this->scoreFor($dkim);
         $dmarcScore = $this->scoreFor($dmarc);
         $mxScore = $this->scoreFor($mx);
 
-        // Weighted average matches DomainHealthScorer: DMARC 25%, SPF 20%, DKIM 20%, MX 15%, Blacklist 20%.
-        $score = (int) round(
-            $dmarcScore * 0.25
-            + $spfScore * 0.20
-            + $dkimScore * 0.20
-            + $mxScore * 0.15
-            + $blacklistScore * 0.20,
-        );
+        // Renormalised over measured categories only, matching DomainHealthScorer.
+        // Weights: DMARC 25%, SPF 20%, DKIM 20%, MX 15%, Blacklist 20%.
+        $weighted = $dmarcScore * 0.25 + $spfScore * 0.20 + $dkimScore * 0.20 + $mxScore * 0.15;
+        $totalWeight = 0.80;
+
+        if (null !== $blacklistScore) {
+            $weighted += $blacklistScore * 0.20;
+            $totalWeight = 1.0;
+        }
+
+        $score = (int) round($weighted / $totalWeight);
 
         $grade = match (true) {
             $score >= 90 => 'A',

@@ -127,7 +127,13 @@
         <input type="checkbox" name="pricing-faq-blacklist-monitoring"/>
         <div class="collapse-title font-semibold">What is blacklist monitoring?</div>
         <div class="collapse-content text-base-content/70 text-sm">
-            <p>Blacklist monitoring continuously checks every IP address that sends mail on your domain's behalf against the major DNS-based block lists (Spamhaus, Barracuda, SORBS, and dozens more). If one of your sending IPs gets listed — usually the first warning sign of a deliverability problem — Sendvery raises an alert and tells you which list, when it happened, and which sender it's linked to, so you can fix the underlying issue before mailbox providers start rejecting your mail.</p>
+            {# Copy kept deliberately specific. It previously said "continuously
+               checks every IP address ... and dozens more", which outran what
+               the checker does on all three counts: it runs daily, it covers the
+               ten most recently active senders per domain, and it queries eight
+               lists. Public DNSBLs rate-limit hard, so those bounds are not
+               going to loosen — the copy has to describe them. #}
+            <p>Blacklist monitoring checks the IP addresses that send mail on your domain's behalf against eight major DNS-based block lists — including Spamhaus, Barracuda, SORBS and SpamCop — once a day, covering your ten most recently active senders per domain. If one of them gets listed — usually the first warning sign of a deliverability problem — Sendvery raises an alert telling you which list, when it happened, and which sender it's linked to, so you can fix the underlying issue before mailbox providers start rejecting your mail.</p>
         </div>
     </div>
 

@@ -45,7 +45,7 @@ final readonly class HealthScoreProvider implements ProviderInterface
             return null;
         }
 
-        return $this->mapRow($row);
+        return HealthScoreResource::fromDatabaseRow($row);
     }
 
     /**
@@ -63,22 +63,6 @@ final readonly class HealthScoreProvider implements ProviderInterface
             ['teamId' => $teamId],
         )->fetchAllAssociative();
 
-        return array_map($this->mapRow(...), $rows);
-    }
-
-    /** @param array<string, mixed> $row */
-    private function mapRow(array $row): HealthScoreResource
-    {
-        return new HealthScoreResource(
-            id: (string) $row['id'],
-            grade: (string) $row['grade'],
-            score: (int) $row['score'],
-            spfScore: (int) $row['spf_score'],
-            dkimScore: (int) $row['dkim_score'],
-            dmarcScore: (int) $row['dmarc_score'],
-            mxScore: (int) $row['mx_score'],
-            blacklistScore: (int) $row['blacklist_score'],
-            checkedAt: (string) $row['checked_at'],
-        );
+        return array_map(HealthScoreResource::fromDatabaseRow(...), $rows);
     }
 }

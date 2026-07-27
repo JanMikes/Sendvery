@@ -10,22 +10,37 @@ use App\Value\Dns\HealthCategory;
 
 final readonly class DomainHealthScorer
 {
+    /**
+     * Weights of the five categories. Blacklist only participates once it has
+     * actually been measured — see {@see self::weightedAverage()}.
+     */
+    private const array WEIGHTS = [
+        'DMARC' => 0.25,
+        'SPF' => 0.20,
+        'DKIM' => 0.20,
+        'MX' => 0.15,
+        'Blacklist' => 0.20,
+    ];
+
+    /**
+     * @param int|null $blacklistScore null when no blacklist check has run for
+     *                                 this domain. It used to default to 100,
+     *                                 which handed every unchecked domain a
+     *                                 perfect fifth of its grade — and since
+     *                                 nothing dispatched CheckBlacklist, that
+     *                                 meant every domain in the product.
+     */
     public function score(EmailAuthCheckResult $result, ?int $blacklistScore = null): DomainHealthScore
     {
-        $spfScore = $this->scoreSpf($result);
-        $dkimScore = $this->scoreDkim($result);
-        $dmarcScore = $this->scoreDmarc($result);
-        $mxScore = $this->scoreMx($result);
-        $blScore = $blacklistScore ?? 100;
+        $measured = [
+            'SPF' => $this->scoreSpf($result),
+            'DKIM' => $this->scoreDkim($result),
+            'DMARC' => $this->scoreDmarc($result),
+            'MX' => $this->scoreMx($result),
+            'Blacklist' => $blacklistScore,
+        ];
 
-        // Weighted average: DMARC 25%, SPF 20%, DKIM 20%, MX 15%, Blacklist 20%
-        $totalScore = (int) round(
-            $dmarcScore * 0.25
-            + $spfScore * 0.20
-            + $dkimScore * 0.20
-            + $mxScore * 0.15
-            + $blScore * 0.20,
-        );
+        $totalScore = $this->weightedAverage($measured);
 
         $grade = match (true) {
             $totalScore >= 90 => 'A',
@@ -35,17 +50,51 @@ final readonly class DomainHealthScorer
             default => 'F',
         };
 
+        $categories = [];
+        foreach ($measured as $name => $categoryScore) {
+            $categories[] = new HealthCategory($name, $categoryScore, $this->statusFromScore($categoryScore));
+        }
+
         return new DomainHealthScore(
             grade: $grade,
             score: $totalScore,
-            categories: [
-                new HealthCategory('SPF', $spfScore, $this->statusFromScore($spfScore)),
-                new HealthCategory('DKIM', $dkimScore, $this->statusFromScore($dkimScore)),
-                new HealthCategory('DMARC', $dmarcScore, $this->statusFromScore($dmarcScore)),
-                new HealthCategory('MX', $mxScore, $this->statusFromScore($mxScore)),
-                new HealthCategory('Blacklist', $blScore, $this->statusFromScore($blScore)),
-            ],
+            categories: $categories,
         );
+    }
+
+    /**
+     * Averages over the categories actually measured, renormalising their
+     * weights to sum to 1.
+     *
+     * This is what makes an unmeasured category cost nothing and earn nothing.
+     * A perfect domain scores 100 whether or not its blacklist was checked; an
+     * imperfect one is graded on the evidence that exists rather than being
+     * topped up by evidence that does not.
+     *
+     * @param array<string, int|null> $scores
+     */
+    private function weightedAverage(array $scores): int
+    {
+        $weighted = 0.0;
+        $totalWeight = 0.0;
+
+        foreach ($scores as $name => $score) {
+            if (null === $score) {
+                continue;
+            }
+
+            $weighted += $score * self::WEIGHTS[$name];
+            $totalWeight += self::WEIGHTS[$name];
+        }
+
+        // Every category unmeasured. Cannot happen today (the four DNS scores
+        // are always computed) but returning 0 here would be a fabricated
+        // verdict of the exact kind this method exists to prevent.
+        if (0.0 === $totalWeight) {
+            return 0;
+        }
+
+        return (int) round($weighted / $totalWeight);
     }
 
     private function scoreSpf(EmailAuthCheckResult $result): int
@@ -178,9 +227,15 @@ final readonly class DomainHealthScorer
         return min(100, $score);
     }
 
-    private function statusFromScore(int $score): string
+    /**
+     * The `unknown` status is the point of the null arm: it keeps "we have not
+     * looked" out of `fail`, which is where an unmeasured category would land
+     * if the default arm carried the error tone.
+     */
+    private function statusFromScore(?int $score): string
     {
         return match (true) {
+            null === $score => 'unknown',
             $score >= 80 => 'pass',
             $score >= 50 => 'warning',
             default => 'fail',

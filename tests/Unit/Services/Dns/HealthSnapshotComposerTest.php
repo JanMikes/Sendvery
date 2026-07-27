@@ -36,15 +36,17 @@ final class HealthSnapshotComposerTest extends TestCase
         self::assertSame(100, $result->dkimScore);
         self::assertSame(100, $result->dmarcScore);
         self::assertSame(100, $result->mxScore);
-        self::assertSame(100, $result->blacklistScore);
-        self::assertSame(100, $result->score);
+        self::assertNull($result->blacklistScore, 'No blacklist check ran, so the snapshot must record no measurement rather than a perfect one.');
+        self::assertSame(100, $result->score, 'Renormalising over the measured categories must not penalise a domain for a check we chose not to run.');
         self::assertSame('A', $result->grade);
     }
 
     #[Test]
-    public function allInvalidWithDefaultBlacklistGetsGradeF(): void
+    public function allInvalidWithNoBlacklistCheckScoresZero(): void
     {
-        // Only the 20% blacklist weight contributes -> 20 -> F.
+        // Nothing measured scores above zero. This used to come out at 20,
+        // because an unrun blacklist lookup was recorded as a perfect 100
+        // carrying a fifth of the weight.
         $result = $this->composer->compose(
             spf: $this->dnsResult(DnsCheckType::Spf, isValid: false),
             dkim: $this->dnsResult(DnsCheckType::Dkim, isValid: false),
@@ -56,8 +58,8 @@ final class HealthSnapshotComposerTest extends TestCase
         self::assertSame(0, $result->dkimScore);
         self::assertSame(0, $result->dmarcScore);
         self::assertSame(0, $result->mxScore);
-        self::assertSame(100, $result->blacklistScore);
-        self::assertSame(20, $result->score);
+        self::assertNull($result->blacklistScore);
+        self::assertSame(0, $result->score);
         self::assertSame('F', $result->grade);
     }
 
@@ -71,8 +73,8 @@ final class HealthSnapshotComposerTest extends TestCase
         self::assertSame(0, $result->dkimScore);
         self::assertSame(0, $result->dmarcScore);
         self::assertSame(0, $result->mxScore);
-        self::assertSame(100, $result->blacklistScore);
-        self::assertSame(20, $result->score);
+        self::assertNull($result->blacklistScore);
+        self::assertSame(0, $result->score);
         self::assertSame('F', $result->grade);
     }
 
@@ -95,8 +97,10 @@ final class HealthSnapshotComposerTest extends TestCase
     #[Test]
     public function weightedFormulaSpotCheckValidDmarcAndSpfOnly(): void
     {
-        // SPF + DMARC valid (100 each), DKIM + MX invalid (0), blacklist default 100.
-        // Score = 100*0.25 + 100*0.20 + 0*0.20 + 0*0.15 + 100*0.20 = 65 -> grade C.
+        // SPF + DMARC valid (100 each), DKIM + MX invalid (0), blacklist never checked.
+        // Renormalised over the 0.80 of weight actually measured:
+        // (100*0.25 + 100*0.20 + 0*0.20 + 0*0.15) / 0.80 = 56.25 -> 56 -> grade C.
+        // The old formula banked 100*0.20 for the unrun blacklist and reported 65.
         $result = $this->composer->compose(
             spf: $this->dnsResult(DnsCheckType::Spf, isValid: true),
             dkim: $this->dnsResult(DnsCheckType::Dkim, isValid: false),
@@ -104,7 +108,7 @@ final class HealthSnapshotComposerTest extends TestCase
             mx: $this->dnsResult(DnsCheckType::Mx, isValid: false),
         );
 
-        self::assertSame(65, $result->score);
+        self::assertSame(56, $result->score);
         self::assertSame('C', $result->grade);
     }
 

@@ -39,8 +39,16 @@ final class DomainHealthSnapshot
     #[ORM\Column(type: 'integer')]
     public readonly int $mxScore;
 
-    #[ORM\Column(type: 'integer')]
-    public readonly int $blacklistScore;
+    /**
+     * Null when no blacklist check had run when this snapshot was written.
+     *
+     * Was NOT NULL and always written as 100, because nothing in the product
+     * dispatched `CheckBlacklist` — so every stored snapshot recorded a perfect
+     * result for a lookup that never happened, and that fabricated 100 carried
+     * 20% of the grade published on the public share page.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    public readonly ?int $blacklistScore;
 
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $checkedAt;
@@ -64,7 +72,7 @@ final class DomainHealthSnapshot
         int $dkimScore,
         int $dmarcScore,
         int $mxScore,
-        int $blacklistScore,
+        ?int $blacklistScore,
         \DateTimeImmutable $checkedAt,
         array $recommendations = [],
         ?string $shareHash = null,

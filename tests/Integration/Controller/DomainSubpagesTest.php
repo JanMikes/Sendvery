@@ -863,13 +863,60 @@ final class DomainSubpagesTest extends WebTestCase
             $blacklistRow->count(),
             'The Blacklist row inside the category-scores list must link to the per-blacklist detail page.',
         );
-        // The row no longer carries a <progress> bar: `blacklist_score` is a
-        // hardcoded 100 that no blacklist check ever produced, so scoring it
-        // published a clean result the domain had not earned.
+        // This snapshot carries a real measurement (70), so it earns a bar.
+        // The bar used to be suppressed unconditionally, because the stored
+        // score was a hardcoded 100 that no check had produced — W1 made the
+        // nightly sweep real, so the suppression now depends on whether a
+        // measurement exists rather than on the feature being inert.
+        self::assertCount(
+            1,
+            $crawler->filter('#health-blacklist progress'),
+            'A measured blacklist result is a measurement like any other and must be scored.',
+        );
+    }
+
+    #[Test]
+    public function blacklistRowStillLinksToBlacklistStatusBeforeAnyCheckHasRun(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $em->persist(new DomainHealthSnapshot(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            grade: 'B',
+            score: 80,
+            spfScore: 90,
+            dkimScore: 85,
+            dmarcScore: 75,
+            mxScore: 90,
+            blacklistScore: null,
+            checkedAt: new \DateTimeImmutable(),
+            recommendations: [],
+            shareHash: null,
+        ));
+        $em->flush();
+
+        $domainId = $persona->domain->id->toString();
+        $crawler = $client->request('GET', '/app/domains/'.$domainId.'/health');
+
+        self::assertResponseIsSuccessful();
+
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('#health-blacklist a[href="/app/domains/'.$domainId.'/blacklist"]')->count(),
+            'The link to the blacklist detail page must survive in the unmeasured state too — that is where a user goes to find out why nothing has been checked.',
+        );
         self::assertCount(
             0,
             $crawler->filter('#health-blacklist progress'),
-            'Blacklist must not render as a scored category while nothing actually checks it.',
+            'A domain whose blacklist has never been checked has no score to draw. A bar here would publish a verdict nobody measured.',
         );
     }
 

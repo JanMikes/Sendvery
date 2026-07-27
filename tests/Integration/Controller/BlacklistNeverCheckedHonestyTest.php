@@ -120,7 +120,10 @@ final class BlacklistNeverCheckedHonestyTest extends WebTestCase
             dkimScore: 100,
             dmarcScore: 100,
             mxScore: 95,
-            blacklistScore: 100,
+            // NULL, not 100: this test is about a domain whose blacklist was
+            // never checked, and since W1 that state is expressible instead of
+            // being written as a perfect score.
+            blacklistScore: null,
             checkedAt: new \DateTimeImmutable(),
             recommendations: [],
             shareHash: $shareHash,

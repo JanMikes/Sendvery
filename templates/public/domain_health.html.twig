@@ -35,6 +35,16 @@
                         { name: 'DMARC', score: snapshot.dmarcScore },
                         { name: 'MX', score: snapshot.mxScore },
                     ] %}
+                    {# Blacklist joins the scored bars only once it has actually
+                       been measured. Before W1 nothing ever dispatched
+                       CheckBlacklist, so this was hard-coded to "Not checked" —
+                       correct then, but it would have kept saying so forever
+                       once the nightly sweep started producing real results. #}
+                    {% if snapshot.blacklistScore is not null %}
+                        {% set categories = categories|merge([
+                            { name: 'Blacklist', score: snapshot.blacklistScore },
+                        ]) %}
+                    {% endif %}
                     {% for cat in categories %}
                         <div>
                             <div class="flex justify-between text-sm mb-1">
@@ -44,10 +54,12 @@
                             <progress class="progress {{ cat.score >= 80 ? 'progress-success' : (cat.score >= 50 ? 'progress-warning' : 'progress-error') }} w-full" value="{{ cat.score }}" max="100"></progress>
                         </div>
                     {% endfor %}
-                    <div class="flex justify-between text-sm text-base-content/50">
-                        <span>Blacklist</span>
-                        <span>Not checked</span>
-                    </div>
+                    {% if snapshot.blacklistScore is null %}
+                        <div class="flex justify-between text-sm text-base-content/50">
+                            <span>Blacklist</span>
+                            <span>Not checked</span>
+                        </div>
+                    {% endif %}
                 </div>
 
                 <div class="divider"></div>

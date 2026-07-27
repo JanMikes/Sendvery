@@ -93,7 +93,7 @@ final class DomainHealthScorerTest extends TestCase
     }
 
     #[Test]
-    public function missingEverythingGetsGradeFWithDefaultBlacklist(): void
+    public function missingEverythingScoresZeroWhenNoBlacklistCheckHasRun(): void
     {
         $result = new EmailAuthCheckResult(
             'example.com',
@@ -105,9 +105,11 @@ final class DomainHealthScorerTest extends TestCase
 
         $score = $this->scorer->score($result);
 
-        // With blacklist defaulting to 100, 20% of 100 = 20 -> grade F
+        // Nothing is published and no blacklist check has run, so there is
+        // nothing to score above zero. The old default of 100 for an unrun
+        // blacklist lookup awarded this domain 20 points it had not earned.
         self::assertSame('F', $score->grade);
-        self::assertSame(20, $score->score);
+        self::assertSame(0, $score->score);
     }
 
     #[Test]
@@ -177,7 +179,19 @@ final class DomainHealthScorerTest extends TestCase
         self::assertSame(['SPF', 'DKIM', 'DMARC', 'MX', 'Blacklist'], $categoryNames);
 
         foreach ($score->categories as $category) {
-            self::assertContains($category->status, ['pass', 'warning', 'fail']);
+            // 'unknown' is a first-class status, not a gap in the list: a
+            // category nobody has measured must be able to say so instead of
+            // being forced into pass/warning/fail. Blacklist reaches this test
+            // unmeasured, which is exactly the case that used to be reported
+            // as a perfect 100.
+            self::assertContains($category->status, ['pass', 'warning', 'fail', 'unknown']);
+
+            if (null === $category->score) {
+                self::assertSame('unknown', $category->status, 'A category with no score must not claim a pass/warning/fail verdict.');
+
+                continue;
+            }
+
             self::assertGreaterThanOrEqual(0, $category->score);
             self::assertLessThanOrEqual(100, $category->score);
         }

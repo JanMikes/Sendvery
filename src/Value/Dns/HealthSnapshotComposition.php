@@ -11,7 +11,8 @@ final readonly class HealthSnapshotComposition
         public int $dkimScore,
         public int $dmarcScore,
         public int $mxScore,
-        public int $blacklistScore,
+        /** Null when no blacklist check has run for this domain. */
+        public ?int $blacklistScore,
         public int $score,
         public string $grade,
     ) {

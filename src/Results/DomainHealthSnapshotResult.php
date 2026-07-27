@@ -17,14 +17,23 @@ final readonly class DomainHealthSnapshotResult
         public int $dkimScore,
         public int $dmarcScore,
         public int $mxScore,
-        public int $blacklistScore,
+        /**
+         * Null when no blacklist check had run when this snapshot was written.
+         *
+         * This field was a non-nullable int fed by `(int) $row['blacklist_score']`,
+         * which silently turned a NULL into 0 — so "we have never looked" and
+         * "listed on every DNSBL we query" arrived at the template as the same
+         * number, and the worse of the two won: a red bar at 0%. Exactly the
+         * failure mode CLAUDE.md's mechanical tells describe.
+         */
+        public ?int $blacklistScore,
         public string $checkedAt,
         public array $recommendations,
         public ?string $shareHash,
     ) {
     }
 
-    /** @param array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string, checked_at: string, recommendations: string, share_hash: string|null} $row */
+    /** @param array{id: string, grade: string, score: int|string, spf_score: int|string, dkim_score: int|string, dmarc_score: int|string, mx_score: int|string, blacklist_score: int|string|null, checked_at: string, recommendations: string, share_hash: string|null} $row */
     public static function fromDatabaseRow(array $row): self
     {
         /** @var array<string, mixed> $recommendations */
@@ -38,7 +47,9 @@ final readonly class DomainHealthSnapshotResult
             dkimScore: (int) $row['dkim_score'],
             dmarcScore: (int) $row['dmarc_score'],
             mxScore: (int) $row['mx_score'],
-            blacklistScore: (int) $row['blacklist_score'],
+            // No cast fallback: NULL must survive as NULL, or the distinction
+            // this column exists to carry is destroyed on the way out of SQL.
+            blacklistScore: null === $row['blacklist_score'] ? null : (int) $row['blacklist_score'],
             checkedAt: $row['checked_at'],
             recommendations: $recommendations,
             shareHash: $row['share_hash'],

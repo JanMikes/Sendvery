@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Command;
 
 use App\Entity\Alert;
+use App\Entity\BlacklistCheckResult;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DnsCheckResult;
@@ -14,6 +15,7 @@ use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
+use App\Repository\IngestionSourceStatusRepository;
 use App\Services\IdentityProvider;
 use App\Value\AlertSeverity;
 use App\Value\AlertType;
@@ -25,6 +27,7 @@ use App\Value\Dns\AutoRampStage;
 use App\Value\Dns\DmarcSetupMode;
 use App\Value\Dns\PolicyChangeSource;
 use App\Value\DnsCheckType;
+use App\Value\IngestionSource;
 use App\Value\SubscriptionPlan;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
@@ -64,6 +67,7 @@ final class SeedDemoDataCommand extends Command
         private readonly EntityManagerInterface $entityManager,
         private readonly IdentityProvider $identityProvider,
         private readonly ClockInterface $clock,
+        private readonly IngestionSourceStatusRepository $ingestionSourceStatusRepository,
         #[Autowire('%kernel.environment%')]
         private readonly string $environment,
     ) {
@@ -94,6 +98,11 @@ final class SeedDemoDataCommand extends Command
         }
 
         $alertCount = $this->createAlerts($team, array_column($domains, 'domain'));
+        $this->markReportIntakeHealthy();
+
+        foreach ($domains as $config) {
+            $this->createBlacklistCheckResults($config['domain'], $config['scores']['blacklist']);
+        }
 
         $this->entityManager->flush();
 
@@ -165,6 +174,15 @@ final class SeedDemoDataCommand extends Command
         // monitored_domain delete below fails on the FK and reseeding is stuck.
         $connection->executeStatement(
             'DELETE FROM known_sender WHERE monitored_domain_id IN (
+                SELECT id FROM monitored_domain WHERE team_id = :teamId
+            )',
+            ['teamId' => $teamId],
+        );
+        // Seeded since W1 — without this the monitored_domain delete below
+        // fails on the FK and reseeding is stuck, the same trap known_sender
+        // sprang.
+        $connection->executeStatement(
+            'DELETE FROM blacklist_check_result WHERE monitored_domain_id IN (
                 SELECT id FROM monitored_domain WHERE team_id = :teamId
             )',
             ['teamId' => $teamId],
@@ -509,6 +527,62 @@ final class SeedDemoDataCommand extends Command
         }
 
         return $created;
+    }
+
+    /**
+     * Stamps a recent successful central-inbox poll.
+     *
+     * Without it the ingestion page shows "Not checked yet" on every demo and
+     * dev environment, because nothing local ever polls a real inbox. That
+     * state is honest but it is also the ONE state a reviewer never needs to
+     * evaluate — it renders identically whether or not the feature works. The
+     * seeder exists precisely so normal empty states are not misread, so it
+     * seeds the state that has something to show.
+     *
+     * This is NOT a substitute for the real thing: a genuinely fresh install
+     * still reports NeverPolled until its first scheduled run, and the demo
+     * team is wiped and rebuilt on every seed.
+     */
+    private function markReportIntakeHealthy(): void
+    {
+        $status = $this->ingestionSourceStatusRepository->getOrCreate(IngestionSource::CentralInbox);
+        $status->recordSuccess($this->clock->now()->modify('-4 minutes'));
+    }
+
+    /**
+     * Backs each seeded snapshot's blacklist score with the check rows that
+     * would have produced it.
+     *
+     * WHY THIS IS NOT OPTIONAL POLISH: the snapshots carry a blacklist score, so
+     * without these rows the health page reads "Blacklist 85%" while the
+     * Blacklist tab it links to sits empty. Two surfaces disagreeing about the
+     * same measurement is exactly the confusion the seeder exists to prevent,
+     * and it only became possible once W1 made blacklist scores real.
+     *
+     * A score below 100 means something is listed, so the seeded rows have to
+     * agree: one listed IP for any domain whose score is not perfect.
+     */
+    private function createBlacklistCheckResults(MonitoredDomain $domain, int $blacklistScore): void
+    {
+        $now = $this->clock->now();
+        $isClean = 100 === $blacklistScore;
+
+        foreach (['203.0.113.10', '203.0.113.11'] as $index => $ip) {
+            // Only the first address carries the listing, so a domain with an
+            // imperfect score has exactly one thing to look at.
+            $listed = !$isClean && 0 === $index;
+
+            $this->entityManager->persist(new BlacklistCheckResult(
+                id: $this->identityProvider->nextIdentity(),
+                monitoredDomain: $domain,
+                ipAddress: $ip,
+                checkedAt: $now->modify('-6 hours'),
+                results: $listed
+                    ? ['zen.spamhaus.org' => ['listed' => true, 'reason' => 'https://check.spamhaus.org/']]
+                    : ['zen.spamhaus.org' => ['listed' => false, 'reason' => null]],
+                isListed: $listed,
+            ));
+        }
     }
 
     /**

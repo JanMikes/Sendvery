@@ -46,7 +46,7 @@ final class SnapshotDomainHealthHandlerTest extends IntegrationTestCase
         self::assertSame(100, $snapshot->dkimScore);
         self::assertSame(100, $snapshot->dmarcScore);
         self::assertSame(100, $snapshot->mxScore);
-        self::assertSame(100, $snapshot->blacklistScore);
+        self::assertNull($snapshot->blacklistScore, 'The nightly sweep runs no blacklist lookup, so the snapshot must record no measurement rather than a clean bill of health.');
         self::assertNotNull($snapshot->shareHash);
         self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $snapshot->shareHash);
         self::assertSame([], $snapshot->recommendations);
@@ -73,8 +73,10 @@ final class SnapshotDomainHealthHandlerTest extends IntegrationTestCase
             'monitoredDomain' => $domainId->toString(),
         ]);
         self::assertNotNull($snapshot);
-        // All-invalid + blacklist default 100 = 20 -> F.
-        self::assertSame(20, $snapshot->score);
+        // Nothing valid and nothing measured beyond DNS, so the score is 0.
+        // It used to be 20, entirely from an unrun blacklist lookup recorded
+        // as a perfect 100 carrying a fifth of the weight.
+        self::assertSame(0, $snapshot->score);
         self::assertSame('F', $snapshot->grade);
         self::assertGreaterThanOrEqual($before->getTimestamp(), $snapshot->checkedAt->getTimestamp());
         self::assertLessThanOrEqual($after->getTimestamp(), $snapshot->checkedAt->getTimestamp());

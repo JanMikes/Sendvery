@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Integration\Command;
 
 use App\Command\SeedDemoDataCommand;
+use App\Repository\IngestionSourceStatusRepository;
 use App\Services\IdentityProvider;
 use App\Tests\IntegrationTestCase;
 use Doctrine\DBAL\Connection;
@@ -78,6 +79,7 @@ final class SeedDemoDataCommandTest extends IntegrationTestCase
             entityManager: $this->getService(EntityManagerInterface::class),
             identityProvider: $this->getService(IdentityProvider::class),
             clock: $this->getService(ClockInterface::class),
+            ingestionSourceStatusRepository: $this->getService(IngestionSourceStatusRepository::class),
             environment: 'prod',
         );
 

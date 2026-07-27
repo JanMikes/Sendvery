@@ -41,11 +41,20 @@
             <tr><td>DKIM</td><td>{{ healthSnapshot.dkimScore }}%</td></tr>
             <tr><td>DMARC</td><td>{{ healthSnapshot.dmarcScore }}%</td></tr>
             <tr><td>MX</td><td>{{ healthSnapshot.mxScore }}%</td></tr>
-            {# `blacklist_score` is a hardcoded 100, not a measurement — no code
-               path runs a blacklist check. Printing "100%" in an exported report
-               a customer may forward to their own stakeholders would be a
-               fabricated clean result. #}
-            <tr><td>Blacklist</td><td class="nodata">Not checked</td></tr>
+            {# `blacklist_score` was a hardcoded 100 rather than a measurement,
+               because nothing dispatched CheckBlacklist. Printing "100%" in an
+               exported report a customer may forward to their own stakeholders
+               would have been a fabricated clean result.
+
+               Since W1 the nightly sweep produces real verdicts, so the number
+               is printed once it exists — and only then. A PDF is the surface
+               where a stale "Not checked" would survive longest, because it is
+               saved and re-read long after the page it came from changed. #}
+            {% if healthSnapshot.blacklistScore is null %}
+                <tr><td>Blacklist</td><td class="nodata">Not checked</td></tr>
+            {% else %}
+                <tr><td>Blacklist</td><td>{{ healthSnapshot.blacklistScore }}%</td></tr>
+            {% endif %}
         </table>
     {% endif %}
 

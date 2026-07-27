@@ -67,6 +67,13 @@ return App::config([
                 // must answer immediately) or the midnight usage-reset cron
                 // fanning out over every affected team.
                 \App\Message\ReleaseQuarantinedReportsForTeam::class => 'async',
+                // One blacklist check is up to 16 blocking DNS queries (8 DNSBLs,
+                // plus a TXT lookup for each hit), and the nightly sweep fans out
+                // over every paid domain's sending IPs. Running that inline would
+                // block the cron container for the length of the slowest resolver
+                // and give a single unresponsive DNSBL the power to stall the whole
+                // sweep; per-message retry with backoff isolates that to one IP.
+                \App\Message\CheckBlacklist::class => 'async',
             ],
         ],
     ],
