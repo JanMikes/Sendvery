@@ -249,6 +249,156 @@ final class SenderRoleClassifierTest extends TestCase
     }
 
     #[Test]
+    public function treatsASignatureThatSurvivedTheHopAsProofOfARelayedMessage(): void
+    {
+        // A signature that verifies against the From domain proves the message
+        // left that domain and reached the receiver unmodified. No spoofer can
+        // produce one, so no other evidence is needed and one message is enough.
+        $role = $this->classifier->classify(
+            'gateway.unmapped-appliance.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 5.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                alignedDkimPassCount: 20,
+            ),
+            hostnameForwardConfirmed: false,
+        );
+
+        self::assertSame(
+            SenderRole::Forwarder,
+            $role,
+            'The percentage heuristic would have called this spoofing at 5% DKIM; the cryptography says a relay carried authentic mail.',
+        );
+    }
+
+    #[Test]
+    public function doesNotCountASignatureMadeForSomebodyElsesDomain(): void
+    {
+        // A relayed newsletter still carries the newsletter vendor's own valid
+        // signature. It passes DKIM and proves nothing about this domain, which
+        // is exactly why the aligned count is separate from the pass rate.
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 100.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                alignedDkimPassCount: 0,
+            ),
+            hostnameForwardConfirmed: false,
+        );
+
+        self::assertSame(
+            SenderRole::Forwarder,
+            $role,
+            'The aggregate clean-forward heuristic still catches this one — it is the fallback the cryptographic rule sits above, not a rule the cryptographic rule replaces.',
+        );
+    }
+
+    #[Test]
+    public function willNotCallASenderAForwarderWhileItsOwnSpfIsPassingToo(): void
+    {
+        // Both mechanisms passing and aligned is the domain's own outbound
+        // path, not a relay. An ESP that signs as the customer looks exactly
+        // like this.
+        $role = $this->classifier->classify(
+            'o1.ptr.sendgrid.net',
+            'SendGrid',
+            new SenderAuthSignals(
+                dkimPassRate: 100.0,
+                spfPassRate: 100.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                alignedDkimPassCount: 400,
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertSame(SenderRole::Esp, $role);
+    }
+
+    #[Test]
+    public function stopsShortOfAccusingASenderWhoseReturnPathWasRewritten(): void
+    {
+        // SRS is what a forwarder does to make SPF pass for itself, and the
+        // rewritten envelope no longer aligns — so the receiver records total
+        // failure and the sender lands squarely on the spoofing shape.
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 0.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                rewrittenEnvelopeMessageCount: 400,
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertSame(
+            SenderRole::Unknown,
+            $role,
+            'A plausible forwarding story is enough to withhold an accusation.',
+        );
+    }
+
+    #[Test]
+    public function aRewrittenReturnPathNeverBuysTheSilenceAForwarderGets(): void
+    {
+        // The envelope sender is free text in the SMTP transaction, and SPF
+        // passing for it proves only that the sender controls the domain they
+        // named — which every attacker does for their own domain. Letting this
+        // grant Forwarder would sell alert suppression for one DNS record.
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 0.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                rewrittenEnvelopeMessageCount: 400,
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertNotSame(SenderRole::Forwarder, $role);
+        self::assertTrue(
+            $role->warrantsAlert(),
+            'Withholding an accusation is free. Withholding the alert is not, and nothing a sender writes about itself may buy it.',
+        );
+    }
+
+    #[Test]
+    public function anOrdinaryAlignmentFailureIsStillJudgedOnItsResults(): void
+    {
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 0.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                rewrittenEnvelopeMessageCount: 0,
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertSame(
+            SenderRole::Suspicious,
+            $role,
+            'A non-aligned envelope that carries no rewriting marks is a plain alignment failure, and softening every one of those would empty the verdict of meaning.',
+        );
+    }
+
+    #[Test]
     public function believesTheReceiverWhenItSaysTheMailWasForwarded(): void
     {
         // Exactly the shape that scores Suspicious on auth results alone: both

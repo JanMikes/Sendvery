@@ -14,16 +14,24 @@ use App\Value\SenderRole;
  * The ordering is the whole design:
  *
  *   1. OwnRelay   — the team already vouched for this IP.
- *   2. Forwarder  — a receiver attested the forward, or a *confirmed* PTR says
- *                   so, or the clean-forward auth signature does.
+ *   2. Forwarder  — an aligned DKIM signature survived the hop, or a receiver
+ *                   attested the forward, or a *confirmed* PTR says so, or the
+ *                   clean-forward auth signature does.
  *   3. Esp        — a recognised provider.
  *   4. Suspicious — fails everything, at volume, with no forwarding story.
  *   5. Unknown    — nothing identified it.
  *
  * Within rule 2 the branches are themselves ordered by how hard the evidence is
- * to forge (DEC-060 §1.2), strongest first: receiver attestation (tier B) sits
- * above the PTR hostname (tier D) because the sender writes its own reverse
- * zone but cannot write Gmail's report.
+ * to forge (DEC-060 §1.2), strongest first:
+ *
+ *   A. an aligned DKIM signature that verified — cryptographic, unforgeable;
+ *   B. the receiver's own policy-override reason — written by Gmail, not by the
+ *      sender;
+ *   D. a forward-confirmed PTR hostname, then the aggregate DKIM/SPF shape.
+ *
+ * Tier E — the shape of the envelope sender — appears nowhere in rule 2, and
+ * that placement is the point rather than an omission: see
+ * {@see hasForwardingStory()}.
  *
  * Rule 2 sitting above rule 4 is not a stylistic choice: a body-rewriting
  * gateway fails DKIM *and* SPF, so on results alone it is a perfect match for
@@ -74,6 +82,29 @@ final readonly class SenderRoleClassifier
     ): SenderRole {
         if (null !== $signals && $signals->isAuthorized) {
             return SenderRole::OwnRelay;
+        }
+
+        // Tier A — the top of the ladder, and the only rule here resting on
+        // mathematics rather than on somebody's word.
+        //
+        // A DKIM signature that verifies against the *header_from* domain proves
+        // two things at once: the message really left that domain, and no byte
+        // the signature covers changed on the way. A spoofer cannot produce one
+        // without the private key. So when that signature survives while SPF
+        // does not, the message was relayed intact by a host the original domain
+        // never authorised — which is the definition of a forward.
+        //
+        // Stated as its own rule rather than left inside the percentage
+        // heuristic below because the two are not the same claim. The heuristic
+        // asks "did most messages pass DKIM?", which a valid signature for
+        // somebody else's domain also satisfies; this asks "did a signature for
+        // *your* domain survive?", which nothing else can satisfy. One message
+        // is enough — the proof does not get stronger by repetition.
+        if (null !== $signals
+            && $signals->alignedDkimPassCount > 0
+            && $signals->spfPassRate <= self::FORWARDING_SPF_MAX
+        ) {
+            return SenderRole::Forwarder;
         }
 
         // Tier B — the receiver's own statement, and the highest-ranked piece of
@@ -141,11 +172,43 @@ final readonly class SenderRoleClassifier
             && 0.0 === $signals->dkimPassRate
             && 0.0 === $signals->spfPassRate
             && $signals->totalMessages >= self::SUSPICIOUS_MIN_MESSAGES
+            && !$this->hasForwardingStory($signals)
         ) {
             return SenderRole::Suspicious;
         }
 
         return SenderRole::Unknown;
+    }
+
+    /**
+     * Tier E — evidence too weak to grant trust, but strong enough to withhold
+     * an accusation.
+     *
+     * A forwarder that wants SPF to pass for itself rewrites the return path,
+     * and the standard schemes leave a mark: `SRS0=`, `prvs=`, a `bounces.`
+     * host. Seeing one on an envelope domain that does *not* align with the From
+     * header is the signature of a forward with a rewritten return path — and it
+     * is also exactly why the messages read as total failures, since a
+     * non-aligned SPF pass is recorded by the receiver as a DMARC failure.
+     *
+     * It deliberately does NOT return SenderRole::Forwarder, and this is the
+     * one place in DEC-060 where the plan's own tier table is overruled. The
+     * envelope sender is free text in the SMTP transaction, chosen by whoever
+     * opened the connection; SPF passing for it proves only that they control
+     * the domain they named, which every attacker does for their own domain.
+     * `MAIL FROM: SRS0=x=y=victim.com=user@attacker.example`, with SPF published
+     * for attacker.example, satisfies every part of the test — so treating it as
+     * tier C and letting it grant Forwarder would have sold the alert-suppressing
+     * role for the price of one DNS record. That is the exact hole DEC-060 was
+     * written to close, one field further down the message.
+     *
+     * Downgrading Suspicious to Unknown is the whole of what it may buy: the
+     * sender stops being called an attacker on this evidence, and still shows up
+     * for review. Withholding an accusation is free; withholding an alert is not.
+     */
+    private function hasForwardingStory(SenderAuthSignals $signals): bool
+    {
+        return $signals->rewrittenEnvelopeMessageCount > 0;
     }
 
     /**

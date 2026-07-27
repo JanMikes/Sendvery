@@ -7,10 +7,10 @@ namespace App\MessageHandler;
 use App\Events\DmarcReportProcessed;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\AlertEngine;
+use App\Services\ReportSenderSignals;
 use App\Services\SenderIdentityResolver;
 use App\Value\AlertSeverity;
 use App\Value\AlertType;
-use App\Value\ForwardingAttestation;
 use App\Value\NewSenderAlertGroup;
 use App\Value\ResolvedSender;
 use App\Value\SenderAuthSignals;
@@ -69,6 +69,7 @@ final readonly class AlertOnNewSender
         private AlertEngine $alertEngine,
         private MonitoredDomainRepository $monitoredDomainRepository,
         private SenderIdentityResolver $senderIdentityResolver,
+        private ReportSenderSignals $reportSenderSignals,
         private Connection $database,
     ) {
     }
@@ -186,58 +187,28 @@ final readonly class AlertOnNewSender
      * lookback is: the operator vouching for a relay on one domain is a verdict
      * about the relay, not about that domain.
      *
+     * The evidence itself comes from {@see ReportSenderSignals}, shared with
+     * sender discovery. Two hand-written copies of the same aggregation feeding
+     * one classifier is how the alert and the inventory end up disagreeing
+     * about what a sender is.
+     *
      * @return array<string, SenderAuthSignals> keyed by source IP
      */
     private function sendersInReport(UuidInterface $teamId, UuidInterface $reportId): array
     {
-        $rows = $this->database->executeQuery(
-            'SELECT
-                rec.source_ip,
-                SUM(rec.count) AS total_messages,
-                SUM(CASE WHEN rec.dkim_result = :pass THEN rec.count ELSE 0 END) AS dkim_pass_count,
-                SUM(CASE WHEN rec.spf_result = :pass THEN rec.count ELSE 0 END) AS spf_pass_count,
-                -- The receiver\'s own account of why it did not apply the
-                -- policy, gathered across every record this host appears in.
-                -- FILTERed so the overwhelmingly common "nobody annotated
-                -- anything" case selects NULL rather than one empty array per
-                -- record; compared as text because a malformed value must
-                -- degrade to "no attestation", and json_array_length() would
-                -- raise instead, aborting the whole report transaction.
-                json_agg(rec.policy_override_reasons)
-                    FILTER (WHERE rec.policy_override_reasons::text <> \'[]\') AS policy_override_reasons
-            FROM dmarc_record rec
-            WHERE rec.dmarc_report_id = :reportId
-            GROUP BY rec.source_ip',
-            [
-                'reportId' => $reportId->toString(),
-                'pass' => 'pass',
-            ],
-        )->fetchAllAssociative();
+        $sourceIps = array_map(strval(...), $this->database->executeQuery(
+            'SELECT DISTINCT source_ip FROM dmarc_record WHERE dmarc_report_id = :reportId',
+            ['reportId' => $reportId->toString()],
+        )->fetchFirstColumn());
 
-        if ([] === $rows) {
+        if ([] === $sourceIps) {
             return [];
         }
 
-        $sourceIps = array_map(static fn (array $row): string => (string) $row['source_ip'], $rows);
-        $authorized = $this->addressesTheTeamVouchedFor($teamId, $sourceIps);
-
-        $signals = [];
-
-        foreach ($rows as $row) {
-            $sourceIp = (string) $row['source_ip'];
-
-            $signals[$sourceIp] = SenderAuthSignals::fromCounts(
-                dkimPassed: (int) $row['dkim_pass_count'],
-                spfPassed: (int) $row['spf_pass_count'],
-                totalMessages: (int) $row['total_messages'],
-                isAuthorized: in_array($sourceIp, $authorized, true),
-                forwarding: ForwardingAttestation::fromAggregatedJson(
-                    is_string($row['policy_override_reasons']) ? $row['policy_override_reasons'] : null,
-                ),
-            );
-        }
-
-        return $signals;
+        return $this->reportSenderSignals->forReport(
+            $reportId,
+            $this->addressesTheTeamVouchedFor($teamId, $sourceIps),
+        );
     }
 
     /**
