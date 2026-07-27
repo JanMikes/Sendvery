@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Entity\KnownSender;
 use App\Entity\MonitoredDomain;
+use App\Value\ForwardingAttestation;
 use App\Value\SenderAuthSignals;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
@@ -69,6 +70,7 @@ final readonly class SenderDiscovery
                 // verdict though — the resolver deliberately keeps it out of the
                 // globally shared `sender_identity` row.
                 isAuthorized: $existingSenders[$sourceIp]['is_authorized'] ?? false,
+                forwarding: $record['forwarding'],
             );
         }
 
@@ -165,7 +167,7 @@ final readonly class SenderDiscovery
     }
 
     /**
-     * @return array<string, array{total_messages: int, pass_count: int, dkim_pass_count: int, spf_pass_count: int}> keyed by source IP
+     * @return array<string, array{total_messages: int, pass_count: int, dkim_pass_count: int, spf_pass_count: int, forwarding: ForwardingAttestation}> keyed by source IP
      */
     private function aggregateBySourceIp(UuidInterface $reportId): array
     {
@@ -175,7 +177,14 @@ final readonly class SenderDiscovery
                 SUM(rec.count) AS total_messages,
                 SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END) AS pass_count,
                 SUM(CASE WHEN rec.dkim_result = :pass THEN rec.count ELSE 0 END) AS dkim_pass_count,
-                SUM(CASE WHEN rec.spf_result = :pass THEN rec.count ELSE 0 END) AS spf_pass_count
+                SUM(CASE WHEN rec.spf_result = :pass THEN rec.count ELSE 0 END) AS spf_pass_count,
+                -- Aggregated exactly as AlertOnNewSender does, and for the same
+                -- reason: the receiver saying "I overrode the policy because
+                -- this was forwarded" is evidence the sending host cannot
+                -- write, so it has to reach the classifier from every path that
+                -- classifies (DEC-060 WP-A).
+                json_agg(rec.policy_override_reasons)
+                    FILTER (WHERE rec.policy_override_reasons::text <> \'[]\') AS policy_override_reasons
             FROM dmarc_record rec
             WHERE rec.dmarc_report_id = :reportId
             GROUP BY rec.source_ip',
@@ -193,6 +202,9 @@ final readonly class SenderDiscovery
                 'pass_count' => (int) $row['pass_count'],
                 'dkim_pass_count' => (int) $row['dkim_pass_count'],
                 'spf_pass_count' => (int) $row['spf_pass_count'],
+                'forwarding' => ForwardingAttestation::fromAggregatedJson(
+                    is_string($row['policy_override_reasons']) ? $row['policy_override_reasons'] : null,
+                ),
             ];
         }
 

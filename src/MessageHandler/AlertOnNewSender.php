@@ -10,6 +10,7 @@ use App\Services\AlertEngine;
 use App\Services\SenderIdentityResolver;
 use App\Value\AlertSeverity;
 use App\Value\AlertType;
+use App\Value\ForwardingAttestation;
 use App\Value\NewSenderAlertGroup;
 use App\Value\ResolvedSender;
 use App\Value\SenderAuthSignals;
@@ -194,7 +195,16 @@ final readonly class AlertOnNewSender
                 rec.source_ip,
                 SUM(rec.count) AS total_messages,
                 SUM(CASE WHEN rec.dkim_result = :pass THEN rec.count ELSE 0 END) AS dkim_pass_count,
-                SUM(CASE WHEN rec.spf_result = :pass THEN rec.count ELSE 0 END) AS spf_pass_count
+                SUM(CASE WHEN rec.spf_result = :pass THEN rec.count ELSE 0 END) AS spf_pass_count,
+                -- The receiver\'s own account of why it did not apply the
+                -- policy, gathered across every record this host appears in.
+                -- FILTERed so the overwhelmingly common "nobody annotated
+                -- anything" case selects NULL rather than one empty array per
+                -- record; compared as text because a malformed value must
+                -- degrade to "no attestation", and json_array_length() would
+                -- raise instead, aborting the whole report transaction.
+                json_agg(rec.policy_override_reasons)
+                    FILTER (WHERE rec.policy_override_reasons::text <> \'[]\') AS policy_override_reasons
             FROM dmarc_record rec
             WHERE rec.dmarc_report_id = :reportId
             GROUP BY rec.source_ip',
@@ -221,6 +231,9 @@ final readonly class AlertOnNewSender
                 spfPassed: (int) $row['spf_pass_count'],
                 totalMessages: (int) $row['total_messages'],
                 isAuthorized: in_array($sourceIp, $authorized, true),
+                forwarding: ForwardingAttestation::fromAggregatedJson(
+                    is_string($row['policy_override_reasons']) ? $row['policy_override_reasons'] : null,
+                ),
             );
         }
 

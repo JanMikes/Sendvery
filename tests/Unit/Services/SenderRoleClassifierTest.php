@@ -6,6 +6,8 @@ namespace App\Tests\Unit\Services;
 
 use App\Services\ForwarderRegistry;
 use App\Services\SenderRoleClassifier;
+use App\Value\ForwardingAttestation;
+use App\Value\PolicyOverrideReasonType;
 use App\Value\SenderAuthSignals;
 use App\Value\SenderRole;
 use PHPUnit\Framework\Attributes\Test;
@@ -243,6 +245,104 @@ final class SenderRoleClassifierTest extends TestCase
         self::assertTrue(
             $forged->warrantsAlert(),
             'A sender failing every check while calling itself SendGrid is exactly what the alert exists to surface.',
+        );
+    }
+
+    #[Test]
+    public function believesTheReceiverWhenItSaysTheMailWasForwarded(): void
+    {
+        // Exactly the shape that scores Suspicious on auth results alone: both
+        // methods failing, at volume, from a host nothing else recognises.
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 0.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                forwarding: new ForwardingAttestation(true, PolicyOverrideReasonType::Forwarded),
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertSame(
+            SenderRole::Forwarder,
+            $role,
+            'The receiver reporting that it overrode the policy because the message was relayed is a first-hand account of what happened to that mail.',
+        );
+    }
+
+    #[Test]
+    public function needsNoHelpFromDnsToBelieveAReceiver(): void
+    {
+        // The attestation is written by Gmail or Microsoft about a decision they
+        // made. It is not a claim of the sending host's, so the gate that exists
+        // to stop a host vouching for itself has nothing to do here.
+        $attested = new SenderAuthSignals(
+            dkimPassRate: 0.0,
+            spfPassRate: 0.0,
+            isAuthorized: false,
+            totalMessages: 400,
+            forwarding: new ForwardingAttestation(true, PolicyOverrideReasonType::MailingList),
+        );
+
+        self::assertSame(SenderRole::Forwarder, $this->classifier->classify(null, null, $attested, false));
+        self::assertSame(
+            SenderRole::Forwarder,
+            $this->classifier->classify('eu-smtp-delivery-1.mimecast.com', null, $attested, false),
+        );
+    }
+
+    #[Test]
+    public function theTeamsOwnVerdictStillOutranksAReceiversAccount(): void
+    {
+        $role = $this->classifier->classify(
+            'mxb.seznam.cz',
+            'Seznam',
+            new SenderAuthSignals(
+                dkimPassRate: 0.0,
+                spfPassRate: 0.0,
+                isAuthorized: true,
+                totalMessages: 400,
+                forwarding: new ForwardingAttestation(true, PolicyOverrideReasonType::Forwarded),
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertSame(
+            SenderRole::OwnRelay,
+            $role,
+            '"This machine is mine" is the operator describing their own infrastructure, and it is the more useful answer of the two.',
+        );
+    }
+
+    #[Test]
+    public function aReceiverThatAttestedNothingLeavesEveryOtherVerdictUntouched(): void
+    {
+        $silent = static fn (float $dkim, float $spf, int $messages): SenderAuthSignals => new SenderAuthSignals(
+            dkimPassRate: $dkim,
+            spfPassRate: $spf,
+            isAuthorized: false,
+            totalMessages: $messages,
+            forwarding: ForwardingAttestation::none(),
+        );
+
+        self::assertSame(SenderRole::Suspicious, $this->classifier->classify('mail.nowhere.example', null, $silent(0.0, 0.0, 400), true));
+        self::assertSame(SenderRole::Esp, $this->classifier->classify('mxb.seznam.cz', 'Seznam', $silent(100.0, 100.0, 40), true));
+        self::assertSame(SenderRole::Unknown, $this->classifier->classify('mail.nowhere.example', null, $silent(0.0, 0.0, 2), true));
+    }
+
+    #[Test]
+    public function theSharedCacheNeverInheritsOneReceiversAccountOfOneReport(): void
+    {
+        // A policy override is per-report, per-receiver evidence about a single
+        // stream of mail — not a global fact about the host, the way its
+        // hostname is. Writing it into `sender_identity` would let one report to
+        // one team silence that host's alerts for everybody.
+        self::assertSame(
+            SenderRole::Unknown,
+            $this->classifier->baselineRole('mail.unrecognised-host.example', null, true),
         );
     }
 

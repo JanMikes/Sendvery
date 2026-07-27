@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Value;
 
+use App\Value\ForwardingAttestation;
+use App\Value\PolicyOverrideReasonType;
 use App\Value\SenderAuthSignals;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -57,5 +59,33 @@ final class SenderAuthSignalsTest extends TestCase
         );
 
         self::assertTrue($signals->isAuthorized);
+    }
+
+    #[Test]
+    public function assumesNoReceiverAttestedAnythingUntilOneDid(): void
+    {
+        self::assertFalse(
+            new SenderAuthSignals(100.0, 0.0, false, 7)->forwarding->attestsForwarding,
+            'A caller that only has pass rates is saying nothing about receivers, and silence must grant nothing.',
+        );
+        self::assertFalse(
+            SenderAuthSignals::fromCounts(dkimPassed: 8, spfPassed: 2, totalMessages: 10)->forwarding->attestsForwarding,
+        );
+    }
+
+    #[Test]
+    public function carriesTheReceiversAccountOfTheMailThrough(): void
+    {
+        $attested = new ForwardingAttestation(true, PolicyOverrideReasonType::TrustedForwarder);
+
+        self::assertSame(
+            $attested,
+            SenderAuthSignals::fromCounts(
+                dkimPassed: 0,
+                spfPassed: 0,
+                totalMessages: 6,
+                forwarding: $attested,
+            )->forwarding,
+        );
     }
 }

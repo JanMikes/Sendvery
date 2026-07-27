@@ -14,11 +14,16 @@ use App\Value\SenderRole;
  * The ordering is the whole design:
  *
  *   1. OwnRelay   — the team already vouched for this IP.
- *   2. Forwarder  — a *confirmed* PTR says so, or the clean-forward auth
- *                   signature does.
+ *   2. Forwarder  — a receiver attested the forward, or a *confirmed* PTR says
+ *                   so, or the clean-forward auth signature does.
  *   3. Esp        — a recognised provider.
  *   4. Suspicious — fails everything, at volume, with no forwarding story.
  *   5. Unknown    — nothing identified it.
+ *
+ * Within rule 2 the branches are themselves ordered by how hard the evidence is
+ * to forge (DEC-060 §1.2), strongest first: receiver attestation (tier B) sits
+ * above the PTR hostname (tier D) because the sender writes its own reverse
+ * zone but cannot write Gmail's report.
  *
  * Rule 2 sitting above rule 4 is not a stylistic choice: a body-rewriting
  * gateway fails DKIM *and* SPF, so on results alone it is a perfect match for
@@ -69,6 +74,28 @@ final readonly class SenderRoleClassifier
     ): SenderRole {
         if (null !== $signals && $signals->isAuthorized) {
             return SenderRole::OwnRelay;
+        }
+
+        // Tier B — the receiver's own statement, and the highest-ranked piece of
+        // evidence on the ladder that Sendvery can obtain rather than be told.
+        //
+        // Why it outranks every branch below: those all rest on something the
+        // sending side controls or produces. A PTR record is written by whoever
+        // holds the IP block; pass rates are a property of the mail the sender
+        // chose to send. `<policy_evaluated><reason>` is written by Gmail or
+        // Microsoft about a decision *they* made, and no amount of control over
+        // the sending host can put it there.
+        //
+        // Why it does not outrank OwnRelay: that branch is the operator's own
+        // first-hand statement about their own infrastructure, and it produces
+        // the more informative answer — "your relay" rather than "somebody's
+        // gateway". Both suppress alerts, so nothing is lost by preferring it.
+        //
+        // Not cached: this is per-report, per-receiver evidence, so it must
+        // never reach the globally shared `sender_identity` row. baselineRole()
+        // passes no signals, which is what keeps it out.
+        if (null !== $signals && $signals->forwarding->attestsForwarding) {
+            return SenderRole::Forwarder;
         }
 
         // The confirmation gate, and only here. A PTR record is written by

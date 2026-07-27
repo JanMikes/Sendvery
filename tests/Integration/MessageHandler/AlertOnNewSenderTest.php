@@ -19,6 +19,8 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\PolicyOverrideReason;
+use App\Value\PolicyOverrideReasonType;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
@@ -262,6 +264,82 @@ final class AlertOnNewSenderTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function aReceiverSayingItOverrodeThePolicyForAForwardIsBelieved(): void
+    {
+        $domain = $this->givenDomain('sendvery.com');
+        $this->givenBaseline($domain);
+
+        // No reverse record and no recognised name: on everything except the
+        // receiver's own account, this host scores Suspicious.
+        $report = $this->givenReport($domain, '2026-07-26 23:59:59');
+        $this->givenRecord(
+            $report,
+            '203.0.113.77',
+            40,
+            policyOverrideReasons: [new PolicyOverrideReason(PolicyOverrideReasonType::Forwarded)],
+        );
+
+        $this->ingest($report);
+
+        self::assertSame(
+            [],
+            $this->alerts(),
+            'Gmail reporting that it did not apply the policy because the message was relayed is the receiver describing what it did, and no sending host can put that in a report about itself.',
+        );
+    }
+
+    #[Test]
+    public function anArcValidatedOverrideIsAlsoBelievedButOtherLocalPolicyTextIsNot(): void
+    {
+        $domain = $this->givenDomain('sendvery.com');
+        $this->givenBaseline($domain);
+
+        $report = $this->givenReport($domain, '2026-07-26 23:59:59');
+        $this->givenRecord(
+            $report,
+            '203.0.113.78',
+            40,
+            policyOverrideReasons: [new PolicyOverrideReason(PolicyOverrideReasonType::LocalPolicy, 'arc=pass')],
+        );
+        $this->givenRecord(
+            $report,
+            '203.0.113.79',
+            40,
+            policyOverrideReasons: [new PolicyOverrideReason(PolicyOverrideReasonType::LocalPolicy, 'sender on our allow list')],
+        );
+
+        $this->ingest($report);
+
+        $alerts = $this->alerts();
+
+        self::assertCount(1, $alerts, 'A verified ARC chain says a relay handled the message; an unexplained local exemption says nothing about routing.');
+        self::assertSame('New sender for sendvery.com: 203.0.113.79', $alerts[0]->title);
+    }
+
+    #[Test]
+    public function anOverrideAboutSamplingDoesNotSilenceTheAlert(): void
+    {
+        $domain = $this->givenDomain('sendvery.com');
+        $this->givenBaseline($domain);
+
+        $report = $this->givenReport($domain, '2026-07-26 23:59:59');
+        $this->givenRecord(
+            $report,
+            '203.0.113.80',
+            40,
+            policyOverrideReasons: [new PolicyOverrideReason(PolicyOverrideReasonType::SampledOut, 'pct=50')],
+        );
+
+        $this->ingest($report);
+
+        self::assertCount(
+            1,
+            $this->alerts(),
+            'sampled_out says the message fell outside the pct= sample. It says nothing about who relayed it.',
+        );
+    }
+
+    #[Test]
     public function anUnrecognisedSenderStillRaisesAnAlertNamingItAndItsVolume(): void
     {
         $domain = $this->givenDomain('sendvery.com');
@@ -481,12 +559,16 @@ final class AlertOnNewSenderTest extends IntegrationTestCase
         return $report;
     }
 
+    /**
+     * @param list<PolicyOverrideReason> $policyOverrideReasons
+     */
     private function givenRecord(
         DmarcReport $report,
         string $sourceIp,
         int $count,
         AuthResult $dkim = AuthResult::Fail,
         AuthResult $spf = AuthResult::Fail,
+        array $policyOverrideReasons = [],
     ): void {
         $this->em->persist(new DmarcRecord(
             id: Uuid::uuid7(),
@@ -497,6 +579,7 @@ final class AlertOnNewSenderTest extends IntegrationTestCase
             dkimResult: $dkim,
             spfResult: $spf,
             headerFrom: $report->monitoredDomain->domain,
+            policyOverrideReasons: $policyOverrideReasons,
         ));
     }
 
