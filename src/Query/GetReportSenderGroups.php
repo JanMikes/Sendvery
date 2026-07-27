@@ -34,7 +34,7 @@ final readonly class GetReportSenderGroups
             return [];
         }
 
-        /** @var list<array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string}> $rows */
+        /** @var list<array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string, policy_override_reasons: string|null}> $rows */
         $rows = $this->database->executeQuery(
             'SELECT
                 '.SenderIdentitySql::IDENTITY_KEY.' AS group_key,
@@ -56,7 +56,14 @@ final readonly class GetReportSenderGroups
                 -- the same way GetTopSendersForDomain does.
                 COUNT(DISTINCT ks.source_ip) AS known_sender_count,
                 COUNT(DISTINCT ks.source_ip) FILTER (WHERE NOT ks.is_authorized AND ks.updated_at IS NULL) AS needs_review_sender_count,
-                COUNT(DISTINCT ks.source_ip) FILTER (WHERE ks.is_authorized) AS authorized_sender_count
+                COUNT(DISTINCT ks.source_ip) FILTER (WHERE ks.is_authorized) AS authorized_sender_count,
+                -- What the reporter said about its own handling of this mail.
+                -- `sender_role` cannot carry it: that column is the globally
+                -- cached verdict about the host, while an override is one
+                -- receiver's account of one report, so it is read per report
+                -- rather than inherited (DEC-060 WP-A).
+                json_agg(rec.policy_override_reasons)
+                    FILTER (WHERE rec.policy_override_reasons::text <> '[]') AS policy_override_reasons
             FROM dmarc_record rec
             JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
             JOIN monitored_domain md ON md.id = dr.monitored_domain_id

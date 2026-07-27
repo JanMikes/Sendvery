@@ -14,6 +14,7 @@ use App\Services\Ai\AiInsightContent;
 use App\Services\Ai\Analysis\ReportInsightAnalyzer;
 use App\Services\Ai\Analysis\RoutineReportClassifier;
 use App\Services\DashboardContext;
+use App\Services\ForwardedMailExplainer;
 use App\Services\Stripe\PlanEnforcement;
 use App\Services\Stripe\PlanLimits;
 use App\Value\Reports\RecordAlignmentVerdict;
@@ -28,6 +29,7 @@ final class ShowReportDetailController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetReportDetail $getReportDetail,
         private readonly GetReportSenderGroups $getReportSenderGroups,
+        private readonly ForwardedMailExplainer $forwardedMailExplainer,
         private readonly DmarcReportRepository $reportRepository,
         private readonly ReportInsightAnalyzer $analyzer,
         private readonly RoutineReportClassifier $routineClassifier,
@@ -48,6 +50,13 @@ final class ShowReportDetailController extends AbstractController
         }
 
         $senderGroups = $this->getReportSenderGroups->forReport($id, $teamIds);
+
+        // Keyed like $alignment so the template looks a sender's explanation up
+        // instead of deciding for itself what forwarding costs (DEC-060 WP-E).
+        $forwardedMail = [];
+        foreach ($senderGroups as $group) {
+            $forwardedMail[$group->groupKey] = $this->forwardedMailExplainer->explain($group);
+        }
 
         $alignment = $this->alignmentVerdicts($report);
 
@@ -77,6 +86,7 @@ final class ShowReportDetailController extends AbstractController
             'failMessages' => $failMessages,
             'donutConfig' => $donutConfig,
             'senderGroups' => $senderGroups,
+            'forwardedMail' => $forwardedMail,
             'alignment' => $alignment,
             ...$this->aiState($id),
         ]);

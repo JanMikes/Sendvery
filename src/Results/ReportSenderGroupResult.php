@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Results;
 
+use App\Value\ForwardingAttestation;
 use App\Value\SenderReviewState;
 use App\Value\SenderRole;
 
@@ -47,11 +48,19 @@ final readonly class ReportSenderGroupResult
          * the group has been classified yet.
          */
         public ?SenderRole $senderRole = null,
+        /**
+         * What the receiver said about its own handling of this mail
+         * (DEC-060 tier B). Kept beside $senderRole rather than folded into it:
+         * the role is the globally cached fact about the host, this is one
+         * receiver's account of one report, and collapsing them would cache a
+         * per-report observation as a permanent property of the sender.
+         */
+        public ForwardingAttestation $forwarding = new ForwardingAttestation(),
     ) {
     }
 
     /**
-     * @param array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string} $row
+     * @param array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string, policy_override_reasons: string|null} $row
      */
     public static function fromDatabaseRow(array $row): self
     {
@@ -80,6 +89,7 @@ final readonly class ReportSenderGroupResult
                 authorizedCount: (int) $row['authorized_sender_count'],
             ),
             senderRole: null !== $row['sender_role'] ? SenderRole::from($row['sender_role']) : null,
+            forwarding: ForwardingAttestation::fromAggregatedJson($row['policy_override_reasons']),
         );
     }
 

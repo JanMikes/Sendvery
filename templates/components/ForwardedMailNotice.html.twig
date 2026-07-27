@@ -1,0 +1,36 @@
+{# Explains a forwarder's undelivered mail on the report-detail "By sender"
+   pane (DEC-060 WP-E). Renders nothing unless
+   {@see \App\Services\ForwardedMailExplainer} found something worth saying, so
+   the caller can drop it under every sender group unconditionally.
+
+   Tone is deliberately neutral — `border-base-300`, `bg-base-200/40`, an
+   information glyph. NOT warning, NOT error. Six real messages were quarantined
+   because a recipient-side gateway rewrote them; the domain owner caused none
+   of it and can fix none of it, so styling this as a problem would be the
+   product lying about its own findings. CLAUDE.md's rule is "Unknown Is Not
+   Failure"; this is its corollary — explained is not broken.
+
+   Props:
+     - explanation (?ForwardedMailExplanation)  verdict for this sender, or null
+#}
+{% props explanation = null %}
+
+{% if explanation is not null and explanation.isWorthSaying %}
+    <div class="mt-2 rounded-box border border-base-300 bg-base-200/40 p-3"
+         data-testid="forwarded-mail-notice"
+         data-outcome="{{ explanation.outcome.value }}"
+         data-affected-messages="{{ explanation.affectedMessages }}">
+        <div class="flex items-start gap-3">
+            {# Information-circle, matching the neutral glyph used elsewhere. #}
+            <svg class="w-5 h-5 text-base-content/50 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+
+            <div class="min-w-0">
+                <p class="text-sm font-medium" data-testid="forwarded-mail-headline">{{ explanation.headline }}</p>
+                <p class="text-sm text-base-content/70 mt-1 leading-relaxed" data-testid="forwarded-mail-why">{{ explanation.whyItHappened }}</p>
+                <p class="text-sm text-base-content/70 mt-2 leading-relaxed" data-testid="forwarded-mail-what-to-do">{{ explanation.whatYouCanDo }}</p>
+            </div>
+        </div>
+    </div>
+{% endif %}

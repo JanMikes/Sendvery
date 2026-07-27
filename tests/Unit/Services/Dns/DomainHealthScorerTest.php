@@ -41,6 +41,57 @@ final class DomainHealthScorerTest extends TestCase
         self::assertCount(5, $score->categories);
     }
 
+    /**
+     * DEC-060 WP-E. Six legitimate messages sat in spam folders in production
+     * because recipient-side gateways rewrote them. Nothing about the domain's
+     * setup caused that, so nothing about it may cost the domain its grade —
+     * a grade that dropped when somebody else's gateway rewrote a body would be
+     * unfixable by definition, and an unfixable grade is a grade nobody trusts.
+     *
+     * The scorer therefore takes only what DNS proves plus the blacklist score,
+     * and this test is the tripwire for a change that starts feeding message
+     * outcomes in: the signature simply has nowhere to put them.
+     */
+    #[Test]
+    public function gradesTheDomainsSetupAndNeverTheFateOfMailSomebodyElseForwarded(): void
+    {
+        $wellConfigured = new EmailAuthCheckResult(
+            'example.com',
+            new SpfCheckResult('v=spf1 include:_spf.google.com ~all', true, 2, 1, ['_spf.google.com'], [], []),
+            [new DkimCheckResult('v=DKIM1; k=rsa; p=...', true, 'rsa', 2048, 'google', [], [])],
+            new DmarcCheckResult('v=DMARC1; p=quarantine; rua=mailto:d@ex.com', 'quarantine', null, ['d@ex.com'], [], null, null, null, [], []),
+            new MxCheckResult([new MxRecord('mail.example.com', 10, '1.2.3.4', true, true)], []),
+        );
+
+        $parameters = new \ReflectionMethod($this->scorer, 'score')->getParameters();
+
+        self::assertSame(
+            ['result', 'blacklistScore'],
+            array_map(static fn (\ReflectionParameter $p): string => $p->getName(), $parameters),
+            'The grade is computed from DNS configuration and blacklist listings only. Quarantined forwards have no way in, and must not gain one.',
+        );
+        // The production domain publishes exactly this policy, and that policy
+        // is what quarantined the six forwarded messages. Enforcing must raise
+        // the grade, never lower it — otherwise the product would be charging
+        // domains for doing the thing it spends the rest of its surface asking
+        // them to do.
+        self::assertGreaterThan(
+            $this->scorer->score($this->sameSetupWithPolicy($wellConfigured, 'none'))->score,
+            $this->scorer->score($wellConfigured)->score,
+        );
+    }
+
+    private function sameSetupWithPolicy(EmailAuthCheckResult $result, string $policy): EmailAuthCheckResult
+    {
+        return new EmailAuthCheckResult(
+            $result->domain,
+            $result->spf,
+            $result->dkim,
+            new DmarcCheckResult('v=DMARC1; p='.$policy.'; rua=mailto:d@ex.com', $policy, null, ['d@ex.com'], [], null, null, null, [], []),
+            $result->mx,
+        );
+    }
+
     #[Test]
     public function missingEverythingGetsGradeFWithDefaultBlacklist(): void
     {

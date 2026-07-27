@@ -17,6 +17,8 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\PolicyOverrideReason;
+use App\Value\PolicyOverrideReasonType;
 use App\Value\SenderRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
@@ -68,6 +70,9 @@ final class ReportDetailSenderGroupsTest extends WebTestCase
         return ['persona' => $persona, 'domain' => $domain, 'report' => $report];
     }
 
+    /**
+     * @param list<PolicyOverrideReason> $policyOverrideReasons
+     */
     private function persistRecord(
         DmarcReport $report,
         string $sourceIp,
@@ -77,6 +82,7 @@ final class ReportDetailSenderGroupsTest extends WebTestCase
         Disposition $disposition = Disposition::None,
         ?string $resolvedHostname = null,
         ?string $resolvedOrg = null,
+        array $policyOverrideReasons = [],
     ): void {
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
@@ -92,6 +98,7 @@ final class ReportDetailSenderGroupsTest extends WebTestCase
             headerFrom: $report->monitoredDomain->domain,
             resolvedHostname: $resolvedHostname,
             resolvedOrg: $resolvedOrg,
+            policyOverrideReasons: $policyOverrideReasons,
         ));
     }
 
@@ -384,6 +391,120 @@ final class ReportDetailSenderGroupsTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('[data-testid="sender-group-role"]'));
         self::assertCount(0, $crawler->filter('[data-testid="record-sender-role"]'));
+    }
+
+    /**
+     * The 2026-07-27 production case, rendered: a gateway that rewrote three of
+     * the four messages it relayed, on a domain publishing p=quarantine. Those
+     * three are in spam folders and nothing the owner does can change that, so
+     * the page has to say so instead of leaving a wall of failure columns to be
+     * read as an incident.
+     */
+    public function testAForwardersUndeliveredMailIsExplainedInsteadOfLeftLookingLikeAnIncident(): void
+    {
+        $client = self::createClient();
+        $ctx = $this->setupPersonaWithReport('detail-forwarded-quarantine');
+
+        $this->persistIdentity('15.222.110.90', 'ca.cloud-sec-av.com', 'cloud-sec-av.com', SenderRole::Forwarder);
+        $this->persistRecord($ctx['report'], '15.222.110.90', 1, AuthResult::Pass, AuthResult::Fail);
+        $this->persistRecord($ctx['report'], '15.222.110.90', 3, AuthResult::Fail, AuthResult::Fail, Disposition::Quarantine);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->flush();
+
+        $client->loginUser($ctx['persona']->user);
+        $crawler = $client->request('GET', '/app/reports/'.$ctx['report']->id->toString());
+
+        self::assertResponseIsSuccessful();
+
+        $notice = $crawler->filter('[data-testid="forwarded-mail-notice"]');
+
+        self::assertCount(1, $notice);
+        self::assertSame('quarantined', $notice->attr('data-outcome'));
+        self::assertSame('3', $notice->attr('data-affected-messages'));
+        self::assertStringContainsString(
+            'not a fault at your end',
+            $crawler->filter('[data-testid="forwarded-mail-headline"]')->text(),
+        );
+        self::assertStringContainsString(
+            'not a reason to weaken your DMARC policy',
+            $crawler->filter('[data-testid="forwarded-mail-what-to-do"]')->text(),
+        );
+    }
+
+    public function testAForwarderWhoseMailAllArrivedIsNotGivenAnExplanationItDoesNotNeed(): void
+    {
+        $client = self::createClient();
+        $ctx = $this->setupPersonaWithReport('detail-forwarded-delivered');
+
+        $this->persistIdentity('52.212.19.177', 'eu.cloud-sec-av.com', 'cloud-sec-av.com', SenderRole::Forwarder);
+        $this->persistRecord($ctx['report'], '52.212.19.177', 4, AuthResult::Pass, AuthResult::Fail);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->flush();
+
+        $client->loginUser($ctx['persona']->user);
+        $crawler = $client->request('GET', '/app/reports/'.$ctx['report']->id->toString());
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $crawler->filter('[data-testid="forwarded-mail-notice"]'));
+    }
+
+    public function testMailFromAnUnidentifiedSenderIsNeverExcusedAsForwarding(): void
+    {
+        $client = self::createClient();
+        $ctx = $this->setupPersonaWithReport('detail-unknown-quarantine');
+
+        $this->persistRecord($ctx['report'], '198.51.100.160', 40, AuthResult::Fail, AuthResult::Fail, Disposition::Quarantine);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->flush();
+
+        $client->loginUser($ctx['persona']->user);
+        $crawler = $client->request('GET', '/app/reports/'.$ctx['report']->id->toString());
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(
+            0,
+            $crawler->filter('[data-testid="forwarded-mail-notice"]'),
+            'Quarantined mail from a host nothing identified is the case DMARC exists for; handing it a forwarder\'s excuse would launder it.',
+        );
+    }
+
+    public function testAReceiverThatAttestedTheForwardIsEnoughToExplainTheMail(): void
+    {
+        $client = self::createClient();
+        $ctx = $this->setupPersonaWithReport('detail-attested-forward');
+
+        // No sender_identity row at all: the cache is populated lazily and
+        // bounded per batch, so a host can be an attested forwarder before it
+        // has ever been looked up.
+        $this->persistRecord(
+            $ctx['report'],
+            '198.51.100.170',
+            6,
+            AuthResult::Fail,
+            AuthResult::Fail,
+            Disposition::Quarantine,
+            policyOverrideReasons: [new PolicyOverrideReason(PolicyOverrideReasonType::Forwarded)],
+        );
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $em->flush();
+
+        $client->loginUser($ctx['persona']->user);
+        $crawler = $client->request('GET', '/app/reports/'.$ctx['report']->id->toString());
+
+        self::assertResponseIsSuccessful();
+
+        $notice = $crawler->filter('[data-testid="forwarded-mail-notice"]');
+
+        self::assertCount(1, $notice, 'The receiver stating it overrode the policy for a forward is evidence the sending host cannot write.');
+        self::assertSame('6', $notice->attr('data-affected-messages'));
     }
 
     public function testRawRecordsTableIsBehindDetailsToggle(): void

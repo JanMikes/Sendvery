@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Results;
 
 use App\Results\ReportSenderGroupResult;
+use App\Value\PolicyOverrideReasonType;
 use App\Value\SenderRole;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -14,11 +15,11 @@ final class ReportSenderGroupResultTest extends TestCase
     /**
      * @param array<string, mixed> $overrides
      *
-     * @return array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string}
+     * @return array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string, policy_override_reasons: string|null}
      */
     private static function row(array $overrides = []): array
     {
-        /** @var array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string} $row */
+        /** @var array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string, policy_override_reasons: string|null} $row */
         $row = array_merge([
             'group_key' => 'cloud-sec-av.com',
             'display_label' => 'cloud-sec-av.com',
@@ -36,6 +37,9 @@ final class ReportSenderGroupResultTest extends TestCase
             'known_sender_count' => '0',
             'needs_review_sender_count' => '0',
             'authorized_sender_count' => '0',
+            // The FILTERed json_agg selects NULL when no receiver annotated any
+            // of the group's records — every group in production today.
+            'policy_override_reasons' => null,
         ], $overrides);
 
         return $row;
@@ -56,6 +60,21 @@ final class ReportSenderGroupResultTest extends TestCase
         );
         self::assertSame(SenderRole::Forwarder, $result->senderRole);
         self::assertNull($result->senderIsAuthorized);
+        self::assertFalse(
+            $result->forwarding->attestsForwarding,
+            'A group no receiver annotated carries no attestation, whatever its cached role says.',
+        );
+    }
+
+    #[Test]
+    public function carriesWhatTheReceiverSaidAboutItsOwnHandlingOfTheMail(): void
+    {
+        $result = ReportSenderGroupResult::fromDatabaseRow(self::row([
+            'policy_override_reasons' => '[[{"type":"trusted_forwarder","comment":null}]]',
+        ]));
+
+        self::assertTrue($result->forwarding->attestsForwarding);
+        self::assertSame(PolicyOverrideReasonType::TrustedForwarder, $result->forwarding->attestedBy);
     }
 
     #[Test]
