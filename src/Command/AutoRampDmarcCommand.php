@@ -14,6 +14,7 @@ use App\Query\GetDomainReadinessSignals;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\Dns\CloudflareDnsClient;
 use App\Services\Dns\DmarcRampReadinessEvaluator;
+use App\Services\Dns\ManagedDmarcCnameChecker;
 use App\Value\AlertType;
 use App\Value\Dns\AutoRampStage;
 use App\Value\Dns\PolicyChangeSource;
@@ -34,6 +35,12 @@ use Symfony\Component\Messenger\MessageBusInterface;
  * enforcing tier), then schedule the next tightening 48h out and execute due
  * advances after a fresh re-check. Guided (auto-drive OFF) domains get a one-time
  * "ready to advance" nudge. Per-domain try/catch so one domain can't abort the run.
+ *
+ * "A fresh re-check" is literal: a domain whose advance is DUE gets a live
+ * `_dmarc` CNAME lookup before anything is evaluated, because tightening is the
+ * one action here that can bounce real mail. It runs only for due domains — at
+ * most twice in a domain's lifetime — so the sweep stays one DNS query per
+ * advance, not per managed domain.
  */
 #[AsCommand(
     name: 'sendvery:dmarc:auto-ramp',
@@ -50,6 +57,7 @@ final class AutoRampDmarcCommand extends Command
         private readonly MonitoredDomainRepository $domainRepository,
         private readonly GetDomainReadinessSignals $readinessSignals,
         private readonly DmarcRampReadinessEvaluator $evaluator,
+        private readonly ManagedDmarcCnameChecker $cnameChecker,
         private readonly MessageBusInterface $commandBus,
         private readonly ClockInterface $clock,
     ) {
@@ -88,6 +96,26 @@ final class AutoRampDmarcCommand extends Command
     {
         $domain = $this->domainRepository->get($domainId);
         $teamId = $domain->team->id;
+
+        // A due advance is the only irreversible-in-practice step in this sweep:
+        // once `p=reject` is published, mail that fails alignment is bounced, not
+        // quarantined. So the stored verification is refreshed from live DNS
+        // BEFORE readiness is evaluated, rather than trusted from whenever the
+        // last nightly sweep happened to run.
+        //
+        // Refreshing first (instead of re-checking after the evaluator has
+        // already passed) is what makes both directions honest: a live CNAME
+        // whose nightly refresh was skipped is re-stamped and may proceed, and a
+        // CNAME that vanished since the last sweep is cleared and trips the rail
+        // below. `markCnameVerified()` ignores an inconclusive lookup, so a
+        // transient resolver blip leaves the stored timestamp alone and the
+        // evaluator's freshness gate decides.
+        if ($domain->autoRampEnabled
+            && null === $domain->autoRampPausedAt
+            && $this->advanceIsDue($domain, $now)
+        ) {
+            $domain->markCnameVerified($this->cnameChecker->verify($domain->domain), $now);
+        }
 
         $readiness = $this->evaluator->evaluate(
             $domain,
@@ -134,7 +162,7 @@ final class AutoRampDmarcCommand extends Command
         }
 
         // 2. A scheduled advance is due — execute only if STILL ready.
-        if (null !== $domain->autoRampScheduledAdvanceAt && $now >= $domain->autoRampScheduledAdvanceAt) {
+        if ($this->advanceIsDue($domain, $now)) {
             if ($readiness->eligibleForNextTier) {
                 $this->commandBus->dispatch(new AdvanceDmarcPolicy($domain->id, $teamId->toString(), null, PolicyChangeSource::AutoRamp));
             } else {
@@ -151,6 +179,11 @@ final class AutoRampDmarcCommand extends Command
                 $this->commandBus->dispatch(new ScheduleAutoRampAdvance($domain->id, $nextStage, $now->modify(self::ADVANCE_NOTICE)));
             }
         }
+    }
+
+    private function advanceIsDue(MonitoredDomain $domain, \DateTimeImmutable $now): bool
+    {
+        return null !== $domain->autoRampScheduledAdvanceAt && $now >= $domain->autoRampScheduledAdvanceAt;
     }
 
     private function rollBackIfEnforcing(MonitoredDomain $domain, string $teamId, AutoRampStage $currentStage): void

@@ -97,6 +97,43 @@ final class DmarcRampReadinessEvaluatorTest extends TestCase
     }
 
     #[Test]
+    public function treatsAVerificationOlderThanOneDnsSweepCycleAsNotVerified(): void
+    {
+        // `cnameVerifiedAt` is refreshed by the 03:00 sweep and cleared the moment
+        // a sweep cannot see the CNAME. A timestamp older than one sweep cycle
+        // therefore does not mean "the CNAME is live" — it means no sweep has
+        // confirmed it since, which is indistinguishable from the CNAME having been
+        // deleted. Acting on it would publish full enforcement for a policy record
+        // that may no longer be served at all.
+        $result = $this->evaluate(
+            $this->domain(DmarcPolicy::None, firstReportDaysAgo: 40, cnameVerified: true, lastChangeDaysAgo: 10, cnameVerifiedHoursAgo: 48),
+            new DomainReadinessResult(99.0, 9, 9000, 5, 0),
+        );
+
+        self::assertTrue($result->ready, 'the mail data still qualifies');
+        self::assertFalse($result->cnameVerified, 'a stale confirmation is not a confirmation');
+        self::assertFalse($result->eligibleForNextTier);
+        self::assertContains('cname_not_verified', $result->blockingReasons, 'Stale verification fails closed through the same rail as a missing CNAME.');
+    }
+
+    #[Test]
+    public function acceptsAVerificationFromTheMostRecentNightlySweep(): void
+    {
+        // The other side of the boundary: a normal healthy host hands the ramp a
+        // timestamp a few hours old, and that must keep working — a gate that
+        // blocked every domain would be indistinguishable from switching
+        // auto-drive off.
+        $result = $this->evaluate(
+            $this->domain(DmarcPolicy::None, firstReportDaysAgo: 40, cnameVerified: true, lastChangeDaysAgo: 10, cnameVerifiedHoursAgo: 25),
+            new DomainReadinessResult(99.0, 9, 9000, 5, 0),
+        );
+
+        self::assertTrue($result->cnameVerified);
+        self::assertTrue($result->eligibleForNextTier);
+        self::assertNotContains('cname_not_verified', $result->blockingReasons);
+    }
+
+    #[Test]
     public function enforcesSevenDayDwell(): void
     {
         $result = $this->evaluate(
@@ -105,6 +142,23 @@ final class DmarcRampReadinessEvaluatorTest extends TestCase
         );
 
         self::assertTrue($result->ready);
+        self::assertFalse($result->eligibleForNextTier);
+        self::assertContains('dwell_not_satisfied', $result->blockingReasons);
+    }
+
+    #[Test]
+    public function aDomainWithNoRecordedPolicyChangeHasNotSatisfiedTheDwell(): void
+    {
+        // No recorded change is the ABSENCE of history, not proof that a week has
+        // passed since the last tightening. Reading it as "dwell satisfied" skipped
+        // the mandatory 7-day observation window outright for legacy and
+        // backfilled rows — the rows whose history we know least about.
+        $domain = $this->domain(DmarcPolicy::None, firstReportDaysAgo: 40, cnameVerified: true, lastChangeDaysAgo: 10);
+        $domain->lastPolicyChangeAt = null;
+
+        $result = $this->evaluate($domain, new DomainReadinessResult(99.0, 9, 9000, 5, 0));
+
+        self::assertTrue($result->ready, 'the mail data still qualifies');
         self::assertFalse($result->eligibleForNextTier);
         self::assertContains('dwell_not_satisfied', $result->blockingReasons);
     }
@@ -196,6 +250,7 @@ final class DmarcRampReadinessEvaluatorTest extends TestCase
         bool $cnameVerified,
         int $lastChangeDaysAgo,
         bool $paused = false,
+        int $cnameVerifiedHoursAgo = 2,
     ): MonitoredDomain {
         $team = new Team(
             id: Uuid::uuid7(),
@@ -212,7 +267,10 @@ final class DmarcRampReadinessEvaluatorTest extends TestCase
             firstReportAt: $this->now->modify(sprintf('-%d days', $firstReportDaysAgo)),
         );
         $domain->managedPolicyP = $p;
-        $domain->cnameVerifiedAt = $cnameVerified ? $this->now->modify('-5 days') : null;
+        // Two hours old — what the 03:00 DNS sweep leaves for the 05:30 ramp.
+        // Anything older than one sweep cycle is not accepted as live
+        // verification, so the default has to be a realistic fresh value.
+        $domain->cnameVerifiedAt = $cnameVerified ? $this->now->modify(sprintf('-%d hours', $cnameVerifiedHoursAgo)) : null;
         $domain->lastPolicyChangeAt = $this->now->modify(sprintf('-%d days', $lastChangeDaysAgo));
         $domain->autoRampPausedAt = $paused ? $this->now->modify('-1 day') : null;
 

@@ -131,7 +131,10 @@ final class BillingPagesTest extends WebTestCase
             reporterEmail: 'noreply@google.com',
             dateRangeBegin: new \DateTimeImmutable('@1700000000'),
             dateRangeEnd: new \DateTimeImmutable('@1700086400'),
-            quarantinedAt: new \DateTimeImmutable('-1 hour'),
+            // "Now": the plan-overage count on the billing/dashboard cards is
+            // scoped to the live usage period, and an hour before midnight on
+            // the 1st would land in the previous one.
+            quarantinedAt: new \DateTimeImmutable(),
             expiresAt: new \DateTimeImmutable('+60 days'),
             reason: $reason,
             reportXmlGz: $compressed,

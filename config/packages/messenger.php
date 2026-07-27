@@ -62,6 +62,11 @@ return App::config([
                 // batch synchronously inside the cron container.
                 \App\Message\PollReportsInbox::class => 'async',
                 \App\Message\ProcessReceivedReportEmail::class => 'async',
+                // Handing back a plan-overage backlog can mean thousands of
+                // reports, and the trigger is either a Stripe webhook (which
+                // must answer immediately) or the midnight usage-reset cron
+                // fanning out over every affected team.
+                \App\Message\ReleaseQuarantinedReportsForTeam::class => 'async',
             ],
         ],
     ],

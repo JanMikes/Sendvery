@@ -136,9 +136,19 @@
 
         {# ── ACTIVE ──────────────────────────────────────────────────── #}
         {% elseif state == 'active' %}
+            {# "CNAME verified" in the present tense was a claim this card could not
+               back: the timestamp behind it is refreshed by the nightly DNS sweep,
+               so a skipped or failed sweep left the card asserting live
+               verification from data over a day old. Say WHEN we last confirmed it
+               and let the reader judge — the same staleness the auto-drive
+               readiness gate refuses to act on is now visible here. #}
             <p class="text-sm text-base-content/60">
                 Sendvery is hosting and enforcing DMARC for {{ domainName }}.
-                CNAME verified · <span class="font-mono">_dmarc.{{ domainName }} → {{ card.cnameTarget }}</span>
+                <span class="font-mono">_dmarc.{{ domainName }} → {{ card.cnameTarget }}</span>
+                {% if card.cnameVerifiedAt %}
+                    <br>
+                    <span data-testid="managed-dmarc-cname-last-confirmed">CNAME last confirmed {{ card.cnameVerifiedAt|date('j M Y, H:i') }}</span>
+                {% endif %}
             </p>
 
             {# Auto-drive (the premium hero) — lead with the hands-off path #}
@@ -250,13 +260,23 @@
     </div>
 </div>
 
+{# Readiness copy. The FIRST arm is the no-measurement arm on purpose: a null
+   passRate/daysOfData means "we have not measured your readiness yet", and every
+   arm below it would turn that absence into a claim — either a 0.0% alignment
+   figure that reads as total authentication failure, or a "you're at full
+   enforcement" reassurance that may be untrue. Pass rates render through the
+   shared `pass_rate_value` macro so this surface can never disagree with the
+   rest of the app about how an absent rate looks. #}
 {% macro readinessHint(card) %}
-    {%- if card.eligibleForNextTier and card.recommendedNextPolicy -%}
-        {{ card.passRate|number_format(1) }}% of your real mail has passed DMARC for {{ card.daysOfData }} days straight, across {{ card.distinctSources }} known senders. You’re ready to move to {{ card.recommendedNextPolicy.value }}.
+    {%- import 'components/_severity_glyph.html.twig' as severity -%}
+    {%- if card.passRate is null or card.daysOfData is null -%}
+        We haven’t measured your readiness yet. As soon as your first DMARC reports arrive we’ll start tracking alignment here — nothing for you to do.
+    {%- elseif card.eligibleForNextTier and card.recommendedNextPolicy -%}
+        {{ severity.pass_rate_value(card.passRate) }} of your real mail has passed DMARC for {{ card.daysOfData }} days straight, across {{ card.distinctSources }} known senders. You’re ready to move to {{ card.recommendedNextPolicy.value }}.
     {%- elseif 'thin_data' in card.blockingReasons -%}
         We’re still gathering data — we’ve seen {{ card.daysOfData }} days of reports. Auto-drive stays paused until your traffic is well understood.
     {%- elseif card.recommendedNextPolicy -%}
-        Alignment is {{ card.passRate|number_format(1) }}% over {{ card.daysOfData }} days. We hold steady until it’s safe to tighten — we’ll let you know the moment you’re ready.
+        Alignment is {{ severity.pass_rate_value(card.passRate) }} over {{ card.daysOfData }} days. We hold steady until it’s safe to tighten — we’ll let you know the moment you’re ready.
     {%- else -%}
         You’re at full enforcement (reject). Sendvery keeps your policy hosted and monitored.
     {%- endif -%}

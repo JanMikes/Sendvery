@@ -25,7 +25,7 @@
                 </svg>
                 <div>
                     <p class="font-semibold">{{ reportUsage.planOverageQuarantineCount }} report{{ reportUsage.planOverageQuarantineCount > 1 ? 's' : '' }} waiting</p>
-                    <p class="text-sm text-base-content/70">They were received after you hit this month's cap. Upgrade to unlock them.</p>
+                    <p class="text-sm text-base-content/70">They were received after you hit this month's cap and are stored safely — nothing is deleted. Upgrade to unlock them now, or they're released automatically when your cap resets on {{ reportUsage.periodEndsAt|date('M j') }}.</p>
                 </div>
                 <a href="{{ path('pricing') }}" class="btn btn-warning btn-sm">Upgrade</a>
             </div>

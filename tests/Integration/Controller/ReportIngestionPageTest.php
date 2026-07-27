@@ -80,10 +80,11 @@ final class ReportIngestionPageTest extends WebTestCase
         $this->persistReport($em, $domainB, $envB, new \DateTimeImmutable('-1 day'));
         $this->persistDnsCheck($em, $domainB, 'v=DMARC1; p=none; rua=mailto:dmarc@'.$domainB->domain);
 
-        // Domain C: No reports yet, no DMARC check — scenario resolver
-        // returns NoRecord, badge shows "DMARC missing", action shows
-        // "Publish RUA".
+        // Domain C: checked, and the check found no `_dmarc` record at all.
+        // THAT is what earns the red "DMARC missing" badge and the "Publish RUA"
+        // CTA — we looked, and there is genuinely nothing published.
         $domainC = $this->persistDomain($em, $persona->team, 'c-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test');
+        $this->persistDnsCheck($em, $domainC, null);
 
         $data['client']->request('GET', '/app/mailboxes');
 
@@ -100,8 +101,32 @@ final class ReportIngestionPageTest extends WebTestCase
         self::assertStringContainsString('Ingesting via DNS (Sendvery)', $body);
         self::assertStringContainsString('Configured for external inbox', $body);
         self::assertStringContainsString('DMARC missing', $body);
-        // The "no reports yet" domain still gets a "Publish RUA" CTA.
+        // A domain we have actually checked and found nothing on gets the CTA.
         self::assertStringContainsString('Publish RUA', $body);
+    }
+
+    #[Test]
+    public function aDomainWhoseDnsHasNeverBeenCheckedIsNotAccusedOfAMissingDmarcRecord(): void
+    {
+        $data = $this->bootPersonaOnly();
+        $em = $data['em'];
+        $persona = $data['persona'];
+
+        // A domain added moments ago: no DNS check has run, so nobody has looked
+        // for its `_dmarc` record yet. The RUA scenario resolver reports
+        // `NoRecord` for this exactly as it does for a genuinely missing record —
+        // it has no check row to read either way — and the matrix used to paint
+        // that red and demand the user publish something.
+        $justAdded = $this->persistDomain($em, $persona->team, 'fresh-'.substr(Uuid::uuid7()->toString(), 0, 8).'.test');
+
+        $data['client']->request('GET', '/app/mailboxes');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $data['client']->getResponse()->getContent();
+        self::assertStringContainsString($justAdded->domain, $body);
+        self::assertStringContainsString('Not checked yet', $body, 'A domain awaiting its first DNS check says so.');
+        self::assertStringNotContainsString('DMARC missing', $body, 'We have not looked yet, so we cannot claim the record is missing.');
+        self::assertStringNotContainsString('Publish RUA', $body, 'There is nothing for the user to do before the first check has even run.');
     }
 
     #[Test]

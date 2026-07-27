@@ -374,6 +374,108 @@ final class DomainHealthClassifierTest extends TestCase
         );
     }
 
+    #[Test]
+    public function aDomainWhoseLatestSpfCheckFailsIsNotHealthyEvenThoughItWasVerifiedOnce(): void
+    {
+        // `spf_verified_at` is a HISTORICAL marker: CheckDomainDnsHandler sets it
+        // when a check passes and never clears it when a later check fails. So a
+        // domain whose SPF record was deleted last month still carries the
+        // timestamp from when it worked. Judging health by that timestamp gave
+        // this domain the green "fully healthy" chip and dropped it out of "Needs
+        // your attention" — the alert email in the user's inbox was the only place
+        // the regression was visible anywhere.
+        $classifier = new DomainHealthClassifier();
+
+        $overview = $this->overview(
+            dmarcVerifiedAt: '2026-05-01 00:00:00',
+            passRate: 99.0,
+            spfVerifiedAt: '2026-05-01 00:00:00',
+            dkimVerifiedAt: '2026-05-01 00:00:00',
+            latestMxScore: 95,
+            spfCheckValid: false,
+            dkimCheckValid: true,
+            dmarcCheckValid: true,
+            mxCheckValid: true,
+        );
+
+        self::assertSame(
+            DomainHealthFilter::Attention,
+            $classifier->classifyOverview($overview),
+            'A currently-failing SPF check must beat a stale spf_verified_at.',
+        );
+        self::assertSame(
+            DomainHealthFilter::Attention,
+            $classifier->classify($overview, $this->buildDnsHealthFromOverview($overview)),
+            'The banner and the list card must reach the same verdict from the same check row.',
+        );
+    }
+
+    #[Test]
+    public function aPassingCheckCountsAsConfiguredWithoutAnyVerifiedAtOrSnapshotScore(): void
+    {
+        // The other direction: the stored check row is authoritative when it says
+        // YES too. A domain checked before the nightly snapshot sweep has run has
+        // no MX score and, for a check path that does not stamp them, no
+        // verified-at columns — but we HAVE looked and everything resolved. Calling
+        // that Attention would be the "not checked yet reads as broken" bug from
+        // the other side.
+        $classifier = new DomainHealthClassifier();
+
+        $overview = $this->overview(
+            dmarcVerifiedAt: '2026-05-01 00:00:00',
+            passRate: 99.0,
+            spfCheckValid: true,
+            dkimCheckValid: true,
+            dmarcCheckValid: true,
+            mxCheckValid: true,
+        );
+
+        self::assertSame(DomainHealthFilter::Healthy, $classifier->classifyOverview($overview));
+        self::assertSame(DomainHealthFilter::Healthy, $classifier->classify($overview, $this->buildDnsHealthFromOverview($overview)));
+    }
+
+    #[Test]
+    public function aProtocolWithNoStoredCheckStillFallsBackToTheVerifiedAtColumns(): void
+    {
+        // "No check row for this protocol" is neither a pass nor a fail, so the
+        // legacy derivation still decides. Without this, every domain seeded before
+        // per-protocol check rows existed would flip to Attention overnight.
+        $classifier = new DomainHealthClassifier();
+
+        $overview = $this->overview(
+            dmarcVerifiedAt: '2026-05-01 00:00:00',
+            passRate: 99.0,
+            spfVerifiedAt: '2026-05-01 00:00:00',
+            dkimVerifiedAt: '2026-05-01 00:00:00',
+            latestMxScore: 95,
+        );
+
+        self::assertSame(DomainHealthFilter::Healthy, $classifier->classifyOverview($overview));
+    }
+
+    #[Test]
+    public function isFullyHealthyReadsTheLatestCheckRatherThanTheVerificationTimestamps(): void
+    {
+        // Same rule for the `/app/domains` "Fully healthy" stat card, which counts
+        // through this method: a broken record must not be counted as healthy just
+        // because it used to work.
+        $classifier = new DomainHealthClassifier();
+
+        self::assertFalse($classifier->isFullyHealthy($this->dnsHealthAllConfigured(dkimCheckValid: false)));
+        self::assertTrue($classifier->isFullyHealthy($this->dnsHealthAllConfigured(dkimCheckValid: true)));
+    }
+
+    #[Test]
+    public function aFailingMxCheckBeatsAHealthySnapshotScore(): void
+    {
+        // MX has no verified-at column, so before this its only input was the
+        // nightly snapshot score — which keeps reporting the last good number
+        // until the next sweep overwrites it.
+        $classifier = new DomainHealthClassifier();
+
+        self::assertFalse($classifier->isFullyHealthy($this->dnsHealthAllConfigured(latestMxScore: 95, mxCheckValid: false)));
+    }
+
     private function overview(
         ?string $dmarcVerifiedAt,
         ?float $passRate,
@@ -383,6 +485,10 @@ final class DomainHealthClassifierTest extends TestCase
         ?int $latestDkimScore = null,
         ?int $latestDmarcScore = null,
         ?int $latestMxScore = null,
+        ?bool $spfCheckValid = null,
+        ?bool $dkimCheckValid = null,
+        ?bool $dmarcCheckValid = null,
+        ?bool $mxCheckValid = null,
     ): DomainOverviewResult {
         return new DomainOverviewResult(
             domainId: 'domain-id',
@@ -399,6 +505,10 @@ final class DomainHealthClassifierTest extends TestCase
             latestDkimScore: $latestDkimScore,
             latestDmarcScore: $latestDmarcScore,
             latestMxScore: $latestMxScore,
+            spfCheckValid: $spfCheckValid,
+            dkimCheckValid: $dkimCheckValid,
+            dmarcCheckValid: $dmarcCheckValid,
+            mxCheckValid: $mxCheckValid,
         );
     }
 
@@ -416,6 +526,10 @@ final class DomainHealthClassifierTest extends TestCase
         \DateTimeImmutable|false|null $dkimVerifiedAt = false,
         \DateTimeImmutable|false|null $dmarcVerifiedAt = false,
         ?int $latestMxScore = 95,
+        ?bool $spfCheckValid = null,
+        ?bool $dkimCheckValid = null,
+        ?bool $dmarcCheckValid = null,
+        ?bool $mxCheckValid = null,
     ): DnsHealthOverviewResult {
         $configured = new \DateTimeImmutable('2026-05-01');
 
@@ -432,6 +546,10 @@ final class DomainHealthClassifierTest extends TestCase
             latestDmarcScore: 100,
             latestMxScore: $latestMxScore,
             latestCheckedAt: $configured,
+            spfCheckValid: $spfCheckValid,
+            dkimCheckValid: $dkimCheckValid,
+            dmarcCheckValid: $dmarcCheckValid,
+            mxCheckValid: $mxCheckValid,
         );
     }
 
@@ -457,6 +575,10 @@ final class DomainHealthClassifierTest extends TestCase
             latestDmarcScore: $overview->latestDmarcScore,
             latestMxScore: $overview->latestMxScore,
             latestCheckedAt: null,
+            spfCheckValid: $overview->spfCheckValid,
+            dkimCheckValid: $overview->dkimCheckValid,
+            dmarcCheckValid: $overview->dmarcCheckValid,
+            mxCheckValid: $overview->mxCheckValid,
         );
     }
 }

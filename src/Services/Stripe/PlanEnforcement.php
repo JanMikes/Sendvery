@@ -90,7 +90,23 @@ final readonly class PlanEnforcement
 
     public function canParseReport(string $teamId, SubscriptionPlan $plan): bool
     {
-        return $this->getMonthlyReportCount($teamId) < $this->planLimits->getMaxReportsPerMonth($plan);
+        return $this->remainingMonthlyReportAllowance($teamId, $plan) > 0;
+    }
+
+    /**
+     * How many further reports this team may parse in the CURRENT period.
+     *
+     * This is THE single answer to "may we ingest another report", and every
+     * ingestion path must ask it, because {@see incrementMonthlyReportCount()}
+     * counts unconditionally: a path that dispatches without asking gets
+     * counted but not capped, so the same team ends up capped or not depending
+     * on which pipeline the report arrived through (central inbox vs BYO
+     * mailbox vs a quarantine release). Never negative, so callers can use the
+     * return value directly as a batch size.
+     */
+    public function remainingMonthlyReportAllowance(string $teamId, SubscriptionPlan $plan): int
+    {
+        return max(0, $this->planLimits->getMaxReportsPerMonth($plan) - $this->getMonthlyReportCount($teamId));
     }
 
     public function getMonthlyReportCount(string $teamId): int
@@ -159,6 +175,22 @@ final readonly class PlanEnforcement
     // ─── Period management ────────────────────────────────────────────────
 
     /**
+     * Start of the monthly usage window every counter in `team_usage` and
+     * `team_ai_usage` is scoped to.
+     *
+     * Deliberately public and deliberately the ONLY definition: anything
+     * deduped or reset once per counter window — the `sendvery:usage:reset`
+     * cron, the "approaching your limits" email's `team.plan_warning_at`
+     * stamp, the figures on `/app/billing` — has to agree with the window we
+     * actually enforce. A second hand-rolled notion of "this month" silently
+     * drifts, and the user reads the drift as the product lying.
+     */
+    public function currentPeriodStart(): \DateTimeImmutable
+    {
+        return $this->clock->now()->modify('first day of this month')->setTime(0, 0);
+    }
+
+    /**
      * Roll every expired usage row in `team_usage` and `team_ai_usage`
      * forward to the current month, zeroing its counter. Intended for the
      * `sendvery:usage:reset` cron — `ensureCurrentPeriod()` already does
@@ -171,7 +203,7 @@ final readonly class PlanEnforcement
     public function resetExpiredCounters(): int
     {
         $now = $this->clock->now();
-        $periodStart = $now->modify('first day of this month')->setTime(0, 0);
+        $periodStart = $this->currentPeriodStart();
         $periodEnd = $periodStart->modify('+1 month');
 
         $params = [
@@ -213,7 +245,7 @@ final readonly class PlanEnforcement
     private function ensureCurrentPeriod(string $table, string $counterColumn, string $teamId): void
     {
         $now = $this->clock->now();
-        $periodStart = $now->modify('first day of this month')->setTime(0, 0);
+        $periodStart = $this->currentPeriodStart();
         $periodEnd = $periodStart->modify('+1 month');
 
         $this->database->executeStatement(

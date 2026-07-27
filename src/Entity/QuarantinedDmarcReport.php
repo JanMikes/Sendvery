@@ -9,12 +9,16 @@ use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
 
 /**
- * Holds a parsed DMARC report we couldn't route to a team — either because
- * no one has the domain monitored, or because the domain exists but isn't
- * verified yet. Released back into the normal report pipeline when a team
- * verifies the matching domain (see ReleaseQuarantinedReportsWhenDomainVerified).
+ * Holds a DMARC report we couldn't hand to a team — because no one has the
+ * domain monitored, because the domain exists but isn't verified yet, or
+ * because the owning team had no monthly report headroom left. Released back
+ * into the normal report pipeline when the blocker clears: domain verification
+ * (ReleaseQuarantinedReportsWhenDomainVerified) or returning plan capacity —
+ * an upgrade or the monthly period rolling (ReleaseQuarantinedReportsForTeamHandler).
  *
- * `expires_at` caps how long we hold these so the table doesn't grow forever.
+ * `expires_at` caps how long we hold the domain-problem reasons so the table
+ * doesn't grow forever on mail we can never hand to anyone. It does NOT apply
+ * to `plan_overage`: see {@see QuarantineReason::isTtlPurgeable()}.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'quarantined_dmarc_report')]
@@ -54,8 +58,12 @@ final class QuarantinedDmarcReport
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $expiresAt;
 
+    /**
+     * Mutable (unlike its siblings) for exactly one transition: see
+     * {@see markBlockedByPlanCap()}.
+     */
     #[ORM\Column(type: 'string', length: 32, enumType: QuarantineReason::class)]
-    public readonly QuarantineReason $reason;
+    public QuarantineReason $reason;
 
     #[ORM\Column(type: 'blob')]
     public readonly mixed $reportXmlGz;
@@ -86,6 +94,24 @@ final class QuarantinedDmarcReport
         $this->expiresAt = $expiresAt;
         $this->reason = $reason;
         $this->reportXmlGz = $reportXmlGz;
+    }
+
+    /**
+     * The domain is sorted out (monitored and verified) and the team's monthly
+     * report cap is now the only thing keeping this report parked.
+     *
+     * Re-stamping matters for two reasons a user can see: `plan_overage` rows
+     * are excluded from the TTL purge, so a report we are withholding for a
+     * billing reason can never be deleted for a verification reason; and the
+     * billing page's "N reports waiting … upgrade to unlock" count reads this
+     * reason, so the number matches what is actually being withheld.
+     *
+     * One-way — a row never goes back to describing a domain problem it no
+     * longer has.
+     */
+    public function markBlockedByPlanCap(): void
+    {
+        $this->reason = QuarantineReason::PlanOverage;
     }
 
     public function reportXmlBytes(): string

@@ -27,6 +27,25 @@ final readonly class DmarcRampReadinessEvaluator
     private const int QUARANTINE_TO_REJECT_DAYS = 60;
     private const int DWELL_DAYS = 7;
 
+    /**
+     * How old `cnameVerifiedAt` may be and still count as "the CNAME is live".
+     *
+     * `cnameVerifiedAt` is refreshed by the 03:00 `sendvery:dns:check-all` sweep
+     * and cleared the moment a sweep cannot see the CNAME, so on a healthy host
+     * the timestamp the 05:30 ramp reads is ~2.5 hours old. 26 hours is one full
+     * sweep cycle plus a 2-hour grace for a slow or slightly late run: a single
+     * on-time sweep always satisfies it, and a SKIPPED sweep never does.
+     *
+     * Existence alone is not evidence of liveness. Without an age bound, a
+     * timestamp from a sweep that failed, was skipped, or is still running reads
+     * as "verified right now" — and this gate is the only thing standing between
+     * a customer and `p=reject` on a `_dmarc` CNAME that no longer resolves to
+     * us, i.e. full enforcement with no policy actually being served. Failing
+     * closed costs at most one day of ramp progress; failing open rejects real
+     * mail.
+     */
+    private const int CNAME_VERIFICATION_MAX_AGE_HOURS = 26;
+
     public function __construct(
         private ClockInterface $clock,
     ) {
@@ -37,10 +56,18 @@ final readonly class DmarcRampReadinessEvaluator
         $now = $this->clock->now();
         $currentStage = AutoRampStage::fromPolicy($domain->managedPolicyP);
         $daysOfData = $this->daysSince($domain->firstReportAt, $now);
-        $cnameVerified = null !== $domain->cnameVerifiedAt;
+        $cnameVerified = $this->cnameVerificationIsFresh($domain->cnameVerifiedAt, $now);
         $paused = null !== $domain->autoRampPausedAt;
-        $dwellSatisfied = null === $domain->lastPolicyChangeAt
-            || $this->daysSince($domain->lastPolicyChangeAt, $now) >= self::DWELL_DAYS;
+        // A missing `lastPolicyChangeAt` is the ABSENCE of a recorded change, not
+        // proof that a week has passed since the last one. Treating it as
+        // satisfied skipped the mandatory 7-day dwell outright for any legacy or
+        // backfilled row — exactly the rows we know least about. Every live
+        // managed domain gets the column stamped by
+        // `MonitoredDomain::enableManagedDmarc()` and again by every policy
+        // change, so failing closed here blocks only rows whose history we
+        // cannot see, and any subsequent policy change unblocks them.
+        $dwellSatisfied = null !== $domain->lastPolicyChangeAt
+            && $this->daysSince($domain->lastPolicyChangeAt, $now) >= self::DWELL_DAYS;
 
         // An authorized sender failing alignment is the regression signal — at an
         // enforcing tier it means real mail is at risk of being blocked.
@@ -116,6 +143,23 @@ final readonly class DmarcRampReadinessEvaluator
             distinctSources: $signals->distinctSources,
             blockingReasons: $blockingReasons,
         );
+    }
+
+    /**
+     * "Was the CNAME confirmed recently enough to act on?" — deliberately the
+     * same shape as the `!$cnameVerified` rail it feeds, so a stale timestamp and
+     * a missing one produce the identical `cname_not_verified` block. A future
+     * timestamp (clock skew on a restored backup) is also treated as fresh: the
+     * gate is about staleness, and inventing a second failure mode for a clock
+     * we cannot fix would only freeze ramps for the wrong reason.
+     */
+    private function cnameVerificationIsFresh(?\DateTimeImmutable $verifiedAt, \DateTimeImmutable $now): bool
+    {
+        if (null === $verifiedAt) {
+            return false;
+        }
+
+        return $verifiedAt >= $now->modify(sprintf('-%d hours', self::CNAME_VERIFICATION_MAX_AGE_HOURS));
     }
 
     private function daysSince(?\DateTimeImmutable $from, \DateTimeImmutable $now): int

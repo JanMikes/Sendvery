@@ -14,6 +14,7 @@ use App\Query\GetDomainReadinessSignals;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\Dns\CloudflareDnsClient;
 use App\Services\Dns\DmarcRampReadinessEvaluator;
+use App\Services\Dns\ManagedDmarcCnameChecker;
 use App\Services\ReportAddressProvider;
 use App\Tests\IntegrationTestCase;
 use App\Value\AuthResult;
@@ -34,6 +35,8 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 final class AutoRampDmarcCommandTest extends IntegrationTestCase
 {
+    use \App\Tests\ScriptsDnsRecords;
+
     #[Test]
     public function schedulesA48hAdvanceWithNoticeWhenDomainBecomesReady(): void
     {
@@ -206,6 +209,100 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function refusesToTightenOnAVerificationOlderThanOneDnsSweepCycle(): void
+    {
+        // The nightly sweep did not run, so the newest confirmation we have that
+        // Sendvery's policy record is actually being served is two days old. A due
+        // advance must not fire on that: the CNAME could have been deleted at any
+        // point since, and p=quarantine on an unserved policy bounces real mail.
+        $domainId = $this->managedDomain(
+            'pro',
+            DmarcPolicy::None,
+            autoRampEnabled: true,
+            ready: true,
+            scheduledAdvanceAt: new \DateTimeImmutable('-1 hour'),
+            scheduledStage: AutoRampStage::Quarantine,
+            cnameVerifiedHoursAgo: 48,
+            cnameLive: false,
+        );
+
+        $this->runSweep();
+
+        $domain = $this->reload($domainId);
+        self::assertSame(DmarcPolicy::None, $domain->managedPolicyP, 'A verification older than one sweep cycle must not be treated as live verification.');
+        self::assertNotNull($domain->autoRampPausedAt, 'Stale verification freezes the ramp exactly like a lost CNAME does.');
+    }
+
+    #[Test]
+    public function neverSchedulesAnAdvanceOnAStaleVerification(): void
+    {
+        $domainId = $this->managedDomain(
+            'pro',
+            DmarcPolicy::None,
+            autoRampEnabled: true,
+            ready: true,
+            cnameVerifiedHoursAgo: 48,
+            cnameLive: false,
+        );
+
+        $this->runSweep();
+
+        $domain = $this->reload($domainId);
+        self::assertNull($domain->autoRampScheduledAdvanceAt, 'Nothing is queued while the CNAME confirmation is stale.');
+        self::assertNotNull($domain->autoRampPausedAt);
+    }
+
+    #[Test]
+    public function reConfirmsTheCnameLiveBeforeExecutingADueAdvance(): void
+    {
+        // The stored confirmation is fresh enough to pass the age gate, but the
+        // customer deleted the CNAME an hour ago. Only a live lookup can see that,
+        // and this is the last moment before enforcement tightens.
+        $domainId = $this->managedDomain(
+            'pro',
+            DmarcPolicy::None,
+            autoRampEnabled: true,
+            ready: true,
+            scheduledAdvanceAt: new \DateTimeImmutable('-1 hour'),
+            scheduledStage: AutoRampStage::Quarantine,
+            cnameVerifiedHoursAgo: 2,
+            cnameLive: false,
+        );
+
+        $this->runSweep();
+
+        $domain = $this->reload($domainId);
+        self::assertSame(DmarcPolicy::None, $domain->managedPolicyP, 'A CNAME that disappeared since the last sweep must block the advance.');
+        self::assertNull($domain->cnameVerifiedAt, 'The live re-check clears the stored confirmation so every other surface stops claiming verification.');
+        self::assertNotNull($domain->autoRampPausedAt);
+    }
+
+    #[Test]
+    public function aLiveCnameLetsADueAdvanceProceedEvenIfTheNightlySweepWasSkipped(): void
+    {
+        // The other half of the re-check: fail-closed must not become
+        // fail-forever. A stale stored timestamp plus a CNAME that still resolves
+        // is a monitoring gap, not a customer problem — the live lookup restores
+        // the confirmation and the advance proceeds.
+        $domainId = $this->managedDomain(
+            'pro',
+            DmarcPolicy::None,
+            autoRampEnabled: true,
+            ready: true,
+            scheduledAdvanceAt: new \DateTimeImmutable('-1 hour'),
+            scheduledStage: AutoRampStage::Quarantine,
+            cnameVerifiedHoursAgo: 48,
+            cnameLive: true,
+        );
+
+        $this->runSweep();
+
+        $domain = $this->reload($domainId);
+        self::assertSame(DmarcPolicy::Quarantine, $domain->managedPolicyP);
+        self::assertNull($domain->autoRampPausedAt);
+    }
+
+    #[Test]
     public function skipsEntirelyWhenCloudflareIsNotConfigured(): void
     {
         $domainId = $this->managedDomain('pro', DmarcPolicy::None, autoRampEnabled: true, ready: true);
@@ -216,6 +313,7 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
             $this->getService(MonitoredDomainRepository::class),
             $this->getService(GetDomainReadinessSignals::class),
             $this->getService(DmarcRampReadinessEvaluator::class),
+            $this->getService(ManagedDmarcCnameChecker::class),
             $this->getService(MessageBusInterface::class),
             $this->getService(\Psr\Clock\ClockInterface::class),
         );
@@ -270,6 +368,8 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
         bool $paused = false,
         ?DmarcPolicy $sp = null,
         int $pct = 100,
+        int $cnameVerifiedHoursAgo = 2,
+        ?bool $cnameLive = null,
     ): UuidInterface {
         $em = $this->getService(EntityManagerInterface::class);
         $now = new \DateTimeImmutable();
@@ -285,13 +385,28 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
             createdAt: $now->modify('-90 days'),
             firstReportAt: $now->modify('-70 days'),
         );
+
+        // The sweep re-checks the CNAME live before executing a due advance, so
+        // the scripted DNS has to agree with the stored verification — otherwise
+        // every due-advance case would read as "the CNAME vanished". `$cnameLive`
+        // decouples the two so a test can describe exactly that divergence.
+        if ($cnameLive ?? $cnameVerified) {
+            $this->scriptDns()->withCname(
+                sprintf('_dmarc.%s', $domain->domain),
+                $this->getService(ManagedDmarcCnameChecker::class)->expectedTarget($domain->domain) ?? '',
+            );
+        }
         $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
         $domain->managedPolicyP = $policy;
         $domain->managedPolicySp = $sp;
         $domain->managedPolicyPct = $pct;
         $domain->autoRampStage = AutoRampStage::fromPolicy($policy);
         $domain->autoRampEnabled = $autoRampEnabled;
-        $domain->cnameVerifiedAt = $cnameVerified ? $now->modify('-60 days') : null;
+        // As fresh as the real 03:00 DNS sweep leaves it for the 05:30 ramp. The
+        // readiness gate refuses to act on a verification older than one sweep
+        // cycle, so a stale value here would make every case below read as
+        // "CNAME lost" rather than exercising the behaviour under test.
+        $domain->cnameVerifiedAt = $cnameVerified ? $now->modify(sprintf('-%d hours', $cnameVerifiedHoursAgo)) : null;
         $domain->autoRampPausedAt = $paused ? $now->modify('-1 day') : null;
         $domain->lastPolicyChangeAt = $now->modify('-30 days');
         $domain->autoRampScheduledStage = $scheduledStage;

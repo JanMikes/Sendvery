@@ -21,6 +21,9 @@ final readonly class ManagedDmarcCardResult
     /**
      * @param list<string> $blockingReasons
      * @param string|null  $conflictingDmarcTxt the customer's own `_dmarc` TXT still blocking the CNAME (RFC 1034 forbids the two coexisting), null when there is none
+     * @param int|null     $daysOfData          days of report history the readiness verdict was measured over, null when no verdict has been computed
+     * @param float|null   $passRate            aligned pass rate the readiness verdict was measured over, null when no verdict has been computed — never 0.0 for "unmeasured"
+     * @param int|null     $distinctSources     distinct sending sources seen, null when no verdict has been computed
      */
     public function __construct(
         public ManagedDmarcCardState $state,
@@ -39,9 +42,9 @@ final readonly class ManagedDmarcCardResult
         public bool $ready,
         public bool $eligibleForNextTier,
         public ?DmarcPolicy $recommendedNextPolicy,
-        public int $daysOfData,
-        public float $passRate,
-        public int $distinctSources,
+        public ?int $daysOfData,
+        public ?float $passRate,
+        public ?int $distinctSources,
         public array $blockingReasons,
     ) {
     }
@@ -88,9 +91,15 @@ final readonly class ManagedDmarcCardResult
             ready: $readiness->ready ?? false,
             eligibleForNextTier: $readiness->eligibleForNextTier ?? false,
             recommendedNextPolicy: $readiness?->recommendedNextPolicy?->p,
-            daysOfData: $readiness->daysOfData ?? 0,
-            passRate: $readiness->passRate ?? 0.0,
-            distinctSources: $readiness->distinctSources ?? 0,
+            // Measurements stay NULL when there is no readiness verdict to read.
+            // They used to default to 0/0.0, which the card then rendered as
+            // "Alignment is 0.0% over 0 days" — indistinguishable from total
+            // authentication failure — and which ALSO defeated the honest
+            // `thin_data` branch below it, because a zero looks like a real
+            // measurement to every downstream check. Absent is not zero.
+            daysOfData: $readiness?->daysOfData,
+            passRate: $readiness?->passRate,
+            distinctSources: $readiness?->distinctSources,
             blockingReasons: $readiness->blockingReasons ?? [],
         );
     }

@@ -16,6 +16,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 /**
  * Drops quarantined reports past their expires_at — domains that were never
  * verified within the retention window.
+ *
+ * NEVER deletes `plan_overage` rows, whatever their expires_at says. Those are
+ * a customer's own reports, withheld only because their plan ran out of monthly
+ * headroom; per `never-delete-user-data` a cap freezes data, it does not destroy
+ * it. The exclusion lives in
+ * {@see QuarantinedDmarcReportRepository::findExpired()} keyed on
+ * {@see \App\Value\Reports\QuarantineReason::isTtlPurgeable()}, so this command cannot delete them
+ * even by accident — they leave quarantine only by being released back into the
+ * report pipeline.
  */
 #[AsCommand(
     name: 'sendvery:reports:quarantine:purge',

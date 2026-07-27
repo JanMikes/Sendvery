@@ -231,6 +231,28 @@ final class ManagedDmarcControllerTest extends WebTestCase
     }
 
     #[Test]
+    public function theActiveCardSaysWhenTheCnameWasLastConfirmedInsteadOfClaimingItIsVerifiedNow(): void
+    {
+        // The card's only evidence that Sendvery's policy record is being served
+        // is a timestamp the nightly DNS sweep refreshes. Asserting "CNAME
+        // verified" in the present tense turned a possibly day-old reading into a
+        // live guarantee — and hid exactly the staleness the auto-drive readiness
+        // gate refuses to act on.
+        [$client, $domainId] = $this->activeManagedDomain();
+
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $domainId->toString()));
+
+        self::assertResponseIsSuccessful();
+        $lastConfirmed = $crawler->filter('[data-testid="managed-dmarc-cname-last-confirmed"]');
+        self::assertCount(1, $lastConfirmed, 'The active card must date its verification claim.');
+        self::assertStringContainsString(
+            (new \DateTimeImmutable('-1 day'))->format('j M Y'),
+            $lastConfirmed->text(),
+            'The date shown is the stored confirmation time, not "now".',
+        );
+    }
+
+    #[Test]
     public function cnamePendingCardOffersAManualVerifyAction(): void
     {
         $client = self::createClient();

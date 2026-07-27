@@ -423,9 +423,16 @@ final readonly class DomainSetupStatusResolver
      * when there is no check row at all do we fall back to the old heuristic
      * (no verified-at timestamp on any record and no scored snapshot).
      *
+     * PUBLIC so other surfaces reuse this one definition instead of inventing a
+     * second notion of "unchecked". `/app/mailboxes` needs it: the ingestion
+     * matrix reads {@see Dns\RuaScenarioResolver} — which reports
+     * `RuaScenario::NoRecord` both for "we checked and there is no `_dmarc` TXT"
+     * and for "no check has ever run" — so a domain added minutes ago got a red
+     * "DMARC missing" badge about a record nobody had looked for yet.
+     *
      * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
      */
-    private function isUnchecked(DnsHealthOverviewResult $dnsHealth, array $protocolStates = []): bool
+    public function isUnchecked(DnsHealthOverviewResult $dnsHealth, array $protocolStates = []): bool
     {
         if ([] !== $protocolStates) {
             return false;

@@ -261,6 +261,12 @@ return App::config([
             'App\MessageHandler\ReleaseQuarantinedReportsWhenDomainVerified' => [
                 'public' => true,
             ],
+            'App\MessageHandler\ReleaseQuarantinedReportsForTeamHandler' => [
+                'public' => true,
+            ],
+            'App\Query\GetReleasableQuarantinedReports' => [
+                'public' => true,
+            ],
             'App\Services\Reports\DmarcReportRouter' => [
                 'public' => true,
             ],

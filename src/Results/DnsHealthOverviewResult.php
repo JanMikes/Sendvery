@@ -6,6 +6,22 @@ namespace App\Results;
 
 final readonly class DnsHealthOverviewResult
 {
+    /**
+     * `$spfCheckValid` / `$dkimCheckValid` / `$dmarcCheckValid` /
+     * `$mxCheckValid` carry the verdict of the NEWEST stored `dns_check_result`
+     * row for that protocol — three states, deliberately `?bool`:
+     *   true  → the latest check found a valid record
+     *   false → the latest check ran and the record is missing or broken
+     *   null  → no check row exists for this protocol yet (never checked).
+     *
+     * They are the authoritative answer to "is this record healthy right now?".
+     * The `*VerifiedAt` timestamps beside them are NOT: `CheckDomainDnsHandler`
+     * only ever SETS them, so a record that broke last month still carries a
+     * verified-at from when it last worked. Reading the timestamps let a domain
+     * with dead SPF classify as fully healthy and disappear from triage. Keep
+     * `*VerifiedAt` for what it is actually for (verification/quarantine-release
+     * history) and read these for health.
+     */
     public function __construct(
         public string $domainId,
         public string $domainName,
@@ -19,6 +35,10 @@ final readonly class DnsHealthOverviewResult
         public ?int $latestDmarcScore,
         public ?int $latestMxScore,
         public ?\DateTimeImmutable $latestCheckedAt,
+        public ?bool $spfCheckValid = null,
+        public ?bool $dkimCheckValid = null,
+        public ?bool $dmarcCheckValid = null,
+        public ?bool $mxCheckValid = null,
     ) {
     }
 
@@ -35,7 +55,11 @@ final readonly class DnsHealthOverviewResult
      *     latest_dkim_score: int|string|null,
      *     latest_dmarc_score: int|string|null,
      *     latest_mx_score: int|string|null,
-     *     latest_checked_at: string|null
+     *     latest_checked_at: string|null,
+     *     spf_check_valid?: bool|int|string|null,
+     *     dkim_check_valid?: bool|int|string|null,
+     *     dmarc_check_valid?: bool|int|string|null,
+     *     mx_check_valid?: bool|int|string|null
      * } $row
      */
     public static function fromDatabaseRow(array $row): self
@@ -53,6 +77,10 @@ final readonly class DnsHealthOverviewResult
             latestDmarcScore: self::toInt($row['latest_dmarc_score']),
             latestMxScore: self::toInt($row['latest_mx_score']),
             latestCheckedAt: self::toDateTime($row['latest_checked_at']),
+            spfCheckValid: self::toNullableBool($row['spf_check_valid'] ?? null),
+            dkimCheckValid: self::toNullableBool($row['dkim_check_valid'] ?? null),
+            dmarcCheckValid: self::toNullableBool($row['dmarc_check_valid'] ?? null),
+            mxCheckValid: self::toNullableBool($row['mx_check_valid'] ?? null),
         );
     }
 
@@ -101,5 +129,23 @@ final readonly class DnsHealthOverviewResult
     private static function toInt(int|string|null $value): ?int
     {
         return null === $value ? null : (int) $value;
+    }
+
+    /**
+     * Postgres booleans surface as real bools on some driver builds and as
+     * `'t'`/`'f'` on others; null must survive as null because it is the
+     * "never checked" state, not a false.
+     */
+    private static function toNullableBool(bool|int|string|null $value): ?bool
+    {
+        if (null === $value) {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return in_array((string) $value, ['1', 't', 'true', 'TRUE'], true);
     }
 }

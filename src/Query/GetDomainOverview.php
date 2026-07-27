@@ -35,6 +35,41 @@ final readonly class GetDomainOverview
      */
     private const string PASS_RATE_SORT_EXPR = 'COALESCE('.self::PASS_RATE_EXPR.', 0)';
 
+    /**
+     * Newest `dns_check_result` verdict per protocol, as four nullable booleans —
+     * the authoritative "is this record healthy right now?" input the health
+     * classifier reads.
+     *
+     * It is joined here rather than derived from `md.*_verified_at` because
+     * `CheckDomainDnsHandler` only ever SETS those columns and never clears them:
+     * a domain whose SPF record was deleted last month keeps its
+     * `spf_verified_at` forever, so the classifier called it fully healthy and it
+     * dropped out of "Needs your attention" entirely. NULL here means "no check
+     * row for that protocol yet", which the classifier must read as not-checked,
+     * never as broken.
+     *
+     * `DISTINCT ON (type)` picks the newest row per protocol; the outer
+     * aggregate-only SELECT always yields exactly one row (all-NULL when the
+     * domain has no check rows), which is what makes `ON true` safe. Grouped
+     * columns must be listed in every GROUP BY that uses this join.
+     */
+    private const string LATEST_CHECK_JOIN = '
+            LEFT JOIN LATERAL (
+                SELECT
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'spf\')   AS spf_check_valid,
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'dkim\')  AS dkim_check_valid,
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'dmarc\') AS dmarc_check_valid,
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'mx\')    AS mx_check_valid
+                FROM (
+                    SELECT DISTINCT ON (dcr.type) dcr.type, dcr.is_valid
+                    FROM dns_check_result dcr
+                    WHERE dcr.monitored_domain_id = md.id
+                    ORDER BY dcr.type, dcr.checked_at DESC
+                ) latest
+            ) dcv ON true';
+
+    private const string GROUP_BY = 'md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, md.first_report_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score, dcv.spf_check_valid, dcv.dkim_check_valid, dcv.dmarc_check_valid, dcv.mx_check_valid';
+
     public function __construct(
         private Connection $database,
     ) {
@@ -114,11 +149,11 @@ final readonly class GetDomainOverview
             null => 'md.domain ASC',
         };
 
-        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}> $data */
+        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null, spf_check_valid: bool|string|null, dkim_check_valid: bool|string|null, dmarc_check_valid: bool|string|null, mx_check_valid: bool|string|null}> $data */
         $data = $this->database->executeQuery(
             $this->buildBaseSelect().'
             WHERE md.team_id IN (:teamIds)'.$whereClause.'
-            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, md.first_report_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score'.$havingClause.'
+            GROUP BY '.self::GROUP_BY.$havingClause.'
             ORDER BY '.$orderClause,
             [
                 'teamIds' => $teamIds,
@@ -147,11 +182,11 @@ final readonly class GetDomainOverview
             return null;
         }
 
-        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}|false $row */
+        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null, spf_check_valid: bool|string|null, dkim_check_valid: bool|string|null, dmarc_check_valid: bool|string|null, mx_check_valid: bool|string|null}|false $row */
         $row = $this->database->executeQuery(
             $this->buildBaseSelect().'
             WHERE md.id = :domainId AND md.team_id IN (:teamIds)
-            GROUP BY md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, md.first_report_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score',
+            GROUP BY '.self::GROUP_BY,
             [
                 'domainId' => $domainId,
                 'teamIds' => $teamIds,
@@ -243,7 +278,11 @@ final readonly class GetDomainOverview
                 dhs.spf_score   AS latest_spf_score,
                 dhs.dkim_score  AS latest_dkim_score,
                 dhs.dmarc_score AS latest_dmarc_score,
-                dhs.mx_score    AS latest_mx_score
+                dhs.mx_score    AS latest_mx_score,
+                dcv.spf_check_valid,
+                dcv.dkim_check_valid,
+                dcv.dmarc_check_valid,
+                dcv.mx_check_valid
             FROM monitored_domain md
             JOIN team t ON t.id = md.team_id
             LEFT JOIN dmarc_report dr ON dr.monitored_domain_id = md.id
@@ -254,6 +293,6 @@ final readonly class GetDomainOverview
                 WHERE monitored_domain_id = md.id
                 ORDER BY checked_at DESC
                 LIMIT 1
-            ) dhs ON true';
+            ) dhs ON true'.self::LATEST_CHECK_JOIN;
     }
 }

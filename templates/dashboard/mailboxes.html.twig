@@ -85,6 +85,16 @@
                                                 <div class="text-xs text-base-content/70 mt-1">
                                                     RUA points at <span class="font-mono">{{ row.ruaScenario.ruaEmail }}</span>
                                                 </div>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'no_record' and uncheckedDomains[row.domainId]|default(false) %}
+                                                {# "No DMARC record" and "we have not checked yet" arrive as the
+                                                   same RuaScenario::NoRecord, because both mean "no stored DMARC
+                                                   check to read". Painting the second one red accused people of a
+                                                   missing record minutes after adding a domain, before any check
+                                                   had run. Neutral badge, no CTA, nothing to do. #}
+                                                <span class="badge badge-ghost">Not checked yet</span>
+                                                <div class="text-xs text-base-content/60 mt-1">
+                                                    We haven’t checked this domain’s DNS yet — usually done within a few minutes
+                                                </div>
                                             {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'no_record' %}
                                                 <span class="badge badge-error">DMARC missing</span>
                                                 <div class="text-xs text-error mt-1">
@@ -129,6 +139,11 @@
                                                 <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"
                                                    class="btn btn-warning btn-xs">Decide</a>
                                             {% elseif row.path.value == 'mailbox' and row.lastReportAt is not null and row.ruaScenario and row.ruaScenario.scenario.value == 'points_at_external' and row.pathMatchesMailbox %}
+                                                <span class="text-base-content/40">—</span>
+                                            {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'no_record' and uncheckedDomains[row.domainId]|default(false) %}
+                                                {# Nothing to act on before the first check has run — asking
+                                                   someone to publish a record we have not looked for yet is how
+                                                   a pending state turns into a chore. #}
                                                 <span class="text-base-content/40">—</span>
                                             {% elseif row.ruaScenario and row.ruaScenario.scenario.value == 'no_record' %}
                                                 <a href="{{ path('dashboard_domain_health', {id: row.domainId}) }}#health-dmarc"

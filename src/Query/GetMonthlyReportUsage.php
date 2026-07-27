@@ -16,6 +16,14 @@ use Psr\Clock\ClockInterface;
  * billing page — a customer can have reports parked without knowing it
  * unless they bump into the (deferred) usage-warning email.
  *
+ * The overage count is scoped to the SAME period as the usage figure beside it.
+ * It used to be unbounded, which made a fixed "12 reports waiting … received
+ * after you hit this month's cap" follow the user around every month forever
+ * — the sentence claimed a period the number didn't have. `/app/quarantine`
+ * remains the complete, unbounded view of everything parked (with its own
+ * plan-overage filter and nav badge); this card answers the narrower question
+ * the billing page asks, which is what this period's cap cost them.
+ *
  * Returns null when the team has no team_usage row yet (i.e. has never had a
  * report parsed). Both callers treat that as "nothing to show".
  *
@@ -68,7 +76,12 @@ final readonly class GetMonthlyReportUsage
                     SELECT COUNT(*)
                     FROM quarantined_dmarc_report qdr
                     JOIN monitored_domain md ON LOWER(md.domain) = qdr.domain_name
-                    WHERE md.team_id = :teamId AND qdr.reason = :overageReason
+                    WHERE md.team_id = :teamId
+                      AND qdr.reason = :overageReason
+                      AND qdr.quarantined_at >= CASE WHEN tu.period_ends_at <= :now
+                            THEN date_trunc(\'month\', :now::timestamp)
+                            ELSE tu.period_started_at
+                        END
                 ) AS plan_overage_quarantine_count
             FROM team_usage tu
             WHERE tu.team_id = :teamId',

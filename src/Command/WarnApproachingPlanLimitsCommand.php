@@ -25,10 +25,17 @@ use Symfony\Component\Mime\Email;
  * that crossed 80% on at least one of: domain cap, seat cap, monthly
  * report cap, or monthly AI quota.
  *
- * De-dup: stamps `team.plan_warning_at`. The Upgrade/Downgrade/SetTeamPlan
- * handlers clear this column on plan change, which is the natural reset
- * point — a new plan deserves a fresh round of warnings if it's tight.
- * Without a plan change, one email per team per plan window is enough.
+ * De-dup: stamps `team.plan_warning_at`, and re-warns once the stamp falls
+ * before the CURRENT usage period (plus the Upgrade/Downgrade/SetTeamPlan
+ * handlers clearing it on a plan change, so a new plan gets a fresh round).
+ *
+ * Per PERIOD, not per plan, and that is the point: the report cap and the AI
+ * quota are monthly. Deduping on "has this team ever been warned" meant a team
+ * was told once, ever, about a limit it re-approaches every single month — and
+ * the month it actually overflowed (reports parked in quarantine) it heard
+ * nothing at all. `PlanEnforcement::currentPeriodStart()` is the same window the
+ * counters are enforced and reset against; a second definition of "this month"
+ * here would drift from the numbers in the email.
  */
 #[AsCommand(
     name: 'sendvery:plan-limits:warn-approaching',
@@ -58,7 +65,9 @@ final class WarnApproachingPlanLimitsCommand extends Command
             ->executeQuery(
                 'SELECT id, plan, plan_warning_at
                  FROM team
-                 WHERE plan_warning_at IS NULL',
+                 WHERE plan_warning_at IS NULL
+                    OR plan_warning_at < :periodStart',
+                ['periodStart' => $this->enforcement->currentPeriodStart()->format('Y-m-d H:i:s')],
             )
             ->fetchAllAssociative();
 

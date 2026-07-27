@@ -10,6 +10,41 @@ use Doctrine\DBAL\Connection;
 
 final readonly class GetDnsHealthOverview
 {
+    /**
+     * Newest `dns_check_result` verdict per protocol, as four nullable booleans.
+     *
+     * This is the authoritative "is the record healthy right now?" source and the
+     * reason it is joined here at all: the `md.*_verified_at` columns selected
+     * beside it are only ever SET by `CheckDomainDnsHandler`, never cleared, so a
+     * domain whose SPF broke last month still looks verified through them. NULL
+     * means no check row exists for that protocol yet, which consumers must read
+     * as "not checked" and never as "broken".
+     *
+     * `DISTINCT ON (type)` picks the newest row per protocol; the outer
+     * aggregate-only SELECT always yields exactly one row (all-NULL when the
+     * domain has no check rows), which is what makes `ON true` safe.
+     */
+    private const string LATEST_CHECK_JOIN = '
+            LEFT JOIN LATERAL (
+                SELECT
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'spf\')   AS spf_check_valid,
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'dkim\')  AS dkim_check_valid,
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'dmarc\') AS dmarc_check_valid,
+                    bool_or(latest.is_valid) FILTER (WHERE latest.type = \'mx\')    AS mx_check_valid
+                FROM (
+                    SELECT DISTINCT ON (dcr.type) dcr.type, dcr.is_valid
+                    FROM dns_check_result dcr
+                    WHERE dcr.monitored_domain_id = md.id
+                    ORDER BY dcr.type, dcr.checked_at DESC
+                ) latest
+            ) dcv ON true';
+
+    private const string LATEST_CHECK_COLUMNS = '
+                dcv.spf_check_valid,
+                dcv.dkim_check_valid,
+                dcv.dmarc_check_valid,
+                dcv.mx_check_valid,';
+
     public function __construct(
         private Connection $database,
     ) {
@@ -31,7 +66,7 @@ final readonly class GetDnsHealthOverview
             return [];
         }
 
-        /** @var list<array{domain_id: string, domain_name: string, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, latest_snapshot_grade: string|null, latest_snapshot_score: int|string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, latest_checked_at: string|null}> $rows */
+        /** @var list<array{domain_id: string, domain_name: string, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, latest_snapshot_grade: string|null, latest_snapshot_score: int|string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, latest_checked_at: string|null, spf_check_valid: bool|string|null, dkim_check_valid: bool|string|null, dmarc_check_valid: bool|string|null, mx_check_valid: bool|string|null}> $rows */
         $rows = $this->database->executeQuery(
             'SELECT
                 md.id           AS domain_id,
@@ -44,7 +79,7 @@ final readonly class GetDnsHealthOverview
                 dhs.spf_score   AS latest_spf_score,
                 dhs.dkim_score  AS latest_dkim_score,
                 dhs.dmarc_score AS latest_dmarc_score,
-                dhs.mx_score    AS latest_mx_score,
+                dhs.mx_score    AS latest_mx_score,'.self::LATEST_CHECK_COLUMNS.'
                 dhs.checked_at  AS latest_checked_at
             FROM monitored_domain md
             LEFT JOIN LATERAL (
@@ -53,7 +88,7 @@ final readonly class GetDnsHealthOverview
                 WHERE monitored_domain_id = md.id
                 ORDER BY checked_at DESC
                 LIMIT 1
-            ) dhs ON true
+            ) dhs ON true'.self::LATEST_CHECK_JOIN.'
             WHERE md.team_id IN (:teamIds)
             ORDER BY md.domain ASC',
             [
@@ -81,7 +116,7 @@ final readonly class GetDnsHealthOverview
             return null;
         }
 
-        /** @var array{domain_id: string, domain_name: string, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, latest_snapshot_grade: string|null, latest_snapshot_score: int|string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, latest_checked_at: string|null}|false $row */
+        /** @var array{domain_id: string, domain_name: string, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, latest_snapshot_grade: string|null, latest_snapshot_score: int|string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, latest_checked_at: string|null, spf_check_valid: bool|string|null, dkim_check_valid: bool|string|null, dmarc_check_valid: bool|string|null, mx_check_valid: bool|string|null}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 md.id           AS domain_id,
@@ -94,7 +129,7 @@ final readonly class GetDnsHealthOverview
                 dhs.spf_score   AS latest_spf_score,
                 dhs.dkim_score  AS latest_dkim_score,
                 dhs.dmarc_score AS latest_dmarc_score,
-                dhs.mx_score    AS latest_mx_score,
+                dhs.mx_score    AS latest_mx_score,'.self::LATEST_CHECK_COLUMNS.'
                 dhs.checked_at  AS latest_checked_at
             FROM monitored_domain md
             LEFT JOIN LATERAL (
@@ -103,7 +138,7 @@ final readonly class GetDnsHealthOverview
                 WHERE monitored_domain_id = md.id
                 ORDER BY checked_at DESC
                 LIMIT 1
-            ) dhs ON true
+            ) dhs ON true'.self::LATEST_CHECK_JOIN.'
             WHERE md.id = :domainId AND md.team_id IN (:teamIds)',
             [
                 'domainId' => $domainId,

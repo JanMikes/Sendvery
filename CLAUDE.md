@@ -500,7 +500,7 @@ Current entries (kept in sync with `apps/sendvery/cron.d/sendvery`):
 - `30 4 * * *` — `sendvery:reports:quarantine:purge` (drop quarantined reports past their TTL)
 - `0 3 * * *` — `sendvery:dns:check-all` (DNS record + verification re-check; writes one domain_health_snapshot per domain per run)
 - `0 9 * * 1` — `sendvery:digest:send-all` (weekly digest)
-- `0 0 * * *` — `sendvery:usage:reset` (roll expired monthly plan-usage counters forward)
+- `0 0 * * *` — `sendvery:usage:reset` (roll expired monthly plan-usage counters forward, **and** queue release of reports parked by `QuarantineReason::PlanOverage` now that capacity has returned — a monthly roll is one of only two moments a team's allowance grows, the other being an upgrade)
 - `45 4 * * *` — `sendvery:dmarc:purge` (per-team DMARC report retention purge from `PlanLimits::getRetentionDays`)
 - `0 8 * * *` — `sendvery:plan-limits:warn-approaching` (email team owners crossing 80% of any plan cap; deduped by `team.plan_warning_at`)
 - `0 4 * * *` — `sendvery:dns:sync-authorization-records` (reconcile Cloudflare RFC 7489 TXT records with active domains; creates missing, deletes stale)

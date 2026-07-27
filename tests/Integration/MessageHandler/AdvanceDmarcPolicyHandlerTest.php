@@ -100,7 +100,11 @@ final class AdvanceDmarcPolicyHandlerTest extends IntegrationTestCase
         $entity->managedPolicyP = DmarcPolicy::None;
         $entity->autoRampStage = AutoRampStage::Monitoring;
         $entity->managedDmarcEnabledAt = $now->modify('-40 days');
-        $entity->cnameVerifiedAt = $now->modify('-39 days');
+        // Readiness requires the CNAME to have been confirmed within the last
+        // sweep cycle, not merely at some point in the past — a 39-day-old
+        // confirmation is no evidence that Sendvery's policy record is still
+        // being served, and the evaluator treats it as unverified.
+        $entity->cnameVerifiedAt = $now->modify('-2 hours');
         $entity->lastPolicyChangeAt = $now->modify('-40 days');
         $entity->popEvents();
         $em->persist($entity);

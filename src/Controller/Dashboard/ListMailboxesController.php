@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controller\Dashboard;
 
+use App\Query\GetDnsHealthOverview;
+use App\Query\GetLatestDnsCheckStatesForDomains;
 use App\Query\GetMailboxDetail;
 use App\Repository\MailboxConnectionRepository;
 use App\Results\MailboxActivitySummary;
 use App\Services\DashboardContext;
+use App\Services\DomainSetupStatusResolver;
 use App\Services\IngestionPathResolver;
 use App\Services\ReportAddressProvider;
 use App\Value\IngestionPath;
@@ -23,6 +26,9 @@ final class ListMailboxesController extends AbstractController
         private readonly GetMailboxDetail $getMailboxDetail,
         private readonly IngestionPathResolver $ingestionPathResolver,
         private readonly ReportAddressProvider $reportAddressProvider,
+        private readonly GetDnsHealthOverview $getDnsHealthOverview,
+        private readonly GetLatestDnsCheckStatesForDomains $getLatestDnsCheckStatesForDomains,
+        private readonly DomainSetupStatusResolver $domainSetupStatusResolver,
     ) {
     }
 
@@ -75,7 +81,49 @@ final class ListMailboxesController extends AbstractController
             'reportAddress' => $this->reportAddressProvider->get(),
             'dnsCtaUrl' => $dnsCtaUrl,
             'allScenarioB' => $allScenarioB,
+            'uncheckedDomains' => $this->resolveUncheckedDomains($matrix),
         ]);
+    }
+
+    /**
+     * Domains whose DNS has never been checked, so the matrix can tell "we have
+     * not looked yet" apart from "there is no DMARC record".
+     *
+     * `RuaScenarioResolver` collapses both into `RuaScenario::NoRecord` — it has
+     * no check row to read either way — which made a domain added five minutes
+     * ago show a red "DMARC missing" badge plus a "Publish RUA" CTA about a
+     * record nobody had looked for. The verdict comes from
+     * {@see DomainSetupStatusResolver::isUnchecked()} rather than a local rule so
+     * this page and the per-domain setup panel can never disagree about whether a
+     * domain is still pending its first check.
+     *
+     * @param list<\App\Results\DomainIngestionMatrixResult> $matrix
+     *
+     * @return array<string, bool> keyed by domain UUID
+     */
+    private function resolveUncheckedDomains(array $matrix): array
+    {
+        $teamIds = $this->dashboardContext->getTeamIdStrings();
+        $domainIds = array_values(array_map(
+            static fn (\App\Results\DomainIngestionMatrixResult $row): string => $row->domainId,
+            $matrix,
+        ));
+
+        $protocolStatesByDomain = $this->getLatestDnsCheckStatesForDomains->forDomains($domainIds, $teamIds);
+
+        // Iterating the DNS-health rows (rather than the matrix rows) means every
+        // entry in the map is backed by a real row — there is no "what if the two
+        // team-scoped queries disagree?" arm to invent an answer for. The template
+        // defaults a missing key to "checked", i.e. the pre-existing rendering.
+        $unchecked = [];
+        foreach ($this->getDnsHealthOverview->forTeams($teamIds) as $dnsHealth) {
+            $unchecked[$dnsHealth->domainId] = $this->domainSetupStatusResolver->isUnchecked(
+                $dnsHealth,
+                $protocolStatesByDomain[$dnsHealth->domainId] ?? [],
+            );
+        }
+
+        return $unchecked;
     }
 
     /**

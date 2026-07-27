@@ -64,7 +64,9 @@ final class WarnApproachingPlanLimitsCommandTest extends IntegrationTestCase
         for ($i = 0; $i < 4; ++$i) {
             $this->addDomain($em, $team, 'dup-'.$i.'-'.Uuid::uuid7()->toString().'.com');
         }
-        $team->planWarningAt = new \DateTimeImmutable('-1 hour');
+        // "Now", not "an hour ago": the de-dup window is the current usage
+        // period, and an hour before midnight on the 1st is the previous one.
+        $team->planWarningAt = new \DateTimeImmutable();
         $em->flush();
 
         $tester = $this->tester();

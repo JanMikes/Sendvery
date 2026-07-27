@@ -24,9 +24,12 @@ use App\Value\DomainHealthFilter;
  *  - Unverified ← DMARC not verified (no reports flow yet → the headline
  *    blocker no matter what else is going on).
  *  - Healthy    ← DMARC verified AND all 4 DNS protocols configured AND
- *    (30-day pass rate ≥ 90 OR no pass-rate data yet). "Configured" mirrors the
- *    `DomainSetupStatusResolver` thresholds: SPF/DKIM/DMARC verified-at present,
- *    MX score ≥ 80. The "no data yet" arm is deliberate — see
+ *    (30-day pass rate ≥ 90 OR no pass-rate data yet). "Configured" reads the
+ *    newest stored `dns_check_result` row per protocol — the same authoritative
+ *    source `DomainSetupStatusResolver` reads — falling back to the legacy
+ *    verified-at / snapshot-score derivation only for protocols with no check row
+ *    at all. See {@see self::protocolConfigured()} for why the timestamps alone
+ *    were unsafe. The "no data yet" arm is deliberate — see
  *    {@see self::awaitingFirstReportVerdict()}.
  *  - Attention  ← any verified domain that isn't Healthy. Includes both the
  *    "missing a protocol" case (covers the green-on-list / yellow-on-detail
@@ -132,11 +135,13 @@ final readonly class DomainHealthClassifier
 
     private function allProtocolsConfigured(DnsHealthOverviewResult $dnsHealth): bool
     {
-        return $dnsHealth->isSpfVerified()
-            && $dnsHealth->isDkimVerified()
-            && $dnsHealth->isDmarcVerified()
-            && null !== $dnsHealth->latestMxScore
-            && $dnsHealth->latestMxScore >= self::MX_CONFIGURED_MIN_SCORE;
+        return $this->protocolConfigured($dnsHealth->spfCheckValid, null !== $dnsHealth->spfVerifiedAt)
+            && $this->protocolConfigured($dnsHealth->dkimCheckValid, null !== $dnsHealth->dkimVerifiedAt)
+            && $this->protocolConfigured($dnsHealth->dmarcCheckValid, null !== $dnsHealth->dmarcVerifiedAt)
+            && $this->protocolConfigured(
+                $dnsHealth->mxCheckValid,
+                null !== $dnsHealth->latestMxScore && $dnsHealth->latestMxScore >= self::MX_CONFIGURED_MIN_SCORE,
+            );
     }
 
     /**
@@ -160,10 +165,39 @@ final readonly class DomainHealthClassifier
      */
     private function allProtocolsConfiguredFromOverview(DomainOverviewResult $overview): bool
     {
-        return null !== $overview->spfVerifiedAt
-            && null !== $overview->dkimVerifiedAt
-            && null !== $overview->dmarcVerifiedAt
-            && null !== $overview->latestMxScore
-            && $overview->latestMxScore >= self::MX_CONFIGURED_MIN_SCORE;
+        return $this->protocolConfigured($overview->spfCheckValid, null !== $overview->spfVerifiedAt)
+            && $this->protocolConfigured($overview->dkimCheckValid, null !== $overview->dkimVerifiedAt)
+            && $this->protocolConfigured($overview->dmarcCheckValid, null !== $overview->dmarcVerifiedAt)
+            && $this->protocolConfigured(
+                $overview->mxCheckValid,
+                null !== $overview->latestMxScore && $overview->latestMxScore >= self::MX_CONFIGURED_MIN_SCORE,
+            );
+    }
+
+    /**
+     * Is one protocol configured? The stored `dns_check_result` verdict WINS
+     * whenever one exists, in both directions:
+     *
+     *  - `$checkValid === true`  → configured, even with no verified-at column
+     *    and no snapshot score (the MX case, and any domain checked before the
+     *    nightly sweep has run).
+     *  - `$checkValid === false` → NOT configured, even though `*_verified_at` is
+     *    still set. This is the whole point: `CheckDomainDnsHandler` only ever
+     *    SETS those timestamps and never clears them, so a record that broke last
+     *    month keeps a verified-at from when it last worked. Reading the timestamp
+     *    gave a domain with dead SPF the green "fully healthy" chip AND dropped it
+     *    out of "Needs your attention" — the alert email said one thing and the
+     *    triage surface said nothing at all.
+     *  - `$checkValid === null`  → no check row for this protocol. Fall back to
+     *    the legacy derivation rather than assume anything; "we have not looked"
+     *    is not "it is broken", and it is not "it is fine" either.
+     *
+     * Same precedence as {@see DomainSetupStatusResolver::stateFor()},
+     * deliberately — the banner's per-protocol checklist and this severity verdict
+     * must not read the same domain from two different sources.
+     */
+    private function protocolConfigured(?bool $checkValid, bool $legacyConfigured): bool
+    {
+        return $checkValid ?? $legacyConfigured;
     }
 }

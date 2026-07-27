@@ -100,6 +100,26 @@ final class DomainOverviewResultTest extends TestCase
         self::assertTrue($result->hasPassRateData());
     }
 
+    public function testTheLatestCheckVerdictKeepsItsThreeStatesWhateverTheDriverHandsBack(): void
+    {
+        // Postgres booleans come back as real bools on some pdo_pgsql builds and
+        // as `'t'`/`'f'` on others. All three states have to survive that:
+        // true = the record is valid now, false = the check ran and it is not,
+        // and NULL = no check row exists — which must never collapse into false,
+        // because "we have not looked" is not "it is broken".
+        $result = DomainOverviewResult::fromDatabaseRow($this->row([
+            'spf_check_valid' => 'f',
+            'dkim_check_valid' => 't',
+            'dmarc_check_valid' => true,
+            'mx_check_valid' => null,
+        ]));
+
+        self::assertFalse($result->spfCheckValid);
+        self::assertTrue($result->dkimCheckValid);
+        self::assertTrue($result->dmarcCheckValid);
+        self::assertNull($result->mxCheckValid, 'No check row must stay null, not become false.');
+    }
+
     public function testADomainThatNeverReceivedAReportIsAwaitingItsFirst(): void
     {
         $result = DomainOverviewResult::fromDatabaseRow($this->row(['first_report_at' => null]));
@@ -123,7 +143,7 @@ final class DomainOverviewResultTest extends TestCase
     }
 
     /**
-     * @param array<string, string|null> $overrides
+     * @param array<string, bool|string|null> $overrides
      *
      * @return array{
      *     domain_id: string,
@@ -134,12 +154,16 @@ final class DomainOverviewResultTest extends TestCase
      *     team_id: string,
      *     team_name: string,
      *     dmarc_verified_at: string|null,
-     *     first_report_at?: string|null
+     *     first_report_at?: string|null,
+     *     spf_check_valid?: bool|int|string|null,
+     *     dkim_check_valid?: bool|int|string|null,
+     *     dmarc_check_valid?: bool|int|string|null,
+     *     mx_check_valid?: bool|int|string|null
      * }
      */
     private function row(array $overrides = []): array
     {
-        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, first_report_at?: string|null} $row */
+        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, first_report_at?: string|null, spf_check_valid?: bool|int|string|null, dkim_check_valid?: bool|int|string|null, dmarc_check_valid?: bool|int|string|null, mx_check_valid?: bool|int|string|null} $row */
         $row = array_merge([
             'domain_id' => 'row-1',
             'domain_name' => 'example.com',

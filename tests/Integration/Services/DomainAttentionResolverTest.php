@@ -336,12 +336,22 @@ final class DomainAttentionResolverTest extends WebTestCase
     #[Test]
     public function aRowNeverRendersWithASeverityAndNothingToExplainIt(): void
     {
-        // Verified check rows for all four protocols, but no health snapshot, so
-        // the classifier will not call the domain Healthy while the per-protocol
-        // rows all read Configured. The row must still say something true.
+        // Passing check rows for all four protocols, but `dmarc_verified_at` was
+        // never stamped — so the health verdict says Unverified (it reads that
+        // column) while every per-protocol row reads Configured. The row must
+        // still say something true rather than borrow the "all four records are
+        // in place" headline.
+        //
+        // This used to be provoked by omitting the health snapshot instead: the
+        // verdict read the nightly snapshot's MX score, so "no snapshot yet" made
+        // it disagree with the check rows. The verdict now reads the same check
+        // rows the protocol list does, so that particular disagreement is gone
+        // and the domain would simply classify Healthy — which is the point of
+        // the fix, not a reason to delete this guard. `dmarc_verified_at` is the
+        // one input the verdict still takes from `monitored_domain`, so it is
+        // where a divergence can still originate.
         $persona = $this->bootPersonaWithoutDomain();
         $domain = $this->bareDomain($persona->team);
-        $domain->dmarcVerifiedAt = new \DateTimeImmutable('-1 day');
         foreach ([DnsCheckType::Spf, DnsCheckType::Dkim, DnsCheckType::Mx] as $type) {
             $this->check($domain, $type, rawRecord: 'ok', isValid: true);
         }
