@@ -24,12 +24,14 @@ final readonly class ManagedDeliveryContext
      * @param bool             $managedAvailable        the team may actually switch this domain to the managed path
      * @param SubscriptionPlan $nextTier                upgrade target named in the upsell, null at the top tier
      * @param string|null      $cnameTarget             the CNAME value to publish, null when we cannot host records
+     * @param string|null      $conflictingDmarcTxt     the customer's own `_dmarc` TXT still standing in the CNAME's way, read LIVE
      */
     public function __construct(
         public bool $dnsAutomationConfigured,
         public bool $managedAvailable,
         public ?SubscriptionPlan $nextTier,
         public ?string $cnameTarget,
+        public ?string $conflictingDmarcTxt = null,
     ) {
     }
 

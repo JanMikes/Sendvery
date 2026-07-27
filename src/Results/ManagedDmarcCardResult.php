@@ -18,11 +18,15 @@ use App\Value\Dns\ManagedDmarcCardState;
  */
 final readonly class ManagedDmarcCardResult
 {
-    /** @param list<string> $blockingReasons */
+    /**
+     * @param list<string> $blockingReasons
+     * @param string|null  $conflictingDmarcTxt the customer's own `_dmarc` TXT still blocking the CNAME (RFC 1034 forbids the two coexisting), null when there is none
+     */
     public function __construct(
         public ManagedDmarcCardState $state,
         public bool $available,
         public string $cnameTarget,
+        public ?string $conflictingDmarcTxt,
         public ?DmarcPolicy $policyP,
         public ?DmarcPolicy $policySp,
         public ?int $policyPct,
@@ -47,6 +51,7 @@ final readonly class ManagedDmarcCardResult
         ?RampReadinessResult $readiness,
         bool $available,
         string $cnameTarget,
+        ?string $conflictingDmarcTxt = null,
     ): self {
         $managed = DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode;
         $hostedRecordPresent = null !== $domain->cloudflareHostedDmarcRecordId;
@@ -68,6 +73,9 @@ final readonly class ManagedDmarcCardResult
             state: $state,
             available: $available,
             cnameTarget: $cnameTarget,
+            // Only meaningful while the CNAME is outstanding — a verified CNAME
+            // cannot have a TXT beside it, so there is nothing to warn about.
+            conflictingDmarcTxt: $verified ? null : $conflictingDmarcTxt,
             policyP: $domain->managedPolicyP,
             policySp: $domain->managedPolicySp,
             policyPct: $domain->managedPolicyPct,

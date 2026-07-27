@@ -373,6 +373,147 @@ final class GuidedDnsSetupResolverTest extends TestCase
         self::assertSame('dashboard_domain_switch_to_self_txt', $selfTxt->switchRoute);
     }
 
+    #[Test]
+    public function aLeftoverDmarcTxtIsSurfacedAsTheRecordToDeleteBeforeTheCname(): void
+    {
+        // The complaint that forced this: the surface handed over the CNAME
+        // without a word about the `_dmarc` TXT already sitting at the same
+        // name. DNS forbids the two coexisting, so the pasted CNAME simply
+        // never takes effect and the page keeps saying "we can't see it yet".
+        $domain = $this->domain();
+        $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+
+        $setup = $this->resolve(
+            setupStatus: $this->statusFor(dmarc: ProtocolState::Configured, rua: ProtocolState::Missing),
+            latestByType: $this->noChecks(),
+            domain: $domain,
+            managed: $this->managedAvailable(conflictingDmarcTxt: 'v=DMARC1; p=quarantine; rua=mailto:me@example.com'),
+        );
+
+        $step = $setup->actionRequired[0];
+        $prerequisite = $step->prerequisite;
+
+        self::assertNotNull($prerequisite, 'The blocking record must be part of the model, not left for the user to discover.');
+        self::assertSame(DnsRecordAction::DeleteExisting, $prerequisite->action);
+        self::assertSame('TXT', $prerequisite->recordType);
+        self::assertSame('_dmarc.example.com', $prerequisite->recordFqdn);
+        self::assertSame('v=DMARC1; p=quarantine; rua=mailto:me@example.com', $prerequisite->currentValue);
+        self::assertStringContainsString('Delete', $prerequisite->title);
+
+        self::assertSame('CNAME', $step->recordType, 'The step still ends in the CNAME — the deletion is step one of two.');
+        self::assertSame('example.com._dmarc.sendvery.test', $step->finalValue);
+    }
+
+    #[Test]
+    public function aBlockedCnameIsAnnouncedAsTwoOrderedChangesInTheHeadline(): void
+    {
+        // Some users read the headline and switch straight to their DNS
+        // provider's tab. "Add 1 DNS record" there loses the deletion entirely.
+        $domain = $this->domain();
+        $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+
+        $setup = $this->resolve(
+            setupStatus: $this->statusFor(dmarc: ProtocolState::Missing, rua: ProtocolState::Missing),
+            latestByType: $this->noChecks(),
+            domain: $domain,
+            managed: $this->managedAvailable(conflictingDmarcTxt: 'v=DMARC1; p=none'),
+        );
+
+        self::assertSame('Swap 1 DNS record — delete the TXT, add the CNAME', $setup->headline);
+        self::assertStringContainsString('in this order', $setup->lede);
+    }
+
+    #[Test]
+    public function withNothingInTheWayTheCnameIsStillASingleAddWithNoDeletionInvented(): void
+    {
+        $domain = $this->domain();
+        $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+
+        $setup = $this->resolve(
+            setupStatus: $this->statusFor(dmarc: ProtocolState::Missing, rua: ProtocolState::Missing),
+            latestByType: $this->noChecks(),
+            domain: $domain,
+            managed: $this->managedAvailable(),
+        );
+
+        $step = $setup->actionRequired[0];
+        self::assertNull($step->prerequisite, 'No record in the way means no deletion step.');
+        self::assertSame('Add 1 DNS record — CNAME', $setup->headline);
+    }
+
+    #[Test]
+    public function aHalfMigratedManagedDomainIsNotReportedAsFinished(): void
+    {
+        // Managed switched on, the customer's own TXT still published and still
+        // naming us in `rua=`: every TXT-based check passes, so the surface used
+        // to file report delivery under "done" and say nothing — while the
+        // policy Sendvery hosts was not being served at all.
+        $domain = $this->domain();
+        $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+
+        $setup = $this->resolve(
+            setupStatus: $this->statusFor(dmarc: ProtocolState::Configured, rua: ProtocolState::Configured),
+            latestByType: $this->checks([DnsCheckType::Dmarc->value => 'v=DMARC1; p=none; rua=mailto:'.self::REPORT_ADDRESS]),
+            domain: $domain,
+            managed: $this->managedAvailable(conflictingDmarcTxt: 'v=DMARC1; p=none; rua=mailto:'.self::REPORT_ADDRESS),
+        );
+
+        self::assertTrue($setup->hasOutstandingWork());
+        self::assertSame(['delivery'], $this->keys($setup->actionRequired));
+        self::assertNotContains('delivery', $this->keys($setup->done));
+        self::assertNotNull($setup->actionRequired[0]->prerequisite);
+    }
+
+    #[Test]
+    public function theCostOfSwitchingToTheManagedPathIsStatedBeforeTheSwitchNotAfter(): void
+    {
+        // A user with a working TXT record should learn that switching means
+        // deleting it while they are still deciding — not on the next page load.
+        $setup = $this->resolve(
+            setupStatus: $this->statusFor(dmarc: ProtocolState::Configured, rua: ProtocolState::Missing),
+            latestByType: $this->checks([DnsCheckType::Dmarc->value => 'v=DMARC1; p=none; rua=mailto:other@example.com']),
+            managed: $this->managedAvailable(),
+        );
+
+        [$selfTxt, $managedCname] = $setup->deliveryOptions;
+
+        self::assertNotNull($managedCname->switchCaveat);
+        self::assertStringContainsString('delete that TXT', $managedCname->switchCaveat);
+        self::assertNull($selfTxt->switchCaveat, 'Already on the self-managed path — switching to it costs nothing.');
+    }
+
+    #[Test]
+    public function switchingBackFromTheManagedPathNamesTheCnameThatHasToGo(): void
+    {
+        $domain = $this->domain();
+        $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+
+        $setup = $this->resolve(
+            setupStatus: $this->statusFor(dmarc: ProtocolState::Missing, rua: ProtocolState::Missing),
+            latestByType: $this->noChecks(),
+            domain: $domain,
+            managed: $this->managedAvailable(),
+        );
+
+        [$selfTxt, $managedCname] = $setup->deliveryOptions;
+
+        self::assertNotNull($selfTxt->switchCaveat);
+        self::assertStringContainsString('CNAME', $selfTxt->switchCaveat);
+        self::assertNull($managedCname->switchCaveat, 'Already on the managed path — nothing left to warn about.');
+    }
+
+    #[Test]
+    public function aDomainWithNoDmarcRecordAtAllGetsNoSwitchingWarning(): void
+    {
+        $setup = $this->resolve(
+            setupStatus: $this->statusFor(dmarc: ProtocolState::Missing, rua: ProtocolState::Missing),
+            latestByType: $this->noChecks(),
+            managed: $this->managedAvailable(),
+        );
+
+        self::assertNull($setup->deliveryOptions[1]->switchCaveat, 'Nothing published means nothing to delete.');
+    }
+
     /**
      * @param array<value-of<DnsCheckType>, ?DnsCheckResult> $latestByType
      */
@@ -397,13 +538,14 @@ final class GuidedDnsSetupResolverTest extends TestCase
         );
     }
 
-    private function managedAvailable(): ManagedDeliveryContext
+    private function managedAvailable(?string $conflictingDmarcTxt = null): ManagedDeliveryContext
     {
         return new ManagedDeliveryContext(
             dnsAutomationConfigured: true,
             managedAvailable: true,
             nextTier: null,
             cnameTarget: 'example.com._dmarc.sendvery.test',
+            conflictingDmarcTxt: $conflictingDmarcTxt,
         );
     }
 

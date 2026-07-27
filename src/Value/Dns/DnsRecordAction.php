@@ -17,6 +17,7 @@ enum DnsRecordAction: string
 {
     case AddNew = 'add_new';
     case EditExisting = 'edit_existing';
+    case DeleteExisting = 'delete_existing';
     case NothingToDo = 'nothing_to_do';
 
     public function label(): string
@@ -24,6 +25,7 @@ enum DnsRecordAction: string
         return match ($this) {
             self::AddNew => 'Add a new record',
             self::EditExisting => 'Edit the existing record',
+            self::DeleteExisting => 'Delete the existing record',
             self::NothingToDo => 'Nothing to do',
         };
     }
@@ -46,6 +48,10 @@ enum DnsRecordAction: string
         return match ($this) {
             self::AddNew => 'primary',
             self::EditExisting => 'warning',
+            // Deleting is the one irreversible thing we ask for, and every DNS
+            // panel colours its delete affordance destructively — matching that
+            // is what stops the user reaching for "edit" instead.
+            self::DeleteExisting => 'error',
             self::NothingToDo => 'success',
         };
     }

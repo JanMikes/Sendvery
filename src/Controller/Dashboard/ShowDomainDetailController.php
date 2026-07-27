@@ -203,6 +203,10 @@ final class ShowDomainDetailController extends AbstractController
                 $managedReadiness,
                 $managedDmarcAvailable,
                 $this->managedDmarcCnameChecker->expectedTarget($domainEntity->domain) ?? '',
+                // Reused from the guided setup surface rather than looked up
+                // again: both panels sit on this page and must not disagree
+                // about whether a leftover TXT is blocking the CNAME.
+                $guided->conflictingDmarcTxt,
             )
             : null;
         $managedHistory = null !== $domainEntity

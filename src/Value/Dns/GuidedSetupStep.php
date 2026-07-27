@@ -19,17 +19,18 @@ use App\Value\ProtocolState;
 final readonly class GuidedSetupStep
 {
     /**
-     * @param string             $key          stable identifier used for test hooks + anchors ('delivery', 'spf', 'dkim', 'mx')
-     * @param string             $name         short protocol label shown in the Done/Later summary rows
-     * @param string             $title        imperative headline: what the user is being asked to do
-     * @param string             $statusLine   one line describing where this record stands today
-     * @param string             $whyText      plain-language reason the record matters
-     * @param string|null        $recordType   DNS record type (TXT / CNAME / MX), null when there is no single record to name
-     * @param string|null        $recordName   short host label the user types at their provider, e.g. `_dmarc`
-     * @param string|null        $recordFqdn   the same host fully qualified, for providers that want the whole name
-     * @param string|null        $currentValue value published today, null when nothing is there
-     * @param string|null        $finalValue   value to end up with; null means we cannot hand over a literal (see $kbSlug)
-     * @param list<SetupCaution> $cautions     consequences to surface under the record, never instead of it
+     * @param string                 $key          stable identifier used for test hooks + anchors ('delivery', 'spf', 'dkim', 'mx')
+     * @param string                 $name         short protocol label shown in the Done/Later summary rows
+     * @param string                 $title        imperative headline: what the user is being asked to do
+     * @param string                 $statusLine   one line describing where this record stands today
+     * @param string                 $whyText      plain-language reason the record matters
+     * @param string|null            $recordType   DNS record type (TXT / CNAME / MX), null when there is no single record to name
+     * @param string|null            $recordName   short host label the user types at their provider, e.g. `_dmarc`
+     * @param string|null            $recordFqdn   the same host fully qualified, for providers that want the whole name
+     * @param string|null            $currentValue value published today, null when nothing is there
+     * @param string|null            $finalValue   value to end up with; null means we cannot hand over a literal (see $kbSlug)
+     * @param list<SetupCaution>     $cautions     consequences to surface under the record, never instead of it
+     * @param SetupPrerequisite|null $prerequisite record that must be DELETED before this step's record can work
      */
     public function __construct(
         public string $key,
@@ -50,6 +51,7 @@ final readonly class GuidedSetupStep
         public string $healthAnchor,
         public bool $offersDeliveryChoice = false,
         public array $cautions = [],
+        public ?SetupPrerequisite $prerequisite = null,
     ) {
     }
 

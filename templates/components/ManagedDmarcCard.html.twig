@@ -98,6 +98,24 @@
                 </p>
             {% endif %}
 
+            {# The blocker first, because the CNAME below cannot be added while
+               this record exists — DNS forbids a CNAME beside any other record
+               at the same name. Without this the user pastes a correct CNAME,
+               their provider rejects or ignores it, and the card just keeps
+               saying "pending". #}
+            {% if card.conflictingDmarcTxt %}
+                <div class="rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-2" data-testid="managed-dmarc-conflicting-txt">
+                    <div class="font-semibold text-sm">Step 1 — delete your existing DMARC TXT record</div>
+                    <p class="text-sm text-base-content/70">
+                        <span class="font-mono">_dmarc.{{ domainName }}</span> still carries a TXT record of your own, and DNS
+                        does not allow a CNAME beside it. Delete this record first — your policy is safe, we already host a
+                        copy of it and start serving it as soon as the CNAME resolves.
+                    </p>
+                    <div class="rounded-lg bg-base-100 border border-base-200 px-3 py-2 font-mono text-xs break-all select-all">{{ card.conflictingDmarcTxt }}</div>
+                </div>
+                <div class="font-semibold text-sm">Step 2 — add the CNAME</div>
+            {% endif %}
+
             <twig:DnsRecordInstruction
                 recordType="CNAME"
                 host="_dmarc.{{ domainName }}"

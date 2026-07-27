@@ -102,6 +102,39 @@ final class ManagedDmarcCnameCheckerTest extends TestCase
         self::assertFalse($this->checker($dns)->hasConflictingDmarcTxt('acme.example'));
     }
 
+    #[Test]
+    public function handsBackTheConflictingRecordItselfSoTheUserDeletesTheRightOne(): void
+    {
+        // "Delete your DMARC TXT" is not actionable in a zone with several
+        // `_dmarc`-adjacent entries — the user needs to see the exact value to
+        // match against the row in their provider's table.
+        $dns = (new FakeDns())
+            ->withTxt('_dmarc.acme.example', 'some-unrelated-verification-token')
+            ->withTxt('_dmarc.acme.example', 'v=DMARC1; p=reject; rua=mailto:dmarc@acme.example');
+
+        self::assertSame(
+            'v=DMARC1; p=reject; rua=mailto:dmarc@acme.example',
+            $this->checker($dns)->findConflictingDmarcTxt('acme.example'),
+            'The record value alone, not its zone-file line — that is what the DNS panel shows.',
+        );
+    }
+
+    #[Test]
+    public function findsNoConflictingRecordWhenTheCnameIsAlreadyVerified(): void
+    {
+        $dns = (new FakeDns())->withCname('_dmarc.acme.example', 'acme.example._dmarc.sendvery.test');
+
+        self::assertNull($this->checker($dns)->findConflictingDmarcTxt('acme.example'));
+    }
+
+    #[Test]
+    public function findsNoConflictingRecordWhenNoDmarcTxtIsPublished(): void
+    {
+        $dns = (new FakeDns())->withTxt('_dmarc.acme.example', 'not-a-dmarc-record');
+
+        self::assertNull($this->checker($dns)->findConflictingDmarcTxt('acme.example'));
+    }
+
     private function checker(FakeDns $dns): ManagedDmarcCnameChecker
     {
         return new ManagedDmarcCnameChecker(

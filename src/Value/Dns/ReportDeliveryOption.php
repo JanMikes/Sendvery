@@ -23,6 +23,7 @@ final readonly class ReportDeliveryOption
      * @param string|null $unavailableReason why it cannot be used, shown in place of the action
      * @param string|null $upgradeRoute      route name for the upgrade CTA, null when upgrading is not the fix
      * @param string|null $switchRoute       route name that moves the domain onto this path, null when it is already there or unavailable
+     * @param string|null $switchCaveat      the DNS work switching will create, told BEFORE the switch — null when there is none
      */
     public function __construct(
         public DmarcSetupMode $mode,
@@ -36,6 +37,7 @@ final readonly class ReportDeliveryOption
         public ?string $switchRoute,
         public ?string $switchLabel,
         public ?string $csrfTokenId,
+        public ?string $switchCaveat = null,
     ) {
     }
 }

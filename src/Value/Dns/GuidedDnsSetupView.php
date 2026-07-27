@@ -23,6 +23,7 @@ final readonly class GuidedDnsSetupView
 {
     /**
      * @param array<value-of<DnsCheckType>, ?DnsCheckResult> $latestByType
+     * @param string|null                                    $conflictingDmarcTxt the customer's own `_dmarc` TXT blocking a pending managed CNAME, read live — carried so the domain detail page's managed card reuses the answer instead of repeating the lookup
      */
     public function __construct(
         public string $domainId,
@@ -31,6 +32,7 @@ final readonly class GuidedDnsSetupView
         public DomainSetupStatus $setupStatus,
         public RuaScenarioResult $ruaScenario,
         public array $latestByType,
+        public ?string $conflictingDmarcTxt = null,
     ) {
     }
 }

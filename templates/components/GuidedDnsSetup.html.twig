@@ -117,7 +117,7 @@
                             {% if step.offersDeliveryChoice %}
                                 {{ _self.deliveryChoice(setup.deliveryOptions, step, domainId) }}
                             {% elseif step.hasCopyableRecord %}
-                                {{ _self.recordBlock(step) }}
+                                {{ _self.recordSteps(step) }}
                             {% else %}
                                 <twig:DnsRecordHowTo
                                     recordType="{{ step.recordType }}"
@@ -153,7 +153,7 @@
                                                     <span class="font-semibold text-base-content/80">Why:</span> {{ step.whyText }}
                                                 </p>
                                             </div>
-                                            {{ _self.recordBlock(step) }}
+                                            {{ _self.recordSteps(step) }}
                                         {% else %}
                                             <twig:DnsRecordHowTo
                                                 recordType="{{ step.recordType }}"
@@ -233,6 +233,75 @@
             </li>
         {% endfor %}
     </ul>
+{% endmacro %}
+
+{# Everything the user has to do at their DNS provider for this step.
+
+   Usually that is one record. When the step carries a prerequisite it is TWO
+   edits in a fixed order — delete the record that is in the way, then add the
+   new one — and they are numbered, because a deletion mentioned as a footnote
+   under a copy-me value is a deletion that does not happen. #}
+{% macro recordSteps(step) %}
+    {% if step.prerequisite %}
+        <div class="space-y-4" data-testid="guided-dns-record-sequence">
+            <div class="rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-3"
+                 data-testid="guided-setup-prerequisite"
+                 data-prerequisite-key="{{ step.prerequisite.key }}">
+                <div class="flex items-baseline gap-2 flex-wrap">
+                    <span class="badge badge-warning badge-sm font-semibold">Step 1</span>
+                    <span class="font-semibold text-sm">{{ step.prerequisite.title }}</span>
+                </div>
+                <p class="text-sm text-base-content/70 leading-relaxed">{{ step.prerequisite.explanation }}</p>
+                {{ _self.prerequisiteBlock(step.prerequisite) }}
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-baseline gap-2 flex-wrap">
+                    <span class="badge badge-primary badge-sm font-semibold">Step 2</span>
+                    <span class="font-semibold text-sm">{{ step.prerequisite.followUpTitle }}</span>
+                </div>
+                {{ _self.recordBlock(step) }}
+            </div>
+        </div>
+    {% else %}
+        {{ _self.recordBlock(step) }}
+    {% endif %}
+{% endmacro %}
+
+{# The record standing in the way, shown with the same TYPE / NAME / VALUE
+   anatomy as the one being added — minus the TTL and the copy button, which
+   mean nothing for a record you are removing. The value is printed in full so
+   the user can match it against the row in their provider's table before
+   deleting anything. #}
+{% macro prerequisiteBlock(prerequisite) %}
+    <div class="rounded-xl border border-base-200 overflow-hidden bg-base-100"
+         data-testid="guided-dns-prerequisite-record"
+         data-record-type="{{ prerequisite.recordType|lower }}">
+        <div class="flex items-center gap-2 flex-wrap px-4 py-3 bg-base-200/60">
+            <span class="text-xs uppercase tracking-wide font-semibold text-base-content/50">Action</span>
+            <span class="badge badge-{{ prerequisite.action.tone }} badge-sm font-semibold" data-testid="guided-dns-prerequisite-action">{{ prerequisite.action.label }}</span>
+            <span class="text-xs text-base-content/50">at your DNS provider</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-px bg-base-200">
+            <div class="bg-base-100 px-4 py-3">
+                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Type</div>
+                <div class="font-mono font-semibold">{{ prerequisite.recordType }}</div>
+            </div>
+            <div class="bg-base-100 px-4 py-3">
+                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Name</div>
+                <div class="font-mono font-semibold break-all">{{ prerequisite.recordName }}</div>
+                <div class="text-xs text-base-content/50 mt-1">
+                    Full name: <span class="font-mono break-all">{{ prerequisite.recordFqdn }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-base-100 border-t border-base-200">
+            <div class="px-4 py-2 bg-base-200/60 text-xs uppercase tracking-wide font-semibold text-base-content/60">Record to delete</div>
+            <div class="px-4 py-3 font-mono text-xs break-all select-all" data-testid="guided-dns-prerequisite-current">{{ prerequisite.currentValue }}</div>
+        </div>
+    </div>
 {% endmacro %}
 
 {# The record, laid out the way a DNS provider's own panel lays it out: the
@@ -346,10 +415,15 @@
                  data-testid="report-delivery-panel-{{ option.mode.value }}"
                  {% if not option.selected %}hidden{% endif %}>
                 {% if option.selected %}
-                    {{ _self.recordBlock(step) }}
+                    {{ _self.recordSteps(step) }}
                 {% else %}
                     <div class="rounded-xl border border-base-200 bg-base-200/40 p-4 space-y-3">
                         <p class="text-sm text-base-content/70">{{ option.summary }}</p>
+                        {# What switching will COST in DNS work, before the click
+                           rather than after it. #}
+                        {% if option.switchCaveat %}
+                            <p class="text-sm text-warning" data-testid="report-delivery-switch-caveat-{{ option.mode.value }}">{{ option.switchCaveat }}</p>
+                        {% endif %}
                         {% if option.switchRoute %}
                             <form method="post" action="{{ path(option.switchRoute, { id: domainId }) }}">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token(option.csrfTokenId) }}">

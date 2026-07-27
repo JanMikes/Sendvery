@@ -20,6 +20,7 @@ use App\Value\Dns\GuidedSetupStep;
 use App\Value\Dns\ManagedDeliveryContext;
 use App\Value\Dns\ReportDeliveryOption;
 use App\Value\Dns\SetupCaution;
+use App\Value\Dns\SetupPrerequisite;
 use App\Value\Dns\SetupTier;
 use App\Value\DnsCheckType;
 use App\Value\DomainSetupDisplayMode;
@@ -93,7 +94,11 @@ final readonly class GuidedDnsSetupResolver
         ManagedDeliveryContext $managed,
         ?RuaScenarioResult $ruaScenario = null,
     ): GuidedDnsSetup {
-        $deliveryOptions = $this->buildDeliveryOptions($domain, $managed);
+        $deliveryOptions = $this->buildDeliveryOptions(
+            $domain,
+            $managed,
+            $latestByType[DnsCheckType::Dmarc->value]?->rawRecord,
+        );
 
         // "The resolver could not form a verdict yet" is exactly what
         // PanelOnly encodes, so reuse it rather than re-deriving pending-ness
@@ -217,18 +222,34 @@ final readonly class GuidedDnsSetupResolver
         $lead = $this->promote($lead, SetupTier::ActionRequired);
         $later = array_map(fn (GuidedSetupStep $step): GuidedSetupStep => $this->promote($step, SetupTier::Later), $unfinished);
 
+        // A step with a prerequisite is two DNS edits, not one, and the headline
+        // is the only part of the surface some users read before switching to
+        // their DNS provider's tab. Saying "add 1 record" there and burying the
+        // deletion below is how the second edit gets missed.
+        $headline = match (true) {
+            null !== $lead->prerequisite => sprintf(
+                'Swap 1 DNS record — delete the %s, add the %s',
+                $lead->prerequisite->recordType,
+                $lead->recordType ?? 'record',
+            ),
+            $lead->hasCopyableRecord() => sprintf('Add 1 DNS record — %s', $lead->recordType ?? 'TXT'),
+            default => $lead->title,
+        };
+
+        $lede = match (true) {
+            null !== $lead->prerequisite => 'Two changes at your DNS provider, in this order — the new record cannot work while the old one is still there. We re-check automatically once you are done.',
+            $lead->hasCopyableRecord() => 'Copy the value below into your DNS provider. We re-check automatically, and you can force a check any time.',
+            default => 'Here is what needs to happen next, and why.',
+        };
+
         return new GuidedDnsSetup(
             actionRequired: [$lead],
             later: $later,
             done: $done,
             deliveryOptions: $deliveryOptions,
             checkInProgress: false,
-            headline: $lead->hasCopyableRecord()
-                ? sprintf('Add 1 DNS record — %s', $lead->recordType ?? 'TXT')
-                : $lead->title,
-            lede: $lead->hasCopyableRecord()
-                ? 'Copy the value below into your DNS provider. We re-check automatically, and you can force a check any time.'
-                : 'Here is what needs to happen next, and why.',
+            headline: $headline,
+            lede: $lede,
         );
     }
 
@@ -253,6 +274,7 @@ final readonly class GuidedDnsSetupResolver
             healthAnchor: $step->healthAnchor,
             offersDeliveryChoice: $step->offersDeliveryChoice,
             cautions: $step->cautions,
+            prerequisite: $step->prerequisite,
         );
     }
 
@@ -279,37 +301,26 @@ final readonly class GuidedDnsSetupResolver
             ProtocolState::Configured !== $dmarcRow->state => $dmarcRow->state,
             default => $ruaRow->state,
         };
-        $isDone = ProtocolState::Configured === $state;
 
         // Managed mode with an unverified CNAME: the record we want is the
         // CNAME, not a TXT record. Asking for a TXT record here would fight the
         // managed record the user already opted into (and DNS forbids both at
         // the same name anyway).
-        $managedPending = !$isDone
-            && DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode
+        //
+        // The TXT-based verdict deliberately does NOT get a veto here. The
+        // half-migrated zone — managed switched on, the customer's own `_dmarc`
+        // TXT still published and still naming us in `rua=` — makes every
+        // TXT-based check pass, so the surface used to report "reports are
+        // reaching Sendvery" and fall silent while the policy we host was not
+        // being served at all and the user was never told the TXT had to go.
+        $managedPending = DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode
             && null === $domain->cnameVerifiedAt;
 
         if ($managedPending) {
-            return new GuidedSetupStep(
-                key: 'delivery',
-                name: 'DMARC reports',
-                title: sprintf('Point _dmarc.%s at Sendvery with one CNAME', $domain->domain),
-                state: $state,
-                tier: SetupTier::Later,
-                action: DnsRecordAction::AddNew,
-                statusLine: "We can't see the CNAME yet — DNS changes can take a few minutes to show up.",
-                whyText: 'This single record never changes. Sendvery hosts the DMARC policy behind it and advances you toward full enforcement, so you never edit DNS for DMARC again.',
-                recordType: 'CNAME',
-                recordName: '_dmarc',
-                recordFqdn: '_dmarc.'.$domain->domain,
-                ttl: self::MANAGED_CNAME_TTL,
-                currentValue: null,
-                finalValue: $managed->cnameTarget,
-                kbSlug: 'what-is-dmarc',
-                healthAnchor: 'health-dmarc',
-                offersDeliveryChoice: true,
-            );
+            return $this->buildManagedCnameStep($domain, $managed);
         }
+
+        $isDone = ProtocolState::Configured === $state;
 
         $instruction = DmarcRuaInstruction::build(
             $latestByType[DnsCheckType::Dmarc->value]?->rawRecord,
@@ -342,6 +353,66 @@ final readonly class GuidedDnsSetupResolver
             healthAnchor: 'health-dmarc',
             offersDeliveryChoice: !$isDone,
             cautions: $isDone || !$hasRecord ? [] : $this->extendCautions($ruaAddressCount, $managed),
+        );
+    }
+
+    /**
+     * The managed path's one and only DNS instruction — plus, when the customer
+     * still owns a `_dmarc` TXT record, the deletion that has to happen first.
+     *
+     * RFC 1034 §3.6.2 forbids a CNAME from coexisting with any other record at
+     * the same name, so a zone that still carries the old TXT simply will not
+     * accept (or, at providers that accept it anyway, will not serve) the CNAME.
+     * Handing over the CNAME alone is how someone ends up staring at "we can't
+     * see the CNAME yet" for an afternoon with a correctly-pasted record: the
+     * blocker was never named. It is a prerequisite rather than a caution
+     * because the step's own record cannot work until it is done.
+     */
+    private function buildManagedCnameStep(MonitoredDomain $domain, ManagedDeliveryContext $managed): GuidedSetupStep
+    {
+        $conflictingTxt = $managed->conflictingDmarcTxt;
+        $hasConflict = null !== $conflictingTxt && '' !== trim($conflictingTxt);
+
+        $prerequisite = $hasConflict
+            ? new SetupPrerequisite(
+                key: 'delete-conflicting-dmarc-txt',
+                title: sprintf('Delete the DMARC TXT record on _dmarc.%s', $domain->domain),
+                explanation: 'DNS does not allow a CNAME to sit next to another record at the same name, so this TXT has to go before the CNAME can take over. You are not dropping protection by deleting it: Sendvery already hosts a copy of your current policy and starts serving it the moment the CNAME resolves.',
+                followUpTitle: 'Then add the CNAME',
+                action: DnsRecordAction::DeleteExisting,
+                recordType: 'TXT',
+                recordName: '_dmarc',
+                recordFqdn: '_dmarc.'.$domain->domain,
+                currentValue: $conflictingTxt,
+            )
+            : null;
+
+        return new GuidedSetupStep(
+            key: 'delivery',
+            name: 'DMARC reports',
+            title: $hasConflict
+                ? sprintf('Swap the _dmarc.%s TXT record for one CNAME', $domain->domain)
+                : sprintf('Point _dmarc.%s at Sendvery with one CNAME', $domain->domain),
+            // Never Configured: the managed policy is not being served until the
+            // CNAME resolves, whatever the customer's leftover TXT record makes
+            // the protocol checks say.
+            state: $hasConflict ? ProtocolState::Invalid : ProtocolState::Missing,
+            tier: SetupTier::Later,
+            action: DnsRecordAction::AddNew,
+            statusLine: $hasConflict
+                ? 'Your own DMARC TXT record is still published, so the CNAME cannot take effect yet — delete that record first.'
+                : "We can't see the CNAME yet — DNS changes can take a few minutes to show up.",
+            whyText: 'This single record never changes. Sendvery hosts the DMARC policy behind it and advances you toward full enforcement, so you never edit DNS for DMARC again.',
+            recordType: 'CNAME',
+            recordName: '_dmarc',
+            recordFqdn: '_dmarc.'.$domain->domain,
+            ttl: self::MANAGED_CNAME_TTL,
+            currentValue: null,
+            finalValue: $managed->cnameTarget,
+            kbSlug: 'what-is-dmarc',
+            healthAnchor: 'health-dmarc',
+            offersDeliveryChoice: true,
+            prerequisite: $prerequisite,
         );
     }
 
@@ -426,12 +497,15 @@ final readonly class GuidedDnsSetupResolver
     }
 
     /**
+     * @param string|null $publishedDmarcTxt the customer's own `_dmarc` TXT as last checked, null when there is none
+     *
      * @return list<ReportDeliveryOption>
      */
-    private function buildDeliveryOptions(MonitoredDomain $domain, ManagedDeliveryContext $managed): array
+    private function buildDeliveryOptions(MonitoredDomain $domain, ManagedDeliveryContext $managed, ?string $publishedDmarcTxt): array
     {
         $managedAvailable = $managed->managedAvailable;
         $isManaged = DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode;
+        $hasOwnTxt = null !== $publishedDmarcTxt && '' !== trim($publishedDmarcTxt);
 
         $unavailableReason = match (true) {
             $managedAvailable => null,
@@ -444,7 +518,7 @@ final readonly class GuidedDnsSetupResolver
             new ReportDeliveryOption(
                 mode: DmarcSetupMode::SelfTxt,
                 label: "I'll add a TXT record",
-                summary: 'You publish one `_dmarc` TXT record and keep control of it. Works on every plan and every DNS provider.',
+                summary: 'You publish one _dmarc TXT record and keep control of it. Works on every plan and every DNS provider.',
                 selected: !$isManaged,
                 available: true,
                 isPremium: false,
@@ -453,11 +527,16 @@ final readonly class GuidedDnsSetupResolver
                 switchRoute: $isManaged ? 'dashboard_domain_switch_to_self_txt' : null,
                 switchLabel: 'Manage the record myself',
                 csrfTokenId: 'domain_managed_to_self',
+                // Switching back is the mirror image of switching over: the
+                // CNAME has to come out before a TXT record can go in.
+                switchCaveat: $isManaged
+                    ? 'Switching back means deleting the _dmarc CNAME and publishing your own TXT record instead. We hand you the exact value to paste as soon as you switch.'
+                    : null,
             ),
             new ReportDeliveryOption(
                 mode: DmarcSetupMode::ManagedCname,
                 label: 'Let Sendvery manage it',
-                summary: 'Point `_dmarc` at us once with a CNAME. We host the policy and move you to full enforcement safely — you never edit DNS for DMARC again.',
+                summary: 'Point _dmarc at us once with a CNAME. We host the policy and move you to full enforcement safely — you never edit DNS for DMARC again.',
                 selected: $isManaged,
                 available: $managedAvailable,
                 isPremium: true,
@@ -466,6 +545,12 @@ final readonly class GuidedDnsSetupResolver
                 switchRoute: $managedAvailable && !$isManaged ? 'dashboard_domain_enable_managed_dmarc' : null,
                 switchLabel: 'Let Sendvery manage DMARC',
                 csrfTokenId: 'domain_managed_enable',
+                // The DNS work the switch creates, told BEFORE the user commits
+                // to it rather than discovered afterwards on a page that just
+                // says "we can't see the CNAME yet".
+                switchCaveat: !$isManaged && $hasOwnTxt
+                    ? 'Heads-up: you already publish a _dmarc TXT record, and DNS does not allow a CNAME beside it. After switching you will need to delete that TXT — we copy your current policy across first, so your protection carries over.'
+                    : null,
             ),
         ];
     }

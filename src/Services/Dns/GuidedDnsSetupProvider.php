@@ -13,9 +13,11 @@ use App\Repository\MonitoredDomainRepository;
 use App\Services\DashboardContext;
 use App\Services\DomainSetupStatusResolver;
 use App\Services\Stripe\PlanEnforcement;
+use App\Value\Dns\DmarcSetupMode;
 use App\Value\Dns\GuidedDnsSetupView;
 use App\Value\Dns\ManagedDeliveryContext;
 use App\Value\DnsCheckType;
+use App\Value\DomainSetupDisplayMode;
 use Ramsey\Uuid\Uuid;
 
 /**
@@ -105,6 +107,19 @@ final readonly class GuidedDnsSetupProvider
         $plan = $this->getTeamPlan->forTeam($this->dashboardContext->getTeamId()->toString());
         $dnsAutomationConfigured = $this->cloudflareClient->isConfigured();
 
+        // The one live DNS read on this path. A `_dmarc` TXT record the customer
+        // still owns blocks the managed CNAME outright (RFC 1034 §3.6.2), and we
+        // are about to tell someone to DELETE a record — an answer from the
+        // cached nightly check, possibly hours old, is not good enough for that.
+        // Narrowly gated so it only runs for the domains it can change the
+        // advice for: managed path chosen, CNAME not verified yet, first check
+        // already landed (the in-progress state publishes no verdicts at all).
+        $conflictingDmarcTxt = DmarcSetupMode::ManagedCname === $domain->dmarcSetupMode
+            && null === $domain->cnameVerifiedAt
+            && DomainSetupDisplayMode::PanelOnly !== $setupStatus->displayMode
+                ? $this->cnameChecker->findConflictingDmarcTxt($domain->domain)
+                : null;
+
         $setup = $this->guidedDnsSetupResolver->resolve(
             $domain,
             $setupStatus,
@@ -114,6 +129,7 @@ final readonly class GuidedDnsSetupProvider
                 managedAvailable: $dnsAutomationConfigured && $this->planEnforcement->canUseManagedDmarc($plan),
                 nextTier: $plan->nextTier(),
                 cnameTarget: $this->cnameChecker->expectedTarget($domain->domain),
+                conflictingDmarcTxt: $conflictingDmarcTxt,
             ),
             // Carries the published `rua=` address count, which decides whether
             // appending Sendvery risks tripping the RFC 7489 two-address cap.
@@ -127,6 +143,7 @@ final readonly class GuidedDnsSetupProvider
             setupStatus: $setupStatus,
             ruaScenario: $ruaScenario,
             latestByType: $latestByType,
+            conflictingDmarcTxt: $conflictingDmarcTxt,
         );
     }
 }

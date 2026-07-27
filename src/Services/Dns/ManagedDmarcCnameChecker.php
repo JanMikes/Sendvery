@@ -7,6 +7,7 @@ namespace App\Services\Dns;
 use App\Services\ReportAddressProvider;
 use App\Value\Dns\CnameVerificationOutcome;
 use Spatie\Dns\Dns;
+use Spatie\Dns\Records\TXT;
 
 /**
  * Verifies the customer's `_dmarc.<domain>` CNAME for managed DMARC (DEC-058):
@@ -70,22 +71,41 @@ final readonly class ManagedDmarcCnameChecker
      */
     public function hasConflictingDmarcTxt(string $customerDomain): bool
     {
+        return null !== $this->findConflictingDmarcTxt($customerDomain);
+    }
+
+    /**
+     * The conflicting record ITSELF, not just its existence — a user told to
+     * "delete your DMARC TXT" in a zone with a dozen `_dmarc`-adjacent entries
+     * needs to see which string we mean before they reach for the delete button.
+     *
+     * Read live for the same reason {@see hasConflictingDmarcTxt()} is: the
+     * cached DNS check can be hours old, and this decides whether we tell
+     * someone to delete a record.
+     */
+    public function findConflictingDmarcTxt(string $customerDomain): ?string
+    {
         if (CnameVerificationOutcome::Verified === $this->verify($customerDomain)) {
-            return false;
+            return null;
         }
 
         try {
             $records = $this->dns->getRecords(sprintf('_dmarc.%s', $customerDomain), 'TXT');
         } catch (\Throwable) {
-            return false;
+            return null;
         }
 
         foreach ($records as $record) {
-            if (str_contains(strtolower((string) $record), 'v=dmarc1')) {
-                return true;
+            // The record's own value, not its zone-file line: the user compares
+            // what we print against the value column in their DNS panel, and
+            // `_dmarc.example.com. 3600 IN TXT "…"` is not what that column says.
+            $value = $record instanceof TXT ? trim($record->txt()) : trim((string) $record);
+
+            if (str_contains(strtolower($value), 'v=dmarc1')) {
+                return $value;
             }
         }
 
-        return false;
+        return null;
     }
 }
