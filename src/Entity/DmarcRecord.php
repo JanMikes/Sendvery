@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Doctrine\PolicyOverrideReasonsType;
 use App\Value\AuthResult;
 use App\Value\Disposition;
+use App\Value\PolicyOverrideReason;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
 
@@ -54,6 +56,25 @@ final class DmarcRecord
     #[ORM\Column(length: 255, nullable: true)]
     public ?string $resolvedOrg;
 
+    /**
+     * Why the receiver did not apply the published policy (RFC 7489 §6.7) —
+     * receiver-attested, and therefore unforgeable by the sender.
+     *
+     * JSON rather than a child table: a record can carry several reasons, so a
+     * scalar column is out; but nothing queries them, they are only ever read
+     * alongside their parent record, and the cardinality is 0-to-a-few. A child
+     * table would buy filterability nobody needs at the price of an extra
+     * entity, cascade configuration and N more INSERTs per report on the ingest
+     * path. Promoting it later stays a pure data migration.
+     *
+     * @var list<PolicyOverrideReason>
+     */
+    #[ORM\Column(type: PolicyOverrideReasonsType::NAME, options: ['default' => '[]'])]
+    public readonly array $policyOverrideReasons;
+
+    /**
+     * @param list<PolicyOverrideReason> $policyOverrideReasons
+     */
     public function __construct(
         UuidInterface $id,
         DmarcReport $dmarcReport,
@@ -68,6 +89,7 @@ final class DmarcRecord
         ?string $spfDomain = null,
         ?string $resolvedHostname = null,
         ?string $resolvedOrg = null,
+        array $policyOverrideReasons = [],
     ) {
         $this->id = $id;
         $this->dmarcReport = $dmarcReport;
@@ -82,5 +104,6 @@ final class DmarcRecord
         $this->spfDomain = $spfDomain;
         $this->resolvedHostname = $resolvedHostname;
         $this->resolvedOrg = $resolvedOrg;
+        $this->policyOverrideReasons = $policyOverrideReasons;
     }
 }

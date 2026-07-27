@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Real-world shape: Gmail annotates a message whose ARC chain it validated with
+  <reason><type>local_policy</type><comment>arc=pass</comment></reason>, which is
+  why the message was delivered despite failing both SPF and DKIM alignment.
+  The second record shows the repeated-<reason> case RFC 7489 §6.7 allows.
+-->
+<feedback>
+  <report_metadata>
+    <org_name>google.com</org_name>
+    <email>noreply-dmarc-support@google.com</email>
+    <report_id>10993108324545456789</report_id>
+    <date_range>
+      <begin>1711929600</begin>
+      <end>1712015999</end>
+    </date_range>
+  </report_metadata>
+  <policy_published>
+    <domain>example.com</domain>
+    <adkim>r</adkim>
+    <aspf>r</aspf>
+    <p>reject</p>
+    <pct>100</pct>
+  </policy_published>
+  <record>
+    <row>
+      <source_ip>209.85.220.69</source_ip>
+      <count>3</count>
+      <policy_evaluated>
+        <disposition>none</disposition>
+        <dkim>fail</dkim>
+        <spf>fail</spf>
+        <reason>
+          <type>local_policy</type>
+          <comment>arc=pass</comment>
+        </reason>
+      </policy_evaluated>
+    </row>
+    <identifiers>
+      <header_from>example.com</header_from>
+    </identifiers>
+    <auth_results>
+      <dkim>
+        <domain>example.com</domain>
+        <result>fail</result>
+        <selector>google</selector>
+      </dkim>
+      <spf>
+        <domain>forwarder.example.net</domain>
+        <result>pass</result>
+      </spf>
+    </auth_results>
+  </record>
+  <record>
+    <row>
+      <source_ip>40.93.13.60</source_ip>
+      <count>1</count>
+      <policy_evaluated>
+        <disposition>none</disposition>
+        <dkim>pass</dkim>
+        <spf>fail</spf>
+        <reason>
+          <type>forwarded</type>
+        </reason>
+        <reason>
+          <type>sampled_out</type>
+          <comment>pct=50</comment>
+        </reason>
+      </policy_evaluated>
+    </row>
+    <identifiers>
+      <header_from>example.com</header_from>
+    </identifiers>
+    <auth_results>
+      <dkim>
+        <domain>example.com</domain>
+        <result>pass</result>
+        <selector>google</selector>
+      </dkim>
+      <spf>
+        <domain>outlook.com</domain>
+        <result>fail</result>
+      </spf>
+    </auth_results>
+  </record>
+</feedback>

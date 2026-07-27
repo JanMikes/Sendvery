@@ -101,6 +101,7 @@ final readonly class ProcessDmarcReportHandler
                 dkimDomain: $parsedRecord->dkimDomain,
                 dkimSelector: $parsedRecord->dkimSelector,
                 spfDomain: $parsedRecord->spfDomain,
+                policyOverrideReasons: $parsedRecord->policyOverrideReasons,
             );
 
             $this->entityManager->persist($record);

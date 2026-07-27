@@ -12,6 +12,8 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\PolicyOverrideReason;
+use App\Value\PolicyOverrideReasonType;
 use PHPUnit\Framework\TestCase;
 use Ramsey\Uuid\Uuid;
 
@@ -36,6 +38,7 @@ final class DmarcRecordTest extends TestCase
             spfDomain: 'example.com',
             resolvedHostname: 'mail-sor-f41.google.com',
             resolvedOrg: 'Google',
+            policyOverrideReasons: [new PolicyOverrideReason(PolicyOverrideReasonType::LocalPolicy, 'arc=pass')],
         );
 
         self::assertSame($id, $record->id);
@@ -51,6 +54,9 @@ final class DmarcRecordTest extends TestCase
         self::assertSame('example.com', $record->spfDomain);
         self::assertSame('mail-sor-f41.google.com', $record->resolvedHostname);
         self::assertSame('Google', $record->resolvedOrg);
+        self::assertCount(1, $record->policyOverrideReasons);
+        self::assertSame(PolicyOverrideReasonType::LocalPolicy, $record->policyOverrideReasons[0]->type);
+        self::assertSame('arc=pass', $record->policyOverrideReasons[0]->comment);
     }
 
     public function testNullableFieldsDefaultToNull(): void
@@ -71,6 +77,7 @@ final class DmarcRecordTest extends TestCase
         self::assertNull($record->spfDomain);
         self::assertNull($record->resolvedHostname);
         self::assertNull($record->resolvedOrg);
+        self::assertSame([], $record->policyOverrideReasons);
     }
 
     private function createReport(): DmarcReport

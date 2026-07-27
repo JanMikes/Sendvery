@@ -11,6 +11,8 @@ use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
 use App\Value\ParsedDmarcRecord;
 use App\Value\ParsedDmarcReport;
+use App\Value\PolicyOverrideReason;
+use App\Value\PolicyOverrideReasonType;
 
 final readonly class DmarcXmlParser
 {
@@ -107,6 +109,8 @@ final readonly class DmarcXmlParser
 
         $headerFrom = (string) ($record->identifiers->header_from ?? '');
 
+        $policyOverrideReasons = $this->parsePolicyOverrideReasons($policyEvaluated);
+
         $dkimDomain = null;
         $dkimSelector = null;
         if (isset($record->auth_results->dkim)) {
@@ -129,7 +133,34 @@ final readonly class DmarcXmlParser
             dkimDomain: $dkimDomain,
             dkimSelector: $dkimSelector,
             spfDomain: $spfDomain,
+            policyOverrideReasons: $policyOverrideReasons,
         );
+    }
+
+    /**
+     * Reads every `<reason>` the receiver attached to `<policy_evaluated>`
+     * (RFC 7489 §6.7).
+     *
+     * A record may legitimately carry more than one — a message can be both
+     * sampled out and forwarded — so this reads the repeated element rather
+     * than the first one. Unknown `<type>` tokens fold into `Other`; nothing in
+     * here can reject a report, because a receiver's optional annotation is
+     * never worth losing an otherwise-valid report over.
+     *
+     * @return list<PolicyOverrideReason>
+     */
+    private function parsePolicyOverrideReasons(?\SimpleXMLElement $policyEvaluated): array
+    {
+        $reasons = [];
+
+        foreach ($policyEvaluated->reason ?? [] as $reason) {
+            $reasons[] = new PolicyOverrideReason(
+                type: PolicyOverrideReasonType::fromReportValue((string) ($reason->type ?? '')),
+                comment: (string) ($reason->comment ?? ''),
+            );
+        }
+
+        return $reasons;
     }
 
     private function parseTimestamp(?\SimpleXMLElement $element, string $fieldName): \DateTimeImmutable

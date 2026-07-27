@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Doctrine\PolicyOverrideReasonsType;
 use Symfony\Component\DependencyInjection\Loader\Configurator\App;
 
 return App::config([
@@ -10,6 +11,9 @@ return App::config([
             'url' => '%env(resolve:DATABASE_URL)%',
             'types' => [
                 'uuid' => 'Ramsey\Uuid\Doctrine\UuidType',
+                // Keeps DmarcRecord::$policyOverrideReasons a list of value
+                // objects on the PHP side while the column stays plain JSON.
+                PolicyOverrideReasonsType::NAME => PolicyOverrideReasonsType::class,
             ],
         ],
         // Team scoping is enforced explicitly in every Query class / repo

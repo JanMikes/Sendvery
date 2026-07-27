@@ -7,6 +7,8 @@ namespace App\Tests\Unit\Value;
 use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\ParsedDmarcRecord;
+use App\Value\PolicyOverrideReason;
+use App\Value\PolicyOverrideReasonType;
 use PHPUnit\Framework\TestCase;
 
 final class ParsedDmarcRecordTest extends TestCase
@@ -50,5 +52,26 @@ final class ParsedDmarcRecordTest extends TestCase
         self::assertNull($record->dkimDomain);
         self::assertNull($record->dkimSelector);
         self::assertNull($record->spfDomain);
+        self::assertSame([], $record->policyOverrideReasons, 'A record the receiver did not annotate carries no override reasons');
+    }
+
+    public function testCarriesEveryPolicyOverrideReasonTheReceiverGave(): void
+    {
+        $reasons = [
+            new PolicyOverrideReason(PolicyOverrideReasonType::LocalPolicy, 'arc=pass'),
+            new PolicyOverrideReason(PolicyOverrideReasonType::Forwarded),
+        ];
+
+        $record = new ParsedDmarcRecord(
+            sourceIp: '209.85.220.69',
+            count: 3,
+            disposition: Disposition::None,
+            dkimResult: AuthResult::Fail,
+            spfResult: AuthResult::Fail,
+            headerFrom: 'example.com',
+            policyOverrideReasons: $reasons,
+        );
+
+        self::assertSame($reasons, $record->policyOverrideReasons);
     }
 }

@@ -12,6 +12,8 @@ use App\Message\ProcessDmarcReport;
 use App\MessageHandler\ProcessDmarcReportHandler;
 use App\Services\Stripe\PlanEnforcement;
 use App\Tests\IntegrationTestCase;
+use App\Value\PolicyOverrideReason;
+use App\Value\PolicyOverrideReasonType;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
 
@@ -159,6 +161,113 @@ final class ProcessDmarcReportHandlerTest extends IntegrationTestCase
 
         $secondReport = $em->find(DmarcReport::class, $secondReportId);
         self::assertNull($secondReport);
+    }
+
+    public function testStoresTheReceiversPolicyOverrideReasonsWithTheRecord(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Override Team',
+            slug: 'override-team-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $domainId = Uuid::uuid7();
+        $domain = new MonitoredDomain(
+            id: $domainId,
+            team: $team,
+            domain: 'example.com',
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($domain);
+        $em->flush();
+        $em->clear();
+
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/policy-override-report.xml');
+        assert(is_string($xml));
+
+        $reportId = Uuid::uuid7();
+        $handler = $this->getService(ProcessDmarcReportHandler::class);
+        $handler(new ProcessDmarcReport(
+            reportId: $reportId,
+            domainId: $domainId,
+            xmlContent: $xml,
+        ));
+        $em->flush();
+        $em->clear();
+
+        /** @var list<DmarcRecord> $records */
+        $records = $em->getRepository(DmarcRecord::class)->findBy(
+            ['dmarcReport' => $reportId->toString()],
+            ['sourceIp' => 'ASC'],
+        );
+        self::assertCount(2, $records);
+
+        // Gmail's ARC-validated override, reloaded from the database.
+        self::assertSame('209.85.220.69', $records[0]->sourceIp);
+        self::assertCount(1, $records[0]->policyOverrideReasons);
+        self::assertSame(PolicyOverrideReasonType::LocalPolicy, $records[0]->policyOverrideReasons[0]->type);
+        self::assertSame('arc=pass', $records[0]->policyOverrideReasons[0]->comment);
+
+        // Microsoft's forwarded + sampled-out pair: both reasons must survive
+        // the round trip, since only reading the first would lose testimony.
+        self::assertSame('40.93.13.60', $records[1]->sourceIp);
+        self::assertSame(
+            [PolicyOverrideReasonType::Forwarded, PolicyOverrideReasonType::SampledOut],
+            array_map(
+                static fn (PolicyOverrideReason $reason): PolicyOverrideReasonType => $reason->type,
+                $records[1]->policyOverrideReasons,
+            ),
+        );
+        self::assertSame('pct=50', $records[1]->policyOverrideReasons[1]->comment);
+    }
+
+    public function testRecordsFromReportsWithoutOverrideReasonsPersistWithNone(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'No Override Team',
+            slug: 'no-override-team-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $domainId = Uuid::uuid7();
+        $domain = new MonitoredDomain(
+            id: $domainId,
+            team: $team,
+            domain: 'example.com',
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($domain);
+        $em->flush();
+        $em->clear();
+
+        $xml = file_get_contents(__DIR__.'/../../Fixtures/google-report.xml');
+        assert(is_string($xml));
+
+        $reportId = Uuid::uuid7();
+        $handler = $this->getService(ProcessDmarcReportHandler::class);
+        $handler(new ProcessDmarcReport(
+            reportId: $reportId,
+            domainId: $domainId,
+            xmlContent: $xml,
+        ));
+        $em->flush();
+        $em->clear();
+
+        /** @var list<DmarcRecord> $records */
+        $records = $em->getRepository(DmarcRecord::class)->findBy(['dmarcReport' => $reportId->toString()]);
+
+        self::assertCount(2, $records);
+        foreach ($records as $record) {
+            self::assertSame([], $record->policyOverrideReasons, 'Reports with no <reason> element ingest exactly as they always did');
+        }
     }
 
     public function testCompressesRawXml(): void
