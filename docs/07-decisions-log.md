@@ -619,6 +619,95 @@ retroactively mutate the prior-period baseline. Fixing it changes the meaning of
 digest period, so it is tracked separately.
 **Detail:** `docs/16-sender-identity-and-digest-truthfulness.md`
 
+### DEC-060: Forwarder is a status a sender earns, never one it asserts
+**Date:** 2026-07-27
+**Status:** Decided
+**Trigger:** DEC-059 stopped Sendvery calling forwarders attackers, but it granted
+`SenderRole::Forwarder` — which makes `warrantsAlert()` false — on the strength of a PTR
+hostname. A reverse zone belongs to whoever holds the IP block, and every VPS provider
+hands that field to the customer, so pointing a reverse record at `anything.mimecast.com`
+bought silence on the one alert that exists to surface spoofing. Meanwhile the strongest
+unforgeable evidence available, the receiver's own RFC 7489 §6.7 policy-override reason,
+was being parsed, persisted, and read by nothing.
+**Decision:** Every rule that can grant or soften a verdict about a sender sits on an
+explicit evidence ladder, ordered by how hard the evidence is for the *sender* to
+fabricate. Two invariants govern it: **a lower tier may never override a higher one, and
+tiers D and below may never grant trust on their own.**
+
+| Tier | Evidence | Forgeable by the sender? |
+|---|---|---|
+| **A** | An aligned DKIM signature that verified | No — cryptographic |
+| **B** | A receiver-attested policy override (`<reason>`) | No — the receiver wrote it |
+| **C** | Cross-receiver correlation of a signed stream | Partly — see (c) |
+| **D** | PTR + forward confirmation; ASN | Hard — needs a second zone, or BGP |
+| **E** | Envelope shape; volume and topology | Trivially |
+
+Sub-decisions:
+  (a) **Tier B is consumed.** Three RFC 7489 override types state outright that the
+      receiver believed the message was relayed (`forwarded`, `trusted_forwarder`,
+      `mailing_list`); a fourth, `local_policy`, is Gmail's ARC bucket and carries the
+      verdict in free text. That comment grants alert-suppressing trust, so `arc=pass` is
+      matched as a whole token and never as a substring. `sampled_out` is about `pct=`,
+      not routing, and `other` is where unrecognised vendor tokens land — both attest
+      nothing, which also makes the last match arm the one that grants nothing. The
+      attestation is per-report, per-receiver evidence and is deliberately **not** written
+      to `sender_identity`, for the same reason `OwnRelay` is not: a global row must not
+      carry one report's observation as a permanent property of a host.
+  (b) **Tier A is stated as its own rule**, ahead of the `DKIM ≥ 80% ∧ SPF ≤ 30%` shape
+      inherited from `ReportFactsBuilder`. The heuristic asks "did most messages pass
+      DKIM?", which a valid signature for somebody *else's* domain satisfies — a relayed
+      newsletter still carries the vendor's signature. The rule asks whether a signature
+      for the header_from domain survived, which nothing but the private key satisfies.
+      One message is enough; the proof does not strengthen by repetition. The heuristic
+      remains as the fallback.
+  (c) **Envelope-rewrite shape (SRS/BATV/VERP) is tier E, not tier C, and grants nothing.**
+      The plan for this work placed it at C and had it grant `Forwarder`. It cannot: the
+      envelope sender is free text in the SMTP transaction, and SPF passing for it proves
+      only that the sender controls the domain they named, which every attacker does for
+      their own. `MAIL FROM: SRS0=x=y=victim.com=user@attacker.example` with SPF published
+      for attacker.example satisfies every part of the test, so granting the role would
+      have sold alert suppression for one DNS record — the same hole DEC-059 §3.3.1
+      closed, one field further down the message.
+  (d) **Cross-receiver correlation is corroboration, encoded as such.** The same signed
+      stream passing from one address and failing from another is what a relay looks like,
+      and it is computed once per report rather than per record. But every field of a
+      *failing* record is chosen by whoever sent it, `d=` included, so a spoofer naming the
+      victim's own domain has the passing half supplied by the victim's real mail. Both (c)
+      and (d) may only downgrade `Suspicious` → `Unknown`; both roles still alert, so the
+      sender comes up for review either way and only the accusation is withdrawn.
+      Withholding an accusation is free; withholding an alert is not.
+  (e) **ASN identifies without excusing.** An AS number comes from BGP and the allocating
+      RIR, so a renter cannot claim `AS8075 Microsoft`, and it names hosts with no PTR at
+      all. But the gateways this work exists to recognise run on rented cloud capacity —
+      `eu.cloud-sec-av.com` announces from Amazon's AS — so requiring the ASN to *agree*
+      with the PTR would reject precisely the genuine forwarders it was meant to
+      corroborate. ASN therefore appears nowhere in `SenderRoleClassifier`. It is shown
+      beside an unidentified address, never instead of it ("203.0.113.9 (AS16509
+      AMAZON-02)"), and is never part of the identity key: half the internet rents from
+      the same handful of networks.
+  (f) **Explained is not broken.** A forwarder whose mail was quarantined or rejected gets
+      the plain reason on the report pane — the gateway rewrote the message, SPF cannot
+      survive the hop by design, DKIM did not survive the rewrite — together with the
+      honest answer that there is nothing to fix, and the explicit statement that it is not
+      a reason to weaken the DMARC policy. Six real messages were in spam folders when this
+      was written. Classifying their senders correctly and then printing "fix your
+      misconfigured sending sources" underneath would have wasted the whole effort. The
+      corollary to CLAUDE.md's *"Unknown Is Not Failure"*: the notice carries no severity
+      and no warning styling, `DomainHealthScorer` grades DNS configuration and blacklist
+      listings only (pinned by a test, so a quarantined forward can never cost a domain its
+      grade), and the digest already frames forwarders correctly.
+**Impact:** `ForwardingAttestation`, `EnvelopeRewriteRegistry`, `ForwardedMailExplainer`
++ `ForwardedMailExplanation`/`ForwardedMailOutcome`, `AsnResolver`/`SystemAsnResolver`/
+`FakeAsnResolver` + `AsnRegistration`, `GetSendersSharingASignedStream`; a new
+`ReportSenderSignals` service replacing the two near-identical aggregations
+`AlertOnNewSender` and `SenderDiscovery` each maintained (two copies of the evidence behind
+one classifier is how the alert and the inventory end up disagreeing); three additive
+`sender_identity` columns (`Version20260727190000`) and the per-batch identification cap
+cut from 12 to 8 to hold the DNS budget; `<twig:ForwardedMailNotice>` on report detail.
+**Ops:** the migration is additive and existing rows self-heal one at a time on their next
+ingest; `bin/console sendvery:senders:backfill-identities` fills the ASN columns in one pass.
+**Detail:** `docs/18-forwarder-trust-verification-plan.md`
+
 ---
 
 *Add new decisions above this line*
