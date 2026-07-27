@@ -8,6 +8,8 @@ use App\Entity\ReceivedReportEmail;
 use App\Message\ProcessReceivedReportEmail;
 use App\Repository\ReceivedReportEmailRepository;
 use App\Services\IdentityProvider;
+use App\Services\IngestionHealthRecorder;
+use App\Value\IngestionSource;
 use App\Value\Reports\FetchedEnvelope;
 use App\Value\Reports\ReportSource;
 use Doctrine\ORM\EntityManagerInterface;
@@ -38,6 +40,7 @@ final readonly class ReportEmailIngestor
         private ClockInterface $clock,
         private LoggerInterface $logger,
         private MessageBusInterface $commandBus,
+        private IngestionHealthRecorder $healthRecorder,
     ) {
     }
 
@@ -69,6 +72,12 @@ final readonly class ReportEmailIngestor
             if (0 !== $persisted) {
                 $this->logger->info('Central inbox poll persisted {count} new envelopes.', ['count' => $persisted]);
             }
+
+            // Reaching here means we connected, drained the batch and closed
+            // cleanly. Zero envelopes still counts: an empty inbox is proof the
+            // pipeline works, and that proof is what entitles the product to
+            // tell a customer their own DNS is the reason reports stopped.
+            $this->healthRecorder->recordSuccess(IngestionSource::CentralInbox, $this->clock->now());
 
             return $persisted;
         } finally {

@@ -1,0 +1,57 @@
+{# Whether Sendvery's own report intake is working.
+
+   WHY IT SITS ABOVE EVERYTHING ELSE ON THE PAGE: when intake is stale, every
+   domain in the matrix below looks silent for a reason that is ours. Reading
+   that list first and this panel second is how an operator ends up chasing a
+   customer's DNS over our own stuck poller.
+
+   The three states are IngestionIntakeState's, not this template's. "Not
+   checked yet" is neutral on purpose — it is the state of every fresh install
+   and every local environment where the central inbox is unconfigured, and
+   painting it red would make a system that has merely not run yet look broken. #}
+{% props health %}
+
+{% set tone = health.state.tone() %}
+
+{% set toneClasses = {
+    'success': 'border-success/30 bg-success/5',
+    'warning': 'border-warning/40 bg-warning/5',
+    'neutral': 'border-base-200 bg-base-100',
+}[tone] %}
+
+{% set glyphClasses = {
+    'success': 'text-success',
+    'warning': 'text-warning',
+    'neutral': 'text-base-content/40',
+}[tone] %}
+
+<div class="card border {{ toneClasses }} shadow-sm mb-6" data-testid="ingestion-intake-health">
+    <div class="card-body p-4">
+        <div class="flex items-start gap-3">
+            <span class="{{ glyphClasses }} mt-0.5 shrink-0" aria-hidden="true">
+                {% if tone == 'success' %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {% elseif tone == 'warning' %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0l-7.1 12.25A2 2 0 004.99 19z"/></svg>
+                {% else %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {% endif %}
+            </span>
+
+            <div class="min-w-0">
+                <div class="text-xs font-medium text-base-content/50 uppercase tracking-wider">
+                    Report intake
+                </div>
+                <h2 class="font-semibold mt-0.5">{{ health.state.label() }}</h2>
+                <p class="text-sm text-base-content/70 mt-1">{{ health.explanation() }}</p>
+
+                {% if health.lastSuccessAt is not null %}
+                    <p class="text-xs text-base-content/50 mt-2">
+                        Last successful collection
+                        <time datetime="{{ health.lastSuccessAt|date('c') }}">{{ health.lastSuccessAt|date('j M Y, H:i') }} UTC</time>
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

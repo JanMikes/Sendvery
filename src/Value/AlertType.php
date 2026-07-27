@@ -23,6 +23,24 @@ enum AlertType: string
     case MailboxConnectionError = 'mailbox_connection_error';
     case IpBlacklisted = 'ip_blacklisted';
 
+    /**
+     * A domain that was reliably receiving DMARC reports has gone quiet for
+     * longer than its own observed cadence.
+     *
+     * The gap this closes: "no reports yet" was only ever evaluated while
+     * `first_report_at` was NULL, so once a domain reported even once the check
+     * was unreachable forever. A domain that reported daily for a year and then
+     * went silent produced no signal at all — in a product whose entire promise
+     * is monitoring, the monitoring stopping was the one thing nobody was told.
+     *
+     * Warning, not Critical, and deliberately so. Silence has an innocent
+     * explanation (the domain genuinely stopped sending mail) as often as a
+     * broken one, and this alert is raised ONLY when our own pipeline is
+     * provably healthy — so it is a real question for the owner, not a
+     * confirmed fault we can assert.
+     */
+    case ReportsStopped = 'reports_stopped';
+
     // Managed DMARC (DEC-058). Regression/dangling are Critical so they also
     // flow through the existing critical-email path; advanced/ready are
     // informational (their own transactional emails carry the detail).
@@ -47,7 +65,8 @@ enum AlertType: string
             self::ManagedDmarcRegression,
             self::ManagedDmarcDangling => AlertSeverity::Critical,
             self::NewUnknownSender,
-            self::MailboxConnectionError => AlertSeverity::Warning,
+            self::MailboxConnectionError,
+            self::ReportsStopped => AlertSeverity::Warning,
             self::PolicyRecommendation,
             self::ManagedDmarcAdvanced,
             self::ManagedDmarcReady => AlertSeverity::Info,

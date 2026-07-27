@@ -8,6 +8,7 @@ use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DnsCheckResult;
 use App\Entity\DomainHealthSnapshot;
+use App\Entity\IngestionSourceStatus;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Query\GetDomainOverview;
@@ -25,6 +26,7 @@ use App\Value\DmarcPolicy;
 use App\Value\DnsCheckType;
 use App\Value\DomainHealthFilter;
 use App\Value\DomainVerificationSeverity;
+use App\Value\IngestionSource;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
@@ -278,10 +280,11 @@ final class DomainAttentionResolverTest extends WebTestCase
     }
 
     #[Test]
-    public function aPublishedRecordWithNoReportsAfterTwoDaysPointsAtTheRuaTag(): void
+    public function aPublishedRecordWithNoReportsPointsAtTheRuaTagOnceOurOwnIntakeIsProvenHealthy(): void
     {
         $persona = $this->bootPersonaWithoutDomain();
         $domain = $this->domainNeedingAttention($persona->team);
+        $this->proveCentralInboxHealthy();
         $this->flush();
 
         $row = $this->onlyRow($this->resolve(
@@ -292,6 +295,47 @@ final class DomainAttentionResolverTest extends WebTestCase
 
         self::assertSame('No DMARC reports yet', $row->reasons[0]->label);
         self::assertStringContainsString('rua=', $row->reasons[0]->detail);
+    }
+
+    #[Test]
+    public function aPublishedRecordWithNoReportsBlamesOurIntakeWhileItIsUnproven(): void
+    {
+        // Same domain, same DNS, same absence of reports — the ONLY difference
+        // is that no successful report collection has been recorded on our
+        // side. Previously both situations produced the identical accusation,
+        // so a user whose rua= tag was already correct was sent to re-check it
+        // because our poller was behind.
+        $persona = $this->bootPersonaWithoutDomain();
+        $domain = $this->domainNeedingAttention($persona->team);
+        $this->flush();
+
+        $row = $this->onlyRow($this->resolve(
+            $persona,
+            verificationStatus: $this->verificationStatus($domain, dmarcVerifiedAt: new \DateTimeImmutable('-5 days'), consecutiveDmarcFailures: 0),
+            verificationSeverity: DomainVerificationSeverity::Warning,
+        ));
+
+        self::assertStringNotContainsString(
+            'rua=',
+            $row->reasons[0]->detail,
+            'With no proof our own intake is running, the rua= tag is not the likeliest explanation and naming it costs the user a pointless DNS audit.',
+        );
+        self::assertStringContainsStringIgnoringCase(
+            'nothing for you to do',
+            $row->reasons[0]->detail,
+            'Suppressing the accusation is not enough — the user must be told explicitly that the wait is ours, or the silence still reads as their fault.',
+        );
+    }
+
+    private function proveCentralInboxHealthy(): void
+    {
+        $status = new IngestionSourceStatus(
+            id: Uuid::uuid7(),
+            source: IngestionSource::CentralInbox,
+        );
+        $status->recordSuccess(new \DateTimeImmutable('-2 minutes'));
+
+        $this->getService(EntityManagerInterface::class)->persist($status);
     }
 
     #[Test]

@@ -7,6 +7,7 @@ namespace App\Tests\Integration\Services\Reports;
 use App\Entity\ReceivedReportEmail;
 use App\Repository\ReceivedReportEmailRepository;
 use App\Services\IdentityProvider;
+use App\Services\IngestionHealthRecorder;
 use App\Services\Reports\CentralInboxConfig;
 use App\Services\Reports\FakeCentralInboxClient;
 use App\Services\Reports\ReportEmailIngestor;
@@ -106,6 +107,7 @@ final class ReportEmailIngestorTest extends IntegrationTestCase
             clock: $this->getService(ClockInterface::class),
             logger: new NullLogger(),
             commandBus: $this->getService(MessageBusInterface::class),
+            healthRecorder: $this->getService(IngestionHealthRecorder::class),
         );
 
         $this->client->addEnvelope($this->envelope(uid: 1, messageId: '<x@y>'));

@@ -24,6 +24,11 @@
         {% endfor %}
     {% endfor %}
 
+    {# Our own half of the pipeline, stated before anything that could be read
+       as the customer's fault. When intake is stale, every domain below looks
+       silent for a reason that is ours. #}
+    <twig:IngestionIntakeHealth :health="intakeHealth" />
+
     <twig:IngestionRoutesCallout
         reportAddress="{{ reportAddress }}"
         dnsCtaUrl="{{ dnsCtaUrl }}"

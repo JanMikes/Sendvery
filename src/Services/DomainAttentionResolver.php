@@ -77,6 +77,7 @@ final readonly class DomainAttentionResolver
         private GetDnsHealthOverview $getDnsHealthOverview,
         private GetLatestDnsCheckStatesForDomains $getLatestDnsCheckStates,
         private RuaScenarioResolver $ruaScenarioResolver,
+        private IngestionHealthReader $ingestionHealth,
     ) {
     }
 
@@ -315,11 +316,12 @@ final readonly class DomainAttentionResolver
             );
         }
 
-        return new DomainAttentionReason(
-            label: 'No DMARC reports yet',
-            detail: 'DMARC is published but no reports have arrived after 48 hours — check that the rua= tag points at Sendvery.',
-            tone: 'warning',
-        );
+        // The record is published and the latest check passed, so the reason
+        // reports are missing is either the rua= tag or us. Only say the former
+        // when we can show the latter is working — see NoReportsExplanation.
+        return NoReportsExplanation::forPipelineHealth(
+            $this->ingestionHealth->isCentralInboxProvenHealthy(),
+        )->toAttentionReason();
     }
 
     /**

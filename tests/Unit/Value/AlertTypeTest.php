@@ -28,7 +28,8 @@ final class AlertTypeTest extends TestCase
         self::assertSame('managed_dmarc_dangling', AlertType::ManagedDmarcDangling->value);
         self::assertSame('managed_dmarc_advanced', AlertType::ManagedDmarcAdvanced->value);
         self::assertSame('managed_dmarc_ready', AlertType::ManagedDmarcReady->value);
-        self::assertCount(13, AlertType::cases());
+        self::assertSame('reports_stopped', AlertType::ReportsStopped->value);
+        self::assertCount(14, AlertType::cases());
     }
 
     #[Test]
@@ -54,5 +55,8 @@ final class AlertTypeTest extends TestCase
         yield 'dns missing is critical' => [AlertType::DnsRecordMissing, AlertSeverity::Critical];
         yield 'dns changed is critical' => [AlertType::DnsRecordChanged, AlertSeverity::Critical];
         yield 'publishing a record for the first time is good news' => [AlertType::DnsRecordPublished, AlertSeverity::Success];
+        // Warning, not Critical: a domain can legitimately stop sending mail,
+        // so silence is a question for the owner rather than a fault we assert.
+        yield 'reports stopping is a warning, not a confirmed fault' => [AlertType::ReportsStopped, AlertSeverity::Warning];
     }
 }

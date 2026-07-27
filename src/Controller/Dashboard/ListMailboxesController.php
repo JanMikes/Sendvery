@@ -11,6 +11,7 @@ use App\Repository\MailboxConnectionRepository;
 use App\Results\MailboxActivitySummary;
 use App\Services\DashboardContext;
 use App\Services\DomainSetupStatusResolver;
+use App\Services\IngestionHealthReader;
 use App\Services\IngestionPathResolver;
 use App\Services\ReportAddressProvider;
 use App\Value\IngestionPath;
@@ -29,6 +30,7 @@ final class ListMailboxesController extends AbstractController
         private readonly GetDnsHealthOverview $getDnsHealthOverview,
         private readonly GetLatestDnsCheckStatesForDomains $getLatestDnsCheckStatesForDomains,
         private readonly DomainSetupStatusResolver $domainSetupStatusResolver,
+        private readonly IngestionHealthReader $ingestionHealthReader,
     ) {
     }
 
@@ -82,6 +84,10 @@ final class ListMailboxesController extends AbstractController
             'dnsCtaUrl' => $dnsCtaUrl,
             'allScenarioB' => $allScenarioB,
             'uncheckedDomains' => $this->resolveUncheckedDomains($matrix),
+            // Our own side of the pipeline. Without it, "reports stopped
+            // arriving" is unanswerable from inside the product and every
+            // ingestion question becomes an SSH session.
+            'intakeHealth' => $this->ingestionHealthReader->centralInboxIntakeHealth(),
         ]);
     }
 
