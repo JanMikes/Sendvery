@@ -398,6 +398,15 @@
                                                    data-row-link-target="link"
                                                    aria-label="View senders for {{ sender.displayLabel }}">{{ sender.displayLabel }}</a>
                                             {% endif %}
+                                            {# A row is a sender, not an address, so the reader
+                                               needs to know what kind of sender it is before
+                                               reading its pass rates: a forwarder at 0% SPF is
+                                               normal, an unrecognised host at 0% SPF is not.
+                                               "Unrecognised" itself stays unwritten — it would
+                                               label most rows and inform nobody. #}
+                                            {% if sender.senderRole is not null and sender.senderRole.value != 'unknown' %}
+                                                <span class="block text-xs font-normal text-base-content/60" data-testid="top-sender-role">{{ sender.senderRole.label }}</span>
+                                            {% endif %}
                                         </td>
                                         <td class="text-right">{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
                                         <td class="text-right">

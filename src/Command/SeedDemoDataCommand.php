@@ -7,6 +7,7 @@ namespace App\Command;
 use App\Entity\Alert;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
+use App\Entity\DnsCheckResult;
 use App\Entity\DomainHealthSnapshot;
 use App\Entity\ManagedDmarcPolicyChange;
 use App\Entity\MonitoredDomain;
@@ -23,6 +24,7 @@ use App\Value\DmarcPolicy;
 use App\Value\Dns\AutoRampStage;
 use App\Value\Dns\DmarcSetupMode;
 use App\Value\Dns\PolicyChangeSource;
+use App\Value\DnsCheckType;
 use App\Value\SubscriptionPlan;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
@@ -88,6 +90,7 @@ final class SeedDemoDataCommand extends Command
         foreach ($domains as $config) {
             $reportCount += $this->createReports($config['domain'], $config['passRatio']);
             $snapshotCount += $this->createSnapshots($config['domain'], $config['grade'], $config['scores']);
+            $this->createDnsCheckResults($config['domain'], $config['scores']);
         }
 
         $alertCount = $this->createAlerts($team, array_column($domains, 'domain'));
@@ -141,6 +144,12 @@ final class SeedDemoDataCommand extends Command
         );
         $connection->executeStatement(
             'DELETE FROM domain_health_snapshot WHERE monitored_domain_id IN (
+                SELECT id FROM monitored_domain WHERE team_id = :teamId
+            )',
+            ['teamId' => $teamId],
+        );
+        $connection->executeStatement(
+            'DELETE FROM dns_check_result WHERE monitored_domain_id IN (
                 SELECT id FROM monitored_domain WHERE team_id = :teamId
             )',
             ['teamId' => $teamId],
@@ -420,6 +429,52 @@ final class SeedDemoDataCommand extends Command
         }
 
         return $created;
+    }
+
+    /**
+     * The AUTHORITATIVE per-protocol state every surface now reads is the newest
+     * `dns_check_result` row — not the snapshot scores and not the `*_verified_at`
+     * columns. Without these rows the seeded demo domains would render with no
+     * protocol badges at all on `/app/domains`, which is exactly the "empty
+     * surface misread as a bug" problem the seeder exists to prevent.
+     *
+     * A score of 0 for a protocol means the demo story is "record absent", so it
+     * gets a row with a null raw record; anything else is a published record that
+     * validates.
+     *
+     * @param array{spf: int, dkim: int, dmarc: int, mx: int, blacklist: int} $scores
+     */
+    private function createDnsCheckResults(MonitoredDomain $domain, array $scores): void
+    {
+        $checkedAt = $this->clock->now()->modify('-1 day')->setTime(3, 0);
+
+        $rawRecords = [
+            DnsCheckType::Spf->value => 'v=spf1 include:_spf.google.com ~all',
+            DnsCheckType::Dkim->value => 'v=DKIM1; k=rsa; p=MIGfMA0GCS',
+            DnsCheckType::Dmarc->value => 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com',
+            DnsCheckType::Mx->value => '10 aspmx.l.google.com',
+        ];
+
+        foreach ($rawRecords as $type => $rawRecord) {
+            $isValid = $scores[$type] > 0;
+
+            $check = new DnsCheckResult(
+                id: $this->identityProvider->nextIdentity(),
+                monitoredDomain: $domain,
+                type: DnsCheckType::from($type),
+                checkedAt: $checkedAt,
+                rawRecord: $isValid ? $rawRecord : null,
+                isValid: $isValid,
+                issues: $isValid ? [] : [['severity' => 'error', 'message' => 'No record found']],
+                details: [],
+                previousRawRecord: null,
+                hasChanged: false,
+            );
+            // Seeding must not emit DNS-change alerts — the demo alert set is
+            // curated separately by createAlerts().
+            $check->popEvents();
+            $this->entityManager->persist($check);
+        }
     }
 
     /**

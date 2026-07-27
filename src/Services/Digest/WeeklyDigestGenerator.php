@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Services\Digest;
 
 use App\Entity\Team;
+use App\Query\SenderIdentitySql;
 use App\Value\AlertSeverity;
+use App\Value\SenderRole;
 use App\Value\WeeklyDigestAlertItem;
 use App\Value\WeeklyDigestBrokenDnsItem;
 use App\Value\WeeklyDigestData;
 use App\Value\WeeklyDigestDomainData;
+use App\Value\WeeklyDigestNewSender;
 use App\Value\WeeklyDigestSenderReview;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
@@ -27,6 +30,11 @@ final readonly class WeeklyDigestGenerator
     /**
      * New senders listed per domain before collapsing into "+N more". Keeps a
      * chatty domain from pushing the rest of the digest below the fold.
+     *
+     * A display cap, not a query limit: the generator returns every new sender
+     * so the "+N more" tail can state a true number. Both the HTML template and
+     * the plain-text alternative read this constant rather than hardcoding 8 —
+     * two copies of the cap would eventually disagree about how many were hidden.
      */
     public const int NEW_SENDERS_PER_DOMAIN_LIMIT = 8;
 
@@ -60,19 +68,20 @@ final readonly class WeeklyDigestGenerator
 
         $domainData = [];
         $totalMessages = 0;
-        $passRateSum = 0.0;
-        $domainsWithData = 0;
+        $totalPassedMessages = 0;
 
         foreach ($domains as $domain) {
             $domainName = (string) $domain['domain'];
             $messages = (int) $domain['total_messages'];
+            $passedMessages = (int) $domain['passed_messages'];
             $passRate = self::toNullableFloat($domain['pass_rate']);
-            $totalMessages += $messages;
 
-            if (null !== $passRate) {
-                $passRateSum += $passRate;
-                ++$domainsWithData;
-            }
+            // Messages, not percentages. The team headline is
+            // totalPassed/totalMessages; summing per-domain rates and dividing
+            // by the domain count is what produced 97.9% for a week whose real,
+            // message-weighted rate was 96.5% (DEC-059 D2).
+            $totalMessages += $messages;
+            $totalPassedMessages += $passedMessages;
 
             // A delta needs real numbers on BOTH sides. Comparing against a
             // week that reported nothing would manufacture a "+94.1%" swing out
@@ -87,9 +96,10 @@ final readonly class WeeklyDigestGenerator
             $domainData[] = new WeeklyDigestDomainData(
                 domainName: $domainName,
                 totalMessages: $messages,
+                passedMessages: $passedMessages,
                 passRate: $passRate,
                 passRateDelta: $passRateDelta,
-                newSenders: $this->getNewSenders($domainId, $periodStart, $periodEnd),
+                newSenders: $this->getNewSenders($teamId, $domainId, $periodStart, $periodEnd),
                 domainId: $domainId,
                 senderReview: $this->getSenderReview($domainId),
             );
@@ -104,7 +114,7 @@ final readonly class WeeklyDigestGenerator
             domains: $domainData,
             totalDomains: count($domains),
             totalMessages: $totalMessages,
-            averagePassRate: $domainsWithData > 0 ? $passRateSum / $domainsWithData : null,
+            totalPassedMessages: $totalPassedMessages,
             alertsCount: array_sum(array_map(static fn (WeeklyDigestAlertItem $item): int => $item->occurrences, $alertGroups)),
             attentionAlertGroups: count($alertGroups),
             attentionAlerts: array_slice($alertGroups, 0, self::ATTENTION_ALERTS_LIMIT),
@@ -126,6 +136,7 @@ final readonly class WeeklyDigestGenerator
                 md.id AS domain_id,
                 md.domain,
                 COALESCE(SUM(rec.count), 0) AS total_messages,
+                COALESCE(SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END), 0) AS passed_messages,
                 SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
                     / NULLIF(SUM(rec.count), 0) * 100 AS pass_rate
             FROM monitored_domain md
@@ -145,8 +156,9 @@ final readonly class WeeklyDigestGenerator
     }
 
     /**
-     * Senders (resolved org, else source IP) seen for this domain during the
-     * window but never before it.
+     * Senders that reached this domain during the window and had never been
+     * seen anywhere in the team before it — one row per sender identity,
+     * annotated with what the sender is and how much it sent.
      *
      * "New" here means "first seen in DMARC data" and carries no opinion on
      * authorization — that lives in {@see getSenderReview()}, which reads
@@ -154,33 +166,79 @@ final readonly class WeeklyDigestGenerator
      * "new this week" is an event, "still unreviewed" is a standing condition,
      * and only the second one is asking the reader to do something.
      *
-     * @return list<string>
+     * Three things here are load-bearing, and each of them is a defect the
+     * shipped digest had (DEC-059 D5, D6):
+     *
+     *  - **Identity is the registrable domain of the PTR, not the IP.** The
+     *    expression comes from {@see SenderIdentitySql} rather than being
+     *    written out here, because every surface disagreeing about what "the
+     *    same sender" means is the original bug (D1). Seznam's rotating IPv6
+     *    pool is one relay; grouping by address reported it as a dozen
+     *    discoveries a week, forever.
+     *  - **"Seen before" is scoped to the TEAM.** An address the team has been
+     *    receiving mail from on one domain for three weeks is not a discovery on
+     *    a sibling domain added yesterday.
+     *  - **Role and volume travel with the sender.** A recipient-side gateway
+     *    breaks SPF by design, so an unannotated "new sender, 2 messages, 0%
+     *    pass" reads as an attack when it is a mail forward.
+     *
+     * `sender_identity` is LEFT JOINed throughout: an address nobody has
+     * resolved yet must still be reported — as itself — rather than disappear
+     * from the digest.
+     *
+     * @return list<WeeklyDigestNewSender>
      */
-    private function getNewSenders(string $domainId, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    private function getNewSenders(string $teamId, string $domainId, \DateTimeImmutable $from, \DateTimeImmutable $to): array
     {
-        /** @var list<string> $senders */
-        $senders = $this->database->executeQuery(
-            'SELECT DISTINCT COALESCE(rec.resolved_org, rec.source_ip) AS sender
+        // The prior-sightings subquery reuses the `rec`/`dr`/`si` aliases so the
+        // shared identity expression applies verbatim on both sides — the two
+        // definitions of "the same sender" must be the same string, not two
+        // strings that look alike. It is uncorrelated, so the inner aliases
+        // simply shadow the outer ones and nothing can bind to the wrong table.
+        /** @var list<array{sender_label: string, sender_role: string|null, message_total: int|string, passed_total: int|string}> $rows */
+        $rows = $this->database->executeQuery(
+            'SELECT
+                '.SenderIdentitySql::GROUPED_DISPLAY_LABEL.' AS sender_label,
+                '.SenderIdentitySql::GROUPED_ROLE.' AS sender_role,
+                SUM(rec.count) AS message_total,
+                SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END) AS passed_total
             FROM dmarc_record rec
             JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
+            '.SenderIdentitySql::JOIN.'
             WHERE dr.monitored_domain_id = :domainId
                 AND dr.date_range_end >= :from AND dr.date_range_end < :to
-                AND COALESCE(rec.resolved_org, rec.source_ip) NOT IN (
-                    SELECT DISTINCT COALESCE(prev_rec.resolved_org, prev_rec.source_ip)
-                    FROM dmarc_record prev_rec
-                    JOIN dmarc_report prev_dr ON prev_dr.id = prev_rec.dmarc_report_id
-                    WHERE prev_dr.monitored_domain_id = :domainId
-                        AND prev_dr.date_range_end < :from
+                AND '.SenderIdentitySql::IDENTITY_KEY.' NOT IN (
+                    SELECT '.SenderIdentitySql::IDENTITY_KEY.'
+                    FROM dmarc_record rec
+                    JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
+                    JOIN monitored_domain md ON md.id = dr.monitored_domain_id
+                    '.SenderIdentitySql::JOIN.'
+                    WHERE md.team_id = :teamId
+                        AND dr.date_range_end < :from
                 )
-            ORDER BY sender',
+            GROUP BY '.SenderIdentitySql::IDENTITY_KEY.'
+            ORDER BY message_total DESC, sender_label',
             [
+                'teamId' => $teamId,
                 'domainId' => $domainId,
                 'from' => $from->format('Y-m-d H:i:s'),
                 'to' => $to->format('Y-m-d H:i:s'),
+                'pass' => 'pass',
             ],
-        )->fetchFirstColumn();
+        )->fetchAllAssociative();
 
-        return $senders;
+        return array_map(
+            static fn (array $row): WeeklyDigestNewSender => new WeeklyDigestNewSender(
+                label: $row['sender_label'],
+                // No identity row for any address in the group means nothing has
+                // classified it yet, which is exactly what Unknown says: worth a
+                // glance, not an accusation.
+                role: null === $row['sender_role'] ? SenderRole::Unknown : SenderRole::from($row['sender_role']),
+                messageCount: (int) $row['message_total'],
+                passedMessageCount: (int) $row['passed_total'],
+            ),
+            $rows,
+        );
     }
 
     /**

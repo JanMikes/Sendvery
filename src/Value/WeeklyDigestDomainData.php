@@ -7,11 +7,21 @@ namespace App\Value;
 final readonly class WeeklyDigestDomainData
 {
     /**
-     * @param list<string> $newSenders senders seen for the first time this week
+     * @param list<WeeklyDigestNewSender> $newSenders senders seen for the first time this week, one row per sender identity
      */
     public function __construct(
         public string $domainName,
         public int $totalMessages,
+        /**
+         * Messages that passed DKIM or SPF this week.
+         *
+         * Carried as a count, not just as the percentage below, because the
+         * team-wide headline rate has to be message-weighted. Averaging
+         * per-domain percentages let one domain sending a single message move
+         * the headline by 33 points and printed 97.9% where the truth was
+         * 96.5% (DEC-059 D2).
+         */
+        public int $passedMessages,
         /**
          * Pass rate for the week, or null when no DMARC records landed in the
          * window. Never 0.0 for "no data" — a reader cannot tell a brand-new

@@ -75,6 +75,10 @@
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {% for domain in domains %}
                 {% set dnsHealth = dnsHealthByDomain[domain.domainId] ?? null %}
+                {# Keyed by DnsCheckType value. An absent key means no check row
+                   for that protocol yet — the card renders no badge rather than
+                   asserting the record is missing. #}
+                {% set protocolStates = protocolStatesByDomain[domain.domainId] ?? {} %}
                 <twig:DomainCard
                     domainId="{{ domain.domainId }}"
                     domainName="{{ domain.domainName }}"
@@ -86,10 +90,10 @@
                     severity="{{ severityByDomain[domain.domainId].value }}"
                     :dnsGrade="dnsHealth and dnsHealth.hasSnapshot() ? dnsHealth.latestSnapshotGrade : null"
                     :dnsGradeColor="dnsHealth and dnsHealth.hasSnapshot() ? dnsHealth.snapshotGradeColor() : null"
-                    :spfPass="dnsHealth ? dnsHealth.isSpfVerified() : null"
-                    :dkimPass="dnsHealth ? dnsHealth.isDkimVerified() : null"
-                    :dmarcPass="dnsHealth ? dnsHealth.isDmarcVerified() : null"
-                    :mxScore="dnsHealth ? dnsHealth.latestMxScore : null"
+                    :spfState="protocolStates.spf is defined ? protocolStates.spf.protocolState().value : null"
+                    :dkimState="protocolStates.dkim is defined ? protocolStates.dkim.protocolState().value : null"
+                    :dmarcState="protocolStates.dmarc is defined ? protocolStates.dmarc.protocolState().value : null"
+                    :mxState="protocolStates.mx is defined ? protocolStates.mx.protocolState().value : null"
                     domainHealthUrl="{{ path('dashboard_domain_health', { id: domain.domainId }) }}"
                 />
             {% endfor %}

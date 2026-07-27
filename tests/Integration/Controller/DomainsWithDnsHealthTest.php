@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Controller;
 
+use App\Entity\DnsCheckResult;
 use App\Entity\DomainHealthSnapshot;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
+use App\Value\DnsCheckType;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
@@ -122,9 +124,26 @@ final class DomainsWithDnsHealthTest extends WebTestCase
 
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
-        $persona->domain->spfVerifiedAt = new \DateTimeImmutable('-1 day');
-        $persona->domain->dkimVerifiedAt = new \DateTimeImmutable('-1 day');
-        $persona->domain->dmarcVerifiedAt = new \DateTimeImmutable('-1 day');
+        // The badges read the stored `dns_check_result` rows, not the
+        // `*_verified_at` columns — those are set-only and cannot distinguish
+        // "never checked" from "checked and passing". A real check per protocol
+        // is what earns a badge.
+        foreach (DnsCheckType::cases() as $type) {
+            $check = new DnsCheckResult(
+                id: Uuid::uuid7(),
+                monitoredDomain: $persona->domain,
+                type: $type,
+                checkedAt: new \DateTimeImmutable('-1 day'),
+                rawRecord: 'record',
+                isValid: true,
+                issues: [],
+                details: [],
+                previousRawRecord: null,
+                hasChanged: false,
+            );
+            $check->popEvents();
+            $em->persist($check);
+        }
         $em->persist(new DomainHealthSnapshot(
             id: Uuid::uuid7(),
             monitoredDomain: $persona->domain,

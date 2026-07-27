@@ -7,7 +7,9 @@ namespace App\Tests\Integration\MessageHandler;
 use App\Entity\Alert;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
+use App\Entity\KnownSender;
 use App\Entity\MonitoredDomain;
+use App\Entity\SenderIdentity;
 use App\Message\SendWeeklyDigest;
 use App\MessageHandler\SendWeeklyDigestHandler;
 use App\Services\Digest\WeeklyDigestGenerator;
@@ -20,6 +22,7 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\SenderRole;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
@@ -178,7 +181,7 @@ final class WeeklyDigestEmailContentTest extends WebTestCase
     }
 
     #[Test]
-    public function newSendersAreGroupedPerDomainWithATotalAndACappedChipList(): void
+    public function newSendersAreListedPerDomainWithATotalAndACappedList(): void
     {
         $persona = $this->onboardedPersona();
         assert(null !== $persona->domain);
@@ -188,7 +191,124 @@ final class WeeklyDigestEmailContentTest extends WebTestCase
 
         self::assertStringContainsString('New senders discovered', $html);
         self::assertStringContainsString('· 11 new', $html);
-        self::assertStringContainsString('+3 more', $html);
+        self::assertStringContainsString(
+            '+'.(11 - WeeklyDigestGenerator::NEW_SENDERS_PER_DOMAIN_LIMIT).' more',
+            $html,
+            'One chatty domain must not push the rest of the digest off the screen.',
+        );
+        self::assertStringContainsString(
+            'and '.(11 - WeeklyDigestGenerator::NEW_SENDERS_PER_DOMAIN_LIMIT).' more',
+            $this->renderDigestText($persona),
+            'The plain-text alternative must hide exactly as much as the HTML one.',
+        );
+    }
+
+    /**
+     * The complaint that produced DEC-059: a wall of raw addresses, all tinted
+     * identically, so a recipient-side security gateway that failed four
+     * forwarded messages was indistinguishable from an attack.
+     */
+    #[Test]
+    public function aMailGatewayIsNamedAndExplainedInsteadOfAppearingAsRawAddresses(): void
+    {
+        $persona = $this->onboardedPersona();
+        assert(null !== $persona->domain);
+
+        foreach (['52.212.19.177' => 'eu', '15.222.110.90' => 'ca', '35.174.145.124' => 'us'] as $ip => $region) {
+            $this->seedIdentity($ip, $region.'.cloud-sec-av.com', 'cloud-sec-av.com', null, SenderRole::Forwarder);
+        }
+
+        $this->seedReport($persona->domain, [
+            ['ip' => '52.212.19.177', 'count' => 2, 'passes' => false],
+            ['ip' => '15.222.110.90', 'count' => 1, 'passes' => false],
+            ['ip' => '35.174.145.124', 'count' => 1, 'passes' => false],
+        ]);
+
+        $html = $this->renderDigest($persona);
+
+        self::assertStringContainsString('cloud-sec-av.com', $html);
+        self::assertStringContainsString(SenderRole::Forwarder->label(), $html);
+        self::assertStringContainsString('4 messages', $html, 'The three nodes are one sender with one combined volume.');
+        self::assertStringNotContainsString('52.212.19.177', $html, 'The reader must never be shown the raw addresses.');
+        self::assertStringContainsString('· 1 new', $html, 'One gateway is one discovery, not three.');
+    }
+
+    #[Test]
+    public function theHeadlinePassRateReflectsEveryMessageRatherThanEveryDomainEqually(): void
+    {
+        $persona = $this->onboardedPersona();
+        assert(null !== $persona->domain);
+        $busy = $this->addDomain($persona, 'busy-digest.example');
+
+        $this->seedReport($persona->domain, [['ip' => '198.51.100.1', 'count' => 10, 'passes' => true]]);
+        $this->seedReport($busy, [
+            ['ip' => '198.51.100.2', 'count' => 45, 'passes' => true],
+            ['ip' => '198.51.100.3', 'count' => 2, 'passes' => false],
+        ]);
+
+        $html = $this->renderDigest($persona);
+
+        self::assertStringContainsString('96.5%', $html, '55 of 57 messages passed.');
+        self::assertStringNotContainsString(
+            '97.9%',
+            $html,
+            'Averaging the two domain rates would claim 97.9% while the sentence beside it talks about all 57 messages.',
+        );
+    }
+
+    #[Test]
+    public function thePlainTextDigestAlsoSaysWhatEachNewSenderIs(): void
+    {
+        // Plenty of readers get the text/plain alternative. It has to carry the
+        // same reassurance, not a bare list of names.
+        $persona = $this->onboardedPersona();
+        assert(null !== $persona->domain);
+        $this->seedIdentity('77.75.78.89', 'mxb.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp);
+        $this->seedReport($persona->domain, [['ip' => '77.75.78.89', 'count' => 47, 'passes' => true]]);
+
+        $text = $this->renderDigestText($persona);
+
+        self::assertStringContainsString('Overall pass rate: 100.0%', $text);
+        self::assertStringContainsString('New senders (1):', $text);
+        self::assertStringContainsString('Seznam — '.SenderRole::Esp->label().', 47 messages, 100.0% pass', $text);
+    }
+
+    #[Test]
+    public function thePlainTextDigestReportsTheTrendAndTheSendersStillWaitingForADecision(): void
+    {
+        $persona = $this->onboardedPersona();
+        assert(null !== $persona->domain);
+        $em = $this->getService(EntityManagerInterface::class);
+
+        // Half of last week's mail failed; all of this week's passed.
+        $this->seedReport($persona->domain, [
+            ['ip' => '198.51.100.20', 'count' => 5, 'passes' => true],
+            ['ip' => '198.51.100.21', 'count' => 5, 'passes' => false],
+        ], periodEnd: new \DateTimeImmutable('-10 days'));
+        $this->seedReport($persona->domain, [['ip' => '198.51.100.20', 'count' => 10, 'passes' => true]]);
+
+        // More unreviewed senders than the digest will name, so the text has to
+        // account for the ones it did not print.
+        for ($index = 0; $index < WeeklyDigestGenerator::UNREVIEWED_SENDERS_PER_DOMAIN_LIMIT + 2; ++$index) {
+            $em->persist(new KnownSender(
+                id: Uuid::uuid7(),
+                monitoredDomain: $persona->domain,
+                sourceIp: '203.0.113.'.(50 + $index),
+                firstSeenAt: new \DateTimeImmutable('-30 days'),
+                lastSeenAt: new \DateTimeImmutable('-1 day'),
+                totalMessages: 100 - $index,
+                passRate: 100.0,
+            ));
+        }
+
+        $text = $this->renderDigestText($persona);
+
+        self::assertStringContainsString('Trend: +50.0%', $text);
+        self::assertStringContainsString(
+            'Waiting for your review ('.(WeeklyDigestGenerator::UNREVIEWED_SENDERS_PER_DOMAIN_LIMIT + 2).',',
+            $text,
+        );
+        self::assertStringContainsString('and 2 more', $text, 'The count of unnamed senders must survive into plain text.');
     }
 
     private function onboardedPersona(): Persona
@@ -205,6 +325,16 @@ final class WeeklyDigestEmailContentTest extends WebTestCase
 
     private function renderDigest(Persona $persona): string
     {
+        return (string) $this->sendDigest($persona)->getHtmlBody();
+    }
+
+    private function renderDigestText(Persona $persona): string
+    {
+        return (string) $this->sendDigest($persona)->getTextBody();
+    }
+
+    private function sendDigest(Persona $persona): Email
+    {
         $em = $this->getService(EntityManagerInterface::class);
         $em->flush();
 
@@ -216,7 +346,87 @@ final class WeeklyDigestEmailContentTest extends WebTestCase
         $message = $messages[0];
         self::assertInstanceOf(Email::class, $message);
 
-        return (string) $message->getHtmlBody();
+        return $message;
+    }
+
+    private function addDomain(Persona $persona, string $name): MonitoredDomain
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $persona->team,
+            domain: $name,
+            createdAt: new \DateTimeImmutable(),
+        );
+        $domain->popEvents();
+        $em->persist($domain);
+
+        return $domain;
+    }
+
+    private function seedIdentity(
+        string $sourceIp,
+        string $hostname,
+        ?string $registrableDomain,
+        ?string $organization,
+        SenderRole $role,
+    ): void {
+        $this->getService(EntityManagerInterface::class)->persist(new SenderIdentity(
+            id: Uuid::uuid7(),
+            sourceIp: $sourceIp,
+            resolvedAt: new \DateTimeImmutable(),
+            hostname: $hostname,
+            registrableDomain: $registrableDomain,
+            organization: $organization,
+            role: $role,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable(),
+        ));
+    }
+
+    /**
+     * @param list<array{ip: string, count: int, passes: bool}> $records
+     */
+    private function seedReport(MonitoredDomain $domain, array $records, ?\DateTimeImmutable $periodEnd = null): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $report = $this->newReport($domain, $periodEnd ?? new \DateTimeImmutable('-1 day'));
+        $em->persist($report);
+
+        foreach ($records as $record) {
+            $em->persist(new DmarcRecord(
+                id: Uuid::uuid7(),
+                dmarcReport: $report,
+                sourceIp: $record['ip'],
+                count: $record['count'],
+                disposition: Disposition::None,
+                dkimResult: $record['passes'] ? AuthResult::Pass : AuthResult::Fail,
+                spfResult: $record['passes'] ? AuthResult::Pass : AuthResult::Fail,
+                headerFrom: $domain->domain,
+            ));
+        }
+    }
+
+    private function newReport(MonitoredDomain $domain, \DateTimeImmutable $periodEnd): DmarcReport
+    {
+        return new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'ext-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: $periodEnd->modify('-1 day'),
+            dateRangeEnd: $periodEnd,
+            policyDomain: $domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::None,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback></feedback>',
+            processedAt: new \DateTimeImmutable(),
+        );
     }
 
     private function seedAlerts(
@@ -247,41 +457,21 @@ final class WeeklyDigestEmailContentTest extends WebTestCase
         }
     }
 
+    /**
+     * Distinct providers, each with its own identity — so the cap being tested
+     * is the display limit and not the identity grouping.
+     */
     private function seedReportWithSenders(MonitoredDomain $domain, int $senderCount): void
     {
-        $em = $this->getService(EntityManagerInterface::class);
-
-        $report = new DmarcReport(
-            id: Uuid::uuid7(),
-            monitoredDomain: $domain,
-            reporterOrg: 'google.com',
-            reporterEmail: 'noreply@google.com',
-            externalReportId: 'ext-'.Uuid::uuid7()->toString(),
-            dateRangeBegin: new \DateTimeImmutable('-2 days'),
-            dateRangeEnd: new \DateTimeImmutable('-1 day'),
-            policyDomain: $domain->domain,
-            policyAdkim: DmarcAlignment::Relaxed,
-            policyAspf: DmarcAlignment::Relaxed,
-            policyP: DmarcPolicy::None,
-            policySp: null,
-            policyPct: 100,
-            rawXml: '<feedback></feedback>',
-            processedAt: new \DateTimeImmutable(),
-        );
-        $em->persist($report);
+        $records = [];
 
         for ($index = 0; $index < $senderCount; ++$index) {
-            $em->persist(new DmarcRecord(
-                id: Uuid::uuid7(),
-                dmarcReport: $report,
-                sourceIp: sprintf('192.0.2.%d', $index + 1),
-                count: 5,
-                disposition: Disposition::None,
-                dkimResult: AuthResult::Pass,
-                spfResult: AuthResult::Pass,
-                headerFrom: $domain->domain,
-                resolvedOrg: sprintf('sender-%02d.example', $index + 1),
-            ));
+            $ip = sprintf('192.0.2.%d', $index + 1);
+            $host = sprintf('mail.sender-%02d.example', $index + 1);
+            $this->seedIdentity($ip, $host, sprintf('sender-%02d.example', $index + 1), null, SenderRole::Esp);
+            $records[] = ['ip' => $ip, 'count' => 5, 'passes' => true];
         }
+
+        $this->seedReport($domain, $records);
     }
 }

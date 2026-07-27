@@ -7,6 +7,7 @@ namespace App\Tests\Integration\Controller;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\MonitoredDomain;
+use App\Entity\SenderIdentity;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
@@ -15,6 +16,7 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\SenderRole;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
@@ -132,10 +134,14 @@ final class PassRateRegressionBannerTest extends WebTestCase
         $em->flush();
     }
 
-    #[Test]
-    public function regressionBannerRendersWhenRecentPassRateDroppedTenPercentagePoints(): void
+    /**
+     * Enough history for the advisor to call a regression, with
+     * `198.51.100.50` as the dominant failure source.
+     *
+     * @param array{client: KernelBrowser, em: EntityManagerInterface, user: User, team: Team, domain: MonitoredDomain} $boot
+     */
+    private function persistRegressionShapedHistory(array $boot): void
     {
-        $boot = $this->bootClient();
         // Older history (8-29 days ago): 88 reports (22 days × 4 calls/day).
         // Together with the recent window below this puts the 30-day baseline
         // well above the TASK-109 MIN_SAMPLE_SIZE = 50 floor AND keeps the
@@ -164,6 +170,13 @@ final class PassRateRegressionBannerTest extends WebTestCase
                 $this->persistReport($boot['em'], $boot['domain'], $d, '203.0.113.51', 1, false);
             }
         }
+    }
+
+    #[Test]
+    public function regressionBannerRendersWhenRecentPassRateDroppedTenPercentagePoints(): void
+    {
+        $boot = $this->bootClient();
+        $this->persistRegressionShapedHistory($boot);
 
         $crawler = $boot['client']->request('GET', '/app/reports');
 
@@ -175,6 +188,42 @@ final class PassRateRegressionBannerTest extends WebTestCase
             'Pass rate dropped',
             (string) $crawler->filter('[data-testid="pass-rate-regression-banner-headline"]')->text(),
         );
+    }
+
+    /**
+     * The banner names the dominant failure source and tells the reader what
+     * to do about it. When that source is a mail gateway, the answer is
+     * "nothing" — SPF cannot survive a forward — and saying so is the
+     * difference between honest guidance and the "fix your misconfigured
+     * sending sources" advice that had a customer chasing benign appliances.
+     */
+    #[Test]
+    public function theBannerExplainsItselfWhenTheDominantFailureSourceIsAForwarder(): void
+    {
+        $boot = $this->bootClient();
+
+        $boot['em']->persist(new SenderIdentity(
+            id: Uuid::uuid7(),
+            sourceIp: '198.51.100.50',
+            resolvedAt: new \DateTimeImmutable(),
+            hostname: 'eu.cloud-sec-av.com',
+            registrableDomain: 'cloud-sec-av.com',
+            organization: null,
+            role: SenderRole::Forwarder,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable(),
+        ));
+
+        $this->persistRegressionShapedHistory($boot);
+
+        $crawler = $boot['client']->request('GET', '/app/reports');
+
+        self::assertResponseIsSuccessful();
+
+        $reason = $crawler->filter('[data-testid="pass-rate-regression-banner-reason"]');
+        self::assertGreaterThan(0, $reason->count(), 'A dominant failure source must still be named.');
+        self::assertStringContainsString('cloud-sec-av.com', $reason->text());
+        self::assertStringContainsString('forwards your mail', $reason->text());
     }
 
     #[Test]

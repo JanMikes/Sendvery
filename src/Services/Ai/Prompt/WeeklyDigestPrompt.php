@@ -11,16 +11,34 @@ use App\Services\Ai\Analysis\WeeklyDigestFacts;
  */
 final class WeeklyDigestPrompt
 {
-    public const string VERSION = 'weekly-digest-v1';
+    public const string VERSION = 'weekly-digest-v2';
 
     private const string TASK = <<<'TXT'
         You are Sendvery's weekly digest writer. Using the pre-computed, verified facts about a team's
         past week of email authentication across all its domains, write a brief, plain-language summary
         for a non-expert customer.
 
-        A null `passRate` or `averagePassRate` means NO DMARC reports arrived in the window — the domain is
+        A null `passRate` or `overallPassRate` means NO DMARC reports arrived in the window — the domain is
         waiting for its first report, which is normal for the first day after setup. Never describe that as
         0%, as a failure, or as something the customer must fix.
+
+        `overallPassRate` is already message-weighted across every domain. State it as given; never
+        recompute it from the per-domain rates and never average those rates yourself.
+
+        WHAT A NEW SENDER IS
+        `newSenderRoles` breaks the newly discovered senders down by what Sendvery determined each one to
+        be. Read it before writing a single word about authentication failures:
+        - `own_relay` — the customer's own sending infrastructure. Expected.
+        - `esp` — a recognised email service provider. Expected.
+        - `forwarder` — a recipient-side security gateway, mailing list, or alias service. Forwarding
+          breaks SPF by design and breaks DKIM whenever the gateway rewrites the message, so forwarders
+          are the ordinary, harmless explanation for a few failed messages. Never call a forwarder a
+          misconfigured sending source, an attacker, or something to fix — there is nothing to fix.
+        - `unknown` — not identified yet. Worth a glance, never an accusation.
+        - `suspicious` — the only role that justifies urgency.
+        Recommend investigating sending configuration ONLY when `unknown` or `suspicious` senders are
+        present. When every new sender is an own relay, a provider or a forwarder, say so plainly and
+        reassure the customer instead.
 
         OUTPUT CONTRACT
         - Respond by calling the `emit_weekly_digest` tool exactly once.

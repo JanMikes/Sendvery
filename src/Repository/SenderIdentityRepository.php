@@ -24,8 +24,7 @@ final readonly class SenderIdentityRepository
 
     public function findByIp(string $sourceIp): ?SenderIdentity
     {
-        return $this->entityManager->getRepository(SenderIdentity::class)
-            ->findOneBy(['sourceIp' => $sourceIp]);
+        return $this->findByIps([$sourceIp])[$sourceIp] ?? null;
     }
 
     /**
@@ -38,14 +37,16 @@ final readonly class SenderIdentityRepository
      */
     public function findByIps(array $sourceIps): array
     {
-        if ([] === $sourceIps) {
+        $wanted = array_values(array_unique($sourceIps));
+
+        if ([] === $wanted) {
             return [];
         }
 
         $identities = $this->entityManager->getRepository(SenderIdentity::class)
             ->createQueryBuilder('si')
             ->where('si.sourceIp IN (:sourceIps)')
-            ->setParameter('sourceIps', array_values(array_unique($sourceIps)))
+            ->setParameter('sourceIps', $wanted)
             ->getQuery()
             ->getResult();
 
@@ -53,6 +54,10 @@ final readonly class SenderIdentityRepository
 
         foreach ($identities as $identity) {
             $byIp[$identity->sourceIp] = $identity;
+        }
+
+        foreach ($this->pendingInserts($wanted) as $sourceIp => $identity) {
+            $byIp[$sourceIp] = $identity;
         }
 
         return $byIp;
@@ -65,5 +70,34 @@ final readonly class SenderIdentityRepository
     public function add(SenderIdentity $identity): void
     {
         $this->entityManager->persist($identity);
+    }
+
+    /**
+     * Identities already discovered in *this* transaction but not yet written.
+     *
+     * A DQL query only sees flushed rows, and no handler is allowed to flush —
+     * the bus middleware does that once, at the end. So two handlers of the same
+     * `DmarcReportProcessed` event (sender inventory and the new-sender alert)
+     * would each miss a brand-new address, each create a row for it, and the
+     * closing flush would die on `uniq_sender_identity_source_ip`, rolling back
+     * the entire report ingest. Reading pending inserts back makes the cache
+     * authoritative within a transaction as well as across them — and, as a
+     * bonus, stops the same address being reverse-looked-up twice per report.
+     *
+     * @param list<string> $sourceIps
+     *
+     * @return array<string, SenderIdentity>
+     */
+    private function pendingInserts(array $sourceIps): array
+    {
+        $pending = [];
+
+        foreach ($this->entityManager->getUnitOfWork()->getScheduledEntityInsertions() as $scheduled) {
+            if ($scheduled instanceof SenderIdentity && in_array($scheduled->sourceIp, $sourceIps, true)) {
+                $pending[$scheduled->sourceIp] = $scheduled;
+            }
+        }
+
+        return $pending;
     }
 }

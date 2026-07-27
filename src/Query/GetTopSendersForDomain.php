@@ -17,6 +17,9 @@ use Doctrine\DBAL\Connection;
  * authorised IPs differently from unreviewed ones — the single most actionable
  * insight a DMARC report can surface ("Mailchimp sends 40% of your mail and
  * 8% of it fails DKIM").
+ *
+ * Rows are grouped by sender identity ({@see SenderIdentitySql}), not by IP, so
+ * a rotating relay pool is one line in the table instead of fifteen.
  */
 final readonly class GetTopSendersForDomain
 {
@@ -36,16 +39,17 @@ final readonly class GetTopSendersForDomain
             return [];
         }
 
-        // The three per-group COUNTs exist because a group is an ORGANISATION,
-        // not an IP: "Seznam" can cover five addresses in three different
-        // review states. MAX(is_authorized) — the previous single signal —
-        // reported such a group as authorized as soon as ONE of its addresses
-        // was, hiding the four still awaiting a decision.
-        /** @var list<array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string}> $rows */
+        // The three per-group COUNTs exist because a group is a SENDER, not an
+        // IP: "Seznam" can cover five addresses in three different review
+        // states. MAX(is_authorized) — the previous single signal — reported
+        // such a group as authorized as soon as ONE of its addresses was,
+        // hiding the four still awaiting a decision.
+        /** @var list<array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string}> $rows */
         $rows = $this->database->executeQuery(
-            "SELECT
-                COALESCE(rec.resolved_org, rec.resolved_hostname, rec.source_ip) AS group_key,
-                COALESCE(rec.resolved_org, rec.resolved_hostname, rec.source_ip) AS display_label,
+            'SELECT
+                '.SenderIdentitySql::IDENTITY_KEY.' AS group_key,
+                '.SenderIdentitySql::GROUPED_DISPLAY_LABEL.' AS display_label,
+                '.SenderIdentitySql::GROUPED_ROLE." AS sender_role,
                 SUM(rec.count) AS total_messages,
                 SUM(CASE WHEN rec.dkim_result = 'pass' THEN rec.count ELSE 0 END) AS dkim_pass_count,
                 SUM(CASE WHEN rec.spf_result  = 'pass' THEN rec.count ELSE 0 END) AS spf_pass_count,
@@ -60,11 +64,12 @@ final readonly class GetTopSendersForDomain
             LEFT JOIN known_sender ks
                 ON ks.monitored_domain_id = dr.monitored_domain_id
                 AND ks.source_ip = rec.source_ip
+            ".SenderIdentitySql::JOIN.'
             WHERE dr.monitored_domain_id = :domainId
               AND md.team_id IN (:teamIds)
             GROUP BY group_key
             ORDER BY total_messages DESC
-            LIMIT :limit",
+            LIMIT :limit',
             [
                 'domainId' => $domainId,
                 'teamIds' => $teamIds,

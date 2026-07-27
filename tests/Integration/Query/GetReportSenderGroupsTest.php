@@ -8,6 +8,7 @@ use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\KnownSender;
 use App\Entity\MonitoredDomain;
+use App\Entity\SenderIdentity;
 use App\Entity\Team;
 use App\Query\GetReportSenderGroups;
 use App\Tests\IntegrationTestCase;
@@ -15,6 +16,7 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\SenderRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
 use Ramsey\Uuid\UuidInterface;
@@ -103,6 +105,26 @@ final class GetReportSenderGroupsTest extends IntegrationTestCase
             headerFrom: $this->domain->domain,
             resolvedHostname: $resolvedHostname,
             resolvedOrg: $resolvedOrg,
+        ));
+    }
+
+    private function persistIdentity(
+        string $sourceIp,
+        string $hostname,
+        string $registrableDomain,
+        ?string $organization,
+        SenderRole $role,
+    ): void {
+        $this->em->persist(new SenderIdentity(
+            id: Uuid::uuid7(),
+            sourceIp: $sourceIp,
+            resolvedAt: new \DateTimeImmutable('2026-05-02'),
+            hostname: $hostname,
+            registrableDomain: $registrableDomain,
+            organization: $organization,
+            role: $role,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable('2026-05-02'),
         ));
     }
 
@@ -278,6 +300,119 @@ final class GetReportSenderGroupsTest extends IntegrationTestCase
 
         self::assertCount(1, $groups);
         self::assertFalse($groups[0]->senderIsAuthorized);
+    }
+
+    /**
+     * The pane exists to answer "who sent this and did it work". Splitting one
+     * gateway across its regional nodes answered it three times, each answer
+     * too small to act on — and none of those nodes appears in any curated
+     * organisation list, so only the PTR's registrable domain can join them up.
+     */
+    public function testAGatewaysRegionalNodesAreOneGroupCarryingEveryAddress(): void
+    {
+        $report = $this->createReport();
+
+        $this->persistIdentity('52.212.19.177', 'eu.cloud-sec-av.com', 'cloud-sec-av.com', null, SenderRole::Forwarder);
+        $this->persistIdentity('15.222.110.90', 'ca.cloud-sec-av.com', 'cloud-sec-av.com', null, SenderRole::Forwarder);
+        $this->persistIdentity('35.174.145.124', 'us.cloud-sec-av.com', 'cloud-sec-av.com', null, SenderRole::Forwarder);
+
+        $this->persistRecord($report, '52.212.19.177', 2, AuthResult::Pass, AuthResult::Fail);
+        $this->persistRecord($report, '15.222.110.90', 1, AuthResult::Fail, AuthResult::Fail);
+        $this->persistRecord($report, '35.174.145.124', 1, AuthResult::Pass, AuthResult::Fail);
+        $this->em->flush();
+
+        $groups = $this->query->forReport($report->id->toString(), [$this->teamId->toString()]);
+
+        self::assertCount(1, $groups);
+        self::assertSame('cloud-sec-av.com', $groups[0]->displayLabel);
+        self::assertSame(4, $groups[0]->totalMessages);
+        self::assertSame(SenderRole::Forwarder, $groups[0]->senderRole);
+
+        $sourceIps = $groups[0]->sourceIps;
+        sort($sourceIps);
+        self::assertSame(
+            ['15.222.110.90', '35.174.145.124', '52.212.19.177'],
+            $sourceIps,
+            'Collapsing the display must not hide which addresses are behind it — the evidence table still expands from these.',
+        );
+    }
+
+    public function testARotatingRelayPoolIsOneGroupUnderItsOrganisationName(): void
+    {
+        $report = $this->createReport();
+
+        $this->persistIdentity('2a02:598:2222::1', 'mxb-1-908.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp);
+        $this->persistIdentity('2a02:598:2222::2', 'mxb-2-904.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp);
+        $this->persistIdentity('2a02:598:2222::3', 'mxb-3-514.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp);
+
+        $this->persistRecord($report, '2a02:598:2222::1', 5, AuthResult::Pass, AuthResult::Pass);
+        $this->persistRecord($report, '2a02:598:2222::2', 5, AuthResult::Pass, AuthResult::Pass);
+        $this->persistRecord($report, '2a02:598:2222::3', 5, AuthResult::Pass, AuthResult::Pass);
+        $this->em->flush();
+
+        $groups = $this->query->forReport($report->id->toString(), [$this->teamId->toString()]);
+
+        self::assertCount(1, $groups);
+        self::assertSame('Seznam', $groups[0]->displayLabel);
+        self::assertSame(15, $groups[0]->totalMessages);
+    }
+
+    /**
+     * A group is allowed to be part-identified: resolution is bounded per
+     * batch, so the second node of a pool can still be waiting. The classified
+     * member's role speaks for the group, because "one of these is a gateway"
+     * is the fact that explains the failures.
+     */
+    public function testAPartlyClassifiedGroupStillReportsTheRoleItIsKnownToHave(): void
+    {
+        $report = $this->createReport();
+
+        $this->persistIdentity('3.132.108.44', 'ipw-outbound.inkyphishfence.com', 'inkyphishfence.com', null, SenderRole::Forwarder);
+        $this->persistIdentity('34.210.15.192', 'ipw-outbound.inkyphishfence.com', 'inkyphishfence.com', null, SenderRole::Unknown);
+
+        $this->persistRecord($report, '3.132.108.44', 1, AuthResult::Pass, AuthResult::Fail);
+        $this->persistRecord($report, '34.210.15.192', 1, AuthResult::Pass, AuthResult::Fail);
+        $this->em->flush();
+
+        $groups = $this->query->forReport($report->id->toString(), [$this->teamId->toString()]);
+
+        self::assertCount(1, $groups);
+        self::assertSame(SenderRole::Forwarder, $groups[0]->senderRole);
+    }
+
+    public function testAnAddressWithNoIdentityKeepsItsPlaceAndReportsNoRole(): void
+    {
+        $report = $this->createReport();
+
+        $this->persistIdentity('198.51.100.4', 'mail.identified.example', 'identified.example', null, SenderRole::Esp);
+        $this->persistRecord($report, '198.51.100.4', 9, AuthResult::Pass, AuthResult::Pass);
+        $this->persistRecord($report, '198.51.100.77', 3, AuthResult::Fail, AuthResult::Fail);
+        $this->em->flush();
+
+        $groups = $this->query->forReport($report->id->toString(), [$this->teamId->toString()]);
+
+        self::assertCount(2, $groups);
+        self::assertSame('198.51.100.77', $groups[1]->displayLabel);
+        self::assertNull($groups[1]->senderRole);
+    }
+
+    /**
+     * The identity cache is authoritative over the enrichment copied onto each
+     * record at ingest: records written before enrichment existed, or replayed
+     * after a purge, carry nothing, and the shared cache is what fills them in.
+     */
+    public function testTheIdentityCacheNamesSendersWhoseRecordsWereIngestedWithoutEnrichment(): void
+    {
+        $report = $this->createReport();
+
+        $this->persistIdentity('192.0.2.55', 'mta.mailgun.org', 'mailgun.org', 'Mailgun', SenderRole::Esp);
+        $this->persistRecord($report, '192.0.2.55', 12, AuthResult::Pass, AuthResult::Pass);
+        $this->em->flush();
+
+        $groups = $this->query->forReport($report->id->toString(), [$this->teamId->toString()]);
+
+        self::assertCount(1, $groups);
+        self::assertSame('Mailgun', $groups[0]->displayLabel);
     }
 
     public function testCrossTenantIsolation(): void

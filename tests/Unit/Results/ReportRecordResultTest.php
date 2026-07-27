@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Results;
 
 use App\Results\ReportRecordResult;
+use App\Value\SenderRole;
 use PHPUnit\Framework\TestCase;
 
 final class ReportRecordResultTest extends TestCase
@@ -24,6 +25,7 @@ final class ReportRecordResultTest extends TestCase
             'spf_domain' => 'example.com',
             'resolved_hostname' => 'mail.google.com',
             'resolved_org' => 'Google',
+            'sender_role' => 'esp',
         ]);
 
         self::assertSame('rec-123', $result->recordId);
@@ -38,6 +40,7 @@ final class ReportRecordResultTest extends TestCase
         self::assertSame('example.com', $result->spfDomain);
         self::assertSame('mail.google.com', $result->resolvedHostname);
         self::assertSame('Google', $result->resolvedOrg);
+        self::assertSame(SenderRole::Esp, $result->senderRole);
     }
 
     public function testFromDatabaseRowWithNullFields(): void
@@ -55,6 +58,7 @@ final class ReportRecordResultTest extends TestCase
             'spf_domain' => null,
             'resolved_hostname' => null,
             'resolved_org' => null,
+            'sender_role' => null,
         ]);
 
         self::assertNull($result->dkimDomain);
@@ -62,5 +66,6 @@ final class ReportRecordResultTest extends TestCase
         self::assertNull($result->spfDomain);
         self::assertNull($result->resolvedHostname);
         self::assertNull($result->resolvedOrg);
+        self::assertNull($result->senderRole, 'An address the identity cache has never seen is not classified, and must not be dressed up as one.');
     }
 }

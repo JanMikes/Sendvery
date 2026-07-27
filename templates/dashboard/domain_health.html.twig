@@ -73,12 +73,16 @@
                 <div class="card-body">
                     <h3 class="card-title text-lg mb-4">Category Scores</h3>
                     <div class="space-y-3">
+                        {# Blacklist is deliberately NOT a scored category here — see
+                           the public health page for the full reason: the stored
+                           `blacklist_score` is a hardcoded 100, not a measurement,
+                           so a green bar claimed a clean result nobody checked.
+                           The row below links to the Blacklist tab and says so. #}
                         {% set categories = [
                             { name: 'SPF',       score: latest.spfScore,       id: 'health-spf' },
                             { name: 'DKIM',      score: latest.dkimScore,      id: 'health-dkim' },
                             { name: 'DMARC',     score: latest.dmarcScore,     id: 'health-dmarc' },
                             { name: 'MX',        score: latest.mxScore,        id: 'health-mx' },
-                            { name: 'Blacklist', score: latest.blacklistScore, id: 'health-blacklist' },
                         ] %}
                         {% for cat in categories %}
                             <div id="{{ cat.id }}">
@@ -86,15 +90,13 @@
                                     <span>{{ cat.name }}</span>
                                     <span class="font-medium">{{ cat.score }}%</span>
                                 </div>
-                                {% if cat.id == 'health-blacklist' %}
-                                    <a href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}" class="block">
-                                {% endif %}
                                 <progress class="progress {{ cat.score >= 80 ? 'progress-success' : (cat.score >= 50 ? 'progress-warning' : 'progress-error') }} w-full" value="{{ cat.score }}" max="100"></progress>
-                                {% if cat.id == 'health-blacklist' %}
-                                    </a>
-                                {% endif %}
                             </div>
                         {% endfor %}
+                        <div id="health-blacklist" class="flex justify-between text-sm">
+                            <a href="{{ path('dashboard_blacklist_status', {id: domain.domainId}) }}" class="link link-hover">Blacklist</a>
+                            <span class="text-base-content/50">Not checked yet</span>
+                        </div>
                     </div>
                 </div>
             </div>

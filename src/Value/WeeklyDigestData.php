@@ -19,10 +19,11 @@ final readonly class WeeklyDigestData
         public int $totalDomains,
         public int $totalMessages,
         /**
-         * Mean pass rate across domains that actually reported, or null when no
-         * domain did. Null renders as "—", never as 0%.
+         * Messages across the whole team that passed DKIM or SPF. Stored rather
+         * than a ready-made percentage so {@see overallPassRate()} is the only
+         * way to obtain the headline number.
          */
-        public ?float $averagePassRate,
+        public int $totalPassedMessages,
         /**
          * Total number of still-unresolved, non-Success alerts raised in the
          * window. Counts individual alerts, so it is >= the number of rows in
@@ -45,6 +46,25 @@ final readonly class WeeklyDigestData
         public int $dnsChangesCount,
         public array $currentlyBrokenDns = [],
     ) {
+    }
+
+    /**
+     * The headline pass rate: message-weighted across the whole team, or null
+     * when the team received no messages at all (rendered "—", never 0%).
+     *
+     * Derived from the two totals on purpose. The shipped digest averaged the
+     * per-domain percentages, which claimed 97.9% where the message-weighted
+     * truth was 96.5% and let one domain sending a single failing message swing
+     * the number by 33 points — while the sentence around it said "sent 57
+     * messages … with an overall pass rate of", asserting a weighted figure
+     * (DEC-059 D2). Computing it here means the headline cannot disagree with
+     * the volume printed beside it.
+     */
+    public function overallPassRate(): ?float
+    {
+        return $this->totalMessages > 0
+            ? $this->totalPassedMessages / $this->totalMessages * 100
+            : null;
     }
 
     /**

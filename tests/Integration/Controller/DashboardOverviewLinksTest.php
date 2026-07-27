@@ -337,8 +337,10 @@ final class DashboardOverviewLinksTest extends WebTestCase
             [
                 'teamId' => $teamId,
                 'count' => 600,
-                'startsAt' => '2026-05-01 00:00:00',
-                'endsAt' => '2026-06-01 00:00:00',
+                // Live window: a finished period correctly reports zero usage,
+                // which would hide the card this test is about.
+                'startsAt' => (new \DateTimeImmutable('first day of this month 00:00:00'))->format('Y-m-d H:i:s'),
+                'endsAt' => (new \DateTimeImmutable('first day of next month 00:00:00'))->format('Y-m-d H:i:s'),
             ],
         );
 

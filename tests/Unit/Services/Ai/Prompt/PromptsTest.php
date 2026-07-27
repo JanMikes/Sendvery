@@ -6,12 +6,15 @@ namespace App\Tests\Unit\Services\Ai\Prompt;
 
 use App\Services\Ai\Analysis\EnforcementReadiness;
 use App\Services\Ai\Analysis\ReportInsightFacts;
+use App\Services\Ai\Analysis\SenderRoleCount;
+use App\Services\Ai\Analysis\WeeklyDigestDomainFact;
 use App\Services\Ai\Analysis\WeeklyDigestFacts;
 use App\Services\Ai\Prompt\AnomalyPrompt;
 use App\Services\Ai\Prompt\RemediationPrompt;
 use App\Services\Ai\Prompt\ReportExplanationPrompt;
 use App\Services\Ai\Prompt\SenderLabelPrompt;
 use App\Services\Ai\Prompt\WeeklyDigestPrompt;
+use App\Value\SenderRole;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -87,15 +90,71 @@ final class PromptsTest extends TestCase
             periodLabel: 'May 1 — May 8',
             totalDomains: 2,
             totalMessages: 1000,
-            averagePassRate: 99.0,
+            overallPassRate: 99.0,
             alertsCount: 0,
             dnsChangesCount: 0,
+            newSenderRoles: [],
             domains: [],
             brokenDns: [],
         ));
 
         self::assertStringContainsString('<report_facts>', $message);
         self::assertStringContainsString('"teamName": "Acme"', $message);
+    }
+
+    /**
+     * The model faithfully told a customer to "fix misconfigured sending
+     * sources" when every failing sender was a third-party forwarder. The facts
+     * now say what each sender is, and the prompt has to state what that means.
+     */
+    #[Test]
+    public function theDigestWriterIsToldThatForwardersExplainFailuresRatherThanCauseThem(): void
+    {
+        self::assertStringContainsString('forwarder', WeeklyDigestPrompt::SYSTEM);
+        self::assertStringContainsString('breaks SPF by design', WeeklyDigestPrompt::SYSTEM);
+        self::assertStringContainsString(
+            'Never call a forwarder a',
+            WeeklyDigestPrompt::SYSTEM,
+            'The one instruction that stops the incident recurring must be explicit.',
+        );
+        self::assertStringContainsString(
+            'already message-weighted',
+            WeeklyDigestPrompt::SYSTEM,
+            'The model must state the headline rate as given rather than averaging the per-domain rates.',
+        );
+    }
+
+    /**
+     * Roles reach the model as a closed enum and integer counts; nothing a
+     * sending host can author is allowed into the prompt.
+     */
+    #[Test]
+    public function newSenderRolesReachTheModelAsCountsAndNeverAsSenderNames(): void
+    {
+        $message = WeeklyDigestPrompt::userMessage(new WeeklyDigestFacts(
+            teamName: 'Acme',
+            periodLabel: 'May 1 — May 8',
+            totalDomains: 1,
+            totalMessages: 57,
+            overallPassRate: 96.5,
+            alertsCount: 0,
+            dnsChangesCount: 0,
+            newSenderRoles: [new SenderRoleCount(SenderRole::Forwarder, 3)],
+            domains: [new WeeklyDigestDomainFact(
+                domain: 'acme.example',
+                messages: 57,
+                passRate: 96.5,
+                passRateDelta: null,
+                newSenderCount: 3,
+                newSenderRoles: [new SenderRoleCount(SenderRole::Forwarder, 3)],
+                alertCount: 0,
+            )],
+            brokenDns: [],
+        ));
+
+        self::assertStringContainsString('"role": "forwarder"', $message);
+        self::assertStringContainsString('"count": 3', $message);
+        self::assertStringContainsString('"overallPassRate": 96.5', $message);
     }
 
     #[Test]

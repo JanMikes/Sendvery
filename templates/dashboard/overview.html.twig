@@ -119,12 +119,20 @@
                 icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'
             />
         </a>
-        {# pass_rate=low — actionable subset, live from ReportsFilter (TASK-016). #}
+        {# pass_rate=low — actionable subset, live from ReportsFilter (TASK-016).
+
+           A null `overallPassRate` means "no DMARC records to grade", NOT 0%.
+           Report rows only exist once the inbox poll has ingested something, so
+           before the first report this card used to show a red 0.0% while the
+           domain cards below correctly said "Waiting for first report". The
+           value comes from the shared `pass_rate_value` macro and the tone
+           stays neutral — an absence of data is not a failure. #}
         <a href="{{ path('dashboard_reports', { pass_rate: 'low' }) }}" class="block">
             <twig:StatCard
                 title="DMARC Pass Rate"
-                value="{{ stats.overallPassRate|number_format(1) }}%"
-                variant="{{ stats.overallPassRate >= 90 ? 'success' : (stats.overallPassRate >= 70 ? 'warning' : 'error') }}"
+                value="{{ severity.pass_rate_value(stats.overallPassRate)|trim }}"
+                caption="{{ stats.hasPassRateData() ? '' : 'Waiting for first report — usually within 24 hours' }}"
+                variant="{{ stats.hasPassRateData() ? (stats.overallPassRate >= 90 ? 'success' : (stats.overallPassRate >= 70 ? 'warning' : 'error')) : 'default' }}"
                 icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>'
             />
         </a>
@@ -237,18 +245,21 @@
                             </thead>
                             <tbody>
                                 {% for report in recentReports %}
-                                    <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                                    <tr class="hover:bg-base-200/50 cursor-pointer"
+                                        {{ stimulus_controller('row-link') }}
+                                        data-action="click->row-link#navigate">
                                         <td class="font-medium">
                                             <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
-                                               class="absolute inset-0 z-10"
-                                               aria-label="View report from {{ report.reporterOrg }} for {{ report.domainName }}"></a>
-                                            {{ report.domainName }}
+                                               class="link link-hover"
+                                               data-row-link-target="link"
+                                               data-turbo-frame="_top"
+                                               aria-label="View report from {{ report.reporterOrg }} for {{ report.domainName }}">{{ report.domainName }}</a>
                                         </td>
                                         <td>{{ report.reporterOrg }}</td>
                                         <td>{{ report.dateRangeEnd|date('M j') }}</td>
                                         <td class="text-right">
-                                            <span class="{{ report.passRate >= 90 ? 'text-success' : (report.passRate >= 70 ? 'text-warning' : 'text-error') }}">
-                                                {{ report.passRate|number_format(1) }}%
+                                            <span class="{{ severity.pass_rate_class(report.passRate)|trim }}">
+                                                {{ severity.pass_rate_value(report.passRate) }}
                                             </span>
                                         </td>
                                     </tr>

@@ -42,9 +42,16 @@ final readonly class GetDomainWorkspaceTabCounts
                 (SELECT COUNT(*) FROM dmarc_report dr
                     WHERE dr.monitored_domain_id = :domainId
                       AND dr.processed_at >= :oneDayAgo) AS reports_24h,
+                -- Senders still AWAITING a decision, not every sender that
+                -- isn't authorized. Without the updated_at test the badge also
+                -- counted senders the user had already reviewed and rejected,
+                -- so it never cleared no matter how much triage they did — and
+                -- a badge that never clears trains people to ignore it.
+                -- Matches SenderReviewState::NeedsReview exactly.
                 (SELECT COUNT(*) FROM known_sender ks
                     WHERE ks.monitored_domain_id = :domainId
-                      AND ks.is_authorized = FALSE) AS unauthorized_senders,
+                      AND ks.is_authorized = FALSE
+                      AND ks.updated_at IS NULL) AS unauthorized_senders,
                 (SELECT CASE WHEN dhs.spf_score < 80
                               OR dhs.dkim_score < 80
                               OR dhs.dmarc_score < 80

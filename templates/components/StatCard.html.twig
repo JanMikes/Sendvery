@@ -1,5 +1,10 @@
-{# Stat card — title, value, optional trend, optional color variant #}
-{% props title, value, trend = null, trendDirection = null, variant = 'default', icon = null %}
+{# Stat card — title, value, optional trend, optional color variant.
+
+   `caption` is the honest-no-data slot: when a measured value is unavailable
+   (not zero — unavailable), pass the suppressed value as `value` and use
+   `caption` to say what the user is waiting for. A bare placeholder with no
+   explanation reads as broken just like a fabricated 0 does. #}
+{% props title, value, trend = null, trendDirection = null, variant = 'default', icon = null, caption = null %}
 
 <div class="card bg-base-100 border border-base-200 shadow-sm">
     <div class="card-body p-4">
@@ -26,6 +31,9 @@
                     {% endif %}
                     {{ trend }}
                 </span>
+            {% endif %}
+            {% if caption %}
+                <p class="text-xs text-base-content/50 mt-1">{{ caption }}</p>
             {% endif %}
         </div>
     </div>

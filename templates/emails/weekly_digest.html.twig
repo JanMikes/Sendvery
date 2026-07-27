@@ -1,17 +1,20 @@
 {% extends 'emails/_layout.html.twig' %}
 {% import 'emails/_components.html.twig' as ui %}
 
-{# A null pass rate means "no DMARC records in this window" — never 0%. Emails
-   are inline-styled, so the no-data tint is the same muted slate the rest of
-   the template uses for absent values. #}
-{% set passRateColor = digest.averagePassRate is null
+{# Message-weighted across the whole team, not the mean of the per-domain
+   percentages — see WeeklyDigestData::overallPassRate(). A null rate means "no
+   DMARC records in this window" and never 0%. Emails are inline-styled, so the
+   no-data tint is the same muted slate the rest of the template uses for
+   absent values. #}
+{% set overallPassRate = digest.overallPassRate() %}
+{% set passRateColor = overallPassRate is null
     ? '#94a3b8'
-    : (digest.averagePassRate >= 95
+    : (overallPassRate >= 95
         ? '#16a34a'
-        : (digest.averagePassRate >= 80 ? '#d97706' : '#dc2626')) %}
+        : (overallPassRate >= 80 ? '#d97706' : '#dc2626')) %}
 
 {% block subject %}Sendvery weekly report — {{ digest.teamName }}{% endblock %}
-{% block preheader %}{{ digest.totalMessages|number_format }} messages · {{ digest.averagePassRate is null ? 'no reports yet' : digest.averagePassRate|number_format(1) ~ '% pass rate' }} · {{ digest.totalDomains }} domain{{ digest.totalDomains != 1 ? 's' : '' }}.{% endblock %}
+{% block preheader %}{{ digest.totalMessages|number_format }} messages · {{ overallPassRate is null ? 'no reports yet' : overallPassRate|number_format(1) ~ '% pass rate' }} · {{ digest.totalDomains }} domain{{ digest.totalDomains != 1 ? 's' : '' }}.{% endblock %}
 {% block header_meta %}{{ dateRange }}{% endblock %}
 
 {% block content %}
@@ -34,7 +37,7 @@
             <td width="33%" style="padding: 4px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
                     <tr><td style="padding: 16px 12px; text-align: center;">
-                        <div style="font-size: {{ digest.averagePassRate is null ? '18px' : '26px' }}; font-weight: 700; color: {{ passRateColor }}; line-height: 1.1; letter-spacing: -0.02em;">{{ digest.averagePassRate is null ? '—' : digest.averagePassRate|number_format(1) ~ '%' }}</div>
+                        <div style="font-size: {{ overallPassRate is null ? '18px' : '26px' }}; font-weight: 700; color: {{ passRateColor }}; line-height: 1.1; letter-spacing: -0.02em;">{{ overallPassRate is null ? '—' : overallPassRate|number_format(1) ~ '%' }}</div>
                         <div style="margin-top: 6px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em;">Pass rate</div>
                     </td></tr>
                 </table>
@@ -202,28 +205,59 @@
     {% endif %}
 
     {# New senders — one block per domain with a total, then at most
-       `senderChipLimit` chips and a "+N more" tail. A domain that discovers
-       thirty senders in a week must not push the rest of the digest off screen. #}
-    {% set senderChipLimit = 8 %}
+       `senderRowLimit` rows and a "+N more" tail. A domain that discovers
+       thirty senders in a week must not push the rest of the digest off screen.
+
+       Each row names what the sender IS, not just where it came from. Senders
+       are grouped by identity (a provider's whole IP pool is one row) and the
+       role decides the tint: an own relay, a provider and a forwarder are
+       normal mail flow and read as calm, while only an unrecognised or
+       suspicious sender is coloured to pull the eye. The digest that triggered
+       DEC-059 printed a wall of raw IPv6 addresses in identical green chips,
+       so a recipient-side mail gateway looked exactly like an attacker. #}
+    {% set senderRowLimit = constant('App\\Services\\Digest\\WeeklyDigestGenerator::NEW_SENDERS_PER_DOMAIN_LIMIT') %}
+    {% set rolePalette = {
+        own_relay:  { bg: '#f0fdf4', border: '#bbf7d0', label: '#166534', meta: '#15803d' },
+        esp:        { bg: '#f0fdf4', border: '#bbf7d0', label: '#166534', meta: '#15803d' },
+        forwarder:  { bg: '#f8fafc', border: '#e2e8f0', label: '#334155', meta: '#64748b' },
+        unknown:    { bg: '#fffbeb', border: '#fde68a', label: '#92400e', meta: '#a16207' },
+        suspicious: { bg: '#fef2f2', border: '#fecaca', label: '#991b1b', meta: '#b91c1c' }
+    } %}
     {% set totalNewSenders = 0 %}
     {% for domain in digest.domains %}
         {% set totalNewSenders = totalNewSenders + domain.newSenders|length %}
     {% endfor %}
     {% if totalNewSenders > 0 %}
         {{ ui.subheading('New senders discovered <span style="font-weight:400;color:#94a3b8;font-size:13px;">(' ~ totalNewSenders ~ ')</span>') }}
+
+        <p style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+            Servers that sent mail as your domains for the first time. We have labelled each one — mail gateways and
+            forwarding services break SPF by design, so a few failures from those are normal rather than a problem.
+        </p>
+
         {% for domain in digest.domains %}
             {% if domain.newSenders|length > 0 %}
-                <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em;">
+                <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em;">
                     {{ domain.domainName }} · {{ domain.newSenders|length }} new
                 </p>
-                <p style="margin: 0 0 14px 0; line-height: 1.9;">
-                    {% for sender in domain.newSenders|slice(0, senderChipLimit) %}
-                        <span style="display: inline-block; padding: 3px 10px; margin: 2px 4px 2px 0; background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 999px; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;">{{ sender }}</span>
-                    {% endfor %}
-                    {% if domain.newSenders|length > senderChipLimit %}
-                        <span style="display: inline-block; padding: 3px 10px; margin: 2px 4px 2px 0; font-size: 12px; color: #64748b;">+{{ domain.newSenders|length - senderChipLimit }} more</span>
-                    {% endif %}
-                </p>
+                {% for sender in domain.newSenders|slice(0, senderRowLimit) %}
+                    {% set rp = rolePalette[sender.role.value] ?? rolePalette.unknown %}
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 6px 0;">
+                        <tr><td style="padding: 10px 14px; background-color: {{ rp.bg }}; border: 1px solid {{ rp.border }}; border-radius: 10px;">
+                            <div style="font-size: 13px; font-weight: 600; color: {{ rp.label }}; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;">{{ sender.label }}</div>
+                            <div style="margin-top: 3px; font-size: 12px; color: {{ rp.meta }};">
+                                {{- sender.role.label() }} ·
+                                {{ sender.messageCount|number_format }} message{{ sender.messageCount != 1 ? 's' : '' }}
+                                {%- if sender.passRate() is not null %} · {{ sender.passRate()|number_format(1) }}% pass{% endif -%}
+                            </div>
+                        </td></tr>
+                    </table>
+                {% endfor %}
+                {% if domain.newSenders|length > senderRowLimit %}
+                    <p style="margin: 0 0 14px 0; font-size: 12px; color: #64748b;">+{{ domain.newSenders|length - senderRowLimit }} more</p>
+                {% else %}
+                    <div style="height: 8px; line-height: 8px;">&nbsp;</div>
+                {% endif %}
             {% endif %}
         {% endfor %}
     {% endif %}

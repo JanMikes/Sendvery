@@ -37,6 +37,24 @@ final readonly class SnapshotDomainHealthHandler
         $dmarc = $this->dnsCheckResultRepository->findLatestForDomainAndType($message->domainId, DnsCheckType::Dmarc);
         $mx = $this->dnsCheckResultRepository->findLatestForDomainAndType($message->domainId, DnsCheckType::Mx);
 
+        // A snapshot is a graded VERDICT about a domain, so it may only be
+        // written once at least one DNS check has actually produced a row.
+        // With no rows at all, HealthSnapshotComposer scores every protocol 0
+        // and grades the domain F — a definite failure invented out of "we
+        // have not looked yet", published at `/health/{shareHash}` as an 8xl
+        // red F to anyone with the link.
+        //
+        // This is reachable: CheckDnsWhenDomainAdded enqueues CheckDomainDns
+        // and SnapshotDomainHealth onto the same async transport and relies on
+        // FIFO ordering, but CheckDomainDns retries with backoff (5s → 30s →
+        // 3m → 15m) and concurrent workers can invert the pair. Refusing to
+        // snapshot is the safe outcome: every check path dispatches
+        // SnapshotDomainHealth again once it has written its rows, and the
+        // health page already renders an honest "No health score yet."
+        if (null === $spf && null === $dkim && null === $dmarc && null === $mx) {
+            return;
+        }
+
         $composition = $this->composer->compose($spf, $dkim, $dmarc, $mx);
 
         $snapshot = new DomainHealthSnapshot(

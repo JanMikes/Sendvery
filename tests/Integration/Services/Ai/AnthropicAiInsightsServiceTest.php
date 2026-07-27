@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Services\Ai;
 
+use App\Entity\Alert;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\KnownSender;
 use App\Entity\MonitoredDomain;
+use App\Entity\SenderIdentity;
 use App\Exceptions\ReportNotAnalyzable;
 use App\Services\Ai\AnthropicAiInsightsService;
 use App\Services\Ai\Input\DnsCheckFailure;
@@ -15,10 +17,13 @@ use App\Tests\Fixtures\Persona;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\IntegrationTestCase;
 use App\Tests\TestSupport\AnthropicMockHttpClient;
+use App\Value\AlertSeverity;
+use App\Value\AlertType;
 use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\SenderRole;
 use App\Value\SubscriptionPlan;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
@@ -110,6 +115,99 @@ final class AnthropicAiInsightsServiceTest extends IntegrationTestCase
         $result = $this->service()->generateWeeklyDigest($persona->team->id);
 
         self::assertStringContainsString('weekly summary', $result->summaryMarkdown);
+    }
+
+    /**
+     * The model was fed an unweighted headline and a bare count of "new
+     * senders", and faithfully recommended fixing misconfigured sending sources
+     * when every one of them was a third-party forwarder. The facts now carry
+     * the message-weighted rate and what each sender is.
+     */
+    public function testTheDigestFactsCarryTheWeightedRateAndWhatTheNewSendersAre(): void
+    {
+        $persona = $this->persona('digestfacts', withDomain: true);
+        self::assertNotNull($persona->domain);
+        $em = $this->getService(EntityManagerInterface::class);
+
+        $em->persist(new SenderIdentity(
+            id: Uuid::uuid7(),
+            sourceIp: '52.212.19.177',
+            resolvedAt: new \DateTimeImmutable(),
+            hostname: 'eu.cloud-sec-av.com',
+            registrableDomain: 'cloud-sec-av.com',
+            organization: null,
+            role: SenderRole::Forwarder,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable(),
+        ));
+
+        $report = new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'ext-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: new \DateTimeImmutable('-2 days'),
+            dateRangeEnd: new \DateTimeImmutable('-1 day'),
+            policyDomain: $persona->domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::None,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback/>',
+            processedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($report);
+        $em->persist(self::record($report, '52.212.19.177', 2, AuthResult::Fail, AuthResult::Fail));
+        $em->persist(self::record($report, '9.9.9.9', 98, AuthResult::Pass, AuthResult::Pass));
+
+        // One alert on the domain and one account-wide. Only the first can be
+        // attributed to a domain fact; the account-wide one still counts towards
+        // the team total, and must not be misfiled under some domain.
+        foreach ([$persona->domain, null] as $alertDomain) {
+            $alert = new Alert(
+                id: Uuid::uuid7(),
+                team: $persona->team,
+                monitoredDomain: $alertDomain,
+                type: AlertType::DnsRecordChanged,
+                severity: AlertSeverity::Warning,
+                title: 'SPF record changed',
+                message: 'Seeded for the digest facts test.',
+                data: [],
+                createdAt: new \DateTimeImmutable('-1 hour'),
+            );
+            $alert->popEvents();
+            $em->persist($alert);
+        }
+
+        $em->flush();
+
+        $captured = AnthropicMockHttpClient::toolResponse([
+            'summary' => 'A test weekly summary.',
+            'key_metrics' => [['label' => 'Messages', 'value' => '100']],
+            'recommendations' => [],
+        ]);
+        $this->mock()->push($captured);
+
+        $this->service()->generateWeeklyDigest($persona->team->id);
+
+        $body = $captured->getRequestOptions()['body'];
+        self::assertIsString($body);
+        /** @var array{messages: list<array{content: string}>} $payload */
+        $payload = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        $facts = $payload['messages'][0]['content'];
+
+        self::assertStringContainsString('"overallPassRate": 98', $facts, '98 of 100 messages passed.');
+        self::assertStringContainsString('"role": "forwarder"', $facts);
+        self::assertStringContainsString('"count": 1', $facts);
+        self::assertStringContainsString('"alertsCount": 2', $facts);
+        self::assertStringContainsString('"alertCount": 1', $facts, 'Only the domain-scoped alert belongs to the domain fact.');
+        self::assertStringNotContainsString(
+            'cloud-sec-av.com',
+            $facts,
+            'Sender names are attacker-influenceable and must never reach the prompt — only roles and counts do.',
+        );
     }
 
     public function testRemediationRecordsAreGeneratedInPhpNotByTheModel(): void

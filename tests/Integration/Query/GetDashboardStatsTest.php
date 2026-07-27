@@ -100,7 +100,11 @@ final class GetDashboardStatsTest extends IntegrationTestCase
 
         self::assertSame(0, $result->totalDomains);
         self::assertSame(0, $result->totalReportsLast30Days);
-        self::assertSame(0.0, $result->overallPassRate);
+        self::assertNull(
+            $result->overallPassRate,
+            'A team with no DMARC records has no pass rate to report. Returning 0.0 would claim every message failed authentication.',
+        );
+        self::assertFalse($result->hasPassRateData());
         self::assertSame(0, $result->totalMessages);
     }
 }

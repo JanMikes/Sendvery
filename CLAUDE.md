@@ -57,6 +57,7 @@ Sendvery is an email health & deliverability micro-SaaS. DMARC report parsing wi
 - **Simple, decoupled, readable** — minimal inheritance, prefer composition
 - **12-factor app** — config from env vars, stateless processes
 - **100% test coverage mandatory** — tests ARE the business specification
+- **Unknown is not failure** — absent/not-yet-measured state never renders as an error, and a desired outcome never renders as a warning. Worked examples and the grep-able tells: [Unknown Is Not Failure](#unknown-is-not-failure)
 
 ## PHP Class Conventions
 
@@ -363,6 +364,41 @@ readonly final class DnsRecord
 - **Infection mutation testing** from the start
 - Tests describe business requirements — they are the specification
 - **Never assert specific CSS/Tailwind classes** (spacing, font-size, responsive breakpoints, layout utilities) in tests. These change constantly during UI prototyping and have no business impact. Only assert semantic daisyUI tokens (e.g. `text-error`, `border-l-success`) when the test verifies a business rule like severity mapping.
+
+## Unknown Is Not Failure
+
+**Absent, unknown or not-yet-measured state must never render as failure. A desired outcome must never render as a warning.**
+
+Four of the ~13 complaints in the first user-review pass were this single rule broken four times. The cost compounds: every false alarm teaches the user to distrust the next warning, including the real ones. In the user's words — *"this is basically useless alert … because otherwise it seems like something is wrong to me but this is totally okay and is actually desired"*, and *"i would prefer better feedback that it is not a failure but waiting for a first report"*.
+
+### The four cases (all fixed — cite them rather than repeating them)
+
+1. **Red `0.0% pass rate` on a domain with zero DMARC reports.** `GetDomainOverview` wrapped the division in `COALESCE(..., 0)`, so "no data" and "100% of mail failed" became the same number — and a comment in that file documented the behaviour as intentional. Fixed: `passRate` is `?float` end-to-end and every surface says "waiting for first report".
+2. **"DKIM record changed for X" as an amber Warning when the previous value was empty** — i.e. the user had just correctly published a DKIM key for the first time. The desired outcome was reported as a possible problem. Fixed: `AlertSeverity::Success` + `AlertType::DnsRecordPublished`, rendered green, never emailed.
+3. **"MX records not detected" on a domain with perfectly valid MX records.** MX state was read from the nightly `domain_health_snapshot`, which had not been written yet; unlike SPF/DKIM/DMARC, MX had no `*_verified_at` fallback — so "we have not checked yet" rendered as "it is broken". Fixed: state reads the authoritative latest `DnsCheckResult`.
+4. **Amber "Unknown" badges on senders that were 100% DKIM-passing and 100% SPF-passing**, with no explanation and no stated action. "We have never asked you about this" looked identical to "this is a problem". Fixed: a three-state vocabulary — Authorized / Needs review / Not authorized — that separates never-reviewed from actively-rejected.
+
+### Mechanical tells — grep for these
+
+Each of the four had one. They are cheap to find and cheap to fix before a user sees them.
+
+- **`COALESCE(<rate>, 0)` or `ELSE 0` in a rate, percentage, score or average expression.** Keep `NULLIF(<divisor>, 0)` — that is what produces the honest NULL. Never wrap it in a zero fallback. If ORDER BY needs a total order, use a separate sort-only expression and never select it (see `GetDomainOverview::PASS_RATE_SORT_EXPR`).
+- **A non-nullable `float`/`int` in `src/Results/` or `src/Value/` for something *measured* that can have zero measurements.** Rates, scores, grades and averages are `?float`/`?int`. A non-nullable field forces the query to invent a number.
+- **A "missing"/"broken" UI state derived from a table only a scheduled command writes** (`domain_health_snapshot`, blacklist results). Those tables are empty until the first cron run. Read the authoritative row instead (`dns_check_result`), or render "not checked yet".
+- **A `bool` where the domain genuinely has three states: yes / no / never decided (or never checked).** Use an enum. `bool $isAuthorized` cannot tell "the user rejected this sender" from "the user has not looked yet"; `bool $isValid` cannot tell "malformed record" from "no record published".
+- **An `{% else %}` or `default =>` arm that carries the error tone.** Unknown and future values fall into the last arm — make the last arm neutral and the error arm explicit.
+
+### The positive obligation
+
+Suppressing the number is not enough on its own — a bare blank where a value belongs also reads as broken. When there is no data, say **what the user is waiting for** and **whether they must act**:
+
+- "Waiting for first report — usually within 24 hours" (nothing to do)
+- "Not checked yet" (nothing to do)
+- "Needs review" (something to do, and it is not an error)
+
+`templates/components/_severity_glyph.html.twig` is the canonical implementation — `pass_rate_tone`, `pass_rate_class`, `pass_rate_value` and `pass_rate_stat` all have a null arm. Route pass rates through it instead of hand-rolling `>= 90 ? 'text-success' : (>= 70 ? 'text-warning' : 'text-error')`, which has no null branch and drifts.
+
+The precedent predates the rule: `templates/components/DomainPassRateSparkline.html.twig` already rendered `—` for the empty case. That is precisely why the old red `0.0%` beside it was self-contradictory — two components describing the same absent data, one honestly and one as a catastrophe. When two surfaces disagree about the same missing value, the alarming one is the bug.
 
 ## Frontend: daisyUI 5 + Tailwind CSS 4
 

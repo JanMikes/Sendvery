@@ -20,6 +20,11 @@ use Psr\Clock\ClockInterface;
  * Returns null when nothing failed (no banner to populate) or when the team
  * has no reports in the window. The "monitored_domain_id" is included so the
  * banner can deep-link directly to the right /app/domains/{id}/senders page.
+ *
+ * The role travels with the sender because the banner's whole job is to say
+ * what to do next, and "the biggest source of failures is a mail gateway
+ * forwarding your mail" needs a very different reaction from the same sentence
+ * about an unrecognised host.
  */
 final readonly class GetTopFailingSenderForTeam
 {
@@ -41,12 +46,19 @@ final readonly class GetTopFailingSenderForTeam
         $now = $this->clock->now();
         $sevenDaysAgo = $now->modify('-7 days');
 
-        /** @var array{sender_id: string|null, display_label: string, source_ip: string, monitored_domain_id: string, failing_message_count: int|string}|false $row */
+        // Grouped by sender identity, not by address: a gateway that spreads its
+        // failures over three continental nodes was previously credited with a
+        // third of the damage each, so the banner named — and sent the reader
+        // after — whichever node happened to be largest. MIN(source_ip) picks
+        // one member deterministically for the "which address" line; the
+        // identity, not that address, is what the sentence is about.
+        /** @var array{sender_id: string|null, display_label: string, sender_role: string|null, source_ip: string, monitored_domain_id: string, failing_message_count: int|string}|false $row */
         $row = $this->database->executeQuery(
-            "SELECT
+            'SELECT
                 MAX(ks.id::text) AS sender_id,
-                COALESCE(rec.resolved_org, rec.resolved_hostname, rec.source_ip) AS display_label,
-                rec.source_ip,
+                '.SenderIdentitySql::GROUPED_DISPLAY_LABEL.' AS display_label,
+                '.SenderIdentitySql::GROUPED_ROLE.' AS sender_role,
+                MIN(rec.source_ip) AS source_ip,
                 dr.monitored_domain_id,
                 SUM(rec.count) AS failing_message_count
             FROM dmarc_record rec
@@ -55,13 +67,14 @@ final readonly class GetTopFailingSenderForTeam
             LEFT JOIN known_sender ks
                 ON ks.monitored_domain_id = dr.monitored_domain_id
                 AND ks.source_ip = rec.source_ip
+            '.SenderIdentitySql::JOIN."
             WHERE md.team_id IN (:teamIds)
               AND dr.date_range_end >= :from
               AND rec.dkim_result <> 'pass'
               AND rec.spf_result <> 'pass'
-            GROUP BY rec.source_ip, dr.monitored_domain_id, display_label
+            GROUP BY ".SenderIdentitySql::IDENTITY_KEY.', dr.monitored_domain_id
             ORDER BY failing_message_count DESC
-            LIMIT 1",
+            LIMIT 1',
             [
                 'teamIds' => $teamIds,
                 'from' => $sevenDaysAgo->format('Y-m-d H:i:s'),

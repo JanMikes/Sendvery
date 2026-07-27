@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Results;
 
 use App\Results\TopSenderForDomainResult;
 use App\Value\SenderReviewState;
+use App\Value\SenderRole;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -14,14 +15,15 @@ final class TopSenderForDomainResultTest extends TestCase
     /**
      * @param array<string, mixed> $overrides
      *
-     * @return array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string}
+     * @return array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string}
      */
     private static function row(array $overrides = []): array
     {
-        /** @var array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string} $row */
+        /** @var array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string} $row */
         $row = array_merge([
             'group_key' => 'Mailchimp',
             'display_label' => 'Mailchimp',
+            'sender_role' => 'esp',
             'total_messages' => '1000',
             'dkim_pass_count' => '920',
             'spf_pass_count' => '950',
@@ -50,6 +52,7 @@ final class TopSenderForDomainResultTest extends TestCase
         self::assertSame('550e8400-e29b-41d4-a716-446655440000', $result->knownSenderId);
         self::assertTrue($result->senderIsAuthorized);
         self::assertSame(SenderReviewState::Authorized, $result->reviewState);
+        self::assertSame(SenderRole::Esp, $result->senderRole);
     }
 
     #[Test]
@@ -61,6 +64,7 @@ final class TopSenderForDomainResultTest extends TestCase
             'total_messages' => 100,
             'dkim_pass_count' => 0,
             'spf_pass_count' => 0,
+            'sender_role' => null,
             'known_sender_id' => null,
             'sender_is_authorized' => null,
             'known_sender_count' => 0,
@@ -72,6 +76,10 @@ final class TopSenderForDomainResultTest extends TestCase
         self::assertSame(0.0, $result->spfPassRate);
         self::assertNull($result->knownSenderId);
         self::assertNull($result->senderIsAuthorized);
+        self::assertNull(
+            $result->senderRole,
+            'An address nothing has classified yet carries no role — reporting one would be inventing evidence.',
+        );
     }
 
     #[Test]
@@ -138,7 +146,7 @@ final class TopSenderForDomainResultTest extends TestCase
     }
 
     /**
-     * Senders are grouped by organisation, so one row can cover several IPs in
+     * Senders are grouped by identity, so one row can cover several IPs in
      * different states. An IP the user explicitly rejected that is still
      * delivering mail is the most urgent thing in the group, so it wins the
      * badge even when a sibling IP is authorized.

@@ -23,12 +23,17 @@
                 <div class="divider"></div>
 
                 <div class="w-full space-y-3">
+                    {# Blacklist is deliberately NOT in this list. `blacklist_score`
+                       is a hardcoded 100 in HealthSnapshotComposer — no production
+                       code path ever runs a blacklist check — so rendering it as a
+                       green 100% progress bar published a clean bill of health this
+                       domain has not earned, on an unauthenticated page. It is
+                       stated honestly below instead. #}
                     {% set categories = [
                         { name: 'SPF', score: snapshot.spfScore },
                         { name: 'DKIM', score: snapshot.dkimScore },
                         { name: 'DMARC', score: snapshot.dmarcScore },
                         { name: 'MX', score: snapshot.mxScore },
-                        { name: 'Blacklist', score: snapshot.blacklistScore },
                     ] %}
                     {% for cat in categories %}
                         <div>
@@ -39,6 +44,10 @@
                             <progress class="progress {{ cat.score >= 80 ? 'progress-success' : (cat.score >= 50 ? 'progress-warning' : 'progress-error') }} w-full" value="{{ cat.score }}" max="100"></progress>
                         </div>
                     {% endfor %}
+                    <div class="flex justify-between text-sm text-base-content/50">
+                        <span>Blacklist</span>
+                        <span>Not checked</span>
+                    </div>
                 </div>
 
                 <div class="divider"></div>

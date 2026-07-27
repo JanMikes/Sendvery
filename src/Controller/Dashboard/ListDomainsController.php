@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainOverview;
+use App\Query\GetLatestDnsCheckStatesForDomains;
 use App\Results\DnsHealthOverviewResult;
 use App\Services\DashboardContext;
 use App\Services\DomainHealthClassifier;
@@ -21,6 +22,7 @@ final class ListDomainsController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetDomainOverview $getDomainOverview,
         private readonly GetDnsHealthOverview $getDnsHealthOverview,
+        private readonly GetLatestDnsCheckStatesForDomains $getLatestDnsCheckStatesForDomains,
         private readonly DomainHealthClassifier $domainHealthClassifier,
     ) {
     }
@@ -92,6 +94,24 @@ final class ListDomainsController extends AbstractController
             $severityByDomain[$domain->domainId] = $this->domainHealthClassifier->classifyOverview($domain);
         }
 
+        // The four protocol badges on each card read the newest stored
+        // `dns_check_result` row — the same authoritative source the domain
+        // detail checklist uses — instead of the `*_verified_at` columns and
+        // the nightly `domain_health_snapshot`.
+        //
+        // Both of the old sources lied, in opposite directions. `isSpfVerified()`
+        // returns a bool, never null, so a domain whose first check had not
+        // landed yet showed three red "not verified" badges about records we had
+        // never looked at. And CheckDomainDnsHandler only ever SETS those
+        // columns — an invalid result leaves the old timestamp in place — so a
+        // domain whose SPF record was deleted last month kept a green "SPF
+        // verified" badge forever. Domains absent from this map have no check
+        // row at all, which the card renders as no badge rather than a verdict.
+        $protocolStatesByDomain = $this->getLatestDnsCheckStatesForDomains->forDomains(
+            array_values(array_map(static fn ($domain): string => $domain->domainId, $domains)),
+            $teamIdStrings,
+        );
+
         return $this->render('dashboard/domains.html.twig', [
             'domains' => $domains,
             // Show the Team column only when the user actually belongs to
@@ -102,6 +122,7 @@ final class ListDomainsController extends AbstractController
             'activeFilterRaw' => $this->normaliseFilterRaw($statusFilterRaw),
             'totalDomainCount' => $totalDomainCount,
             'severityByDomain' => $severityByDomain,
+            'protocolStatesByDomain' => $protocolStatesByDomain,
             'dnsHealthByDomain' => $dnsHealthByDomain,
             'totalDnsCount' => $totalDnsCount,
             'healthyCount' => $healthyCount,

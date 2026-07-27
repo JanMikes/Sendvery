@@ -41,7 +41,11 @@
             <tr><td>DKIM</td><td>{{ healthSnapshot.dkimScore }}%</td></tr>
             <tr><td>DMARC</td><td>{{ healthSnapshot.dmarcScore }}%</td></tr>
             <tr><td>MX</td><td>{{ healthSnapshot.mxScore }}%</td></tr>
-            <tr><td>Blacklist</td><td>{{ healthSnapshot.blacklistScore }}%</td></tr>
+            {# `blacklist_score` is a hardcoded 100, not a measurement — no code
+               path runs a blacklist check. Printing "100%" in an exported report
+               a customer may forward to their own stakeholders would be a
+               fabricated clean result. #}
+            <tr><td>Blacklist</td><td class="nodata">Not checked</td></tr>
         </table>
     {% endif %}
 
@@ -60,7 +64,16 @@
                 {% endif %}
             </tr>
             <tr><td class="stat-label">Known Senders</td><td class="stat-value">{{ reportData.total_senders }} ({{ reportData.authorized_senders }} authorized)</td></tr>
-            <tr><td class="stat-label">Blacklisted IPs (7d)</td><td class="stat-value {{ reportData.blacklisted_ips > 0 ? 'fail' : 'pass' }}">{{ reportData.blacklisted_ips }}</td></tr>
+            {# A 0 here means "no blacklist check has ever run", not "no listings
+               found" — so it must not be styled `pass`, which reads as a
+               verified all-clear. #}
+            <tr><td class="stat-label">Blacklisted IPs (7d)</td>
+                {% if reportData.blacklisted_ips > 0 %}
+                    <td class="stat-value fail">{{ reportData.blacklisted_ips }}</td>
+                {% else %}
+                    <td class="stat-value nodata">Not checked</td>
+                {% endif %}
+            </tr>
         </table>
     {% endif %}
 

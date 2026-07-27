@@ -57,7 +57,8 @@
                         <p class="text-sm text-base-content/70 mt-2 leading-relaxed max-w-3xl"
                            data-testid="pass-rate-regression-banner-reason">
                             {{ regression.percentFromTopSender()|number_format(0) }}% of the failures came from
-                            <span class="font-mono font-medium">{{ regression.topFailingSender.displayLabel }}</span>.
+                            <span class="font-mono font-medium">{{ regression.topFailingSender.displayLabel }}</span>{#
+                            #}{% if regression.topFailingSender.senderRole is not null and regression.topFailingSender.senderRole.value == 'forwarder' %}, a mail gateway that forwards your mail — SPF always breaks on a forward, so this is usually expected rather than a misconfiguration{% endif %}.
                         </p>
                     {% endif %}
 

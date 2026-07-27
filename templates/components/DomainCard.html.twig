@@ -4,7 +4,12 @@
    and renders the honest "Waiting for first report" state via the shared
    `pass_rate_stat` macro. Callers MUST bind it with `:passRate="…"` so a real
    null survives; `passRate="{{ … }}"` would stringify it to "" and read as 0. #}
-{% props domainId, domainName, passRate = null, awaitingFirstReport = true, totalReports = 0, latestReportDate = null, dmarcPolicy = null, teamName = null, severity = 'unverified', dnsGrade = null, dnsGradeColor = null, spfPass = null, dkimPass = null, dmarcPass = null, mxScore = null, domainHealthUrl = null %}
+{# `spfState`/`dkimState`/`dmarcState`/`mxState` carry a `ProtocolState` value
+   ('configured' / 'invalid' / 'missing') or null. Null means NO DNS check has
+   run for that protocol yet, and renders as no badge at all — never as a red
+   "not verified", which is what the previous booleans did to every domain whose
+   first check had not landed. #}
+{% props domainId, domainName, passRate = null, awaitingFirstReport = true, totalReports = 0, latestReportDate = null, dmarcPolicy = null, teamName = null, severity = 'unverified', dnsGrade = null, dnsGradeColor = null, spfState = null, dkimState = null, dmarcState = null, mxState = null, domainHealthUrl = null %}
 
 {% import 'components/_severity_glyph.html.twig' as severityMacros %}
 
@@ -58,33 +63,31 @@
            spans by design: the card-wrap is a stretched-link `<a>`, so nested
            anchors would be invalid HTML. The "DNS Health →" footer link
            carries the single deep-link to the per-domain drill-down. #}
-        {% if dnsGrade is not null or spfPass is not null or dkimPass is not null or dmarcPass is not null or mxScore is not null %}
+        {% if dnsGrade is not null or spfState is not null or dkimState is not null or dmarcState is not null or mxState is not null %}
             <div class="flex flex-wrap items-center gap-2 mt-3">
                 {% if dnsGrade is not null %}
                     <span class="badge {{ dnsGradeColor ?? 'badge-ghost' }} font-bold"
                           aria-label="DNS health grade {{ dnsGrade }} for {{ domainName }}">{{ dnsGrade }}</span>
                 {% endif %}
-                {% if spfPass is not null %}
-                    <span class="badge {{ spfPass ? 'badge-success' : 'badge-error' }}"
-                          aria-label="SPF {{ spfPass ? 'verified' : 'not verified' }}">SPF</span>
-                {% endif %}
-                {% if dkimPass is not null %}
-                    <span class="badge {{ dkimPass ? 'badge-success' : 'badge-error' }}"
-                          aria-label="DKIM {{ dkimPass ? 'verified' : 'not verified' }}">DKIM</span>
-                {% endif %}
-                {% if dmarcPass is not null %}
-                    <span class="badge {{ dmarcPass ? 'badge-success' : 'badge-error' }}"
-                          aria-label="DMARC {{ dmarcPass ? 'verified' : 'not verified' }}">DMARC</span>
-                {% endif %}
-                {% if mxScore is not null %}
-                    {% if mxScore >= 80 %}
-                        <span class="badge badge-success" aria-label="MX records healthy">MX</span>
-                    {% elseif mxScore >= 50 %}
-                        <span class="badge badge-warning" aria-label="MX records degraded">MX</span>
-                    {% else %}
-                        <span class="badge badge-error" aria-label="MX records failing">MX</span>
+                {# One badge per protocol, from the stored check row. `configured`
+                   is green; `invalid` (a record exists but fails validation) is
+                   amber because the fix is an edit; `missing` (we looked and
+                   found nothing) is red because the fix is to publish one. #}
+                {% for badge in [
+                    { label: 'SPF',   state: spfState },
+                    { label: 'DKIM',  state: dkimState },
+                    { label: 'DMARC', state: dmarcState },
+                    { label: 'MX',    state: mxState },
+                ] %}
+                    {% if badge.state is not null %}
+                        {% set tone = badge.state == 'configured' ? 'badge-success' : (badge.state == 'invalid' ? 'badge-warning' : 'badge-error') %}
+                        {% set description = badge.state == 'configured'
+                            ? 'verified'
+                            : (badge.state == 'invalid' ? 'present but failing checks' : 'no record published') %}
+                        <span class="badge {{ tone }}"
+                              aria-label="{{ badge.label }} {{ description }}">{{ badge.label }}</span>
                     {% endif %}
-                {% endif %}
+                {% endfor %}
             </div>
         {% endif %}
 

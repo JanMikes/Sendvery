@@ -22,7 +22,16 @@
     {% if statusResults is empty %}
         <div class="card bg-base-100 shadow">
             <div class="card-body text-center py-12">
-                <p class="text-base-content/60">No blacklist checks yet. Checks will run automatically for known sender IPs.</p>
+                {# The old copy promised "Checks will run automatically for known
+                   sender IPs." Nothing dispatches CheckBlacklist today — there is
+                   no scheduled blacklist job — so that was a commitment the
+                   product does not keep. Say what is actually true. #}
+                <p class="text-base-content/60">No blacklist results for this domain yet.</p>
+                <p class="text-sm text-base-content/50 mt-2">
+                    Automatic blacklist monitoring is not switched on yet, so treat an empty list as
+                    &ldquo;not checked&rdquo; rather than &ldquo;not listed&rdquo;. You can check any IP
+                    right now with the <a href="{{ path('tools_blacklist_checker') }}" class="link">blacklist checker</a>.
+                </p>
             </div>
         </div>
     {% else %}

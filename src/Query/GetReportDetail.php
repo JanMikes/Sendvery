@@ -58,7 +58,14 @@ final readonly class GetReportDetail
             return null;
         }
 
-        /** @var list<array{record_id: string, source_ip: string, count: int|string, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: string|null, dkim_selector: string|null, spf_domain: string|null, resolved_hostname: string|null, resolved_org: string|null}> $recordRows */
+        // Records stay per-IP here — this is the raw evidence table, and
+        // collapsing addresses would destroy the very detail it exists to show.
+        // What the identity join adds is naming: the cache holds the PTR
+        // hostname for addresses whose `dmarc_record` columns were written
+        // before enrichment existed (or never, for a report replayed from a
+        // purge), plus the role, so a row reads as "a forwarder" rather than as
+        // a bare number that failed SPF.
+        /** @var list<array{record_id: string, source_ip: string, count: int|string, disposition: string, dkim_result: string, spf_result: string, header_from: string, dkim_domain: string|null, dkim_selector: string|null, spf_domain: string|null, resolved_hostname: string|null, resolved_org: string|null, sender_role: string|null}> $recordRows */
         $recordRows = $this->database->executeQuery(
             'SELECT
                 rec.id AS record_id,
@@ -71,9 +78,11 @@ final readonly class GetReportDetail
                 rec.dkim_domain AS dkim_domain,
                 rec.dkim_selector AS dkim_selector,
                 rec.spf_domain AS spf_domain,
-                rec.resolved_hostname AS resolved_hostname,
-                rec.resolved_org AS resolved_org
+                COALESCE(si.hostname, rec.resolved_hostname) AS resolved_hostname,
+                COALESCE(si.organization, rec.resolved_org) AS resolved_org,
+                si.role AS sender_role
             FROM dmarc_record rec
+            '.SenderIdentitySql::JOIN.'
             WHERE rec.dmarc_report_id = :reportId
             ORDER BY rec.count DESC',
             ['reportId' => $reportId],

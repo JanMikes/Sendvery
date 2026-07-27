@@ -154,10 +154,10 @@ final readonly class SendWeeklyDigestHandler
         $lines[] = 'Summary:';
         $lines[] = "  Domains monitored: {$digest->totalDomains}";
         $lines[] = "  Total messages: {$digest->totalMessages}";
-        $lines[] = '  Average pass rate: '.(
-            null === $digest->averagePassRate
+        $lines[] = '  Overall pass rate: '.(
+            null === $digest->overallPassRate()
                 ? 'no reports yet'
-                : sprintf('%.1f%%', $digest->averagePassRate)
+                : sprintf('%.1f%%', $digest->overallPassRate())
         );
         $lines[] = "  Needs attention: {$digest->alertsCount}";
 
@@ -215,11 +215,31 @@ final readonly class SendWeeklyDigestHandler
             }
 
             if ([] !== $domain->newSenders) {
-                $lines[] = sprintf(
-                    '  New senders (%d): %s',
-                    count($domain->newSenders),
-                    implode(', ', $domain->newSenders),
-                );
+                $lines[] = sprintf('  New senders (%d):', count($domain->newSenders));
+
+                // One line each, carrying what the sender is and how much it
+                // sent. A bare list of names made a mail gateway that failed
+                // two forwarded messages indistinguishable from a spoofer.
+                // Capped at the same number as the HTML so the two alternatives
+                // of one email never hide different amounts.
+                foreach (array_slice($domain->newSenders, 0, WeeklyDigestGenerator::NEW_SENDERS_PER_DOMAIN_LIMIT) as $sender) {
+                    $passRate = $sender->passRate();
+
+                    $lines[] = sprintf(
+                        '    %s — %s, %d message%s%s',
+                        $sender->label,
+                        $sender->role->label(),
+                        $sender->messageCount,
+                        1 === $sender->messageCount ? '' : 's',
+                        null === $passRate ? '' : sprintf(', %.1f%% pass', $passRate),
+                    );
+                }
+
+                $hidden = count($domain->newSenders) - WeeklyDigestGenerator::NEW_SENDERS_PER_DOMAIN_LIMIT;
+
+                if ($hidden > 0) {
+                    $lines[] = sprintf('    … and %d more', $hidden);
+                }
             }
 
             // Mirrors the HTML "Waiting for your review" block. Unlike the

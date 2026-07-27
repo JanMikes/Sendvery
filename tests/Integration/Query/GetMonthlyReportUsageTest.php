@@ -14,6 +14,7 @@ use App\Value\Reports\QuarantineReason;
 use App\Value\Reports\ReportSource;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Clock\ClockInterface;
 use Ramsey\Uuid\Uuid;
 use Ramsey\Uuid\UuidInterface;
 
@@ -33,20 +34,25 @@ final class GetMonthlyReportUsageTest extends IntegrationTestCase
     {
         $query = $this->getService(GetMonthlyReportUsage::class);
         $team = $this->createTeam('with-usage');
-        $this->insertTeamUsage($team->id, 250, '2026-05-01 00:00:00', '2026-06-01 00:00:00');
+        // The period must be LIVE. A finished period deliberately reads as zero
+        // usage — see GetMonthlyReportUsageStalePeriodTest — so pinning this
+        // assertion to fixed past dates would test the stale path by accident.
+        [$periodStart, $periodEnd] = $this->currentPeriod();
+        $this->insertTeamUsage($team->id, 250, $periodStart, $periodEnd);
 
         $result = $query->forTeam($team->id->toString());
 
         self::assertNotNull($result);
         self::assertSame(250, $result->currentCount);
-        self::assertSame('2026-06-01 00:00:00', $result->periodEndsAt->format('Y-m-d H:i:s'));
+        self::assertSame($periodEnd, $result->periodEndsAt->format('Y-m-d H:i:s'));
     }
 
     public function testReturnsZeroOverageWhenNoneExist(): void
     {
         $query = $this->getService(GetMonthlyReportUsage::class);
         $team = $this->createTeam('no-overage');
-        $this->insertTeamUsage($team->id, 100, '2026-05-01 00:00:00', '2026-06-01 00:00:00');
+        [$periodStart, $periodEnd] = $this->currentPeriod();
+        $this->insertTeamUsage($team->id, 100, $periodStart, $periodEnd);
 
         $result = $query->forTeam($team->id->toString());
 
@@ -60,7 +66,8 @@ final class GetMonthlyReportUsageTest extends IntegrationTestCase
         $em = $this->getService(EntityManagerInterface::class);
         $team = $this->createTeam('with-overage');
         $domain = $this->createDomain($team, 'overage-test.example');
-        $this->insertTeamUsage($team->id, 100, '2026-05-01 00:00:00', '2026-06-01 00:00:00');
+        [$periodStart, $periodEnd] = $this->currentPeriod();
+        $this->insertTeamUsage($team->id, 100, $periodStart, $periodEnd);
 
         $this->createQuarantine($domain->domain, QuarantineReason::PlanOverage);
         $this->createQuarantine($domain->domain, QuarantineReason::PlanOverage);
@@ -100,7 +107,8 @@ final class GetMonthlyReportUsageTest extends IntegrationTestCase
         $em = $this->getService(EntityManagerInterface::class);
         $team = $this->createTeam('non-overage');
         $domain = $this->createDomain($team, 'non-overage.example');
-        $this->insertTeamUsage($team->id, 100, '2026-05-01 00:00:00', '2026-06-01 00:00:00');
+        [$periodStart, $periodEnd] = $this->currentPeriod();
+        $this->insertTeamUsage($team->id, 100, $periodStart, $periodEnd);
 
         $this->createQuarantine($domain->domain, QuarantineReason::UnknownDomain);
         $this->createQuarantine($domain->domain, QuarantineReason::UnverifiedDomain);
@@ -118,7 +126,8 @@ final class GetMonthlyReportUsageTest extends IntegrationTestCase
         $em = $this->getService(EntityManagerInterface::class);
         $team = $this->createTeam('multi-overage');
         $domain = $this->createDomain($team, 'multi.example');
-        $this->insertTeamUsage($team->id, 100, '2026-05-01 00:00:00', '2026-06-01 00:00:00');
+        [$periodStart, $periodEnd] = $this->currentPeriod();
+        $this->insertTeamUsage($team->id, 100, $periodStart, $periodEnd);
 
         for ($i = 0; $i < 5; ++$i) {
             $this->createQuarantine($domain->domain, QuarantineReason::PlanOverage);
@@ -135,13 +144,28 @@ final class GetMonthlyReportUsageTest extends IntegrationTestCase
     {
         $query = $this->getService(GetMonthlyReportUsage::class);
         $team = $this->createTeam('hydrate-period');
-        $this->insertTeamUsage($team->id, 0, '2026-05-15 12:30:00', '2026-06-15 12:30:00');
+        [$periodStart, $periodEnd] = $this->currentPeriod();
+        $this->insertTeamUsage($team->id, 0, $periodStart, $periodEnd);
 
         $result = $query->forTeam($team->id->toString());
 
         self::assertNotNull($result);
         self::assertInstanceOf(\DateTimeImmutable::class, $result->periodEndsAt);
-        self::assertSame('2026-06-15', $result->periodEndsAt->format('Y-m-d'));
+        self::assertSame(substr($periodEnd, 0, 10), $result->periodEndsAt->format('Y-m-d'));
+    }
+
+    /**
+     * The live monthly window, matching PlanEnforcement::ensureCurrentPeriod().
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function currentPeriod(): array
+    {
+        $start = $this->getService(ClockInterface::class)->now()
+            ->modify('first day of this month')
+            ->setTime(0, 0);
+
+        return [$start->format('Y-m-d H:i:s'), $start->modify('+1 month')->format('Y-m-d H:i:s')];
     }
 
     private function createTeam(string $prefix): Team

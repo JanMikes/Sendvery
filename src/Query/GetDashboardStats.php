@@ -21,10 +21,10 @@ final readonly class GetDashboardStats
     public function forTeams(array $teamIds): DashboardStatsResult
     {
         if ([] === $teamIds) {
-            return new DashboardStatsResult(0, 0, 0.0, 0);
+            return new DashboardStatsResult(0, 0, null, 0);
         }
 
-        /** @var array{total_domains: int|string, total_reports_30d: int|string, total_messages: int|string, pass_rate: float|string}|false $row */
+        /** @var array{total_domains: int|string, total_reports_30d: int|string, total_messages: int|string, pass_rate: float|string|null}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 (SELECT COUNT(*) FROM monitored_domain WHERE team_id IN (:teamIds)) AS total_domains,
@@ -43,7 +43,11 @@ final readonly class GetDashboardStats
                     WHERE md.team_id IN (:teamIds)
                     AND dr.date_range_end >= NOW() - INTERVAL \'30 days\'
                 ), 0) AS total_messages,
-                COALESCE((
+                -- Deliberately NOT wrapped in COALESCE(..., 0): NULLIF on the
+                -- divisor is what produces the honest NULL for "no messages
+                -- counted", and a zero fallback would render as a red 0.0%
+                -- pass rate on a team that simply has no reports yet.
+                (
                     SELECT
                         SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
                         / NULLIF(SUM(rec.count), 0)
@@ -53,7 +57,7 @@ final readonly class GetDashboardStats
                     JOIN monitored_domain md ON md.id = dr.monitored_domain_id
                     WHERE md.team_id IN (:teamIds)
                     AND dr.date_range_end >= NOW() - INTERVAL \'30 days\'
-                ), 0) AS pass_rate',
+                ) AS pass_rate',
             [
                 'teamIds' => $teamIds,
                 'pass' => 'pass',
@@ -64,13 +68,13 @@ final readonly class GetDashboardStats
         )->fetchAssociative();
 
         if (false === $row) {
-            return new DashboardStatsResult(0, 0, 0.0, 0);
+            return new DashboardStatsResult(0, 0, null, 0);
         }
 
         return new DashboardStatsResult(
             totalDomains: (int) $row['total_domains'],
             totalReportsLast30Days: (int) $row['total_reports_30d'],
-            overallPassRate: (float) $row['pass_rate'],
+            overallPassRate: null === $row['pass_rate'] ? null : (float) $row['pass_rate'],
             totalMessages: (int) $row['total_messages'],
         );
     }

@@ -131,6 +131,14 @@
                                 {% if record.resolvedHostname ?? record.resolvedOrg %}
                                     <span class="text-sm text-base-content/60">{{ record.resolvedHostname ?? record.resolvedOrg }}</span>
                                 {% endif %}
+                                {# What the address IS, next to the verdict on what its mail
+                                   DID. A gateway breaking SPF is forwarding working exactly
+                                   as designed; without this the same red badge reads as an
+                                   attack. "Unrecognised" is left off — it would sit on nearly
+                                   every row and say nothing. #}
+                                {% if record.senderRole is not null and record.senderRole.value != 'unknown' %}
+                                    <span class="badge badge-sm badge-ghost" data-testid="record-sender-role">{{ record.senderRole.label }}</span>
+                                {% endif %}
                                 <span class="text-sm text-base-content/60">{{ record.count }} msg</span>
                                 <span class="badge badge-sm badge-{{ verdict.dkim.badgeTone }}">DKIM {{ verdict.dkim.label }}</span>
                                 <span class="badge badge-sm badge-{{ verdict.spf.badgeTone }}">SPF {{ verdict.spf.label }}</span>
@@ -212,6 +220,9 @@
                             <span class="font-medium truncate max-w-[18rem]" title="{{ group.displayLabel }}">
                                 {{ group.displayLabel|length > 50 ? group.displayLabel[:50] ~ '…' : group.displayLabel }}
                             </span>
+                            {% if group.senderRole is not null and group.senderRole.value != 'unknown' %}
+                                <span class="badge badge-sm badge-ghost" data-testid="sender-group-role">{{ group.senderRole.label }}</span>
+                            {% endif %}
                             <span class="text-sm text-base-content/60">{{ group.totalMessages }} msg</span>
                             <span class="badge badge-sm badge-ghost">DKIM {{ group.dkimPassRate|number_format(0) }}%</span>
                             <span class="badge badge-sm badge-ghost">SPF {{ group.spfPassRate|number_format(0) }}%</span>
@@ -224,10 +235,8 @@
                             {% if group.dispositionReject > 0 %}
                                 <span class="badge badge-sm badge-error">{{ group.dispositionReject }} reject</span>
                             {% endif %}
-                            {% if group.senderIsAuthorized is same as(true) %}
-                                <span class="badge badge-sm badge-success">Authorized</span>
-                            {% elseif group.senderIsAuthorized is same as(false) %}
-                                <span class="badge badge-sm badge-error">Unauthorized</span>
+                            {% if group.reviewState is not null %}
+                                <twig:SenderStatusBadge :state="group.reviewState" />
                             {% endif %}
                         </div>
                     </summary>

@@ -88,4 +88,41 @@ enum SenderReviewState: string
     {
         return self::NeedsReview === $this;
     }
+
+    /**
+     * The state to show for a row that stands for a GROUP of addresses — an
+     * organisation on the Top Senders table or a report's sender pane — rather
+     * than a single inventory entry.
+     *
+     * Worst-first, deliberately: a provider running five machines where one is
+     * still unreviewed is not "Authorized". The naive alternative,
+     * MAX(is_authorized), reported the whole group as settled the moment ONE
+     * address was, which is how a group could look green while hiding a sender
+     * nobody had decided about.
+     *
+     * Null means no inventory row backs the group at all — "not tracked yet",
+     * which is not the same as "needs review" and must not borrow its amber.
+     *
+     * Lives on the enum so every grouped surface derives the state identically;
+     * it used to be copied privately into each result DTO, and a second copy is
+     * how two pages start disagreeing.
+     */
+    public static function worstOfGroup(int $knownSenderCount, int $needsReviewCount, int $authorizedCount): ?self
+    {
+        if (0 === $knownSenderCount) {
+            return null;
+        }
+
+        // Anything left over once reviewed-and-accepted and never-reviewed are
+        // accounted for was actively rejected, which outranks both.
+        if ($knownSenderCount > $needsReviewCount + $authorizedCount) {
+            return self::NotAuthorized;
+        }
+
+        if ($needsReviewCount > 0) {
+            return self::NeedsReview;
+        }
+
+        return self::Authorized;
+    }
 }

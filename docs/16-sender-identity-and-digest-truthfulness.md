@@ -1,7 +1,16 @@
 # DEC-059 — Sender Identity & Digest Truthfulness
 
-**Status:** Approved, in implementation
+**Status:** Implemented (WP1–WP6). D8 deferred — see §3.9.
 **Date:** 2026-07-27
+
+> **Delivery note.** WP1/WP2/WP6 shipped to production with the PR #4 release; the
+> identity backfill has been run against production (174 records enriched, 17 addresses
+> identified: 11 → `seznam.cz` as `esp`, 6 → `cloud-sec-av.com` / `inkyphishfence.com` /
+> `outlook.com` as `forwarder`, **zero `unknown`, zero `suspicious`**). That run is the
+> empirical confirmation of §3.2 and §3.3 — the rotating relay pool collapsed to a single
+> sender with no new `OrganizationMapper` entries, and the body-rewriting gateway
+> `ca.cloud-sec-av.com` (fails DKIM *and* SPF) classified as `Forwarder`, not spoofing,
+> closing D12 on real data. WP3/WP4/WP5 are verified but not yet merged.
 **Trigger:** Production weekly digest for team `myspeedpuzzling` (2026-07-27) told the
 owner to investigate seven IP addresses and "fix misconfigured sending sources".
 Every one of those IPs was benign, and Sendvery had **already computed** the

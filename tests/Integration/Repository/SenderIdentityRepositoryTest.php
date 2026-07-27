@@ -77,6 +77,39 @@ final class SenderIdentityRepositoryTest extends IntegrationTestCase
         self::assertSame([], $repository->findByIps([]));
     }
 
+    public function testFindsAnIdentityDiscoveredEarlierInTheSameTransaction(): void
+    {
+        $repository = $this->getService(SenderIdentityRepository::class);
+
+        $repository->add($this->identity('198.51.100.42', 'mxb.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp));
+
+        $found = $repository->findByIp('198.51.100.42');
+
+        self::assertNotNull(
+            $found,
+            'Handlers never flush, so two handlers of the same report event would each create a row for the same new address and the closing flush would fail.',
+        );
+        self::assertSame('seznam.cz', $found->registrableDomain);
+    }
+
+    public function testMixesAlreadyStoredAndJustDiscoveredIdentitiesInOneBatch(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $repository = $this->getService(SenderIdentityRepository::class);
+
+        $repository->add($this->identity('198.51.100.43', 'mxb.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp));
+        $em->flush();
+        $em->clear();
+
+        $repository->add($this->identity('198.51.100.44', 'eu.cloud-sec-av.com', 'cloud-sec-av.com', null, SenderRole::Forwarder));
+
+        $found = $repository->findByIps(['198.51.100.43', '198.51.100.44']);
+
+        self::assertCount(2, $found);
+        self::assertSame('seznam.cz', $found['198.51.100.43']->registrableDomain);
+        self::assertSame('cloud-sec-av.com', $found['198.51.100.44']->registrableDomain);
+    }
+
     public function testKeepsOnlyOneIdentityPerAddress(): void
     {
         $em = $this->getService(EntityManagerInterface::class);

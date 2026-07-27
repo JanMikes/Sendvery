@@ -9,6 +9,9 @@ namespace App\Services\Ai\Analysis;
  */
 final readonly class WeeklyDigestDomainFact
 {
+    /**
+     * @param list<SenderRoleCount> $newSenderRoles breakdown of $newSenderCount by what each sender is
+     */
     public function __construct(
         public string $domain,
         public int $messages,
@@ -20,6 +23,13 @@ final readonly class WeeklyDigestDomainFact
         public ?float $passRate,
         public ?float $passRateDelta,
         public int $newSenderCount,
+        /**
+         * Without this the model saw "3 new senders, 4% of mail failing" and
+         * faithfully recommended fixing misconfigured sending sources — when
+         * all three were third-party forwarders and nothing was misconfigured
+         * (DEC-059 D10).
+         */
+        public array $newSenderRoles,
         public int $alertCount,
     ) {
     }

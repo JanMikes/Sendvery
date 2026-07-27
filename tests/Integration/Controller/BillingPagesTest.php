@@ -76,8 +76,17 @@ final class BillingPagesTest extends WebTestCase
         return ['client' => $client, 'teamId' => $teamId, 'domain' => $domain];
     }
 
-    private function insertTeamUsage(UuidInterface $teamId, int $count, string $startsAt = '2026-05-01 00:00:00', string $endsAt = '2026-06-01 00:00:00'): void
+    /**
+     * Defaults to the LIVE monthly window. Fixed past dates would silently make
+     * every caller exercise the finished-period path, which now correctly reads
+     * as zero usage (see GetMonthlyReportUsageStalePeriodTest).
+     */
+    private function insertTeamUsage(UuidInterface $teamId, int $count, ?string $startsAt = null, ?string $endsAt = null): void
     {
+        $periodStart = new \DateTimeImmutable('first day of this month 00:00:00');
+        $startsAt ??= $periodStart->format('Y-m-d H:i:s');
+        $endsAt ??= $periodStart->modify('+1 month')->format('Y-m-d H:i:s');
+
         $connection = self::getContainer()->get(Connection::class);
         assert($connection instanceof Connection);
         $connection->executeStatement(

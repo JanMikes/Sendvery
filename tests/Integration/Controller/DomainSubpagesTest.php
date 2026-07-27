@@ -8,12 +8,14 @@ use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\DomainHealthSnapshot;
 use App\Entity\KnownSender;
+use App\Entity\SenderIdentity;
 use App\Tests\Fixtures\TestFixtures;
 use App\Tests\WebTestCase;
 use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\SenderRole;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -361,6 +363,88 @@ final class DomainSubpagesTest extends WebTestCase
             $link->count(),
             'Top Senders chart card must render a "View all senders →" link when sender data is present.',
         );
+    }
+
+    /**
+     * A relay that rotates through an address pool is one sender, and the
+     * table has to say so — fifteen near-identical rows crowded out every
+     * other sender the domain had and made the pass rates meaningless.
+     */
+    #[Test]
+    public function topSendersTableListsARotatingRelayPoolOnceAndSaysWhatItIs(): void
+    {
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $client->loginUser($persona->user);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $report = new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $persona->domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'pool-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: new \DateTimeImmutable('-2 days'),
+            dateRangeEnd: new \DateTimeImmutable('-1 day'),
+            policyDomain: $persona->domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::None,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback/>',
+            processedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($report);
+
+        $pool = [
+            '2a02:598:3333::1' => 'mxb-1-908.seznam.cz',
+            '2a02:598:3333::2' => 'mxb-2-904.seznam.cz',
+            '2a02:598:3333::3' => 'mxb-3-514.seznam.cz',
+        ];
+
+        foreach ($pool as $ip => $hostname) {
+            $em->persist(new SenderIdentity(
+                id: Uuid::uuid7(),
+                sourceIp: $ip,
+                resolvedAt: new \DateTimeImmutable(),
+                hostname: $hostname,
+                registrableDomain: 'seznam.cz',
+                organization: 'Seznam',
+                role: SenderRole::Esp,
+                resolutionAttempts: 1,
+                lastAttemptAt: new \DateTimeImmutable(),
+            ));
+
+            $em->persist(new DmarcRecord(
+                id: Uuid::uuid7(),
+                dmarcReport: $report,
+                sourceIp: $ip,
+                count: 10,
+                disposition: Disposition::None,
+                dkimResult: AuthResult::Pass,
+                spfResult: AuthResult::Pass,
+                headerFrom: $persona->domain->domain,
+            ));
+        }
+        $em->flush();
+
+        $crawler = $client->request('GET', '/app/domains/'.$persona->domain->id->toString());
+
+        self::assertResponseIsSuccessful();
+
+        $rows = $crawler->filter('[data-testid="top-senders-table"] tbody tr');
+        self::assertCount(1, $rows, 'One relay is one row, however many addresses it sends from.');
+        self::assertStringContainsString('Seznam', $rows->text());
+        self::assertStringContainsString('30', $rows->text(), 'The pool\'s whole volume belongs to the one sender.');
+
+        $role = $crawler->filter('[data-testid="top-sender-role"]');
+        self::assertCount(1, $role);
+        self::assertSame(SenderRole::Esp->label(), $role->text());
     }
 
     /**
@@ -773,11 +857,19 @@ final class DomainSubpagesTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         $blacklistUrl = '/app/domains/'.$domainId.'/blacklist';
-        $blacklistRow = $crawler->filter('#health-blacklist a.block[href="'.$blacklistUrl.'"]');
+        $blacklistRow = $crawler->filter('#health-blacklist a[href="'.$blacklistUrl.'"]');
         self::assertGreaterThan(
             0,
             $blacklistRow->count(),
-            'The Blacklist row inside the category-scores list must wrap its <progress> in a link to the per-blacklist detail page.',
+            'The Blacklist row inside the category-scores list must link to the per-blacklist detail page.',
+        );
+        // The row no longer carries a <progress> bar: `blacklist_score` is a
+        // hardcoded 100 that no blacklist check ever produced, so scoring it
+        // published a clean result the domain had not earned.
+        self::assertCount(
+            0,
+            $crawler->filter('#health-blacklist progress'),
+            'Blacklist must not render as a scored category while nothing actually checks it.',
         );
     }
 

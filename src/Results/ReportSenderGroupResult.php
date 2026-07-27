@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace App\Results;
 
+use App\Value\SenderReviewState;
+use App\Value\SenderRole;
+
+/**
+ * One sender on the report-detail "By sender" pane.
+ *
+ * A row is a sender identity, so {@see $sourceIps} routinely holds several
+ * addresses — a rotating relay pool or a gateway's regional nodes.
+ */
 final readonly class ReportSenderGroupResult
 {
     /**
@@ -22,11 +31,27 @@ final readonly class ReportSenderGroupResult
         public int $dispositionReject,
         public array $sourceIps,
         public ?bool $senderIsAuthorized,
+        /**
+         * The group's worst review state, so this pane and the Sender Inventory
+         * can never render two different verdicts for the same server. Null when
+         * no inventory row backs the group yet. Kept alongside
+         * $senderIsAuthorized because the report-authorization display still
+         * asks the plain "is this one authorised?" question.
+         */
+        public ?SenderReviewState $reviewState = null,
+        /**
+         * What this sender is, independent of how its mail authenticated in
+         * this one report. A forwarder failing SPF is the expected outcome of
+         * forwarding, not evidence of anything wrong; without the role the
+         * pane cannot tell the reader the difference. Null when no address in
+         * the group has been classified yet.
+         */
+        public ?SenderRole $senderRole = null,
     ) {
     }
 
     /**
-     * @param array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null} $row
+     * @param array{group_key: string, display_label: string, sender_role: string|null, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, disposition_none: int|string, disposition_quarantine: int|string, disposition_reject: int|string, source_ips: string, sender_is_authorized: int|string|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string} $row
      */
     public static function fromDatabaseRow(array $row): self
     {
@@ -49,6 +74,12 @@ final readonly class ReportSenderGroupResult
             senderIsAuthorized: null !== $row['sender_is_authorized']
                 ? (bool) (int) $row['sender_is_authorized']
                 : null,
+            reviewState: SenderReviewState::worstOfGroup(
+                knownSenderCount: (int) $row['known_sender_count'],
+                needsReviewCount: (int) $row['needs_review_sender_count'],
+                authorizedCount: (int) $row['authorized_sender_count'],
+            ),
+            senderRole: null !== $row['sender_role'] ? SenderRole::from($row['sender_role']) : null,
         );
     }
 

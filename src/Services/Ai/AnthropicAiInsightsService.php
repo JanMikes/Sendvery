@@ -8,6 +8,7 @@ use App\Exceptions\ReportNotAnalyzable;
 use App\Repository\TeamRepository;
 use App\Services\Ai\Analysis\ReportInsightAnalyzer;
 use App\Services\Ai\Analysis\RoutineReportClassifier;
+use App\Services\Ai\Analysis\SenderRoleCount;
 use App\Services\Ai\Analysis\WeeklyDigestDomainFact;
 use App\Services\Ai\Analysis\WeeklyDigestFacts;
 use App\Services\Ai\Client\AnthropicClient;
@@ -27,6 +28,7 @@ use App\Services\Ai\Security\UntrustedDataSanitizer;
 use App\Services\Digest\WeeklyDigestGenerator;
 use App\Services\OrganizationMapper;
 use App\Value\AiInsightType;
+use App\Value\SenderRole;
 use App\Value\WeeklyDigestData;
 use Ramsey\Uuid\UuidInterface;
 
@@ -170,7 +172,16 @@ final readonly class AnthropicAiInsightsService implements AiInsightsService
         }
 
         $domains = [];
+        $teamRoleTally = [];
+
         foreach ($data->domains as $domain) {
+            $roleTally = [];
+
+            foreach ($domain->newSenders as $sender) {
+                $roleTally[$sender->role->value] = ($roleTally[$sender->role->value] ?? 0) + 1;
+                $teamRoleTally[$sender->role->value] = ($teamRoleTally[$sender->role->value] ?? 0) + 1;
+            }
+
             $domains[] = new WeeklyDigestDomainFact(
                 domain: $this->sanitizer->sanitize($domain->domainName),
                 messages: $domain->totalMessages,
@@ -180,6 +191,7 @@ final readonly class AnthropicAiInsightsService implements AiInsightsService
                 passRateDelta: null !== $domain->passRateDelta ? round($domain->passRateDelta, 1) : null,
                 // Counts only — never the untrusted sender names themselves.
                 newSenderCount: count($domain->newSenders),
+                newSenderRoles: self::toRoleCounts($roleTally),
                 alertCount: $alertCountByDomain[$domain->domainName] ?? 0,
             );
         }
@@ -194,11 +206,33 @@ final readonly class AnthropicAiInsightsService implements AiInsightsService
             periodLabel: $data->periodStart->format('M j').' — '.$data->periodEnd->format('M j, Y'),
             totalDomains: $data->totalDomains,
             totalMessages: $data->totalMessages,
-            averagePassRate: null !== $data->averagePassRate ? round($data->averagePassRate, 1) : null,
+            overallPassRate: null !== $data->overallPassRate() ? round($data->overallPassRate(), 1) : null,
             alertsCount: $data->alertsCount,
             dnsChangesCount: $data->dnsChangesCount,
+            newSenderRoles: self::toRoleCounts($teamRoleTally),
             domains: $domains,
             brokenDns: $brokenDns,
         );
+    }
+
+    /**
+     * Enum order, not data order: the same week must serialise byte-identically
+     * however the rows happened to come back.
+     *
+     * @param array<string, int> $tally counts keyed by SenderRole value
+     *
+     * @return list<SenderRoleCount>
+     */
+    private static function toRoleCounts(array $tally): array
+    {
+        $counts = [];
+
+        foreach (SenderRole::cases() as $role) {
+            if (isset($tally[$role->value])) {
+                $counts[] = new SenderRoleCount($role, $tally[$role->value]);
+            }
+        }
+
+        return $counts;
     }
 }

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit\Value;
 
+use App\Value\SenderRole;
 use App\Value\WeeklyDigestDomainData;
+use App\Value\WeeklyDigestNewSender;
 use App\Value\WeeklyDigestSenderReview;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -17,18 +19,26 @@ final class WeeklyDigestDomainDataTest extends TestCase
         $domain = new WeeklyDigestDomainData(
             domainName: 'example.com',
             totalMessages: 250,
+            passedMessages: 246,
             passRate: 98.2,
             passRateDelta: -1.5,
-            newSenders: ['mailchimp.com', 'sendgrid.net'],
+            newSenders: [
+                new WeeklyDigestNewSender('mailchimp.com', SenderRole::Esp, 40, 40),
+                new WeeklyDigestNewSender('sendgrid.net', SenderRole::Esp, 12, 12),
+            ],
             domainId: '00000000-0000-0000-0000-000000000001',
             senderReview: WeeklyDigestSenderReview::none(),
         );
 
         self::assertSame('example.com', $domain->domainName);
         self::assertSame(250, $domain->totalMessages);
+        self::assertSame(246, $domain->passedMessages);
         self::assertSame(98.2, $domain->passRate);
         self::assertSame(-1.5, $domain->passRateDelta);
-        self::assertSame(['mailchimp.com', 'sendgrid.net'], $domain->newSenders);
+        self::assertSame(
+            ['mailchimp.com', 'sendgrid.net'],
+            array_map(static fn (WeeklyDigestNewSender $s): string => $s->label, $domain->newSenders),
+        );
     }
 
     #[Test]
@@ -37,6 +47,7 @@ final class WeeklyDigestDomainDataTest extends TestCase
         $domain = new WeeklyDigestDomainData(
             domainName: 'example.com',
             totalMessages: 250,
+            passedMessages: 246,
             passRate: 98.2,
             passRateDelta: null,
             newSenders: [],
@@ -58,6 +69,7 @@ final class WeeklyDigestDomainDataTest extends TestCase
         $domain = new WeeklyDigestDomainData(
             domainName: 'brand-new.com',
             totalMessages: 0,
+            passedMessages: 0,
             passRate: null,
             passRateDelta: null,
             newSenders: [],
@@ -78,6 +90,7 @@ final class WeeklyDigestDomainDataTest extends TestCase
         $domain = new WeeklyDigestDomainData(
             domainName: 'new-domain.com',
             totalMessages: 10,
+            passedMessages: 10,
             passRate: 100.0,
             passRateDelta: null,
             newSenders: [],
