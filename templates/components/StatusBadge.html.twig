@@ -1,4 +1,14 @@
-{# Status badge — pass/fail/warning/neutral indicator #}
+{# Status badge — pass/fail/warning/neutral indicator.
+
+   SCOPE: outcomes that already happened — SPF/DKIM auth results, message
+   disposition (what a receiver DID to a message), and connection health. Here
+   `quarantine`/`reject` mean mail was held back or refused, so the amber/red
+   tones are correct.
+
+   NOT for a domain's published DMARC policy. Policy runs the opposite way:
+   `p=reject` is full enforcement and the best available posture. Use
+   `<twig:PolicyBadge>`, which scales severity by exposure instead of by
+   outcome. #}
 {% props status, label = null %}
 
 {% set badgeClass = {

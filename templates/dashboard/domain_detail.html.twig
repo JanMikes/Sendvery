@@ -13,7 +13,7 @@
             <h1 class="text-2xl font-bold">{{ domain.domainName }}</h1>
             <div class="flex items-center gap-2 mt-1">
                 {% if domain.dmarcPolicy %}
-                    <twig:StatusBadge status="{{ domain.dmarcPolicy }}" label="p={{ domain.dmarcPolicy }}" />
+                    <twig:PolicyBadge policy="{{ domain.dmarcPolicy }}" label="p={{ domain.dmarcPolicy }}" />
                 {% endif %}
                 {% if domain.isVerified %}
                     <span class="badge badge-sm badge-success">Verified</span>

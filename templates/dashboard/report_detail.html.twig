@@ -49,12 +49,12 @@
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                     <div>
                         <span class="text-base-content/50">Policy (p)</span>
-                        <p><twig:StatusBadge status="{{ report.policyP }}" label="p={{ report.policyP }}" /></p>
+                        <p><twig:PolicyBadge policy="{{ report.policyP }}" label="p={{ report.policyP }}" /></p>
                     </div>
                     {% if report.policySp %}
                         <div>
                             <span class="text-base-content/50">Subdomain (sp)</span>
-                            <p><twig:StatusBadge status="{{ report.policySp }}" label="sp={{ report.policySp }}" /></p>
+                            <p><twig:PolicyBadge policy="{{ report.policySp }}" label="sp={{ report.policySp }}" /></p>
                         </div>
                     {% endif %}
                     <div>

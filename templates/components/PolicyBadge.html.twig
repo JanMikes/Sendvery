@@ -1,0 +1,26 @@
+{# DMARC *policy* badge — what a domain asks receivers to do with mail that
+   fails alignment.
+
+   WHY this is not `<twig:StatusBadge>`: that component's colour map is keyed
+   for message *disposition* (what a receiver actually did to a message), where
+   `reject` means "blocked" and correctly earns a red badge. Policy runs the
+   opposite way — `p=reject` is full enforcement, the strongest posture, and the
+   destination the managed auto-ramp (DEC-058) drives customers toward. Sharing
+   one map inverted the scale: the best outcome rendered red beside the domain
+   name while the weakest, most spoofable state rendered neutral grey.
+
+   Severity therefore ascends with protection: warning (spoofable, act) ->
+   info (enforcement under way) -> success (fully enforced).
+
+   The fallback arm is neutral on purpose. An unrecognised or absent policy is
+   unknown, not broken, and CLAUDE.md requires the last arm to carry no error
+   tone. #}
+{% props policy, label = null %}
+
+{% set badgeClass = {
+    'none': 'badge-warning',
+    'quarantine': 'badge-info',
+    'reject': 'badge-success',
+}[policy] ?? 'badge-ghost' %}
+
+<span class="badge badge-sm {{ badgeClass }}">{{ label ?? policy }}</span>
