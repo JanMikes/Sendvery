@@ -156,15 +156,54 @@ enum SenderRole: string
 Classification order (first match wins, deterministic — no AI in the hot path):
 
 1. **OwnRelay** — matching `known_sender.is_authorized`, or in the domain's SPF set.
-2. **Forwarder** — PTR matches `ForwarderRegistry` (`*.protection.outlook.com`,
-   `inkyphishfence`, `cloud-sec-av`, `mimecast`, `proofpoint`, `pphosted`, `barracuda`,
-   `messagelabs`, …), **or** the clean-forward signature (DKIM ≥ 80% ∧ SPF ≤ 30%).
+2. **Forwarder** — a **forward-confirmed** PTR matches `ForwarderRegistry`
+   (`*.protection.outlook.com`, `inkyphishfence`, `cloud-sec-av`, `mimecast`,
+   `proofpoint`, `pphosted`, `barracuda`, `messagelabs`, …), **or** the clean-forward
+   signature (DKIM ≥ 80% ∧ SPF ≤ 30%).
 3. **Esp** — `OrganizationMapper` hit.
 4. **Suspicious** — both auth methods fail, no forwarder signal, volume above threshold.
 5. **Unknown** — everything else.
 
 Rule 2's PTR branch is what closes **D12**: the clean-forward signature alone cannot
 catch a *modifying* forwarder like `ca.cloud-sec-av.com`, which fails both checks.
+
+#### 3.3.1 The PTR branch requires forward-confirmed reverse DNS
+
+A PTR record is published by whoever controls the reverse zone of an IP block, and
+essentially every VPS provider hands that field to the customer. Rule 2's hostname
+branch turns that attacker-writable string into `SenderRole::Forwarder`, and
+`warrantsAlert()` is `false` for `Forwarder` — so an unconfirmed PTR was a free way to
+switch off the new-sender alert, the one signal that exists to surface spoofing: point
+the reverse record at `anything.mimecast.com` and nothing fires.
+
+So the hostname branch requires **FCrDNS**: resolve the claimed hostname forward (A
+*and* AAAA, the full RRset) and require the original address back in it, compared as
+`inet_pton()` binary with the IPv4-mapped `::ffff:` prefix stripped. Nobody can make
+Mimecast's A records point at their box. Google and Yahoo have required this of bulk
+senders since February 2024, so real infrastructure already satisfies it — all 17
+production identities pass.
+
+Confirmation gates **trust only**. A hostname that fails confirmation is still stored
+and still displayed (it is the best label available); it simply falls through to rules
+3–5 like any other host. Unconfirmed is deliberately **not** `Suspicious` — the whole
+point of DEC-059 was removing false alarms, not inventing a new source of them. The
+clean-forward auth signature is cryptographic and stays ungated: a DKIM signature that
+still verifies after the hop proves the message was relayed intact, whatever DNS says.
+
+**Rule 3 (`Esp`) is gated by the same flag, and that half matters more.**
+`$organization` is resolved from the PTR hostname and nothing else, and `Esp` suppresses
+the new-sender alert exactly as `Forwarder` does — while `OrganizationMapper` recognises
+~60 provider names against `ForwarderRegistry`'s handful. Gating only the forwarder
+branch would therefore have closed the narrow half of the hole and left the wide one
+open: `x.sendgrid.net` or `x.protection.outlook.com` in a reverse record would still have
+bought silence. An unconfirmed claim earns a **label**, never a **role**.
+
+`sender_identity.forward_confirmed` is nullable and defaults to NULL for rows cached
+before the check existed. NULL means "never asked", grants nothing, and makes the row
+due for exactly one re-resolution — defaulting to `true` would grandfather the hole in
+for every already-cached address, and `false` would record a verdict never reached.
+Confirmation runs inside the resolver's existing per-batch budget rather than beside
+it: the cap became 12 identifications (≤ 24 DNS queries) where it was 25 lookups.
 
 ### 3.4 Resolution is cached, bounded, and off the hot path
 

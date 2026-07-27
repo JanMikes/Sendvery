@@ -232,6 +232,36 @@ final class AlertOnNewSenderTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function aSpooferCannotSilenceThisAlertByNamingItsOwnReverseRecordAfterAGateway(): void
+    {
+        $domain = $this->givenDomain('sendvery.com');
+        $this->givenBaseline($domain);
+
+        // The reverse zone of an IP block belongs to whoever holds the block,
+        // and essentially every VPS provider hands that field to the customer.
+        // Claiming to be Mimecast therefore costs an attacker one form field —
+        // and the forwarder role it used to buy is exactly the role that makes
+        // this alert stay quiet. Mimecast's own addresses say otherwise.
+        $this->scriptReverseDns()
+            ->withForgedHostname('203.0.113.250', 'eu-smtp-delivery-1.mimecast.com')
+            ->withForwardAddresses('eu-smtp-delivery-1.mimecast.com', '195.130.217.1');
+
+        $report = $this->givenReport($domain, '2026-07-25 23:59:59');
+        $this->givenRecord($report, '203.0.113.250', 40, dkim: AuthResult::Fail, spf: AuthResult::Fail);
+
+        $this->ingest($report);
+
+        $alerts = $this->alerts();
+
+        self::assertCount(
+            1,
+            $alerts,
+            'The new-sender alert exists to surface spoofing; a name its own owner wrote must not be able to switch it off.',
+        );
+        self::assertSame('New sender for sendvery.com: mimecast.com', $alerts[0]->title);
+    }
+
+    #[Test]
     public function anUnrecognisedSenderStillRaisesAnAlertNamingItAndItsVolume(): void
     {
         $domain = $this->givenDomain('sendvery.com');

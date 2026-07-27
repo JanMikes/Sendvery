@@ -39,11 +39,11 @@ final class BackfillSenderIdentitiesCommand extends Command
     private const int DEFAULT_LIMIT = 500;
 
     /**
-     * Matches the resolver's own per-batch lookup cap, so every address in a
-     * chunk gets a real lookup instead of silently falling off the end of the
-     * budget and being reported as unresolved.
+     * Matches the resolver's own per-batch cap, so every address in a chunk gets
+     * a real lookup instead of silently falling off the end of the budget and
+     * being reported as unresolved.
      */
-    private const int CHUNK_SIZE = 25;
+    private const int CHUNK_SIZE = SenderIdentityResolver::MAX_IDENTIFICATIONS_PER_BATCH;
 
     public function __construct(
         private readonly Connection $database,

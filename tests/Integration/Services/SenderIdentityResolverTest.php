@@ -7,6 +7,7 @@ namespace App\Tests\Integration\Services;
 use App\Entity\SenderIdentity;
 use App\Repository\SenderIdentityRepository;
 use App\Services\Dns\FakeReverseDnsResolver;
+use App\Services\Dns\ForwardConfirmedReverseDns;
 use App\Services\IdentityProvider;
 use App\Services\OrganizationMapper;
 use App\Services\RegistrableDomainExtractor;
@@ -101,6 +102,164 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
         self::assertSame('cloud-sec-av.com', $resolved->displayLabel());
     }
 
+    public function testDoesNotHandForwarderTrustToAReverseRecordItsOwnerWrote(): void
+    {
+        // The exploit: a PTR record is set by whoever holds the IP block, so a
+        // spoofer names their box after a famous gateway, is filed as a harmless
+        // forwarder, and the new-sender alert — the one signal that would have
+        // surfaced them — never fires. The forward RRset of mimecast.com is
+        // published by Mimecast and does not list the attacker's address.
+        $this->scriptReverseDns()
+            ->withForgedHostname('203.0.113.240', 'eu-smtp-delivery-1.mimecast.com')
+            ->withForwardAddresses('eu-smtp-delivery-1.mimecast.com', '195.130.217.1');
+
+        $resolved = $this->resolver()->resolve(
+            '203.0.113.240',
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 400),
+        );
+
+        self::assertNotSame(SenderRole::Forwarder, $resolved->role);
+        self::assertTrue($resolved->role->warrantsAlert(), 'The user has to hear about this sender.');
+
+        $this->getService(EntityManagerInterface::class)->flush();
+        $cached = $this->getService(SenderIdentityRepository::class)->findByIp('203.0.113.240');
+        self::assertNotNull($cached);
+        self::assertFalse($cached->isForwardConfirmed());
+        self::assertNotSame(
+            SenderRole::Forwarder,
+            $cached->role,
+            'The cache is shared, so an unearned role would silence this sender for every other team too.',
+        );
+        self::assertSame(
+            'eu-smtp-delivery-1.mimecast.com',
+            $cached->hostname,
+            'The name is still the best label we have; only the trust in it is withheld.',
+        );
+    }
+
+    public function testStillRecognisesAForwarderThatOnlyItsDkimSignatureCanProve(): void
+    {
+        // No reverse record at all, so no hostname to confirm — but a DKIM
+        // signature that still verifies after the hop is cryptographic proof
+        // that the message was relayed intact, and no DNS check can add to it.
+        $resolved = $this->resolver()->resolve(
+            '198.51.100.77',
+            new SenderAuthSignals(dkimPassRate: 100.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 2),
+        );
+
+        self::assertFalse($resolved->isResolved());
+        self::assertSame(SenderRole::Forwarder, $resolved->role);
+        self::assertFalse($resolved->role->warrantsAlert());
+    }
+
+    public function testMakesAnAddressCachedBeforeConfirmationExistedEarnItsTrustAgain(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $repository = $this->getService(SenderIdentityRepository::class);
+
+        // A row written before forward confirmation existed: hostname trusted,
+        // question never asked. Migrating it in as "confirmed" would leave the
+        // hole open for every address already in the cache.
+        $repository->add(new SenderIdentity(
+            id: $this->getService(IdentityProvider::class)->nextIdentity(),
+            sourceIp: '203.0.113.241',
+            resolvedAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+            hostname: 'eu-smtp-delivery-1.mimecast.com',
+            registrableDomain: 'mimecast.com',
+            role: SenderRole::Forwarder,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+        ));
+        $em->flush();
+        $em->clear();
+
+        $this->scriptReverseDns()
+            ->withForgedHostname('203.0.113.241', 'eu-smtp-delivery-1.mimecast.com')
+            ->withForwardAddresses('eu-smtp-delivery-1.mimecast.com', '195.130.217.1');
+
+        $resolved = $this->resolver()->resolve('203.0.113.241');
+
+        self::assertNotSame(
+            SenderRole::Forwarder,
+            $resolved->role,
+            'A role granted before the check existed is not evidence that the check would have passed.',
+        );
+
+        $em->flush();
+        $cached = $repository->findByIp('203.0.113.241');
+        self::assertNotNull($cached);
+        self::assertFalse($cached->isForwardConfirmed());
+        self::assertSame(2, $cached->resolutionAttempts, 'One re-resolution settles the question for good.');
+        self::assertFalse(
+            $cached->isDueForRetry(new \DateTimeImmutable('2027-07-27 10:00:00')),
+            'Once answered, the host is never queried again.',
+        );
+    }
+
+    public function testConfirmsARelayThatPublishesOnlyAnIpv6Address(): void
+    {
+        // mxb-2-904.seznam.cz is real, and it has no A record at all.
+        $this->scriptReverseDns()
+            ->withHostname('2a02:598:64:8a00::1000:904', 'mxb-2-904.seznam.cz')
+            ->withForwardAddresses('mxb-2-904.seznam.cz', '2a02:0598:0064:8a00:0000:0000:1000:0904');
+
+        $this->resolver()->resolve('2a02:598:64:8a00::1000:904');
+        $this->getService(EntityManagerInterface::class)->flush();
+
+        $cached = $this->getService(SenderIdentityRepository::class)->findByIp('2a02:598:64:8a00::1000:904');
+        self::assertNotNull($cached);
+        self::assertTrue(
+            $cached->isForwardConfirmed(),
+            'An A-only check, or a textual comparison, would strip a legitimate relay of its identity.',
+        );
+    }
+
+    public function testConfirmsAGatewayThatSendsFromAnyNodeOfItsPool(): void
+    {
+        $this->scriptReverseDns()
+            ->withHostname('34.210.15.192', 'ipw-outbound.inkyphishfence.com')
+            ->withForwardAddresses(
+                'ipw-outbound.inkyphishfence.com',
+                '3.132.108.44',
+                '18.208.14.99',
+                '34.210.15.192',
+                '35.171.24.11',
+                '44.192.8.7',
+                '52.6.90.201',
+                '54.86.3.19',
+                '107.20.44.62',
+            );
+
+        $resolved = $this->resolver()->resolve(
+            '34.210.15.192',
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 60),
+        );
+
+        self::assertSame(
+            SenderRole::Forwarder,
+            $resolved->role,
+            'Reading only the first answer of an eight-address pool would reject seven eighths of a real gateway.',
+        );
+    }
+
+    public function testConfirmsAGatewayThatAnswersWithAnIpv4MappedAddress(): void
+    {
+        $this->scriptReverseDns()
+            ->withHostname('40.93.13.100', 'mail-dm2pr04cu00304.outbound.protection.outlook.com')
+            ->withForwardAddresses('mail-dm2pr04cu00304.outbound.protection.outlook.com', '::ffff:40.93.13.100');
+
+        $resolved = $this->resolver()->resolve(
+            '40.93.13.100',
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 60),
+        );
+
+        self::assertSame(
+            SenderRole::Forwarder,
+            $resolved->role,
+            'Microsoft answers AAAA queries with IPv4-mapped addresses; comparing them as text would reject a legitimate host.',
+        );
+    }
+
     public function testShowsATeamItsOwnRelayWithoutRewritingTheSharedCache(): void
     {
         $this->scriptReverseDns()->withHostname('77.75.78.89', 'mxb.seznam.cz');
@@ -179,9 +338,14 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
 
         self::assertCount(40, $resolved, 'Every address still gets an answer.');
         self::assertSame(
-            25,
+            SenderIdentityResolver::MAX_IDENTIFICATIONS_PER_BATCH,
             $reverseDns->lookupCount(),
             'A pathological report must not be able to chain an unbounded number of DNS lookups inside a worker.',
+        );
+        self::assertLessThanOrEqual(
+            25,
+            $reverseDns->lookupCount() + $reverseDns->forwardLookupCount(),
+            'Confirming a hostname has to fit inside the budget the reverse lookups already had, not double it.',
         );
         self::assertTrue($resolved['198.51.100.1']->isResolved());
         self::assertFalse(
@@ -227,7 +391,7 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
 
         $ips = [];
 
-        for ($i = 1; $i <= 25; ++$i) {
+        for ($i = 1; $i <= SenderIdentityResolver::MAX_IDENTIFICATIONS_PER_BATCH; ++$i) {
             $ip = '198.51.100.'.$i;
             $ips[] = $ip;
             $reverseDns->withHostname($ip, sprintf('host%d.example.com', $i));
@@ -239,7 +403,7 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
         $resolved = $this->resolver()->resolveMany($ips);
 
         self::assertFalse($resolved['198.51.100.99']->isResolved());
-        self::assertSame(25, $reverseDns->lookupCount());
+        self::assertSame(SenderIdentityResolver::MAX_IDENTIFICATIONS_PER_BATCH, $reverseDns->lookupCount());
 
         $em->flush();
         $cached = $repository->findByIp('198.51.100.99');
@@ -302,6 +466,7 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
             role: SenderRole::Forwarder,
             resolutionAttempts: 1,
             lastAttemptAt: new \DateTimeImmutable(self::NOW),
+            forwardConfirmed: true,
         ));
         $em->flush();
         $em->clear();
@@ -324,9 +489,12 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
 
     private function resolver(?MockClock $clock = null): SenderIdentityResolver
     {
+        $reverseDns = $this->getService(FakeReverseDnsResolver::class);
+
         return new SenderIdentityResolver(
             repository: $this->getService(SenderIdentityRepository::class),
-            reverseDns: $this->getService(FakeReverseDnsResolver::class),
+            reverseDns: $reverseDns,
+            forwardConfirmation: new ForwardConfirmedReverseDns($reverseDns),
             registrableDomainExtractor: $this->getService(RegistrableDomainExtractor::class),
             organizationMapper: $this->getService(OrganizationMapper::class),
             classifier: $this->getService(SenderRoleClassifier::class),

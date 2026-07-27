@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Entity\SenderIdentity;
 use App\Repository\SenderIdentityRepository;
+use App\Services\Dns\ForwardConfirmedReverseDns;
 use App\Services\Dns\ReverseDnsResolver;
 use App\Value\ResolvedSender;
 use App\Value\SenderAuthSignals;
@@ -22,24 +23,37 @@ use Psr\Clock\ClockInterface;
  * re-queried on every single ingest.
  *
  * Ingest can therefore never chain an unbounded number of DNS lookups, which is
- * what DEC-059 D11 was about: at most {@see MAX_LOOKUPS_PER_BATCH} live lookups
- * happen per call, and anything beyond that is returned unresolved and picked
- * up by a later report. No AI, no blocking enrichment, nothing that can stall a
- * worker.
+ * what DEC-059 D11 was about: at most {@see MAX_IDENTIFICATIONS_PER_BATCH}
+ * addresses are identified live per call, and anything beyond that is returned
+ * unresolved and picked up by a later report. No AI, no blocking enrichment,
+ * nothing that can stall a worker.
+ *
+ * Identification includes forward-confirming the PTR hostname
+ * ({@see ForwardConfirmedReverseDns}) before any trust is placed in it, because
+ * a reverse record is written by whoever holds the IP block and a forged one
+ * used to be enough to be classified as a harmless forwarder and silence the
+ * new-sender alert.
  */
 final readonly class SenderIdentityResolver
 {
     /**
-     * Hard cap on live reverse lookups per batch. Reports normally carry a
+     * Hard cap on addresses identified live per batch. Reports normally carry a
      * handful of source IPs, and the cache means a busy domain converges after
      * one or two ingests — so this only ever bites on a pathological report,
      * which is exactly when a worker must not be allowed to stall.
+     *
+     * Identifying one address costs at most two DNS queries: the reverse
+     * lookup, then the forward lookup that confirms it. The cap is deliberately
+     * expressed in identifications rather than lookups so that forward
+     * confirmation tightened this budget instead of doubling it — a batch still
+     * issues at most 24 queries, where before it issued 25.
      */
-    private const int MAX_LOOKUPS_PER_BATCH = 25;
+    public const int MAX_IDENTIFICATIONS_PER_BATCH = 12;
 
     public function __construct(
         private SenderIdentityRepository $repository,
         private ReverseDnsResolver $reverseDns,
+        private ForwardConfirmedReverseDns $forwardConfirmation,
         private RegistrableDomainExtractor $registrableDomainExtractor,
         private OrganizationMapper $organizationMapper,
         private SenderRoleClassifier $classifier,
@@ -80,7 +94,7 @@ final readonly class SenderIdentityResolver
 
         $cached = $this->repository->findByIps($distinctIps);
         $now = $this->clock->now();
-        $lookupsRemaining = self::MAX_LOOKUPS_PER_BATCH;
+        $identificationsRemaining = self::MAX_IDENTIFICATIONS_PER_BATCH;
         $resolved = [];
 
         foreach ($distinctIps as $sourceIp) {
@@ -93,7 +107,7 @@ final readonly class SenderIdentityResolver
                 continue;
             }
 
-            if ($lookupsRemaining <= 0) {
+            if ($identificationsRemaining <= 0) {
                 // Budget spent. Report what we already know (possibly nothing)
                 // without recording an attempt, so the IP keeps its place in the
                 // retry schedule and gets a real lookup on the next ingest.
@@ -104,7 +118,7 @@ final readonly class SenderIdentityResolver
                 continue;
             }
 
-            --$lookupsRemaining;
+            --$identificationsRemaining;
             $resolved[$sourceIp] = $this->present($this->lookUp($sourceIp, $identity, $now), $signals);
         }
 
@@ -120,6 +134,13 @@ final readonly class SenderIdentityResolver
         $hostname = $this->reverseDns->resolve($sourceIp);
         $registrableDomain = null === $hostname ? null : $this->registrableDomainExtractor->extract($hostname);
         $organization = null === $hostname ? null : $this->organizationMapper->resolve($hostname);
+        // Asked once, here, and cached with the rest of the facts: the answer is
+        // as global and as static as the hostname it validates. With no hostname
+        // there is no claim to confirm, so the question stays unasked (null)
+        // rather than being recorded as a failure.
+        $forwardConfirmed = null === $hostname
+            ? null
+            : $this->forwardConfirmation->confirms($sourceIp, $hostname);
 
         if (null === $identity) {
             $identity = new SenderIdentity(
@@ -135,7 +156,8 @@ final readonly class SenderIdentityResolver
             hostname: $hostname,
             registrableDomain: $registrableDomain,
             organization: $organization,
-            role: $this->classifier->baselineRole($hostname, $organization),
+            role: $this->classifier->baselineRole($hostname, $organization, true === $forwardConfirmed),
+            forwardConfirmed: $forwardConfirmed,
             at: $now,
         );
 
@@ -146,16 +168,22 @@ final readonly class SenderIdentityResolver
      * Applies the caller's own signals on top of the cached facts. The result is
      * never written back: OwnRelay and Suspicious are per-team verdicts and the
      * cache is shared by everyone.
+     *
+     * The role is always re-derived rather than read off the row, so that the
+     * forward-confirmation flag gates every answer this service gives — including
+     * for rows written before confirmation existed, and for rows a spent lookup
+     * budget could not refresh yet.
      */
     private function present(SenderIdentity $identity, ?SenderAuthSignals $signals): ResolvedSender
     {
-        if (null === $signals) {
-            return ResolvedSender::fromIdentity($identity);
-        }
-
         return ResolvedSender::fromIdentity(
             $identity,
-            $this->classifier->classify($identity->hostname, $identity->organization, $signals),
+            $this->classifier->classify(
+                $identity->hostname,
+                $identity->organization,
+                $signals,
+                $identity->isForwardConfirmed(),
+            ),
         );
     }
 }

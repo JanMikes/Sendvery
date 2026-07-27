@@ -24,6 +24,10 @@ use Ramsey\Uuid\UuidInterface;
  * writing them into a global row would leak one team's verdict onto another's
  * dashboard. Callers that hold those signals get the full five-way
  * classification from SenderIdentityResolver instead.
+ *
+ * {@see $forwardConfirmed} is an objective global fact for the same reason the
+ * hostname is: either the claimed name resolves back to this address or it does
+ * not, identically for every tenant.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'sender_identity')]
@@ -65,6 +69,19 @@ final class SenderIdentity
     #[ORM\Column(type: 'string', length: 20, enumType: SenderRole::class)]
     public SenderRole $role;
 
+    /**
+     * Whether {@see $hostname} survived forward-confirmed reverse DNS — the
+     * claimed name resolving back to {@see $sourceIp}.
+     *
+     * Three-valued on purpose. `true` and `false` are answers; `null` means the
+     * question was never asked, which is the state every row cached before
+     * FCrDNS existed is in. Null is *not* trust: it grants nothing, and it makes
+     * the row due for one re-resolution so a genuine forwarder earns its trust
+     * back instead of inheriting it.
+     */
+    #[ORM\Column(type: 'boolean', nullable: true)]
+    public ?bool $forwardConfirmed;
+
     /** When the cached facts were last written — successful lookup or not. */
     #[ORM\Column(type: 'datetime_immutable')]
     public \DateTimeImmutable $resolvedAt;
@@ -86,6 +103,7 @@ final class SenderIdentity
         SenderRole $role = SenderRole::Unknown,
         int $resolutionAttempts = 0,
         ?\DateTimeImmutable $lastAttemptAt = null,
+        ?bool $forwardConfirmed = null,
     ) {
         $this->id = $id;
         $this->sourceIp = $sourceIp;
@@ -96,6 +114,7 @@ final class SenderIdentity
         $this->role = $role;
         $this->resolutionAttempts = $resolutionAttempts;
         $this->lastAttemptAt = $lastAttemptAt;
+        $this->forwardConfirmed = $forwardConfirmed;
     }
 
     /**
@@ -109,12 +128,14 @@ final class SenderIdentity
         ?string $registrableDomain,
         ?string $organization,
         SenderRole $role,
+        ?bool $forwardConfirmed,
         \DateTimeImmutable $at,
     ): void {
         $this->hostname = $hostname;
         $this->registrableDomain = $registrableDomain;
         $this->organization = $organization;
         $this->role = $role;
+        $this->forwardConfirmed = $forwardConfirmed;
         $this->resolvedAt = $at;
         $this->lastAttemptAt = $at;
         ++$this->resolutionAttempts;
@@ -126,6 +147,15 @@ final class SenderIdentity
     }
 
     /**
+     * Whether the PTR hostname is safe to draw conclusions from. Only an
+     * explicit `true` counts — an unanswered question is not a yes.
+     */
+    public function isForwardConfirmed(): bool
+    {
+        return true === $this->forwardConfirmed;
+    }
+
+    /**
      * A host that answered is never re-queried on the ingest path: PTR records
      * for mail infrastructure are effectively static, and the cost of a stale
      * hostname is far lower than the cost of stalling a worker.
@@ -133,7 +163,12 @@ final class SenderIdentity
     public function isDueForRetry(\DateTimeImmutable $now): bool
     {
         if ($this->isResolved()) {
-            return false;
+            // Except once, for rows cached before forward confirmation existed.
+            // Their hostname carries no verdict either way, and an unverified
+            // PTR must never be trusted — so instead of freezing them as
+            // permanently unconfirmed (which would demote genuine forwarders
+            // forever) they get exactly one re-resolution to earn an answer.
+            return null === $this->forwardConfirmed;
         }
 
         if (null === $this->lastAttemptAt) {

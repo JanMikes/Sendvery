@@ -22,6 +22,7 @@ final class SenderIdentityTest extends TestCase
         self::assertSame(0, $identity->resolutionAttempts);
         self::assertNull($identity->lastAttemptAt);
         self::assertSame(SenderRole::Unknown, $identity->role);
+        self::assertFalse($identity->isForwardConfirmed());
         self::assertTrue($identity->isDueForRetry(new \DateTimeImmutable('2026-07-27 09:00:00')));
     }
 
@@ -35,6 +36,7 @@ final class SenderIdentityTest extends TestCase
             registrableDomain: 'cloud-sec-av.com',
             organization: null,
             role: SenderRole::Forwarder,
+            forwardConfirmed: true,
             at: new \DateTimeImmutable('2026-07-27 10:00:00'),
         );
 
@@ -42,6 +44,7 @@ final class SenderIdentityTest extends TestCase
         self::assertSame('eu.cloud-sec-av.com', $identity->hostname);
         self::assertSame('cloud-sec-av.com', $identity->registrableDomain);
         self::assertSame(SenderRole::Forwarder, $identity->role);
+        self::assertTrue($identity->isForwardConfirmed());
         self::assertSame('2026-07-27 10:00:00', $identity->resolvedAt->format('Y-m-d H:i:s'));
         self::assertSame('2026-07-27 10:00:00', $identity->lastAttemptAt?->format('Y-m-d H:i:s'));
         self::assertSame(1, $identity->resolutionAttempts);
@@ -51,7 +54,7 @@ final class SenderIdentityTest extends TestCase
     public function neverLooksUpAHostThatAlreadyAnswered(): void
     {
         $identity = $this->newIdentity();
-        $identity->recordResolution('mxb.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp, new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordResolution('mxb.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp, true, new \DateTimeImmutable('2026-07-27 10:00:00'));
 
         self::assertFalse(
             $identity->isDueForRetry(new \DateTimeImmutable('2027-07-27 10:00:00')),
@@ -60,11 +63,48 @@ final class SenderIdentityTest extends TestCase
     }
 
     #[Test]
+    public function neverLooksUpAHostWhoseNameWasCheckedAndFoundWanting(): void
+    {
+        $identity = $this->newIdentity();
+        $identity->recordResolution('claims.mimecast.com', 'mimecast.com', null, SenderRole::Unknown, false, new \DateTimeImmutable('2026-07-27 10:00:00'));
+
+        self::assertFalse($identity->isForwardConfirmed());
+        self::assertFalse(
+            $identity->isDueForRetry(new \DateTimeImmutable('2027-07-27 10:00:00')),
+            'A failed confirmation is an answer, not an open question.',
+        );
+    }
+
+    #[Test]
+    public function asksOnceMoreAboutAHostnameCachedBeforeConfirmationExisted(): void
+    {
+        $identity = new SenderIdentity(
+            id: Uuid::uuid7(),
+            sourceIp: '15.222.110.90',
+            resolvedAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+            hostname: 'ca.cloud-sec-av.com',
+            registrableDomain: 'cloud-sec-av.com',
+            role: SenderRole::Forwarder,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+        );
+
+        self::assertFalse(
+            $identity->isForwardConfirmed(),
+            'A question never asked is not a yes; a row cached before the check existed has earned no trust.',
+        );
+        self::assertTrue(
+            $identity->isDueForRetry(new \DateTimeImmutable('2026-07-27 10:00:00')),
+            'Freezing these rows as unconfirmed would demote genuine forwarders forever, so each gets one chance to answer.',
+        );
+    }
+
+    #[Test]
     public function remembersThatAnAddressHasNoReverseRecord(): void
     {
         $identity = $this->newIdentity();
 
-        $identity->recordResolution(null, null, null, SenderRole::Unknown, new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordResolution(null, null, null, SenderRole::Unknown, null, new \DateTimeImmutable('2026-07-27 10:00:00'));
 
         self::assertFalse($identity->isResolved());
         self::assertSame(1, $identity->resolutionAttempts);
