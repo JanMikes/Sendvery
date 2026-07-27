@@ -284,6 +284,90 @@ final class GetDomainOverviewTest extends IntegrationTestCase
         self::assertCount(1, $results);
         self::assertSame(0, $results[0]->totalReports);
         self::assertNull($results[0]->latestReportDate);
-        self::assertSame(0.0, $results[0]->passRate);
+        // A domain nobody has reported on has NO pass rate. 0.0 would claim
+        // every message failed authentication, which is a different fact.
+        self::assertNull(
+            $results[0]->passRate,
+            'A domain with no DMARC records must report no pass rate, never 0%.',
+        );
+        self::assertFalse($results[0]->hasPassRateData());
+        self::assertTrue($results[0]->isAwaitingFirstReport());
+    }
+
+    public function testAVerifiedDomainAwaitingItsFirstReportIsNotListedAsNeedingAttention(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetDomainOverview::class);
+        $teamId = $this->seedVerifiedDomainWithoutReports($em);
+
+        $results = $query->forTeams([$teamId], DomainHealthFilter::Attention);
+
+        self::assertSame(
+            [],
+            $results,
+            'A correctly verified domain that simply has no reports yet must not be accused of needing attention.',
+        );
+    }
+
+    public function testAVerifiedDomainAwaitingItsFirstReportStaysInTheHealthyFilter(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetDomainOverview::class);
+        $teamId = $this->seedVerifiedDomainWithoutReports($em);
+
+        $results = $query->forTeams([$teamId], DomainHealthFilter::Healthy);
+
+        self::assertCount(1, $results);
+        self::assertSame('awaiting-report.example', $results[0]->domainName);
+    }
+
+    public function testAnUnverifiedDomainWithoutReportsIsNeverListedAsHealthy(): void
+    {
+        // "No reports" no longer disqualifies a domain from Healthy, so the
+        // filter has to exclude unverified domains explicitly — otherwise the
+        // Healthy list would contain cards rendering the red unverified glyph.
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetDomainOverview::class);
+
+        $teamId = Uuid::uuid7();
+        $team = new Team(
+            id: $teamId,
+            name: 'Unverified Healthy Guard',
+            slug: 'unverified-healthy-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+        $em->persist(new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'never-verified.example',
+            createdAt: new \DateTimeImmutable(),
+        ));
+        $em->flush();
+
+        self::assertSame([], $query->forTeams([$teamId->toString()], DomainHealthFilter::Healthy));
+    }
+
+    private function seedVerifiedDomainWithoutReports(EntityManagerInterface $em): string
+    {
+        $teamId = Uuid::uuid7();
+        $team = new Team(
+            id: $teamId,
+            name: 'Awaiting Report',
+            slug: 'awaiting-report-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $em->persist(new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'awaiting-report.example',
+            createdAt: new \DateTimeImmutable('-1 hour'),
+            dmarcVerifiedAt: new \DateTimeImmutable('-30 minutes'),
+        ));
+        $em->flush();
+
+        return $teamId->toString();
     }
 }

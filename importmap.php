@@ -40,4 +40,16 @@ return [
     '@symfony/ux-live-component' => [
         'path' => './vendor/symfony/ux-live-component/assets/dist/live_controller.js',
     ],
+    // TomSelect's own stylesheet is deliberately NOT pinned here. We compile its
+    // structural CSS plus a daisyUI-token theme into assets/styles/app.css
+    // instead, so the widget matches our inputs and ships in one request.
+    'tom-select' => [
+        'version' => '2.6.2',
+    ],
+    '@orchidjs/sifter' => [
+        'version' => '1.1.0',
+    ],
+    '@orchidjs/unicode-variants' => [
+        'version' => '1.1.2',
+    ],
 ];

@@ -494,6 +494,28 @@ final class AlertActionsTest extends WebTestCase
         self::assertFalse($foreign->isRead);
     }
 
+    public function testBulkSkipsMalformedAlertIdsAndStillAppliesTheValidOnes(): void
+    {
+        $data = $this->bootClientWithAlert();
+        $token = $this->csrfToken($data['client'], 'bulk_alert_action');
+
+        $data['client']->request('POST', '/app/alerts/bulk', [
+            'action' => 'mark_read',
+            'alertIds' => [
+                'not-a-uuid',
+                $data['alertId']->toString(),
+            ],
+            '_csrf_token' => $token,
+        ]);
+
+        self::assertResponseRedirects('/app/alerts');
+
+        $data['em']->clear();
+        $alert = $data['em']->find(Alert::class, $data['alertId']);
+        self::assertNotNull($alert);
+        self::assertTrue($alert->isRead, 'Garbage in the submitted id list must be dropped, not abort the whole action.');
+    }
+
     public function testBulkWithoutCsrfReturns403(): void
     {
         $data = $this->bootClientWithAlert();

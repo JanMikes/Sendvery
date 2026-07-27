@@ -9,16 +9,12 @@ use App\Query\GetDomainDetail;
 use App\Query\GetDomainHealthHistory;
 use App\Query\GetDomainWorkspaceTabCounts;
 use App\Repository\AiInsightRepository;
-use App\Repository\DnsCheckResultRepository;
 use App\Services\Ai\AiInsightCacheKey;
 use App\Services\Ai\AiInsightContent;
 use App\Services\Ai\Result\RemediationResult;
 use App\Services\DashboardContext;
-use App\Services\Dns\DnsRecordRecommender;
-use App\Services\ReportAddressProvider;
-use App\Value\Dns\DmarcRuaInstruction;
+use App\Services\Dns\GuidedDnsSetupProvider;
 use App\Value\DnsCheckType;
-use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -29,11 +25,9 @@ final class DashboardDomainHealthController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly GetDomainDetail $getDomainDetail,
         private readonly GetDomainHealthHistory $getDomainHealthHistory,
-        private readonly DnsCheckResultRepository $dnsCheckResultRepository,
-        private readonly ReportAddressProvider $reportAddressProvider,
-        private readonly DnsRecordRecommender $dnsRecordRecommender,
         private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
         private readonly AiInsightRepository $insights,
+        private readonly GuidedDnsSetupProvider $guidedDnsSetupProvider,
     ) {
     }
 
@@ -50,32 +44,17 @@ final class DashboardDomainHealthController extends AbstractController
         $latest = $this->getDomainHealthHistory->latestForDomain($id, $teamIds);
         $history = $this->getDomainHealthHistory->forDomain($id, $teamIds);
 
-        $domainUuid = Uuid::fromString($id);
+        // The guided setup surface is the page's lead content and the SAME
+        // component the domain detail page renders. It replaces what used to be
+        // three separate, partly-contradicting panels here: a standalone "add
+        // this rua= record" card, a loop of per-category recommendation cards,
+        // and a pending banner. One model means the page can no longer offer the
+        // self-managed TXT record while silently omitting the managed CNAME.
+        $guided = $this->guidedDnsSetupProvider->forDomainId($id);
 
-        // TASK-095: load every per-category DNS check in one go so the
-        // recommender can reason over the full picture (e.g. cross-reference
-        // an SPF "no record" with the DMARC state).
-        $latestByType = [
-            DnsCheckType::Spf->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Spf),
-            DnsCheckType::Dkim->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Dkim),
-            DnsCheckType::Dmarc->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Dmarc),
-            DnsCheckType::Mx->value => $this->dnsCheckResultRepository->findLatestForDomainAndType($domainUuid, DnsCheckType::Mx),
-        ];
-
-        $ruaInstruction = DmarcRuaInstruction::build(
-            $latestByType[DnsCheckType::Dmarc->value]?->rawRecord,
-            $this->reportAddressProvider->get(),
-        );
-
-        // No stored check for ANY record type means the first DNS check hasn't
-        // completed yet. In that state every "you have no X record" claim below
-        // would be a guess presented as fact — render a pending banner instead
-        // and hold the recommendations until real data exists (TASK: first-check UX).
-        $dnsCheckPending = [] === array_filter($latestByType);
-
-        $dnsRecommendations = $dnsCheckPending
-            ? []
-            : $this->dnsRecordRecommender->recommendForDomain($domain->domainName, $latestByType);
+        if (null === $guided) {
+            throw $this->createNotFoundException('Domain not found.');
+        }
 
         $trendChartConfig = null;
         if (count($history) > 1) {
@@ -103,11 +82,9 @@ final class DashboardDomainHealthController extends AbstractController
             'latest' => $latest,
             'history' => $history,
             'trendChartConfig' => $trendChartConfig,
-            'ruaInstruction' => $ruaInstruction,
-            'dnsRecommendations' => $dnsRecommendations,
-            'dnsCheckPending' => $dnsCheckPending,
+            'guidedDnsSetup' => $guided->setup,
             'tabCounts' => $tabCounts,
-            'aiRemediation' => $this->cachedRemediation($id, $latestByType),
+            'aiRemediation' => $this->cachedRemediation($id, $guided->latestByType),
         ]);
     }
 

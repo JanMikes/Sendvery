@@ -9,6 +9,7 @@ use App\Entity\DmarcReport;
 use App\Entity\KnownSender;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
+use App\Entity\User;
 use App\Query\GetTopSendersForDomain;
 use App\Tests\IntegrationTestCase;
 use App\Value\AuthResult;
@@ -257,8 +258,83 @@ final class GetTopSendersForDomainTest extends IntegrationTestCase
         $summary = $query->summaryForDomain($domainId->toString(), [$team->id->toString()]);
 
         self::assertSame(2, $summary->authorizedCount);
-        self::assertSame(1, $summary->unknownCount);
+        self::assertSame(1, $summary->needsReviewCount);
+        self::assertSame(0, $summary->notAuthorizedCount);
+        self::assertSame(1, $summary->unauthorizedCount());
         self::assertSame(3, $summary->uniqueIpCount);
+        self::assertSame(10, $summary->needsReviewMessages, 'The CTA needs the volume the unreviewed senders carry, not just their count.');
+    }
+
+    /**
+     * A sender somebody looked at and rejected is a settled decision, not a
+     * pending request — it must not inflate the "waiting for your review"
+     * number the call to action is built on.
+     */
+    public function testSummarySeparatesUnreviewedSendersFromRejectedOnes(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetTopSendersForDomain::class);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Tri-state Summary',
+            slug: 'tri-state-summary-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $domainId = Uuid::uuid7();
+        $domain = new MonitoredDomain(
+            id: $domainId,
+            team: $team,
+            domain: 'tri-state-summary.com',
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($domain);
+
+        $user = new User(
+            id: Uuid::uuid7(),
+            email: 'tri-state-'.Uuid::uuid7()->toString().'@example.com',
+            createdAt: new \DateTimeImmutable(),
+        );
+        $user->popEvents();
+        $em->persist($user);
+
+        $neverReviewed = new KnownSender(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            sourceIp: '5.5.5.5',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 700,
+            passRate: 100.0,
+        );
+        $em->persist($neverReviewed);
+
+        $rejected = new KnownSender(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            sourceIp: '6.6.6.6',
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: 40,
+            passRate: 5.0,
+        );
+        $rejected->markUnknown($user, new \DateTimeImmutable('-2 days'));
+        $em->persist($rejected);
+
+        $em->flush();
+
+        $summary = $query->summaryForDomain($domainId->toString(), [$team->id->toString()]);
+
+        self::assertSame(1, $summary->needsReviewCount, 'Only the sender nobody decided about is awaiting review.');
+        self::assertSame(1, $summary->notAuthorizedCount, 'The rejected sender is a decision, reported separately.');
+        self::assertSame(0, $summary->authorizedCount);
+        self::assertSame(
+            700,
+            $summary->needsReviewMessages,
+            'Volume attributed to unreviewed senders must exclude the rejected one.',
+        );
     }
 
     public function testSummaryReturnsZerosForEmptyTeamList(): void
@@ -268,8 +344,10 @@ final class GetTopSendersForDomainTest extends IntegrationTestCase
         $summary = $query->summaryForDomain(Uuid::uuid7()->toString(), []);
 
         self::assertSame(0, $summary->authorizedCount);
-        self::assertSame(0, $summary->unknownCount);
+        self::assertSame(0, $summary->needsReviewCount);
+        self::assertSame(0, $summary->notAuthorizedCount);
         self::assertSame(0, $summary->uniqueIpCount);
+        self::assertSame(0, $summary->needsReviewMessages);
     }
 
     public function testSummaryReturnsZerosForDomainWithNoSenders(): void
@@ -279,8 +357,10 @@ final class GetTopSendersForDomainTest extends IntegrationTestCase
         $summary = $query->summaryForDomain(Uuid::uuid7()->toString(), [Uuid::uuid7()->toString()]);
 
         self::assertSame(0, $summary->authorizedCount);
-        self::assertSame(0, $summary->unknownCount);
+        self::assertSame(0, $summary->needsReviewCount);
+        self::assertSame(0, $summary->notAuthorizedCount);
         self::assertSame(0, $summary->uniqueIpCount);
+        self::assertSame(0, $summary->needsReviewMessages);
     }
 
     public function testForDomainDoesNotReturnDataForOtherTeam(): void
@@ -396,7 +476,9 @@ final class GetTopSendersForDomainTest extends IntegrationTestCase
         $summary = $query->summaryForDomain($domainAId->toString(), [$teamB->id->toString()]);
 
         self::assertSame(0, $summary->authorizedCount);
-        self::assertSame(0, $summary->unknownCount);
+        self::assertSame(0, $summary->needsReviewCount);
+        self::assertSame(0, $summary->notAuthorizedCount);
         self::assertSame(0, $summary->uniqueIpCount);
+        self::assertSame(0, $summary->needsReviewMessages);
     }
 }

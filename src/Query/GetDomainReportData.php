@@ -21,7 +21,7 @@ final readonly class GetDomainReportData
      *     domain_name: string,
      *     total_reports: int,
      *     total_messages: int,
-     *     pass_rate: float,
+     *     pass_rate: float|null,
      *     authorized_senders: int,
      *     total_senders: int,
      *     blacklisted_ips: int,
@@ -45,13 +45,16 @@ final readonly class GetDomainReportData
             return null;
         }
 
+        // `pass_rate` is NULL, not 0, when no messages were ever counted: the
+        // exported PDF must not tell a customer their brand-new domain fails
+        // 100% of its mail when the truth is "no report has arrived yet".
+        // NULLIF on the divisor does that without a CASE.
         $reportStats = $this->database->executeQuery(
             'SELECT
                 COUNT(*) AS total_reports,
                 COALESCE(SUM(rec_stats.total_messages), 0) AS total_messages,
-                CASE WHEN COALESCE(SUM(rec_stats.total_messages), 0) > 0
-                    THEN COALESCE(SUM(rec_stats.pass_count), 0)::float / SUM(rec_stats.total_messages) * 100
-                    ELSE 0 END AS pass_rate
+                COALESCE(SUM(rec_stats.pass_count), 0)::float
+                    / NULLIF(SUM(rec_stats.total_messages), 0) * 100 AS pass_rate
             FROM dmarc_report dr
             LEFT JOIN LATERAL (
                 SELECT SUM(count) AS total_messages,
@@ -88,11 +91,13 @@ final readonly class GetDomainReportData
             ['domainId' => $domainId],
         )->fetchAssociative();
 
+        $passRate = false === $reportStats ? null : ($reportStats['pass_rate'] ?? null);
+
         return [
             'domain_name' => (string) $domain,
             'total_reports' => (int) ($reportStats['total_reports'] ?? 0),
             'total_messages' => (int) ($reportStats['total_messages'] ?? 0),
-            'pass_rate' => round((float) ($reportStats['pass_rate'] ?? 0), 2),
+            'pass_rate' => null === $passRate ? null : round((float) $passRate, 2),
             'authorized_senders' => (int) ($senderStats['authorized_senders'] ?? 0),
             'total_senders' => (int) ($senderStats['total_senders'] ?? 0),
             'blacklisted_ips' => (int) ($blacklistCount ?? 0),

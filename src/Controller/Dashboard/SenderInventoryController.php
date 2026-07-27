@@ -8,10 +8,12 @@ use App\Query\GetDomainDetail;
 use App\Query\GetDomainWorkspaceTabCounts;
 use App\Query\GetSenderActivity30Day;
 use App\Query\GetSenderInventory;
+use App\Query\GetTopSendersForDomain;
 use App\Results\SenderActivity30Day;
 use App\Services\DashboardContext;
 use App\Services\SenderAuthorizationAdvisor;
 use App\Value\SenderAdvisorSeverity;
+use App\Value\SenderInventoryFilter;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,6 +28,7 @@ final class SenderInventoryController extends AbstractController
         private readonly GetSenderActivity30Day $getSenderActivity30Day,
         private readonly SenderAuthorizationAdvisor $senderAdvisor,
         private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
+        private readonly GetTopSendersForDomain $getTopSendersForDomain,
     ) {
     }
 
@@ -42,13 +45,11 @@ final class SenderInventoryController extends AbstractController
         $filterParam = $request->query->getString('filter');
         $recommendationParam = $request->query->getString('recommendation');
 
-        $authorizedFilter = match ($filterParam) {
-            'authorized' => true,
-            'unauthorized' => false,
-            default => null,
-        };
-
-        $senders = $this->getSenderInventory->forDomain($domainId, $teamIds, $authorizedFilter);
+        $senders = $this->getSenderInventory->forDomain(
+            $domainId,
+            $teamIds,
+            SenderInventoryFilter::tryFrom($filterParam),
+        );
 
         $sourceIps = array_values(array_unique(array_map(static fn ($s) => $s->sourceIp, $senders)));
         $activityByIp = $this->getSenderActivity30Day->forDomain($domainId, $sourceIps);
@@ -90,6 +91,11 @@ final class SenderInventoryController extends AbstractController
             }
         }
 
+        // Counted from the whole domain, NOT from `$senders` — the table is
+        // filtered, and a call to action that says "0 senders waiting" because
+        // you are looking at the Authorized tab would be worse than useless.
+        $senderSummary = $this->getTopSendersForDomain->summaryForDomain($domainId, $teamIds);
+
         $tabCounts = $this->getDomainWorkspaceTabCounts->forDomain($domainId)->toTwigArray();
 
         return $this->render('dashboard/sender_inventory.html.twig', [
@@ -99,6 +105,8 @@ final class SenderInventoryController extends AbstractController
             'recommendationFilter' => $recommendationParam,
             'advisorBySenderId' => $advisorByIdMap,
             'needsDecisionCount' => $needsDecisionCount,
+            'needsReviewCount' => $senderSummary->needsReviewCount,
+            'needsReviewMessages' => $senderSummary->needsReviewMessages,
             'tabCounts' => $tabCounts,
         ]);
     }

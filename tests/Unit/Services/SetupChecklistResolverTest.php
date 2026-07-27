@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Services;
 
 use App\Services\SetupChecklistResolver;
 use App\Value\Dns\RuaScenario;
+use App\Value\SetupChecklistDomain;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -441,5 +442,129 @@ final class SetupChecklistResolverTest extends TestCase
                 sprintf('Expected receive_reports complete for scenario %s', null === $scenario ? 'null' : $scenario->value),
             );
         }
+    }
+
+    #[Test]
+    public function openStepsNameTheDomainTheyAreAskingAbout(): void
+    {
+        // "Publish your DMARC record → Do it" was unanswerable for anyone with
+        // more than one domain: the step named no domain and the CTA landed on
+        // the domains list, leaving the user to guess which one was meant.
+        $result = (new SetupChecklistResolver())->resolve(
+            domainCount: 2,
+            anyDomainHasDmarcVerified: false,
+            anyDomainHasFirstReport: false,
+            hasMailbox: false,
+            dismissedAt: null,
+            hasDmarcRegression: false,
+            headlineDomainRuaScenario: null,
+            focusDomain: new SetupChecklistDomain('019fa000-0000-7000-8000-000000000001', 'acme.example'),
+        );
+
+        self::assertSame('acme.example', $result->focusDomainName);
+        self::assertSame('Publish the DMARC record for acme.example', $result->steps[1]->title);
+        self::assertSame('Receive the first DMARC report for acme.example', $result->steps[2]->title);
+    }
+
+    #[Test]
+    public function theOpenDmarcStepDeepLinksTheNamedDomainsOwnSetupSurface(): void
+    {
+        $result = (new SetupChecklistResolver())->resolve(
+            domainCount: 1,
+            anyDomainHasDmarcVerified: false,
+            anyDomainHasFirstReport: false,
+            hasMailbox: false,
+            dismissedAt: null,
+            hasDmarcRegression: false,
+            headlineDomainRuaScenario: null,
+            focusDomain: new SetupChecklistDomain('019fa000-0000-7000-8000-000000000001', 'acme.example'),
+        );
+
+        self::assertSame('dashboard_domain_health', $result->steps[1]->actionRoute);
+        self::assertSame(
+            ['id' => '019fa000-0000-7000-8000-000000000001', '_fragment' => 'health-dmarc'],
+            $result->steps[1]->actionRouteParams,
+        );
+        self::assertSame('Set up acme.example', $result->steps[1]->actionLabel);
+    }
+
+    #[Test]
+    public function withNoDomainsYetTheStepsStayGenericBecauseThereIsNothingToName(): void
+    {
+        $result = (new SetupChecklistResolver())->resolve(
+            domainCount: 0,
+            anyDomainHasDmarcVerified: false,
+            anyDomainHasFirstReport: false,
+            hasMailbox: false,
+            dismissedAt: null,
+            hasDmarcRegression: false,
+            headlineDomainRuaScenario: null,
+        );
+
+        self::assertNull($result->focusDomainName);
+        self::assertSame('Publish your DMARC record', $result->steps[1]->title);
+        self::assertSame('dashboard_domains', $result->steps[1]->actionRoute);
+        self::assertSame([], $result->steps[1]->actionRouteParams);
+        self::assertSame('Do it', $result->steps[1]->actionLabel);
+    }
+
+    #[Test]
+    public function theMailboxBranchKeepsItsDomainAgnosticRouteEvenWithAFocusedDomain(): void
+    {
+        // Connecting an inbox is not a per-domain action, so scenario (c) must not
+        // be rewritten into a DNS deep-link just because a domain is named.
+        $result = (new SetupChecklistResolver())->resolve(
+            domainCount: 1,
+            anyDomainHasDmarcVerified: true,
+            anyDomainHasFirstReport: false,
+            hasMailbox: false,
+            dismissedAt: null,
+            hasDmarcRegression: false,
+            headlineDomainRuaScenario: RuaScenario::PointsAtExternal,
+            focusDomain: new SetupChecklistDomain('019fa000-0000-7000-8000-000000000001', 'acme.example'),
+        );
+
+        self::assertSame('dashboard_mailbox_add', $result->steps[2]->actionRoute);
+        self::assertSame([], $result->steps[2]->actionRouteParams);
+    }
+
+    #[Test]
+    public function otherDomainsStillMissingDmarcAreOfferedAlongsideTheFocusedOne(): void
+    {
+        $others = [new SetupChecklistDomain('019fa000-0000-7000-8000-000000000002', 'beta.example')];
+
+        $result = (new SetupChecklistResolver())->resolve(
+            domainCount: 2,
+            anyDomainHasDmarcVerified: false,
+            anyDomainHasFirstReport: false,
+            hasMailbox: false,
+            dismissedAt: null,
+            hasDmarcRegression: false,
+            headlineDomainRuaScenario: null,
+            focusDomain: new SetupChecklistDomain('019fa000-0000-7000-8000-000000000001', 'acme.example'),
+            otherUnfinishedDomains: $others,
+        );
+
+        self::assertSame($others, $result->otherUnfinishedDomains);
+    }
+
+    #[Test]
+    public function otherDomainsAreDroppedOnceTheDmarcStepIsTicked(): void
+    {
+        // The step is no longer tracking that work, so pointing at more domains
+        // would be advertising a to-do this card has stopped owning.
+        $result = (new SetupChecklistResolver())->resolve(
+            domainCount: 2,
+            anyDomainHasDmarcVerified: true,
+            anyDomainHasFirstReport: false,
+            hasMailbox: false,
+            dismissedAt: null,
+            hasDmarcRegression: false,
+            headlineDomainRuaScenario: null,
+            focusDomain: new SetupChecklistDomain('019fa000-0000-7000-8000-000000000001', 'acme.example'),
+            otherUnfinishedDomains: [new SetupChecklistDomain('019fa000-0000-7000-8000-000000000002', 'beta.example')],
+        );
+
+        self::assertSame([], $result->otherUnfinishedDomains);
     }
 }

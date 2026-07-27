@@ -369,7 +369,7 @@ final class DomainSubpagesTest extends WebTestCase
      * the matching filter on the sender inventory page.
      */
     #[Test]
-    public function topSendersStatRowShowsAuthorizedAndUnknownCounts(): void
+    public function topSendersStatRowShowsAuthorizedAndNeedsReviewCounts(): void
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
@@ -408,17 +408,17 @@ final class DomainSubpagesTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         $authorizedNode = $crawler->filter('[data-testid="sender-summary-authorized"]');
-        $unknownNode = $crawler->filter('[data-testid="sender-summary-unknown"]');
+        $needsReviewNode = $crawler->filter('[data-testid="sender-summary-needs-review"]');
         $uniqueIpsNode = $crawler->filter('[data-testid="sender-summary-unique-ips"]');
 
         self::assertGreaterThan(0, $authorizedNode->count(), 'Stat row must render the authorized count.');
-        self::assertGreaterThan(0, $unknownNode->count(), 'Stat row must render the unknown count.');
+        self::assertGreaterThan(0, $needsReviewNode->count(), 'Stat row must render how many senders await a decision.');
         self::assertGreaterThan(0, $uniqueIpsNode->count(), 'Stat row must render the unique-IPs count.');
 
         self::assertStringContainsString('1', $authorizedNode->text());
         self::assertStringContainsString('authorized', $authorizedNode->text());
-        self::assertStringContainsString('1', $unknownNode->text());
-        self::assertStringContainsString('unknown', $unknownNode->text());
+        self::assertStringContainsString('1', $needsReviewNode->text());
+        self::assertStringContainsString('need review', $needsReviewNode->text());
         self::assertStringContainsString('2', $uniqueIpsNode->text());
         self::assertStringContainsString('unique IPs', $uniqueIpsNode->text());
     }
@@ -455,11 +455,11 @@ final class DomainSubpagesTest extends WebTestCase
         $sendersUrl = '/app/domains/'.$domainId.'/senders';
 
         $authorized = $crawler->filter('[data-testid="sender-summary-authorized"]')->attr('href');
-        $unknown = $crawler->filter('[data-testid="sender-summary-unknown"]')->attr('href');
+        $needsReview = $crawler->filter('[data-testid="sender-summary-needs-review"]')->attr('href');
         $uniqueIps = $crawler->filter('[data-testid="sender-summary-unique-ips"]')->attr('href');
 
         self::assertSame($sendersUrl.'?filter=authorized', $authorized);
-        self::assertSame($sendersUrl.'?filter=unauthorized', $unknown);
+        self::assertSame($sendersUrl.'?filter=needs_review', $needsReview);
         self::assertSame($sendersUrl, $uniqueIps);
     }
 
@@ -516,6 +516,16 @@ final class DomainSubpagesTest extends WebTestCase
 
         $rows = $crawler->filter('[data-testid="top-senders-table"] tbody tr');
         self::assertCount(5, $rows, 'Top Senders table must render exactly 5 rows when 7 senders exist.');
+
+        // No `known_sender` row backs any of these groups, so there is nothing
+        // for the user to decide. The old two-way badge painted all five amber
+        // "Unknown", which read as five pending decisions that did not exist.
+        self::assertSame(
+            array_fill(0, 5, 'untracked'),
+            $crawler->filter('[data-testid="top-senders-table"] [data-testid="sender-status-badge"]')->each(
+                static fn ($node): ?string => $node->attr('data-sender-state'),
+            ),
+        );
     }
 
     #[Test]

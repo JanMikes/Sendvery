@@ -379,6 +379,107 @@ final class ReportsFilterTest extends WebTestCase
         self::assertCount(1, $crawler->filter('select[name="reporter[]"]'));
     }
 
+    /**
+     * The combobox widget is progressive enhancement only: the real
+     * <select multiple> has to survive in the markup, otherwise the GET form
+     * stops submitting domain[]/reporter[] for anyone without JavaScript.
+     */
+    public function testDomainAndReporterFiltersStayRealMultiSelects(): void
+    {
+        $ctx = $this->setupClientWithReports();
+        $crawler = $ctx['client']->request('GET', '/app/reports');
+
+        $domainSelect = $crawler->filter('select[name="domain[]"]');
+        self::assertCount(1, $domainSelect, 'The domain filter must remain a real select element');
+        self::assertNotNull($domainSelect->attr('multiple'), 'The domain filter must allow picking several domains');
+
+        $reporterSelect = $crawler->filter('select[name="reporter[]"]');
+        self::assertCount(1, $reporterSelect, 'The reporter filter must remain a real select element');
+        self::assertNotNull($reporterSelect->attr('multiple'), 'The reporter filter must allow picking several reporters');
+    }
+
+    public function testDomainFilterOffersEveryMonitoredDomainAsAnOption(): void
+    {
+        $ctx = $this->setupClientWithReports();
+        $crawler = $ctx['client']->request('GET', '/app/reports');
+
+        $values = $crawler->filter('select[name="domain[]"] option')->each(
+            static fn ($node): string => (string) $node->attr('value'),
+        );
+
+        self::assertContains($ctx['domainA']->id->toString(), $values);
+        self::assertContains($ctx['domainB']->id->toString(), $values);
+    }
+
+    public function testReporterFilterOffersEveryReporterSeenInStoredReports(): void
+    {
+        $ctx = $this->setupClientWithReports();
+        $crawler = $ctx['client']->request('GET', '/app/reports');
+
+        $values = $crawler->filter('select[name="reporter[]"] option')->each(
+            static fn ($node): string => (string) $node->attr('value'),
+        );
+
+        self::assertContains('google.com', $values);
+        self::assertContains('yahoo.com', $values);
+        self::assertContains('microsoft.com', $values);
+    }
+
+    public function testBothMultiSelectsAreUpgradedToTheSearchableComboboxWidget(): void
+    {
+        $ctx = $this->setupClientWithReports();
+        $crawler = $ctx['client']->request('GET', '/app/reports');
+
+        self::assertCount(
+            1,
+            $crawler->filter('select[name="domain[]"][data-controller~="tom-select"]'),
+            'The domain filter must be wired to the searchable combobox widget',
+        );
+        self::assertCount(
+            1,
+            $crawler->filter('select[name="reporter[]"][data-controller~="tom-select"]'),
+            'The reporter filter must be wired to the searchable combobox widget',
+        );
+    }
+
+    /**
+     * Reporter names are read back from stored reports, so a hand-typed value
+     * could never match a row — the widget must not offer to create one.
+     */
+    public function testComboboxNeverOffersToInventNewFilterValues(): void
+    {
+        $ctx = $this->setupClientWithReports();
+        $crawler = $ctx['client']->request('GET', '/app/reports');
+
+        self::assertSame(
+            'false',
+            $crawler->filter('select[name="reporter[]"]')->attr('data-tom-select-allow-create-value'),
+        );
+        self::assertSame(
+            'false',
+            $crawler->filter('select[name="domain[]"]')->attr('data-tom-select-allow-create-value'),
+        );
+    }
+
+    public function testActiveFiltersAreShownAsSelectedOptions(): void
+    {
+        $ctx = $this->setupClientWithReports();
+        $crawler = $ctx['client']->request(
+            'GET',
+            '/app/reports?domain%5B%5D='.$ctx['domainA']->id->toString().'&reporter%5B%5D=google.com',
+        );
+
+        $selectedDomains = $crawler->filter('select[name="domain[]"] option[selected]')->each(
+            static fn ($node): string => (string) $node->attr('value'),
+        );
+        self::assertSame([$ctx['domainA']->id->toString()], $selectedDomains);
+
+        $selectedReporters = $crawler->filter('select[name="reporter[]"] option[selected]')->each(
+            static fn ($node): string => (string) $node->attr('value'),
+        );
+        self::assertSame(['google.com'], $selectedReporters);
+    }
+
     public function testDomainReportsAppliesPassRateFilter(): void
     {
         $ctx = $this->setupClientWithReports();

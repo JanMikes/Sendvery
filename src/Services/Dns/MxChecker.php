@@ -109,20 +109,59 @@ final readonly class MxChecker
         );
     }
 
+    /**
+     * The mail host's address, preferring IPv4 (still what most senders reach
+     * it over) and falling back to IPv6.
+     *
+     * The AAAA fallback is load-bearing, not a nicety: `MxCheckResult::isPassing()`
+     * requires at least one record to resolve to an address, so an IPv6-only
+     * mail host used to be reported as a failing MX — the same false-negative
+     * class as reading MX state off a nightly snapshot. A host that publishes
+     * only AAAA is perfectly deliverable; claiming its MX is broken is wrong.
+     */
     private function resolveHost(string $host): ?string
     {
-        try {
-            $records = $this->dns->getRecords($host, 'A');
-        } catch (\Throwable) {
-            return null;
-        }
+        return $this->resolveIpv4($host) ?? $this->resolveIpv6($host);
+    }
 
-        foreach ($records as $record) {
-            if (preg_match('/A\s+(\d+\.\d+\.\d+\.\d+)/', (string) $record, $matches)) {
+    private function resolveIpv4(string $host): ?string
+    {
+        foreach ($this->recordsFor($host, 'A') as $record) {
+            if (preg_match('/\bA\s+(\d+\.\d+\.\d+\.\d+)/', $record, $matches)) {
                 return $matches[1];
             }
         }
 
         return null;
+    }
+
+    private function resolveIpv6(string $host): ?string
+    {
+        foreach ($this->recordsFor($host, 'AAAA') as $record) {
+            // An IPv6 literal is the only hex-and-colon token an AAAA answer
+            // carries, so "at least one colon" is enough to pick it out of the
+            // "<host> <ttl> IN AAAA <address>" line without re-implementing
+            // RFC 4291 addressing rules.
+            if (preg_match('/\bAAAA\s+([0-9A-Fa-f:]*:[0-9A-Fa-f:.]+)/', $record, $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function recordsFor(string $host, string $type): array
+    {
+        try {
+            return array_values(array_map(
+                static fn (mixed $record): string => (string) $record,
+                $this->dns->getRecords($host, $type),
+            ));
+        } catch (\Throwable) {
+            return [];
+        }
     }
 }

@@ -6,6 +6,7 @@ namespace App\Services\Dns;
 
 use Spatie\Dns\Dns;
 use Spatie\Dns\Records\A;
+use Spatie\Dns\Records\AAAA;
 use Spatie\Dns\Records\CNAME;
 use Spatie\Dns\Records\MX;
 use Spatie\Dns\Records\Record;
@@ -39,6 +40,24 @@ final class FakeDns extends Dns
             'class' => 'IN',
             'type' => 'A',
             'ip' => $ip,
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * IPv6-only mail hosts are real (and were misreported as broken MX before
+     * {@see MxChecker} learned to fall back from A to AAAA), so the fake has to
+     * be able to describe one.
+     */
+    public function withAaaa(string $name, string $ipv6): self
+    {
+        $this->records[$name]['AAAA'][] = AAAA::make([
+            'host' => $name,
+            'ttl' => 60,
+            'class' => 'IN',
+            'type' => 'AAAA',
+            'ipv6' => $ipv6,
         ]);
 
         return $this;
@@ -79,6 +98,25 @@ final class FakeDns extends Dns
             'type' => 'MX',
             'pri' => $priority,
             'target' => $target,
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Files a record under `$type` whose serialised form does NOT parse as that
+     * type. Real resolvers do occasionally hand back answers a checker cannot
+     * make sense of, and a checker must degrade to "nothing usable here" rather
+     * than crash or invent a record.
+     */
+    public function withMalformedRecord(string $name, string $type, string $value): self
+    {
+        $this->records[$name][strtoupper($type)][] = TXT::make([
+            'host' => $name,
+            'ttl' => 60,
+            'class' => 'IN',
+            'type' => 'TXT',
+            'txt' => $value,
         ]);
 
         return $this;

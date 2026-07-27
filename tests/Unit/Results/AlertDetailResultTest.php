@@ -23,6 +23,7 @@ final class AlertDetailResultTest extends TestCase
             'is_read' => false,
             'created_at' => '2026-03-25 10:00:00',
             'snoozed_until' => null,
+            'resolved_at' => null,
             'domain_id' => '660e8400-e29b-41d4-a716-446655440000',
             'domain_name' => 'example.com',
         ]);
@@ -47,10 +48,32 @@ final class AlertDetailResultTest extends TestCase
             'is_read' => false,
             'created_at' => '2026-03-25 10:00:00',
             'snoozed_until' => '2026-04-01 10:00:00',
+            'resolved_at' => null,
             'domain_id' => null,
             'domain_name' => null,
         ]);
 
         self::assertSame('2026-04-01 10:00:00', $result->snoozedUntil);
+    }
+
+    #[Test]
+    public function carriesTheResolutionTimestampSoTheDetailPageCanSayNothingIsLeftToDo(): void
+    {
+        $result = AlertDetailResult::fromDatabaseRow([
+            'alert_id' => '550e8400-e29b-41d4-a716-446655440000',
+            'type' => 'dns_record_missing',
+            'severity' => 'critical',
+            'title' => 'MX record removed for example.com',
+            'message' => 'msg',
+            'data' => '{}',
+            'is_read' => false,
+            'created_at' => '2026-03-25 10:00:00',
+            'snoozed_until' => null,
+            'resolved_at' => '2026-03-27 04:00:00',
+            'domain_id' => null,
+            'domain_name' => null,
+        ]);
+
+        self::assertSame('2026-03-27 04:00:00', $result->resolvedAt);
     }
 }

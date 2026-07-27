@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Results\SetupChecklistResult;
 use App\Value\Dns\RuaScenario;
+use App\Value\SetupChecklistDomain;
 use App\Value\SetupChecklistStep;
 
 /**
@@ -21,6 +22,25 @@ use App\Value\SetupChecklistStep;
  *    has regressed (verified at some point + consecutive failures now).
  *    This lets us avoid clearing the dismissal column on every DNS check.
  *
+ * ONE FOCUSED DOMAIN, NAMED. Every step that is still open names
+ * `$focusDomain` and deep-links to that domain's DNS setup surface, because
+ * "Publish your DMARC record → Do it" told a multi-domain user nothing about
+ * WHICH domain was meant. The checklist is scoped to one domain rather than
+ * repeated per domain on purpose: it is a one-time onboarding track that
+ * disappears for good once the team is set up, whereas "which of my domains is
+ * broken right now, and why" is a permanent question answered by the attention
+ * list ({@see DomainAttentionResolver}) directly below it. A per-domain
+ * checklist would be a second, worse copy of that list — 3 rows per domain,
+ * forever. Any other domain still missing DMARC is surfaced as a plain link in
+ * `otherUnfinishedDomains` so it is one click away without repeating the track.
+ *
+ * COMPLETION STAYS TEAM-WIDE. `anyDomainHasDmarcVerified` /
+ * `anyDomainHasFirstReport` decide whether a step is ticked, so adding a fresh
+ * domain to an established team does not re-open "Finish setting up Sendvery".
+ * The focus domain only decides what an OPEN step is called and where its CTA
+ * goes — and an open DMARC step means no domain is verified yet, so any
+ * unverified domain is a truthful target.
+ *
  * Scenario branching (TASK-128): the third step ("Receive your first DMARC
  * report") tailors its copy + CTA to the headline domain's
  * {@see RuaScenario}. When `rua=` already points at Sendvery, telling the
@@ -31,6 +51,10 @@ use App\Value\SetupChecklistStep;
  */
 final readonly class SetupChecklistResolver
 {
+    /**
+     * @param ?SetupChecklistDomain      $focusDomain            the domain open steps name + link to; null only when the team has no domains yet
+     * @param list<SetupChecklistDomain> $otherUnfinishedDomains further domains still missing a verified DMARC record, for the "also needs setup" links
+     */
     public function resolve(
         int $domainCount,
         bool $anyDomainHasDmarcVerified,
@@ -39,6 +63,8 @@ final readonly class SetupChecklistResolver
         ?\DateTimeImmutable $dismissedAt,
         bool $hasDmarcRegression,
         ?RuaScenario $headlineDomainRuaScenario,
+        ?SetupChecklistDomain $focusDomain = null,
+        array $otherUnfinishedDomains = [],
     ): SetupChecklistResult {
         $addDomainStep = new SetupChecklistStep(
             id: 'add_domain',
@@ -52,11 +78,19 @@ final readonly class SetupChecklistResolver
 
         $publishDmarcStep = new SetupChecklistStep(
             id: 'publish_dmarc',
-            title: 'Publish your DMARC record',
+            title: null === $focusDomain
+                ? 'Publish your DMARC record'
+                : sprintf('Publish the DMARC record for %s', $focusDomain->name),
             description: 'Add a DMARC TXT record so email receivers know where to send aggregate reports.',
-            actionRoute: 'dashboard_domains',
-            actionLabel: 'Do it',
-            actionRouteParams: [],
+            // Land on the domain's own guided DNS surface with the DMARC step
+            // already in view, not on the domains list the user then has to
+            // navigate from. Same route + anchor the per-domain status banner's
+            // "Set up DMARC" CTA uses.
+            actionRoute: null === $focusDomain ? 'dashboard_domains' : 'dashboard_domain_health',
+            actionLabel: null === $focusDomain ? 'Do it' : sprintf('Set up %s', $focusDomain->name),
+            actionRouteParams: null === $focusDomain
+                ? []
+                : ['id' => $focusDomain->id, '_fragment' => 'health-dmarc'],
             isComplete: $anyDomainHasDmarcVerified,
         );
 
@@ -64,6 +98,7 @@ final readonly class SetupChecklistResolver
             anyDomainHasFirstReport: $anyDomainHasFirstReport,
             hasMailbox: $hasMailbox,
             headlineDomainRuaScenario: $headlineDomainRuaScenario,
+            focusDomain: $focusDomain,
         );
 
         $steps = [$addDomainStep, $publishDmarcStep, $receiveReportsStep];
@@ -89,6 +124,11 @@ final readonly class SetupChecklistResolver
             totalCount: $totalCount,
             isVisible: $isVisible,
             isFullyComplete: $isFullyComplete,
+            focusDomainName: $focusDomain?->name,
+            // Only meaningful while the DMARC step is open: once one domain is
+            // verified the step is ticked and "these others also need setup"
+            // would be pointing at work this card is no longer tracking.
+            otherUnfinishedDomains: $publishDmarcStep->isComplete ? [] : $otherUnfinishedDomains,
         );
     }
 
@@ -108,22 +148,34 @@ final readonly class SetupChecklistResolver
         bool $anyDomainHasFirstReport,
         bool $hasMailbox,
         ?RuaScenario $headlineDomainRuaScenario,
+        ?SetupChecklistDomain $focusDomain,
     ): SetupChecklistStep {
         $isComplete = $anyDomainHasFirstReport || $hasMailbox;
+        $title = null === $focusDomain
+            ? 'Receive your first DMARC report'
+            : sprintf('Receive the first DMARC report for %s', $focusDomain->name);
+
+        // The mailbox route is domain-agnostic, so scenario (c) keeps its
+        // generic params; the two DNS-facing branches deep-link the focused
+        // domain the same way the DMARC step does.
+        $dnsRoute = null === $focusDomain ? 'dashboard_domains' : 'dashboard_domain_health';
+        $dnsRouteParams = null === $focusDomain
+            ? []
+            : ['id' => $focusDomain->id, '_fragment' => 'health-dmarc'];
 
         return match ($headlineDomainRuaScenario) {
             RuaScenario::PointsAtSendvery => new SetupChecklistStep(
                 id: 'receive_reports',
-                title: 'Receive your first DMARC report',
+                title: $title,
                 description: 'Reports flow in automatically. The first one usually arrives within 24-48 hours of rua= publishing — Gmail, Outlook and Yahoo each send one per day per domain.',
-                actionRoute: 'dashboard_domains',
+                actionRoute: $dnsRoute,
                 actionLabel: 'Check DNS setup',
-                actionRouteParams: [],
+                actionRouteParams: $dnsRouteParams,
                 isComplete: $isComplete,
             ),
             RuaScenario::PointsAtExternal => new SetupChecklistStep(
                 id: 'receive_reports',
-                title: 'Receive your first DMARC report',
+                title: $title,
                 description: 'Your DMARC record routes reports to an inbox you own. Connect that inbox so Sendvery can poll it — or repoint DMARC at Sendvery instead.',
                 actionRoute: 'dashboard_mailbox_add',
                 actionLabel: 'Connect that inbox',
@@ -132,11 +184,11 @@ final readonly class SetupChecklistResolver
             ),
             RuaScenario::NoRecord, null => new SetupChecklistStep(
                 id: 'receive_reports',
-                title: 'Receive your first DMARC report',
+                title: $title,
                 description: 'Reports flow in automatically once DMARC is published. Connect a mailbox if you prefer pulling them yourself.',
-                actionRoute: 'dashboard_domains',
+                actionRoute: $dnsRoute,
                 actionLabel: 'Do it',
-                actionRouteParams: [],
+                actionRouteParams: $dnsRouteParams,
                 isComplete: $isComplete,
             ),
         };

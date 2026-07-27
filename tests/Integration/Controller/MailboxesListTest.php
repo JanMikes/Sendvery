@@ -85,26 +85,36 @@ final class MailboxesListTest extends WebTestCase
         $crawler = $data['client']->request('GET', '/app/mailboxes');
 
         self::assertResponseIsSuccessful();
-        // Stretched-link anchor inside the row points to detail page.
-        $anchors = $crawler->filter('a[href="/app/mailboxes/'.$data['mailbox']->id->toString().'"]');
+        // The row's destination is a real, visible anchor — keyboard reachable,
+        // middle-clickable and announced as a link — not an invisible overlay.
+        $anchors = $crawler->filter('table tbody tr td a[href="/app/mailboxes/'.$data['mailbox']->id->toString().'"]');
         self::assertGreaterThan(0, $anchors->count());
+        self::assertStringContainsString(
+            $data['mailbox']->host,
+            $anchors->first()->text(),
+            'The row link must be the visible host label, so users can see and copy where it goes.',
+        );
 
-        // The stretched-link anchor MUST carry `absolute inset-0 z-10` so the
-        // overlay covers the row but defers to z-20 inner controls.
-        $stretched = $anchors->filter('.absolute.inset-0.z-10');
-        self::assertGreaterThan(0, $stretched->count());
+        // Whole-row click convenience comes from the generic row-link controller,
+        // which reads the destination off that anchor.
+        $rows = $crawler->filter('table tbody tr[data-controller~="row-link"]');
+        self::assertGreaterThan(0, $rows->count());
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('table tbody tr a[data-row-link-target="link"]')->count(),
+            'The row must nominate exactly which anchor a row click should follow.',
+        );
     }
 
     #[Test]
-    public function retestButtonIsClickableDespiteStretchedLink(): void
+    public function retestButtonKeepsItsOwnClickAwayFromRowNavigation(): void
     {
         $data = $this->bootClientWithMailbox();
 
         $crawler = $data['client']->request('GET', '/app/mailboxes');
 
-        // The retest form must be above the stretched anchor's stacking
-        // context. The form (or its container) carries `relative z-20`.
-        $forms = $crawler->filter('form.relative.z-20[action="/app/mailboxes/'.$data['mailbox']->id->toString().'/test"]');
+        // Submitting Re-test must never fall through to "open the mailbox".
+        $forms = $crawler->filter('form[data-row-link-ignore][action="/app/mailboxes/'.$data['mailbox']->id->toString().'/test"]');
         self::assertGreaterThan(0, $forms->count());
     }
 

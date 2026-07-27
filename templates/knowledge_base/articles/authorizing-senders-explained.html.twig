@@ -1,36 +1,73 @@
 {% extends 'knowledge_base/_article_layout.html.twig' %}
 
 {% block title %}Authorizing Senders Explained — Sendvery{% endblock %}
-{% block meta_description %}When a sender appears in your Sender Inventory, you have three choices: authorize, revoke, or keep watching. This guide explains how Sendvery picks the recommendation and what each option does.{% endblock %}
+{% block meta_description %}Every sender in your inventory is Authorized, Needs review, or Not authorized. This guide explains what each one means, how to verify a sender really is yours, what happens if you ignore it, and how Sendvery picks its recommendation.{% endblock %}
 
 {% block article_title %}Authorizing Senders Explained{% endblock %}
-{% block article_intro %}The Sender Inventory shows every IP that has tried to send mail as your domain. This is how Sendvery decides which ones to nudge you about &mdash; and what happens when you click Authorize or Mark as revoked.{% endblock %}
+{% block article_intro %}The Sender Inventory shows every server that has tried to send mail as your domain. Each one carries a status you own &mdash; Authorized, Needs review, or Not authorized. This is what those mean, how to decide, and what happens if you don't.{% endblock %}
 
 {% block table_of_contents %}
 <ul class="space-y-2 text-sm">
-    <li><a href="#what-it-means" class="link link-hover text-base-content/60">What "authorized" actually means</a></li>
+    <li><a href="#three-states" class="link link-hover text-base-content/60">The three statuses</a></li>
+    <li><a href="#how-to-verify" class="link link-hover text-base-content/60">How do I verify a sender is really mine?</a></li>
+    <li><a href="#do-nothing" class="link link-hover text-base-content/60">What happens if I do nothing?</a></li>
+    <li><a href="#what-it-means" class="link link-hover text-base-content/60">What "authorized" actually changes</a></li>
     <li><a href="#how-recommendations-work" class="link link-hover text-base-content/60">How Sendvery picks the recommendation</a></li>
 </ul>
 {% endblock %}
 
 {% block article_content %}
 
-<h2 id="what-it-means">What "authorized" actually means</h2>
+<h2 id="three-states">The three statuses</h2>
 
-<p>Marking a sender as <strong>authorized</strong> is a note-to-self &mdash; it tells Sendvery that you've recognised the source and intend mail from it, so we should stop highlighting it in your alerts and dashboards. It does <strong>not</strong> change your DNS, your SPF record, your DKIM keys, or anything visible to receivers. Authorization is an internal label that helps the next person looking at your inventory understand what's expected vs. what's surprising.</p>
+<p>Sendvery discovers senders automatically: every source IP that shows up in a DMARC report for your domain gets a row in your inventory. It arrives as <strong>Needs review</strong>, because nothing in a DMARC report tells us whether that server is your mail host or somebody impersonating you. Only you know that.</p>
 
-<p><strong>Mark as revoked</strong> is the inverse signal: it flags a source you've decided is illegitimate. We don't block anything either &mdash; revocation is again an internal label &mdash; but a revoked sender becomes a permanent red flag the next time it shows up, so spoofers don't slowly drift back into the "we'll just ignore that one" pile. If you want receivers to actually drop spoofed mail, that's what your DMARC policy does (move from <code>p=none</code> to <code>p=quarantine</code> or <code>p=reject</code> in the DNS health page).</p>
+<ul>
+    <li><strong>Authorized</strong> &mdash; you confirmed this server is allowed to send as your domain. It stops appearing in alerts, reminders and the weekly email.</li>
+    <li><strong>Needs review</strong> &mdash; we've seen it, nobody has decided yet. <strong>This is the only status that is asking something of you.</strong> Every newly discovered sender starts here.</li>
+    <li><strong>Not authorized</strong> &mdash; you looked at it and decided it isn't yours. It stays flagged, so a spoofer can't slowly drift into the "we always ignore that one" pile.</li>
+</ul>
+
+<h2 id="how-to-verify">How do I verify a sender is really mine?</h2>
+
+<p>There is no button that proves it &mdash; but three signals together are strong evidence, and they're all on the row in front of you.</p>
+
+<ol>
+    <li><strong>Do you recognise the organisation?</strong> Sendvery resolves the reverse DNS and the owning organisation where it can, so you usually see a name rather than a bare IP. If it names your mail provider, your newsletter tool, your invoicing system or your CRM &mdash; something you pay for &mdash; that's the strongest signal available.</li>
+    <li><strong>Is DKIM passing, consistently?</strong> This is the one that's hard to fake. DKIM signatures are made with a private key that only you and the services you set up hold. A sender at 100% DKIM pass is cryptographically demonstrating it has your key. A spoofer cannot do that; spoofed mail shows up with DKIM failing.</li>
+    <li><strong>Does the volume match mail you actually send?</strong> If your team sends a few hundred messages a week, a sender at that scale is plausible. One at 50,000 is not.</li>
+</ol>
+
+<p>A worked example, because it's the common one. You see five rows &mdash; <code>mxb.seznam.cz</code>, <code>mxb-1-910.seznam.cz</code> and friends &mdash; each at 100% DKIM and 100% SPF, all badged <strong>Needs review</strong>. Read it back through the three signals: the name is your mail provider, they're signing with your DKIM key, and the volume is your normal traffic split across the provider's outbound machines. That's your own mail host, seen from the outside. Authorize them.</p>
+
+<p>The reverse case: an IP with no resolved organisation, DKIM failing on most messages, appearing out of nowhere with a burst of volume. That's what spoofing looks like. Mark it not authorized.</p>
+
+<p>And when you genuinely can't tell &mdash; no recognisable name, but the mail is passing DKIM &mdash; leave it in Needs review and check back. Passing DKIM means somebody with your key is sending it, which almost always means a service one of your colleagues set up. Ask around before you decide either way.</p>
+
+<h2 id="do-nothing">What happens if I do nothing?</h2>
+
+<p>Nothing breaks. Statuses never change your DNS, your SPF record, your DKIM keys or your DMARC policy, and they never block or release a single message. What actually stops spoofed mail from being delivered is your DMARC policy &mdash; moving from <code>p=none</code> to <code>p=quarantine</code> or <code>p=reject</code>.</p>
+
+<p>What you lose by not deciding is signal. A sender left in Needs review keeps being flagged in your inventory, your alerts and your weekly email, because Sendvery has no way of knowing it's fine. Working through the list once is what makes the next genuinely suspicious sender stand out instead of being lost among a dozen amber rows you've learned to scroll past.</p>
+
+<h2 id="what-it-means">What "authorized" actually changes</h2>
+
+<p>Marking a sender as <strong>authorized</strong> is a note-to-self &mdash; it tells Sendvery that you've recognised the source and intend mail from it, so we should stop highlighting it. It does <strong>not</strong> change anything visible to receivers. Authorization is an internal label that also helps the next person looking at your inventory understand what's expected versus what's surprising.</p>
+
+<p><strong>Not authorized</strong> is the inverse signal, and it's equally internal: we don't block anything either. Its value is that the sender becomes a standing red flag rather than fading into the background.</p>
 
 <h2 id="how-recommendations-work">How Sendvery picks the recommendation</h2>
 
-<p>Sendvery looks at the last 30 days of activity for each sender and emits one of three nudges. The thresholds are chosen so a legitimate marketing IP that's been sending real mail for a week clears the authorize bar, while a spoofer producing failing mail crosses the revoke bar before they drown out the genuine traffic.</p>
+<p>On top of the three statuses, Sendvery looks at the last 30 days of activity for each sender and, when there's enough history, offers an opinion. The thresholds are chosen so a legitimate marketing IP that's been sending real mail for a week clears the authorize bar, while a spoofer producing failing mail crosses the other bar before they drown out the genuine traffic.</p>
 
 <ul>
-    <li><strong>Recommend authorize</strong>: at least 50 messages in the last 30 days with a DKIM pass rate of 90% or higher, and we can identify the organisation (so the suggestion is concrete: "Mailchimp has sent X messages"). The recommendation never fires for unknown IPs &mdash; we will not pre-stamp "looks fine" for a source we can't name.</li>
-    <li><strong>Recommend revoke</strong>: at least 20 messages in the last 30 days with a DKIM pass rate below 50%, and the source is unknown. A known organisation with a low pass rate is more likely misconfigured than malicious &mdash; revocation isn't the right tool for that and we don't suggest it.</li>
+    <li><strong>Recommend authorize</strong>: at least 50 messages in the last 30 days with a DKIM pass rate of 90% or higher, and we can identify the organisation (so the suggestion is concrete: "Mailchimp has sent X messages"). It never fires for unidentified IPs &mdash; we won't pre-stamp "looks fine" for a source we can't name.</li>
+    <li><strong>Recommend not authorized</strong>: at least 20 messages in the last 30 days with a DKIM pass rate below 50%, and the source is unidentified. A known organisation with a low pass rate is more likely misconfigured than malicious &mdash; that needs a DKIM fix, not a rejection, so we don't suggest one.</li>
     <li><strong>Monitor</strong>: enough activity to be worth surfacing but the volume or pass rate sits between the two thresholds &mdash; not yet enough signal to commit to a recommendation. We'll re-evaluate as more data arrives.</li>
 </ul>
 
-<p>You're never forced to follow a recommendation. If a sender looks wrong to you, mark it as revoked even if we said "authorize". The advisor exists to surface the senders worth your attention, not to make the decision for you.</p>
+<p>Senders below five messages in 30 days get no recommendation at all. They still show as <strong>Needs review</strong> and still count towards the "senders waiting for your review" total &mdash; a quiet sender is still a sender you haven't accounted for; we just don't have the evidence to advise you about it.</p>
+
+<p>You're never forced to follow a recommendation. If a sender looks wrong to you, mark it not authorized even if we said "authorize". The advisor exists to surface the senders worth your attention, not to make the decision for you.</p>
 
 {% endblock %}

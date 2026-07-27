@@ -7,7 +7,6 @@ namespace App\Controller\Dashboard;
 use App\Query\GetAllReports;
 use App\Query\GetDnsHealthOverview;
 use App\Query\GetDomainDetail;
-use App\Query\GetDomainOverview;
 use App\Query\GetDomainPassRateTrend;
 use App\Query\GetDomainReadinessSignals;
 use App\Query\GetDomainWorkspaceTabCounts;
@@ -23,9 +22,8 @@ use App\Services\DmarcPolicyAdvisor;
 use App\Services\Dns\CloudflareDnsClient;
 use App\Services\Dns\DkimSelectorRegistry;
 use App\Services\Dns\DmarcRampReadinessEvaluator;
+use App\Services\Dns\GuidedDnsSetupProvider;
 use App\Services\Dns\ManagedDmarcCnameChecker;
-use App\Services\Dns\RuaScenarioResolver;
-use App\Services\DomainSetupStatusResolver;
 use App\Services\ReportAddressProvider;
 use App\Services\Stripe\PlanEnforcement;
 use App\Value\DmarcPolicy;
@@ -49,9 +47,6 @@ final class ShowDomainDetailController extends AbstractController
         private readonly QuarantinedDmarcReportRepository $quarantineRepository,
         private readonly GetDnsHealthOverview $getDnsHealthOverview,
         private readonly DmarcPolicyAdvisor $dmarcPolicyAdvisor,
-        private readonly DomainSetupStatusResolver $domainSetupStatusResolver,
-        private readonly RuaScenarioResolver $ruaScenarioResolver,
-        private readonly GetDomainOverview $getDomainOverview,
         private readonly GetDomainWorkspaceTabCounts $getDomainWorkspaceTabCounts,
         private readonly GetLatestDkimDetection $getLatestDkimDetection,
         private readonly DkimSelectorRegistry $dkimSelectorRegistry,
@@ -64,6 +59,7 @@ final class ShowDomainDetailController extends AbstractController
         private readonly DmarcRampReadinessEvaluator $dmarcRampReadinessEvaluator,
         private readonly GetManagedDmarcPolicyHistory $getManagedDmarcPolicyHistory,
         private readonly ManagedDmarcCnameChecker $managedDmarcCnameChecker,
+        private readonly GuidedDnsSetupProvider $guidedDnsSetupProvider,
     ) {
     }
 
@@ -132,22 +128,20 @@ final class ShowDomainDetailController extends AbstractController
             : $this->quarantineRepository->countForDomain($domain->domainName);
 
         $dnsHealth = $this->getDnsHealthOverview->forDomain($id, $teamIds);
-        $ruaScenario = $this->ruaScenarioResolver->resolveForDomainId(Uuid::fromString($id));
-        // TASK-098: pass the overview row so the resolver derives banner
-        // severity via the unified DomainHealthClassifier. Without this, the
-        // banner reads only per-protocol state and can render green for a
-        // verified domain that has all four records but a 65% pass rate —
-        // while the `/app/domains` list card (which DOES read pass rate)
-        // renders yellow for the same domain. `forDomain` is the single-row
-        // variant of the list query, so the classifier sees the same shape
-        // it does on the list page.
-        $domainOverview = $this->getDomainOverview->forDomain($id, $teamIds);
-        // TASK-114: pass the domain ID so the resolver can ask
-        // RuaMailboxMatcher whether the published rua= address routes to a
-        // mailbox we're polling. When it does, the 5th RUA destination row
-        // renders in success tone — matching the `/app/mailboxes` matrix's
-        // green badge for the same domain.
-        $domainSetupStatus = $this->domainSetupStatusResolver->resolve($dnsHealth, $ruaScenario, $domainOverview, $id);
+
+        // One assembly point for the guided setup surface, the status banner and
+        // the RUA facts below — see GuidedDnsSetupProvider. Resolving them
+        // together is what guarantees the banner, the setup surface and
+        // /app/domains/{id}/health cannot contradict each other about the same
+        // domain.
+        $guided = $this->guidedDnsSetupProvider->forDomainId($id);
+
+        if (null === $guided) {
+            throw $this->createNotFoundException('Domain not found.');
+        }
+
+        $ruaScenario = $guided->ruaScenario;
+        $domainSetupStatus = $guided->setupStatus;
 
         // The detail result carries `dmarc_policy` as a raw nullable string
         // straight from DBAL — `tryFrom` (not `from`) protects against a DB
@@ -226,6 +220,7 @@ final class ShowDomainDetailController extends AbstractController
             'dnsHealth' => $dnsHealth,
             'dmarcPolicyAdvice' => $dmarcPolicyAdvice,
             'domainSetupStatus' => $domainSetupStatus,
+            'guidedDnsSetup' => $guided->setup,
             'hasPublishedDmarcRecord' => $hasPublishedDmarcRecord,
             'tabCounts' => $tabCounts,
             'dkimDetection' => $dkimDetection,

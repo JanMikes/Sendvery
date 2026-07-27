@@ -51,7 +51,7 @@ final class DomainOverviewResultTest extends TestCase
             'domain_name' => 'test.com',
             'total_reports' => '0',
             'latest_report_date' => null,
-            'pass_rate' => '0',
+            'pass_rate' => null,
             'team_id' => 'team-456',
             'team_name' => 'Beta Corp',
             'dmarc_verified_at' => null,
@@ -65,6 +65,7 @@ final class DomainOverviewResultTest extends TestCase
 
         self::assertNull($result->latestReportDate);
         self::assertSame(0, $result->totalReports);
+        self::assertNull($result->passRate);
         self::assertNull($result->dmarcVerifiedAt);
         self::assertNull($result->spfVerifiedAt);
         self::assertNull($result->dkimVerifiedAt);
@@ -72,6 +73,86 @@ final class DomainOverviewResultTest extends TestCase
         self::assertNull($result->latestDkimScore);
         self::assertNull($result->latestDmarcScore);
         self::assertNull($result->latestMxScore);
+    }
+
+    public function testANullPassRateColumnMeansNoDataRatherThanZeroPercent(): void
+    {
+        // The query returns SQL NULL when a domain has no DMARC records. Casting
+        // that to 0.0 made a brand-new domain look identical to one where every
+        // single message failed authentication.
+        $result = DomainOverviewResult::fromDatabaseRow($this->row(['pass_rate' => null]));
+
+        self::assertNull($result->passRate);
+        self::assertFalse(
+            $result->hasPassRateData(),
+            'A domain with no records must not claim to have a pass rate.',
+        );
+    }
+
+    public function testAMeasuredZeroPassRateIsPreservedAsARealMeasurement(): void
+    {
+        // The mirror image: a genuine 0% (every message failed) must stay 0.0
+        // and keep reporting that it has data, or total failure would be hidden
+        // behind a friendly "waiting for first report".
+        $result = DomainOverviewResult::fromDatabaseRow($this->row(['pass_rate' => '0']));
+
+        self::assertSame(0.0, $result->passRate);
+        self::assertTrue($result->hasPassRateData());
+    }
+
+    public function testADomainThatNeverReceivedAReportIsAwaitingItsFirst(): void
+    {
+        $result = DomainOverviewResult::fromDatabaseRow($this->row(['first_report_at' => null]));
+
+        self::assertTrue($result->isAwaitingFirstReport());
+    }
+
+    public function testADomainWhoseReportsWerePurgedIsNotAwaitingItsFirstReport(): void
+    {
+        // `firstReportAt` survives retention purges, so a domain that reported
+        // months ago and then aged out says "no reports in this period", not
+        // "waiting for your first report" — which would look like broken setup.
+        $result = DomainOverviewResult::fromDatabaseRow($this->row([
+            'pass_rate' => null,
+            'total_reports' => '0',
+            'first_report_at' => '2024-01-01 00:00:00',
+        ]));
+
+        self::assertFalse($result->isAwaitingFirstReport());
+        self::assertFalse($result->hasPassRateData());
+    }
+
+    /**
+     * @param array<string, string|null> $overrides
+     *
+     * @return array{
+     *     domain_id: string,
+     *     domain_name: string,
+     *     total_reports: int|string,
+     *     latest_report_date: string|null,
+     *     pass_rate: float|string|null,
+     *     team_id: string,
+     *     team_name: string,
+     *     dmarc_verified_at: string|null,
+     *     first_report_at?: string|null
+     * }
+     */
+    private function row(array $overrides = []): array
+    {
+        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, first_report_at?: string|null} $row */
+        $row = array_merge([
+            'domain_id' => 'row-1',
+            'domain_name' => 'example.com',
+            'total_reports' => '4',
+            'latest_report_date' => '2026-04-02 00:00:00',
+            'pass_rate' => '91.5',
+            'team_id' => 'team-1',
+            'team_name' => 'Acme Inc',
+            'dmarc_verified_at' => '2026-03-15 10:00:00',
+            'first_report_at' => '2026-03-16 10:00:00',
+        ], $overrides);
+
+        return $row;
     }
 
     public function testFromDatabaseRowSnapshotFieldsAreOptional(): void

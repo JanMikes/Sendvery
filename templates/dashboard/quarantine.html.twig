@@ -144,14 +144,15 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {# Stretched-link row navigation per TASK-018. The
-                               reason badge is anchored with `relative z-20` so
-                               it wins over the stretched-row anchor and filters
-                               instead of opening detail (TASK-036). The leading
-                               glyph icon (TASK-071) ALSO links to the same
-                               reason filter with `relative z-20` for the same
-                               reason — clicking the red icon on a plan_overage
-                               row applies `?reason=plan_overage` to the page. #}
+                            {# Row navigation: a real anchor on the Received cell plus the generic
+                               `row-link` Stimulus controller (see
+                               assets/controllers/row_link_controller.js). The old stretched-link
+                               overlay depended on positioning a `<tr>`, which CSS leaves undefined
+                               — it made every row resolve to the same overlay. The two secondary
+                               anchors on this row (leading glyph + reason badge, both filtering by
+                               reason per TASK-036/TASK-071) keep their own clicks for free: the
+                               controller ignores clicks that originate on any <a>, so they no longer
+                               need z-index juggling. #}
                             {% for item in items %}
                                 {# `severityTone()` lives on the QuarantineReason enum so
                                    the rule is the single source of truth (TASK-071).
@@ -161,11 +162,13 @@
                                 {% set itemReason = enum('App\\Value\\Reports\\QuarantineReason').tryFrom(item.reason) %}
                                 {% set itemTone = itemReason ? itemReason.severityTone() : 'base-300' %}
                                 {% set itemSeverity = itemReason ? itemReason.severityTone() : 'neutral' %}
-                                <tr class="hover:bg-base-200/50 cursor-pointer relative border-l-4 border-l-{{ itemTone }}">
+                                <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ itemTone }}"
+                                    {{ stimulus_controller('row-link') }}
+                                    data-action="click->row-link#navigate">
                                     <td class="w-8">
                                         {% if itemReason %}
                                             <a href="{{ path('dashboard_quarantine', { reason: itemReason.value }) }}"
-                                               class="relative z-20 inline-flex"
+                                               class="inline-flex"
                                                aria-label="Filter by reason {{ itemReason.value }}">
                                                 {{ severity.glyph(itemSeverity, 'sm') }}
                                             </a>
@@ -175,9 +178,9 @@
                                     </td>
                                     <td class="whitespace-nowrap">
                                         <a href="{{ path('dashboard_quarantine_detail', { id: item.quarantineId }) }}"
-                                           class="absolute inset-0 z-10"
-                                           aria-label="Open quarantined report for {{ item.domainName }}"></a>
-                                        {{ item.quarantinedAt|date('M j, H:i') }}
+                                           class="link link-hover"
+                                           data-row-link-target="link"
+                                           aria-label="Open quarantined report for {{ item.domainName }}">{{ item.quarantinedAt|date('M j, H:i') }}</a>
                                     </td>
                                     <td class="font-medium">{{ item.domainName }}</td>
                                     <td class="text-sm text-base-content/70">{{ item.reporterEmail }}</td>
@@ -192,7 +195,7 @@
                                                 'plan_overage': 'Plan overage',
                                             }[itemReason.value] %}
                                             <a href="{{ path('dashboard_quarantine', { reason: itemReason.value }) }}"
-                                               class="relative z-20 badge badge-sm badge-{{ itemSeverity }}"
+                                               class="badge badge-sm badge-{{ itemSeverity }}"
                                                aria-label="Filter by {{ reasonLabel }}">{{ reasonLabel }}</a>
                                         {% else %}
                                             <span class="badge badge-sm badge-ghost">{{ item.reason }}</span>

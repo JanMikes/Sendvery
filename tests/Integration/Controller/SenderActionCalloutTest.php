@@ -207,7 +207,7 @@ final class SenderActionCalloutTest extends WebTestCase
         self::assertGreaterThan(0, $callout->count(), 'recommend_revoke callout must render.');
         self::assertSame('recommend_revoke', (string) $callout->attr('data-severity'));
         self::assertStringContainsString(
-            'Consider revoking',
+            'Consider marking this sender not authorized',
             (string) $crawler->filter('[data-testid="sender-action-callout-headline"]')->text(),
         );
         self::assertStringContainsString('198.51.100.7', (string) $crawler->filter('[data-testid="sender-action-callout-reason"]')->text());
@@ -256,7 +256,7 @@ final class SenderActionCalloutTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $stat = $crawler->filter('[data-testid="sender-needs-decision-stat"]');
         self::assertGreaterThan(0, $stat->count());
-        self::assertStringContainsString('2 senders need a decision', $stat->text());
+        self::assertStringContainsString('2 we can advise on', $stat->text());
     }
 
     #[Test]

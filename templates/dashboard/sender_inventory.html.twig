@@ -19,49 +19,52 @@
 {% block content %}
     <twig:DomainWorkspaceTabs :domain="domain" active="senders" :tabCounts="tabCounts" />
 
-    {# TASK-092 "X senders need a decision" stat row — only renders when at
-       least one row has a recommend_authorize or recommend_revoke verdict.
-       Links to ?recommendation=needs_decision to narrow the table. #}
-    {% if needsDecisionCount is defined and needsDecisionCount > 0 %}
-        <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId, recommendation: 'needs_decision' }) }}"
-           class="card border border-warning/30 bg-warning/5 shadow-sm mb-4 block hover:bg-warning/10 transition-colors"
-           data-testid="sender-needs-decision-stat">
-            <div class="card-body p-4 flex flex-row items-center gap-3">
-                <div class="w-9 h-9 rounded-full bg-warning/10 flex items-center justify-center shrink-0">
-                    <svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="font-semibold text-sm sm:text-base">
-                        {{ needsDecisionCount }} sender{{ needsDecisionCount == 1 ? '' : 's' }} need{{ needsDecisionCount == 1 ? 's' : '' }} a decision
-                    </div>
-                    <div class="text-xs sm:text-sm text-base-content/60">
-                        Each one has crossed the threshold for an authorize or revoke recommendation. Click to filter the table.
-                    </div>
-                </div>
-                <svg class="w-5 h-5 text-base-content/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
-            </div>
-        </a>
-    {% endif %}
+    {# The quantified call to action. Driven by the honest count of senders
+       nobody has decided about (not the advisor-threshold subset) — a
+       low-volume sender the advisor stays quiet about is still a sender the
+       user has to make a call on, and staying silent about it is what made the
+       amber badges unexplainable. #}
+    <twig:SenderReviewCta
+        domainId="{{ domain.domainId }}"
+        :needsReviewCount="needsReviewCount"
+        :needsReviewMessages="needsReviewMessages"
+        :needsDecisionCount="needsDecisionCount" />
 
-    {# Filter tabs #}
-    <div class="tabs tabs-bordered mb-6">
+    {# Filter tabs. `?filter=unauthorized` is still accepted (older links and
+       bookmarks point at it) but it spans both non-authorized states, so it
+       cannot light up either precise tab — it renders its own chip instead. #}
+    <div class="tabs tabs-bordered mb-4">
         <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId }) }}"
            class="tab {{ filter == '' or filter is null ? 'tab-active' : '' }}">All</a>
+        <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId, filter: 'needs_review' }) }}"
+           class="tab {{ filter == 'needs_review' ? 'tab-active' : '' }}"
+           data-testid="sender-tab-needs-review">
+            Needs review
+            {% if needsReviewCount > 0 %}
+                <span class="badge badge-xs badge-warning ml-1">{{ needsReviewCount }}</span>
+            {% endif %}
+        </a>
         <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId, filter: 'authorized' }) }}"
            class="tab {{ filter == 'authorized' ? 'tab-active' : '' }}">Authorized</a>
-        <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId, filter: 'unauthorized' }) }}"
-           class="tab {{ filter == 'unauthorized' ? 'tab-active' : '' }}">Unauthorized</a>
+        <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId, filter: 'not_authorized' }) }}"
+           class="tab {{ filter == 'not_authorized' ? 'tab-active' : '' }}">Not authorized</a>
+        {% if filter == 'unauthorized' %}
+            <span class="tab tab-active flex items-center gap-1" data-testid="sender-legacy-unauthorized-tab">
+                Everything not authorized
+                <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId }) }}" class="text-base-content/60 hover:text-base-content" aria-label="Clear filter">×</a>
+            </span>
+        {% endif %}
         {% if recommendationFilter is defined and recommendationFilter == 'needs_decision' %}
             <span class="tab tab-active flex items-center gap-1" data-testid="sender-needs-decision-active-tab">
-                Needs decision
+                We can advise on these
                 <a href="{{ path('dashboard_sender_inventory', { domainId: domain.domainId }) }}" class="text-base-content/60 hover:text-base-content" aria-label="Clear filter">×</a>
             </span>
         {% endif %}
     </div>
+
+    {# The explanation, unconditionally reachable from the page the badges live
+       on. Auto-expanded while anything still needs a decision. #}
+    <twig:SenderStatusLegend :needsReviewCount="needsReviewCount" />
 
     {% if senders is empty %}
         <div class="card bg-base-100 shadow">
@@ -72,8 +75,9 @@
     {% else %}
         {# Bulk-action form wrapping the table. The Stimulus controller toggles
            the toolbar visibility based on per-row checkbox state. Per-row
-           Authorize/Revoke buttons use the HTML5 form= attribute to target
-           hidden forms rendered AFTER this form (HTML disallows nested forms). #}
+           Authorize / Mark-not-authorized buttons use the HTML5 form= attribute
+           to target hidden forms rendered AFTER this form (HTML disallows
+           nested forms). #}
         <form id="bulk-sender-form"
               method="post"
               action="{{ path('dashboard_sender_bulk', { domainId: domain.domainId }) }}"
@@ -91,7 +95,7 @@
                 </button>
                 <button type="submit" name="action" value="mark_unknown" class="btn btn-sm btn-ghost">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"></path></svg>
-                    Mark unknown selected
+                    Mark selected not authorized
                 </button>
                 <button type="button" class="btn btn-sm btn-ghost ml-auto" data-action="sender-selection#clearAll">Clear</button>
             </div>
@@ -111,7 +115,7 @@
                             <th>First Seen</th>
                             <th>Last Seen</th>
                             <th>Status</th>
-                            <th>Actions</th>
+                            <th>Your decision</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -131,7 +135,7 @@
                                     {% if sender.organization %}
                                         <span class="badge badge-sm badge-ghost">{{ sender.organization }}</span>
                                     {% else %}
-                                        <span class="text-base-content/40">Unknown</span>
+                                        <span class="text-base-content/40" title="We could not resolve who owns this IP. That is not itself suspicious — many mail hosts publish no reverse DNS.">Not identified</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
@@ -143,11 +147,7 @@
                                 <td class="text-sm text-base-content/60">{{ sender.firstSeenAt|date('M j, Y') }}</td>
                                 <td class="text-sm text-base-content/60">{{ sender.lastSeenAt|date('M j, Y') }}</td>
                                 <td>
-                                    {% if sender.isAuthorized %}
-                                        <span class="badge badge-sm badge-success">Authorized</span>
-                                    {% else %}
-                                        <span class="badge badge-sm badge-warning">Unknown</span>
-                                    {% endif %}
+                                    <twig:SenderStatusBadge :state="sender.reviewState" />
                                     {% if sender.updatedAt %}
                                         <div class="text-xs text-base-content/50 mt-1">
                                             Last changed by {{ sender.updatedByUserEmail ?? 'system' }} on {{ sender.updatedAt|date('M j, Y') }}
@@ -160,15 +160,21 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <div class="flex items-center gap-1">
-                                        {% if sender.isAuthorized %}
-                                            <button type="submit"
-                                                    form="revoke-form-{{ sender.id }}"
-                                                    class="btn btn-ghost btn-xs">Revoke</button>
-                                        {% else %}
+                                    {# Both verdicts offered on an undecided row: the old
+                                       single "Authorize" button made the page look like
+                                       authorizing was the only thing you could do, which
+                                       is exactly the confusion this ticket is about. #}
+                                    <div class="flex flex-wrap items-center gap-1">
+                                        {% if not sender.isAuthorized %}
                                             <button type="submit"
                                                     form="authorize-form-{{ sender.id }}"
                                                     class="btn btn-primary btn-xs">Authorize</button>
+                                        {% endif %}
+                                        {% if sender.reviewState.value != 'not_authorized' %}
+                                            <button type="submit"
+                                                    form="revoke-form-{{ sender.id }}"
+                                                    class="btn btn-ghost btn-xs"
+                                                    title="Record that this server is not yours. Nothing is blocked — it stays flagged in your alerts.">Not authorized</button>
                                         {% endif %}
                                         <button type="button"
                                                 class="btn btn-ghost btn-xs"
@@ -180,10 +186,10 @@
                                     </div>
                                 </td>
                             </tr>
-                            {# TASK-092 inline recommendation callout. The
-                               SenderActionCallout component renders nothing for
-                               monitor/none — this guard keeps the empty extra
-                               <tr> out of the DOM when the row is healthy. #}
+                            {# Inline recommendation callout. The SenderActionCallout
+                               component renders nothing for monitor/none — this guard
+                               keeps the empty extra <tr> out of the DOM when the row
+                               is healthy. #}
                             {% if advisorBySenderId is defined and advisorBySenderId[sender.id] is defined and advisorBySenderId[sender.id].severity.value in ['recommend_authorize', 'recommend_revoke'] %}
                                 <tr class="bg-transparent" data-testid="sender-callout-row-{{ sender.id }}">
                                     <td colspan="10" class="p-0 pb-3">

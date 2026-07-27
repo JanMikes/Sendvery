@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* TomSelect's structural CSS only (positioning, flex layout, a11y hiding). It is
+ * pulled into the `base` cascade layer so every colour, radius and metric it
+ * hardcodes loses to the unlayered "TomSelect" theme block at the end of this
+ * file — no !important arms race, no stock look leaking through. */
+@import "tom-select/dist/css/tom-select.css" layer(base);
 @plugin "daisyui";
 
 
@@ -94,4 +99,221 @@
     margin-inline: auto;
     padding-inline: 1.5rem;
     max-width: 80rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * TomSelect — theme layer
+ *
+ * Mirrors daisyUI's own `input`/`select` recipe (same --size scale, same
+ * --radius-field, same 20%-of-base-content border, same 2px base-content focus
+ * ring) so an enhanced <select> is visually indistinguishable from the plain
+ * controls sitting next to it. Deliberately unlayered: TomSelect's stock CSS is
+ * imported into the `base` layer at the top of this file, and unlayered rules
+ * always beat layered ones, so nothing here needs !important.
+ *
+ * The `ts-size-*` classes are put on the wrapper and dropdown by
+ * assets/controllers/tom_select_controller.js.
+ * ------------------------------------------------------------------------- */
+
+.ts-wrapper {
+    --ts-size: calc(var(--size-field, 0.25rem) * 10);
+    --ts-font-size: 0.875rem;
+    --ts-border-color: color-mix(in oklab, var(--color-base-content) 20%, transparent);
+}
+
+.ts-wrapper.ts-size-xs,
+.ts-dropdown.ts-size-xs {
+    --ts-size: calc(var(--size-field, 0.25rem) * 6);
+    --ts-font-size: 0.6875rem;
+}
+
+.ts-wrapper.ts-size-sm,
+.ts-dropdown.ts-size-sm {
+    --ts-size: calc(var(--size-field, 0.25rem) * 8);
+    --ts-font-size: 0.75rem;
+}
+
+.ts-wrapper.ts-size-lg,
+.ts-dropdown.ts-size-lg {
+    --ts-size: calc(var(--size-field, 0.25rem) * 12);
+    --ts-font-size: 1.125rem;
+}
+
+/* Control (the box that replaces the native select) */
+.ts-wrapper .ts-control {
+    align-items: center;
+    background-color: var(--color-base-100);
+    border: var(--border) solid var(--ts-border-color);
+    border-radius: var(--radius-field);
+    box-shadow:
+        0 1px color-mix(in oklab, var(--ts-border-color) calc(var(--depth) * 10%), transparent) inset,
+        0 -1px oklch(100% 0 0 / calc(var(--depth) * 0.1)) inset;
+    color: var(--color-base-content);
+    column-gap: 0.25rem;
+    cursor: text;
+    font-family: var(--font-sans);
+    font-size: var(--ts-font-size);
+    line-height: 1.35;
+    min-height: var(--ts-size);
+    padding-block: 0.25rem;
+    padding-inline-start: 0.75rem;
+    row-gap: 0.25rem;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.ts-wrapper.multi.has-items .ts-control {
+    padding-block: 0.25rem;
+}
+
+/* Visible keyboard focus, identical to daisyUI's input focus ring. */
+.ts-wrapper.focus .ts-control,
+.ts-wrapper.dropdown-active .ts-control {
+    --ts-border-color: var(--color-base-content);
+    box-shadow: 0 1px color-mix(in oklab, var(--ts-border-color) calc(var(--depth) * 10%), transparent);
+    isolation: isolate;
+    outline: 2px solid var(--color-base-content);
+    outline-offset: 2px;
+}
+
+.ts-wrapper .ts-control > input {
+    color: var(--color-base-content);
+    font-family: var(--font-sans);
+    font-size: var(--ts-font-size);
+    min-width: 3rem;
+}
+
+.ts-wrapper .ts-control > input::placeholder {
+    color: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+}
+
+.ts-wrapper.disabled .ts-control {
+    background-color: var(--color-base-200);
+    border-color: var(--color-base-200);
+    box-shadow: none;
+    color: color-mix(in oklab, var(--color-base-content) 40%, transparent);
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+/* Single-choice mode keeps daisyUI's two-triangle caret so it reads as a select. */
+.ts-wrapper.single .ts-control {
+    --ts-pr-caret: 1.75rem;
+    background-image:
+        linear-gradient(45deg, transparent 50%, currentColor 50%),
+        linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 20px) calc(1px + 50%), calc(100% - 16.1px) calc(1px + 50%);
+    background-repeat: no-repeat;
+    background-size: 4px 4px, 4px 4px;
+}
+
+/* Selected-value chips */
+/* Reporter orgs and hostnames are long (enterprise.protection.outlook.com), so
+ * both chips and options wrap instead of being clipped by TomSelect's
+ * overflow: hidden. */
+.ts-wrapper.multi .ts-control > .item {
+    align-items: center;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    background: color-mix(in oklab, var(--color-primary) 12%, var(--color-base-100));
+    border: var(--border) solid color-mix(in oklab, var(--color-primary) 28%, transparent);
+    border-radius: var(--radius-selector);
+    color: color-mix(in oklab, var(--color-primary) 80%, var(--color-base-content));
+    font-weight: 500;
+    line-height: 1.25;
+    margin: 0;
+    padding: 0.125rem 0.5rem;
+}
+
+.ts-wrapper.multi .ts-control > .item.active {
+    background: color-mix(in oklab, var(--color-primary) 22%, var(--color-base-100));
+    border-color: color-mix(in oklab, var(--color-primary) 45%, transparent);
+}
+
+.ts-wrapper.plugin-remove_button .item .remove {
+    border-radius: 0 calc(var(--radius-selector) - 2px) calc(var(--radius-selector) - 2px) 0;
+    color: inherit;
+    padding-inline: 0.375rem;
+}
+
+.ts-wrapper.plugin-remove_button:not(.rtl) .item .remove {
+    border-left: var(--border) solid color-mix(in oklab, var(--color-primary) 28%, transparent);
+    margin-left: 0.375rem;
+}
+
+.ts-wrapper.plugin-remove_button .item .remove:hover {
+    background: color-mix(in oklab, var(--color-primary) 22%, transparent);
+}
+
+.ts-wrapper.plugin-remove_button .item .remove:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+/* Dropdown panel — matches daisyUI's dropdown-content + menu */
+.ts-dropdown {
+    background: var(--color-base-100);
+    border: var(--border) solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    box-shadow:
+        0 10px 15px -3px oklch(0% 0 0 / 0.1),
+        0 4px 6px -4px oklch(0% 0 0 / 0.1);
+    color: var(--color-base-content);
+    font-family: var(--font-sans);
+    font-size: var(--ts-font-size, 0.875rem);
+    line-height: 1.35;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    padding: 0.25rem;
+    z-index: 50;
+}
+
+.ts-dropdown .option,
+.ts-dropdown .optgroup-header,
+.ts-dropdown .no-results,
+.ts-dropdown .create {
+    border-radius: var(--radius-field);
+    overflow-wrap: anywhere;
+    padding: 0.375rem 0.625rem;
+}
+
+.ts-dropdown .active {
+    background-color: var(--color-base-200);
+    color: var(--color-base-content);
+}
+
+.ts-dropdown [data-selectable].option.active {
+    background-color: color-mix(in oklab, var(--color-primary) 12%, var(--color-base-100));
+    color: color-mix(in oklab, var(--color-primary) 85%, var(--color-base-content));
+}
+
+.ts-dropdown [data-selectable] .highlight {
+    background: color-mix(in oklab, var(--color-primary) 22%, transparent);
+    border-radius: 0.125rem;
+    color: inherit;
+}
+
+.ts-dropdown .optgroup-header {
+    background: transparent;
+    color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.ts-dropdown .no-results,
+.ts-dropdown .create {
+    color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+}
+
+.ts-dropdown .active.create {
+    color: var(--color-base-content);
+}
+
+.ts-dropdown-content {
+    max-height: 16rem;
+}
+
+.ts-dropdown .spinner::after {
+    border-color: var(--color-primary) transparent var(--color-primary) transparent;
 }

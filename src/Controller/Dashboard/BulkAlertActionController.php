@@ -6,6 +6,8 @@ namespace App\Controller\Dashboard;
 
 use App\Message\BulkMarkAlertsRead;
 use App\Message\BulkSnoozeAlerts;
+use App\Message\MarkAllAlertsRead;
+use App\Query\GetAlerts;
 use App\Services\DashboardContext;
 use Psr\Clock\ClockInterface;
 use Ramsey\Uuid\Uuid;
@@ -22,6 +24,7 @@ final class BulkAlertActionController extends AbstractController
         private readonly DashboardContext $dashboardContext,
         private readonly MessageBusInterface $commandBus,
         private readonly ClockInterface $clock,
+        private readonly GetAlerts $getAlerts,
     ) {
     }
 
@@ -33,8 +36,31 @@ final class BulkAlertActionController extends AbstractController
         }
 
         $action = $request->request->getString('action');
-        if (!in_array($action, ['mark_read', 'snooze_7d'], true)) {
+        if (!in_array($action, ['mark_read', 'snooze_7d', 'mark_all_read'], true)) {
             throw $this->createNotFoundException('Unknown bulk action.');
+        }
+
+        $teamId = $this->dashboardContext->getTeamId();
+
+        // "Mark all as read" is deliberately selection-independent: the list is
+        // capped at 50 rows, so requiring a selection would make it impossible
+        // to clear the tail of a busy backlog.
+        if ('mark_all_read' === $action) {
+            // Counted BEFORE dispatch so the flash reports the alerts actually
+            // affected. The per-row actions report their submitted count, which
+            // over-reports when an id is already read or belongs elsewhere.
+            $affected = $this->getAlerts->countUnreadForTeams([$teamId->toString()], includeSnoozed: true);
+
+            if (0 === $affected) {
+                $this->addFlash('success', 'No unread alerts to mark.');
+
+                return $this->redirectToRoute('dashboard_alerts');
+            }
+
+            $this->commandBus->dispatch(new MarkAllAlertsRead(teamId: $teamId));
+            $this->addFlash('success', sprintf('Marked %d alert%s as read.', $affected, 1 === $affected ? '' : 's'));
+
+            return $this->redirectToRoute('dashboard_alerts');
         }
 
         /** @var array<int, mixed> $rawIds */
@@ -52,8 +78,6 @@ final class BulkAlertActionController extends AbstractController
         if ([] === $alertIds) {
             return $this->redirectToRoute('dashboard_alerts');
         }
-
-        $teamId = $this->dashboardContext->getTeamId();
 
         if ('mark_read' === $action) {
             $this->commandBus->dispatch(new BulkMarkAlertsRead(

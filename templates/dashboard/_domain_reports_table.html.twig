@@ -12,14 +12,21 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {# Row navigation: real anchor on the reporter cell + the generic `row-link`
+                           Stimulus controller. Never reinstate an `absolute inset-0` overlay inside
+                           a `<tr class="relative">` — positioning a table-row is undefined in CSS,
+                           which made every row of this table open the same report. Contract lives in
+                           assets/controllers/row_link_controller.js. #}
                         {% for report in reports %}
-                            <tr class="hover:bg-base-200/50 cursor-pointer relative">
+                            <tr class="hover:bg-base-200/50 cursor-pointer"
+                                {{ stimulus_controller('row-link') }}
+                                data-action="click->row-link#navigate">
                                 <td class="font-medium">
                                     <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
-                                       class="absolute inset-0 z-10"
+                                       class="link link-hover"
+                                       data-row-link-target="link"
                                        data-turbo-frame="_top"
-                                       aria-label="View report from {{ report.reporterOrg }}"></a>
-                                    {{ report.reporterOrg }}
+                                       aria-label="View report from {{ report.reporterOrg }} covering {{ report.dateRangeBegin|date('M j') }} to {{ report.dateRangeEnd|date('M j, Y') }}">{{ report.reporterOrg }}</a>
                                 </td>
                                 <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                 <td class="text-right">{{ report.recordCount }}</td>

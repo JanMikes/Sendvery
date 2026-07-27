@@ -19,10 +19,16 @@ use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
 
 /**
- * Covers the bundled TASK-067 + TASK-080 surface on /app/domains/{id}: the
- * one-line status banner up top and the per-protocol setup checklist
- * directly under DomainWorkspaceTabs. Also guards the regression that the
- * old bare SPF/DKIM/DMARC/MX badge chips are gone.
+ * Covers the two stacked verdict surfaces on /app/domains/{id}: the one-line
+ * status banner up top and the guided DNS setup surface directly under
+ * DomainWorkspaceTabs. Also guards the regression that the old bare
+ * SPF/DKIM/DMARC/MX badge chips are gone.
+ *
+ * The guided surface replaced a flat "N of 5 checks passing" checklist. Its
+ * contract is different in three ways the tests below pin down: exactly one
+ * step is ever presented as actionable now, the DMARC record and where its
+ * reports go are ONE step rather than two rows, and both report-delivery paths
+ * (self-managed TXT, managed CNAME) are always offered.
  */
 final class ShowDomainDetailSetupStatusTest extends WebTestCase
 {
@@ -84,7 +90,7 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
     }
 
     #[Test]
-    public function spfFailingShowsAttentionBannerAndChecklistWithSpfFixLink(): void
+    public function spfFailingShowsAttentionBannerAndNamesSpfAsTheOneThingToDoNext(): void
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
@@ -118,6 +124,10 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
         ));
         $em->flush();
 
+        // Report delivery already works for this domain, so it cannot claim the
+        // single actionable slot — that leaves SPF as the next thing to do.
+        $this->persistDmarcCheck($em, $persona, 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
+
         $client->loginUser($persona->user);
         $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
 
@@ -129,15 +139,100 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
         self::assertStringContainsString('Action needed', $body);
         self::assertStringContainsString('SPF', $body);
 
-        // Checklist — partial-state branch with the SPF row in Missing state
-        // and a Fix-this link pointing at the SPF anchor on the health page.
-        self::assertStringContainsString('data-testid="domain-setup-status-checklist"', $body);
-        self::assertStringContainsString('of 5 checks passing', $body);
-        self::assertMatchesRegularExpression('~href="/app/domains/[^"]+/health\#health-spf"~', $body);
+        // Report delivery is fine here, so SPF is the single step presented as
+        // actionable now — the whole point of the tiering is that the user is
+        // pointed at ONE thing rather than a wall of equally red rows.
+        self::assertStringContainsString('data-testid="guided-setup-step-spf"', $body);
+        self::assertStringContainsString('Action required now', $body);
+        self::assertStringNotContainsString('data-testid="guided-setup-step-delivery"', $body);
+
+        // The old checklist framing is gone for good.
+        self::assertStringNotContainsString('of 5 checks passing', $body);
+        self::assertStringNotContainsString('data-testid="domain-setup-status-checklist"', $body);
     }
 
     #[Test]
-    public function noDnsHealthYetShowsPendingCardWithReverifyForm(): void
+    public function onlyOneStepIsEverPresentedAsActionableNow(): void
+    {
+        // A domain where several records are unfinished at once. Whatever else
+        // renders, tier 1 holds exactly one step: the ambiguity the redesign
+        // set out to remove was "four red rows, which do I touch first?".
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        // A single stored check is enough to leave the pending state; nothing is
+        // verified, so report delivery, SPF, DKIM and MX are all outstanding.
+        $this->persistDmarcCheck($em, $persona, null);
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(
+            1,
+            $crawler->filter('[data-setup-tier="action_required"]'),
+            'Exactly one step may be presented as the thing to do next.',
+        );
+        // Report delivery wins the slot — without it there are no reports at
+        // all, so nothing else on the product works.
+        self::assertCount(
+            1,
+            $crawler->filter('[data-testid="guided-setup-step-delivery"][data-setup-tier="action_required"]'),
+            'Report delivery outranks SPF, DKIM and MX for the actionable slot.',
+        );
+        // The rest are visible but explicitly deferred, not hidden.
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('[data-testid="guided-setup-summary-later"]')->count(),
+            'Outstanding-but-deferred records stay visible under their own heading.',
+        );
+    }
+
+    #[Test]
+    public function theReportDeliveryStepOffersBothTheTxtRecordAndTheManagedCnamePath(): void
+    {
+        // The complaint that drove this: the DNS surfaces asked for a TXT record
+        // and never mentioned that Sendvery can host the record instead. Both
+        // paths must be on the page, and a plan that cannot use the managed one
+        // must be told why rather than shown nothing.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $this->persistDmarcCheck($em, $persona, null);
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(
+            1,
+            $crawler->filter('[data-testid="report-delivery-option-self_txt"]'),
+            'The self-managed TXT path must be offered.',
+        );
+        self::assertCount(
+            1,
+            $crawler->filter('[data-testid="report-delivery-option-managed_cname"]'),
+            'The managed-CNAME path must be offered too, not silently omitted.',
+        );
+        // Unavailable is fine; unexplained is not.
+        $managed = $crawler->filter('[data-testid="report-delivery-option-managed_cname"]');
+        self::assertNotSame(
+            '',
+            trim($managed->text()),
+            'The managed option must carry either an action or the reason it is unavailable.',
+        );
+    }
+
+    #[Test]
+    public function noDnsCheckYetShowsAnInProgressPanelInsteadOfRedVerdicts(): void
     {
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
@@ -152,19 +247,88 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $body = (string) $client->getResponse()->getContent();
 
-        // TASK-097: banner hides in the unchecked-DNS pending state — the
-        // old "DNS not configured yet" headline was a wrong-information bug
-        // (we hadn't actually checked yet) and the info-blue panel below
-        // leads alone.
+        // The banner hides while there is no verdict — the old "DNS not
+        // configured yet" headline was a wrong-information bug a first-time
+        // user hit within five minutes of signing up.
         self::assertStringNotContainsString('data-testid="domain-status-banner"', $body);
         self::assertStringNotContainsString('DNS not configured yet — start with the SPF record', $body);
 
-        // Pending card branch — re-check form posting to dashboard_domain_reverify.
-        self::assertStringContainsString('data-testid="domain-setup-status-pending"', $body);
-        self::assertStringContainsString("We haven't checked DNS yet", $body);
+        // The in-progress panel says a check is running, and offers the manual
+        // escape hatch. Crucially it must NOT claim any record is missing.
+        self::assertStringContainsString('data-testid="dns-check-pending-banner"', $body);
+        self::assertStringContainsString('DNS check in progress', $body);
+        self::assertStringNotContainsString('not detected', $body);
         self::assertMatchesRegularExpression(
             '~<form[^>]*action="/app/domains/[^"]+/reverify"~',
             $body,
+        );
+    }
+
+    #[Test]
+    public function theInProgressPanelKeepsItselfUpToDateWithoutAReload(): void
+    {
+        // A user who added a domain and waited saw the page silently flip to red
+        // only after they reloaded by hand. The pending panel now polls a
+        // turbo-frame endpoint and settles on its own.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        $extra = $fixtures->addExtraDomain($persona->team, 'polling-extra');
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $extra->id->toString()));
+
+        self::assertResponseIsSuccessful();
+        $frame = $crawler->filter('turbo-frame#domain-dns-setup');
+        self::assertCount(1, $frame, 'The setup surface lives in a turbo-frame so it can refresh in place.');
+        self::assertStringContainsString(
+            'dns-verify-poll',
+            (string) $frame->attr('data-controller'),
+            'While a check is pending the frame polls for the result.',
+        );
+        self::assertStringContainsString(
+            sprintf('/app/domains/%s/dns-setup', $extra->id->toString()),
+            (string) $frame->attr('data-dns-verify-poll-url-value'),
+            'It polls the per-domain setup frame endpoint.',
+        );
+
+        // And that endpoint renders the same surface, so a polled refresh cannot
+        // drift from what a reload would show.
+        $client->request('GET', sprintf('/app/domains/%s/dns-setup?mode=compact', $extra->id->toString()));
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString(
+            'data-testid="dns-check-pending-banner"',
+            (string) $client->getResponse()->getContent(),
+        );
+    }
+
+    #[Test]
+    public function pollingStopsOnceTheCheckHasProducedAResult(): void
+    {
+        // The stopping condition has to be in the markup, not only in the JS:
+        // the settled marker is what tells the poller to go quiet, so a settled
+        // surface must never advertise the poller.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $fixtures->onboardedOwner();
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $this->persistDmarcCheck($em, $persona, 'v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+
+        self::assertResponseIsSuccessful();
+        self::assertGreaterThan(
+            0,
+            $crawler->filter('[data-dns-setup-settled]')->count(),
+            'A surface with real results marks itself settled so polling stops.',
+        );
+        self::assertNull(
+            $crawler->filter('turbo-frame#domain-dns-setup')->attr('data-controller'),
+            'Nothing left to wait for means no poller at all.',
         );
     }
 
@@ -215,7 +379,7 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
         self::assertStringContainsString('data-testid="domain-status-banner"', $body);
         self::assertStringContainsString('Monitoring active — all four records are in place', $body);
 
-        // Panel — all three branches must be absent.
+        // The old panel's three branches must all be gone.
         self::assertStringNotContainsString('data-testid="domain-setup-status-all-green"', $body);
         self::assertStringNotContainsString('data-testid="domain-setup-status-checklist"', $body);
         self::assertStringNotContainsString('data-testid="domain-setup-status-pending"', $body);
@@ -224,11 +388,53 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
     }
 
     #[Test]
-    public function partialSetupRendersBothBannerAndChecklistWithTightSpacing(): void
+    public function publishingTheDmarcRecordAndPointingItsReportsAtSendveryIsOneStepNotTwo(): void
     {
-        // TASK-097: in the partial-setup state both cards render together,
-        // with the banner's bottom margin tightened (mb-2) so they read as
-        // a single TL;DR → drill-down unit instead of two stacked cards.
+        // The old surface split these into a "DMARC" row and a separate "RUA
+        // destination" row, which read as two DNS records to publish. It is one
+        // record and one job, so it is one step — and the step is named after
+        // the outcome the user cares about.
+        $client = self::createClient();
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+        $persona = $this->seedPartialDomain($fixtures);
+        assert(null !== $persona->domain);
+
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        // A DMARC record exists but its rua= goes somewhere else — the case
+        // where the two old rows disagreed most confusingly.
+        $this->persistDmarcCheck($em, $persona, 'v=DMARC1; p=none; rua=mailto:reports@external.example');
+
+        $client->loginUser($persona->user);
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertCount(
+            1,
+            $crawler->filter('[data-testid="guided-setup-step-delivery"]'),
+            'Report delivery is a single step.',
+        );
+        // The old two-row framing (and its routing-arrow workaround for the
+        // ambiguity) is gone.
+        self::assertStringNotContainsString('Where reports go', $body);
+        self::assertStringNotContainsString('domain-setup-row-routing', $body);
+
+        // Editing beats adding here: a record already exists at `_dmarc`, and
+        // telling the user to "add" one is how domains end up with two.
+        self::assertStringContainsString('Edit the existing record', $body);
+        // The record it hands over keeps the user's existing address and appends
+        // ours rather than silently replacing theirs.
+        self::assertStringContainsString('mailto:reports@external.example,mailto:', $body);
+    }
+
+    #[Test]
+    public function theRecordIsPresentedWithTheFieldsADnsProviderAsksFor(): void
+    {
+        // Cloudflare and friends ask for type, name, TTL and content. Naming
+        // those fields — and showing the short host label rather than only the
+        // FQDN — is what stops the classic `_dmarc.example.com.example.com`.
         $client = self::createClient();
         $fixtures = TestFixtures::fromContainer(self::getContainer());
         $persona = $fixtures->onboardedOwner();
@@ -236,137 +442,26 @@ final class ShowDomainDetailSetupStatusTest extends WebTestCase
 
         $em = self::getContainer()->get(EntityManagerInterface::class);
         assert($em instanceof EntityManagerInterface);
-
-        $verifiedAt = new \DateTimeImmutable();
-        // DMARC + DKIM verified, SPF intentionally NOT verified.
-        $persona->domain->dkimVerifiedAt = $verifiedAt;
-        $persona->domain->dmarcVerifiedAt = $verifiedAt;
-
-        $em->persist(new DomainHealthSnapshot(
-            id: Uuid::uuid7(),
-            monitoredDomain: $persona->domain,
-            grade: 'B',
-            score: 75,
-            spfScore: 30,
-            dkimScore: 100,
-            dmarcScore: 100,
-            mxScore: 95,
-            blacklistScore: 90,
-            checkedAt: new \DateTimeImmutable(),
-            recommendations: [],
-            shareHash: null,
-        ));
-        $em->flush();
+        $this->persistDmarcCheck($em, $persona, null);
 
         $client->loginUser($persona->user);
-        $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
+        $crawler = $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
 
         self::assertResponseIsSuccessful();
-        $body = (string) $client->getResponse()->getContent();
+        $record = $crawler->filter('[data-testid="guided-dns-record"]');
+        self::assertGreaterThan(0, $record->count(), 'The actionable step shows a record to publish.');
 
-        // Both cards render.
-        self::assertStringContainsString('data-testid="domain-status-banner"', $body);
-        self::assertStringContainsString('data-testid="domain-setup-status-checklist"', $body);
-
-        // Spacing: the banner wrapper uses mb-2 (not mb-4) when both
-        // banner + panel render together.
-        self::assertMatchesRegularExpression(
-            '~<div class="rounded-2xl[^"]*\bmb-2\b[^"]*"[^>]*data-testid="domain-status-banner"~',
-            $body,
-        );
-    }
-
-    #[Test]
-    public function task107RuaRowUsesRoutingGlyphForNoRecordScenario(): void
-    {
-        // TASK-107: scenario NoRecord — the 5th row reads "Missing" tone but
-        // must still use the routing-arrow glyph + "Where reports go" pre-
-        // label so the user reads it as a routing choice, not a DNS record
-        // to publish.
-        $this->assertRuaRowUsesRoutingGlyph(null);
-    }
-
-    #[Test]
-    public function task107RuaRowUsesRoutingGlyphForPointsAtSendveryScenario(): void
-    {
-        // TASK-107: scenario PointsAtSendvery — the 5th row reads success
-        // tone but must still differentiate from the four protocol rows.
-        $this->assertRuaRowUsesRoutingGlyph('v=DMARC1; p=none; rua=mailto:reports@sendvery.com');
-    }
-
-    #[Test]
-    public function task107RuaRowUsesRoutingGlyphForPointsAtExternalScenario(): void
-    {
-        // TASK-107: scenario PointsAtExternal without a matching mailbox —
-        // the 5th row reads warning tone but still uses the routing glyph.
-        $this->assertRuaRowUsesRoutingGlyph('v=DMARC1; p=none; rua=mailto:reports@external.example');
-    }
-
-    #[Test]
-    public function task107RuaRowUsesRoutingGlyphForPointsAtExternalWithMatchingMailbox(): void
-    {
-        // TASK-107 + TASK-114 union: the success branch (matching mailbox)
-        // also gets the routing glyph. Different code path (all-green
-        // forced into checklist via ruaRoutedToConnectedMailbox) so worth
-        // a dedicated assertion.
-        $client = self::createClient();
-        $fixtures = TestFixtures::fromContainer(self::getContainer());
-        $persona = $this->seedHealthyDomain($fixtures);
-        assert(null !== $persona->domain);
-
-        $em = self::getContainer()->get(EntityManagerInterface::class);
-        assert($em instanceof EntityManagerInterface);
-
-        $ruaEmail = 'route-'.substr(Uuid::uuid7()->toString(), 0, 6).'@external.example';
-        $this->persistDmarcCheck($em, $persona, sprintf('v=DMARC1; p=none; rua=mailto:%s', $ruaEmail));
-        $this->persistConnectedMailbox($em, $persona, $ruaEmail);
-
-        $client->loginUser($persona->user);
-        $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
-
-        self::assertResponseIsSuccessful();
-        $body = (string) $client->getResponse()->getContent();
-
-        self::assertStringContainsString('data-glyph="route"', $body);
-        self::assertStringContainsString('Where reports go', $body);
-        self::assertStringContainsString('domain-setup-row-routing', $body);
-        // The four DNS protocol rows still render check (these are
-        // configured/green in this fixture) — proves we didn't replace
-        // every glyph with the arrow.
-        self::assertStringContainsString('data-glyph="check"', $body);
-    }
-
-    private function assertRuaRowUsesRoutingGlyph(?string $rawDmarcRecord): void
-    {
-        $client = self::createClient();
-        $fixtures = TestFixtures::fromContainer(self::getContainer());
-        $persona = $this->seedPartialDomain($fixtures);
-
-        $em = self::getContainer()->get(EntityManagerInterface::class);
-        assert($em instanceof EntityManagerInterface);
-        if (null !== $rawDmarcRecord) {
-            $this->persistDmarcCheck($em, $persona, $rawDmarcRecord);
+        $text = $record->text();
+        foreach (['Type', 'Name', 'TTL', 'Current value', 'Final value'] as $label) {
+            self::assertStringContainsString($label, $text, sprintf('The record block labels its "%s" field.', $label));
         }
-
-        $client->loginUser($persona->user);
-        assert(null !== $persona->domain);
-        $client->request('GET', sprintf('/app/domains/%s', $persona->domain->id->toString()));
-
-        self::assertResponseIsSuccessful();
-        $body = (string) $client->getResponse()->getContent();
-
-        // Routing glyph + categorical pre-label fingerprint the RUA row.
-        self::assertStringContainsString('data-glyph="route"', $body);
-        self::assertStringContainsString('Where reports go', $body);
-        self::assertStringContainsString('domain-setup-row-routing', $body);
-
-        // The four DNS protocol rows still use the check/cross idiom (the
-        // partial domain fixture has SPF + DMARC + DKIM Configured, MX
-        // configured — at least one check glyph fires; or cross for the
-        // ones still missing).
-        self::assertTrue(
-            str_contains($body, 'data-glyph="check"') || str_contains($body, 'data-glyph="cross"'),
-            'Expected the four DNS protocol rows to still use check/cross glyphs alongside the new routing arrow',
+        self::assertStringContainsString('Add a new record', $text, 'Nothing is published yet, so the verb is "add".');
+        self::assertStringContainsString('No record exists yet', $text, 'The current value is stated rather than left blank.');
+        self::assertStringContainsString('_dmarc', $text, 'The host is shown as the short label the provider expects.');
+        self::assertGreaterThan(
+            0,
+            $record->filter('[data-testid="guided-dns-record-copy"]')->count(),
+            'The value the user has to transcribe is copyable.',
         );
     }
 

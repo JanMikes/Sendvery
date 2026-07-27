@@ -375,8 +375,8 @@ final class QuarantineFilterTest extends WebTestCase
         $crawler = $data['client']->getCrawler();
 
         // Each table row's reason cell is now an anchor pointing to the
-        // filtered view. `relative z-20` keeps the badge click ahead of the
-        // stretched-row link (TASK-018).
+        // filtered view. The row-link controller ignores clicks that start on a
+        // nested <a>, so the badge keeps its own destination (TASK-036).
         $badgeAnchors = $crawler->filter('table tbody tr td a.badge');
         self::assertCount(3, $badgeAnchors, 'Each row should expose its reason as a clickable anchor.');
 

@@ -109,9 +109,7 @@
                 :copyable="true" />
 
             <div class="flex items-center gap-2 flex-wrap">
-                <form method="post" action="{{ path('dashboard_domain_reverify', { id: domainId }) }}" data-testid="managed-dmarc-verify-now">
-                    <button type="submit" class="btn btn-primary btn-sm">Verify now</button>
-                </form>
+                <twig:RecheckDnsButton :domainId="domainId" label="Verify now" buttonClass="btn-primary btn-sm" formTestid="managed-dmarc-verify-now" />
                 <form method="post" action="{{ path('dashboard_domain_switch_to_self_txt', { id: domainId }) }}">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('domain_managed_to_self') }}">
                     <button type="submit" class="btn btn-ghost btn-sm">Switch back to managing the record yourself →</button>

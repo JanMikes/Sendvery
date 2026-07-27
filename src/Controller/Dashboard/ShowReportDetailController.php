@@ -8,6 +8,7 @@ use App\Query\GetReportDetail;
 use App\Query\GetReportSenderGroups;
 use App\Repository\AiInsightRepository;
 use App\Repository\DmarcReportRepository;
+use App\Results\ReportDetailResult;
 use App\Services\Ai\AiInsightCacheKey;
 use App\Services\Ai\AiInsightContent;
 use App\Services\Ai\Analysis\ReportInsightAnalyzer;
@@ -15,6 +16,7 @@ use App\Services\Ai\Analysis\RoutineReportClassifier;
 use App\Services\DashboardContext;
 use App\Services\Stripe\PlanEnforcement;
 use App\Services\Stripe\PlanLimits;
+use App\Value\Reports\RecordAlignmentVerdict;
 use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -47,11 +49,13 @@ final class ShowReportDetailController extends AbstractController
 
         $senderGroups = $this->getReportSenderGroups->forReport($id, $teamIds);
 
+        $alignment = $this->alignmentVerdicts($report);
+
         $totalMessages = 0;
         $passMessages = 0;
         foreach ($report->records as $record) {
             $totalMessages += $record->count;
-            if ('pass' === $record->dkimResult || 'pass' === $record->spfResult) {
+            if ($alignment[$record->recordId]->dmarcPass) {
                 $passMessages += $record->count;
             }
         }
@@ -73,8 +77,35 @@ final class ShowReportDetailController extends AbstractController
             'failMessages' => $failMessages,
             'donutConfig' => $donutConfig,
             'senderGroups' => $senderGroups,
+            'alignment' => $alignment,
             ...$this->aiState($id),
         ]);
+    }
+
+    /**
+     * One verdict per record, keyed by record id so Twig can look a row's
+     * explanation up without re-deriving anything in a template.
+     *
+     * @return array<string, RecordAlignmentVerdict>
+     */
+    private function alignmentVerdicts(ReportDetailResult $report): array
+    {
+        $verdicts = [];
+
+        foreach ($report->records as $record) {
+            $verdicts[$record->recordId] = RecordAlignmentVerdict::evaluate(
+                headerFrom: $record->headerFrom,
+                dkimResult: $record->dkimResult,
+                dkimDomain: $record->dkimDomain,
+                dkimSelector: $record->dkimSelector,
+                spfResult: $record->spfResult,
+                spfDomain: $record->spfDomain,
+                policyAdkim: $report->policyAdkim,
+                policyAspf: $report->policyAspf,
+            );
+        }
+
+        return $verdicts;
     }
 
     /**

@@ -5,7 +5,13 @@
 
    `points` is a list of pass-rates (0-100, oldest → newest). Two or more
    points render as a polyline; one point degrades to a single dot; an empty
-   list renders an "—" placeholder so layout stays stable across all rows. #}
+   list renders an "—" placeholder so layout stays stable across all rows.
+
+   The empty-series "—" is the same placeholder `pass_rate_value()` in
+   `components/_severity_glyph.html.twig` renders for a null pass rate, so the
+   trend line and the figure beside it always tell the same story. Pair this
+   with `pass_rate_stat(...)` — never with a hard-coded "0.0%", which is what
+   used to make an empty sparkline sit next to a red zero. #}
 {% props points = [], width = 80, height = 20 %}
 
 {% set count = points|length %}

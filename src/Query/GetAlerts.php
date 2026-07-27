@@ -16,7 +16,10 @@ final readonly class GetAlerts
     }
 
     /**
-     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     * @param list<string> $teamIds    team UUIDs the caller is allowed to read from
+     * @param bool|null    $isResolved null keeps resolved alerts in the list — they
+     *                                 stay visible as a record that the fix landed;
+     *                                 true/false narrows to only/never resolved
      *
      * @return array<AlertListResult>
      */
@@ -27,6 +30,7 @@ final readonly class GetAlerts
         ?string $domainId = null,
         ?bool $isRead = null,
         bool $onlySnoozed = false,
+        ?bool $isResolved = null,
         int $limit = 50,
     ): array {
         if ([] === $teamIds) {
@@ -42,6 +46,7 @@ final readonly class GetAlerts
                 a.is_read,
                 a.created_at,
                 a.snoozed_until,
+                a.resolved_at,
                 md.id AS domain_id,
                 md.domain AS domain_name
             FROM alert a
@@ -71,6 +76,12 @@ final readonly class GetAlerts
             $params['isRead'] = $isRead ? 'true' : 'false';
         }
 
+        if (null !== $isResolved) {
+            $sql .= $isResolved
+                ? ' AND a.resolved_at IS NOT NULL'
+                : ' AND a.resolved_at IS NULL';
+        }
+
         if ($onlySnoozed) {
             // Only currently-snoozed alerts. Expired snoozes are treated as
             // un-snoozed, so they DON'T appear under this filter.
@@ -84,26 +95,40 @@ final readonly class GetAlerts
         $sql .= ' ORDER BY a.created_at DESC LIMIT :limit';
         $params['limit'] = $limit;
 
-        /** @var list<array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, snoozed_until: string|null, domain_id: string|null, domain_name: string|null}> $rows */
+        /** @var list<array{alert_id: string, type: string, severity: string, title: string, message: string, is_read: bool|string, created_at: string, snoozed_until: string|null, resolved_at: string|null, domain_id: string|null, domain_name: string|null}> $rows */
         $rows = $this->database->executeQuery($sql, $params, $types)->fetchAllAssociative();
 
         return array_map(AlertListResult::fromDatabaseRow(...), $rows);
     }
 
     /**
-     * @param list<string> $teamIds team UUIDs the caller is allowed to read from
+     * The "needs attention" count behind the sidebar badge and the hero
+     * summary. Resolved alerts are excluded regardless of their read flag: the
+     * problem they describe is gone, so nagging about them would be dishonest.
+     *
+     * @param list<string> $teamIds        team UUIDs the caller is allowed to read from
+     * @param bool         $includeSnoozed counts snoozed-but-unread alerts too. Only
+     *                                     "Mark all as read" wants this — it flips the
+     *                                     read flag across the whole backlog, so its
+     *                                     flash must report that same wider set
      */
-    public function countUnreadForTeams(array $teamIds): int
+    public function countUnreadForTeams(array $teamIds, bool $includeSnoozed = false): int
     {
         if ([] === $teamIds) {
             return 0;
         }
 
-        return (int) $this->database->executeQuery(
-            'SELECT COUNT(*) FROM alert
+        $sql = 'SELECT COUNT(*) FROM alert
              WHERE team_id IN (:teamIds)
              AND is_read = false
-             AND (snoozed_until IS NULL OR snoozed_until <= NOW())',
+             AND resolved_at IS NULL';
+
+        if (!$includeSnoozed) {
+            $sql .= ' AND (snoozed_until IS NULL OR snoozed_until <= NOW())';
+        }
+
+        return (int) $this->database->executeQuery(
+            $sql,
             ['teamIds' => $teamIds],
             ['teamIds' => ArrayParameterType::STRING],
         )->fetchOne();
@@ -123,6 +148,7 @@ final readonly class GetAlerts
              WHERE team_id IN (:teamIds)
              AND is_read = false
              AND severity = :severity
+             AND resolved_at IS NULL
              AND (snoozed_until IS NULL OR snoozed_until <= NOW())',
             ['teamIds' => $teamIds, 'severity' => 'critical'],
             ['teamIds' => ArrayParameterType::STRING],

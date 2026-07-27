@@ -40,7 +40,7 @@
 
         {% set headlineBySeverity = {
             'recommend_authorize': 'Consider authorizing this sender',
-            'recommend_revoke': 'Consider revoking this sender',
+            'recommend_revoke': 'Consider marking this sender not authorized',
         } %}
 
         {% set formIdBySeverity = {
@@ -88,7 +88,7 @@
                             <a href="{{ path('knowledge_base_article', { slug: 'authorizing-senders-explained' }) }}"
                                class="link link-hover text-xs sm:text-sm text-base-content/70"
                                data-testid="sender-action-callout-kb-link">
-                                Read more about authorizing senders →
+                                How do I tell if a sender is really mine? →
                             </a>
                         </div>
                     </div>

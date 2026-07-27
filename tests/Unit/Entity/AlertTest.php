@@ -121,6 +121,133 @@ final class AlertTest extends TestCase
     }
 
     #[Test]
+    public function anAlertCountsAsSnoozedOnlyUntilItsDeadlinePasses(): void
+    {
+        [$team] = $this->createTeamAndDomain();
+
+        $alert = new Alert(
+            id: Uuid::uuid7(),
+            team: $team,
+            monitoredDomain: null,
+            type: AlertType::FailureSpike,
+            severity: AlertSeverity::Critical,
+            title: 'Failure spike',
+            message: 'Spike.',
+            data: [],
+            createdAt: new \DateTimeImmutable('2026-03-25 10:00:00'),
+        );
+
+        self::assertFalse($alert->isSnoozed(new \DateTimeImmutable('2026-03-25 11:00:00')), 'An alert that was never snoozed is never hidden.');
+
+        $alert->snoozeUntil(new \DateTimeImmutable('2026-04-01 10:00:00'));
+
+        self::assertTrue($alert->isSnoozed(new \DateTimeImmutable('2026-03-26 10:00:00')));
+        self::assertFalse(
+            $alert->isSnoozed(new \DateTimeImmutable('2026-04-02 10:00:00')),
+            'An expired snooze puts the alert back in front of the user — no manual cleanup needed.',
+        );
+
+        $alert->unsnooze();
+
+        self::assertFalse($alert->isSnoozed(new \DateTimeImmutable('2026-03-26 10:00:00')));
+    }
+
+    #[Test]
+    public function aFreshAlertIsNotResolved(): void
+    {
+        [$team] = $this->createTeamAndDomain();
+
+        $alert = new Alert(
+            id: Uuid::uuid7(),
+            team: $team,
+            monitoredDomain: null,
+            type: AlertType::DnsRecordInvalid,
+            severity: AlertSeverity::Critical,
+            title: 'MX is broken for example.com',
+            message: 'Broken.',
+            data: [],
+            createdAt: new \DateTimeImmutable(),
+        );
+
+        self::assertNull($alert->resolvedAt);
+        self::assertFalse($alert->isResolved());
+    }
+
+    #[Test]
+    public function resolvingRecordsWhenTheProblemWasObservedFixed(): void
+    {
+        [$team] = $this->createTeamAndDomain();
+        $resolvedAt = new \DateTimeImmutable('2026-03-27 04:00:00');
+
+        $alert = new Alert(
+            id: Uuid::uuid7(),
+            team: $team,
+            monitoredDomain: null,
+            type: AlertType::DnsRecordMissing,
+            severity: AlertSeverity::Critical,
+            title: 'MX record removed for example.com',
+            message: 'Missing.',
+            data: [],
+            createdAt: new \DateTimeImmutable('2026-03-25 10:00:00'),
+        );
+
+        $alert->resolve($resolvedAt);
+
+        self::assertTrue($alert->isResolved());
+        self::assertSame($resolvedAt, $alert->resolvedAt);
+    }
+
+    #[Test]
+    public function resolvingAnAlreadyResolvedAlertKeepsTheOriginalResolutionTime(): void
+    {
+        // The nightly DNS sweep re-observes the same healthy record forever;
+        // bumping the timestamp each night would make a months-old fix look
+        // like it happened last night.
+        [$team] = $this->createTeamAndDomain();
+        $firstResolution = new \DateTimeImmutable('2026-03-27 04:00:00');
+
+        $alert = new Alert(
+            id: Uuid::uuid7(),
+            team: $team,
+            monitoredDomain: null,
+            type: AlertType::DnsRecordInvalid,
+            severity: AlertSeverity::Critical,
+            title: 'SPF is broken for example.com',
+            message: 'Broken.',
+            data: [],
+            createdAt: new \DateTimeImmutable('2026-03-25 10:00:00'),
+        );
+
+        $alert->resolve($firstResolution);
+        $alert->resolve(new \DateTimeImmutable('2026-06-01 04:00:00'));
+
+        self::assertSame($firstResolution, $alert->resolvedAt);
+    }
+
+    #[Test]
+    public function aResolvedAlertCanBeRehydratedFromStorage(): void
+    {
+        [$team] = $this->createTeamAndDomain();
+        $resolvedAt = new \DateTimeImmutable('2026-03-27 04:00:00');
+
+        $alert = new Alert(
+            id: Uuid::uuid7(),
+            team: $team,
+            monitoredDomain: null,
+            type: AlertType::DnsRecordInvalid,
+            severity: AlertSeverity::Critical,
+            title: 'DKIM is broken for example.com',
+            message: 'Broken.',
+            data: [],
+            createdAt: new \DateTimeImmutable('2026-03-25 10:00:00'),
+            resolvedAt: $resolvedAt,
+        );
+
+        self::assertTrue($alert->isResolved());
+        self::assertSame($resolvedAt, $alert->resolvedAt);
+    }
+
+    #[Test]
     public function nullableDomain(): void
     {
         [$team] = $this->createTeamAndDomain();

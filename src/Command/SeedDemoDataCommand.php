@@ -149,6 +149,17 @@ final class SeedDemoDataCommand extends Command
             'DELETE FROM alert WHERE team_id = :teamId',
             ['teamId' => $teamId],
         );
+        // known_sender rows are created by SenderDiscovery during report
+        // ingestion, not by this seeder, so an untouched demo team has none —
+        // which is exactly why this was missed. As soon as a demo domain
+        // acquires one (ingesting a report, or reviewing a sender by hand), the
+        // monitored_domain delete below fails on the FK and reseeding is stuck.
+        $connection->executeStatement(
+            'DELETE FROM known_sender WHERE monitored_domain_id IN (
+                SELECT id FROM monitored_domain WHERE team_id = :teamId
+            )',
+            ['teamId' => $teamId],
+        );
         $connection->executeStatement(
             'DELETE FROM monitored_domain WHERE team_id = :teamId',
             ['teamId' => $teamId],

@@ -38,11 +38,27 @@ return App::config([
         // RateLimiterFactory $contactFormLimiter (camelCase + Limiter).
         // NO 3rd-party CAPTCHA — defence is layered: honeypot field +
         // time-trap + this rate-limiter, all in-house.
+        // DEC-059 / D14: the "Re-check DNS" button runs live SPF/DKIM/DMARC/MX
+        // lookups synchronously inside the web request (deliberately — the user
+        // must see a fresh result on redirect), so without a cap any signed-in
+        // user can make Sendvery hammer third-party resolvers. Keyed on the
+        // DOMAIN id, not the client IP: the cost is per-domain, so the limit has
+        // to hold across a team's members and across one person's tabs.
+        // fixed_window rather than token_bucket because its retryAfter counts
+        // down the real remaining wait, which is what the disabled button shows
+        // ("Re-check available in 2m"); token_bucket always reports a whole
+        // interval no matter how much of it has already elapsed.
+        // Autowires as RateLimiterFactory $domainRecheckLimiter.
         'rate_limiter' => [
             'contact_form' => [
                 'policy' => 'token_bucket',
                 'limit' => 5,
                 'rate' => ['interval' => '1 hour', 'amount' => 5],
+            ],
+            'domain_recheck' => [
+                'policy' => 'fixed_window',
+                'limit' => 1,
+                'interval' => '3 minutes',
             ],
         ],
     ],
@@ -54,9 +70,11 @@ return App::config([
             'session' => [
                 'handler_id' => null,
             ],
-            // TASK-159: rate-limiter token-bucket state needs to survive
+            // TASK-159: rate-limiter state needs to survive
             // services_resetter->reset() so a single test method can verify
-            // that 5 submissions exhaust the bucket and the 6th is blocked.
+            // that 5 submissions exhaust the bucket and the 6th is blocked
+            // (and, for DEC-059, that a second DNS re-check inside 3 minutes
+            // is throttled instead of running live lookups again).
             // Symfony's default cache.adapter.array is tagged kernel.reset
             // and wipes itself between requests, making rate-limit verification
             // impossible. Filesystem pool persists between requests within a

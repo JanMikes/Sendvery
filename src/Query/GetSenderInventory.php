@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Query;
 
 use App\Results\SenderInventoryResult;
+use App\Value\SenderInventoryFilter;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 
@@ -20,7 +21,7 @@ final readonly class GetSenderInventory
      *
      * @return array<SenderInventoryResult>
      */
-    public function forDomain(string $domainId, array $teamIds, ?bool $authorizedFilter = null): array
+    public function forDomain(string $domainId, array $teamIds, ?SenderInventoryFilter $filter = null): array
     {
         if ([] === $teamIds) {
             return [];
@@ -46,9 +47,17 @@ final readonly class GetSenderInventory
             'teamIds' => ArrayParameterType::STRING,
         ];
 
-        if (null !== $authorizedFilter) {
-            $sql .= ' AND ks.is_authorized = :authorized';
-            $params['authorized'] = $authorizedFilter ? 'true' : 'false';
+        // `updated_at IS NULL` is the "nobody has decided yet" test — see
+        // App\Value\SenderReviewState for why that column carries the fact.
+        // Literals, not bound parameters: the values come from an enum, never
+        // from the request.
+        if (null !== $filter) {
+            $sql .= ' AND '.match ($filter) {
+                SenderInventoryFilter::Authorized => 'ks.is_authorized = TRUE',
+                SenderInventoryFilter::Unauthorized => 'ks.is_authorized = FALSE',
+                SenderInventoryFilter::NeedsReview => 'ks.is_authorized = FALSE AND ks.updated_at IS NULL',
+                SenderInventoryFilter::NotAuthorized => 'ks.is_authorized = FALSE AND ks.updated_at IS NOT NULL',
+            };
         }
 
         $sql .= ' ORDER BY ks.total_messages DESC';

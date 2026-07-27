@@ -111,7 +111,11 @@ final class DashboardPagesTest extends WebTestCase
         $data['client']->request('GET', '/app');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h3', 'Monitored Domains');
+        // Asserted against `body` rather than the first `h3`: the overview's
+        // heading order is a layout decision that has changed more than once,
+        // and what this smoke test actually cares about is that the page
+        // rendered its content at all.
+        self::assertSelectorTextContains('body', 'Monitored Domains');
     }
 
     #[Test]

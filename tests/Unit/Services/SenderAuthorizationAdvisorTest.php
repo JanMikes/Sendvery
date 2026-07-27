@@ -9,6 +9,7 @@ use App\Results\SenderAdvisorResult;
 use App\Results\SenderInventoryResult;
 use App\Services\SenderAuthorizationAdvisor;
 use App\Value\SenderAdvisorSeverity;
+use App\Value\SenderReviewState;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Ramsey\Uuid\Uuid;
@@ -138,9 +139,9 @@ final class SenderAuthorizationAdvisorTest extends TestCase
         $result = $advisor->advise($sender, $activity);
 
         self::assertSame(SenderAdvisorSeverity::RecommendRevoke, $result->severity);
-        self::assertStringContainsString('Unknown sender at 203.0.113.42', $result->reasonText);
+        self::assertStringContainsString('The unidentified server at 203.0.113.42', $result->reasonText);
         self::assertStringContainsString('75 failing messages', $result->reasonText);
-        self::assertSame('Mark as revoked', $result->primaryActionLabel);
+        self::assertSame('Mark not authorized', $result->primaryActionLabel);
     }
 
     #[Test]
@@ -297,6 +298,7 @@ final class SenderAuthorizationAdvisorTest extends TestCase
             updatedAt: null,
             notes: null,
             updatedByUserEmail: null,
+            reviewState: SenderReviewState::fromFlags($isAuthorized, false),
         );
     }
 }

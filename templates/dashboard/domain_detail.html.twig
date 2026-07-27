@@ -22,11 +22,17 @@
                 {% endif %}
             </div>
         </div>
+        {# Always reachable, not only in the conditional setup/quarantine
+           banners below: the "Unverified" badge right next to it is exactly
+           what makes a user want to force a check. #}
+        <twig:RecheckDnsButton :domainId="domain.domainId" label="Re-check DNS" buttonClass="btn-sm btn-ghost" />
     </div>
 {% endblock %}
 
 {% block content %}
     {% import 'components/_severity_glyph.html.twig' as severity %}
+
+    <twig:DomainRecheckNotice />
 
     {# One-line status banner (TASK-067) — the headline answer to "is this
        domain set up correctly?". Sits above the workspace tabs so it leads
@@ -39,16 +45,22 @@
        on the most-visited authenticated page read as unfinished. #}
     <twig:DomainWorkspaceTabs :domain="domain" active="overview" :tabCounts="tabCounts" />
 
-    {# Per-protocol setup checklist (TASK-080) — the actionable body under the
-       banner. Renders one of three states: all-green confirmation, partial
-       checklist with Fix-this deep-links, or "no DNS check yet" with a
-       re-check button. #}
-    <twig:DomainSetupStatus :status="domainSetupStatus" :domainId="domain.domainId" :ruaExtendInstruction="ruaExtendInstruction" :ruaAddressCount="ruaAddressCount" :dnsAutomationConfigured="dnsAutomationConfigured" />
+    {# The guided DNS setup surface, compact: the single next action expanded,
+       everything else summarised, with a drill-down to the full guide on
+       /app/domains/{id}/health. Same component, same model as that page. #}
+    <twig:GuidedDnsSetup
+        :setup="guidedDnsSetup"
+        :domainId="domain.domainId"
+        :domainName="domain.domainName"
+        mode="compact" />
 
     {# Managed DMARC (DEC-058) — the control surface; only when DNS automation is
-       configured (self-hosters without Cloudflare never see it). #}
+       configured (self-hosters without Cloudflare never see it).
+       `mb-6` (not `mt-4`) so this card keeps the same bottom rhythm as every
+       other top-level card on the page — it previously had no bottom margin at
+       all and sat flush against the DKIM selector card below it. #}
     {% if dnsAutomationConfigured and managedDmarcCard is not null %}
-        <div class="mt-4">
+        <div class="mb-6">
             <twig:ManagedDmarcCard
                 :card="managedDmarcCard"
                 domainId="{{ domain.domainId }}"
@@ -240,9 +252,7 @@
                         Email receivers are already sending reports for this domain — they're parked in quarantine until your DMARC TXT record is verified. Finish DNS verification to unlock them all at once.
                     </p>
                 </div>
-                <form method="post" action="{{ path('dashboard_domain_reverify', {id: domain.domainId}) }}" class="shrink-0">
-                    <button type="submit" class="btn btn-sm btn-warning">Re-check DNS</button>
-                </form>
+                <twig:RecheckDnsButton :domainId="domain.domainId" label="Re-check DNS" buttonClass="btn-sm btn-warning" />
             </div>
         </div>
     {% endif %}
@@ -260,6 +270,15 @@
         </a>
         <twig:StatCard title="Reports" value="{{ domain.totalReports }}" />
     </div>
+
+    {# The expected action, quantified and full-width. Same component as the
+       Sender Inventory page: the amber badges in the Top Senders table below
+       are meaningless without a sentence saying what they want, and the user
+       should not have to click into the inventory to find that out. #}
+    <twig:SenderReviewCta
+        domainId="{{ domain.domainId }}"
+        :needsReviewCount="senderSummary.needsReviewCount"
+        :needsReviewMessages="senderSummary.needsReviewMessages" />
 
     {# DMARC policy explainer (TASK-037) — sits directly under the metrics
        that justify the next-tier recommendation. TASK-099: only render when
@@ -299,24 +318,35 @@
                     {% endif %}
                 </div>
 
-                {# Senders-by-authorization stat row. Renders whenever there's
+                {# Senders-by-review-state stat row. Renders whenever there's
                    anything to count — known_sender rows can exist even before
                    DMARC records do (manual seed, import, etc.). Each count
                    clicks through to the matching filter on the sender
-                   inventory page (`?filter=authorized|unauthorized`). The
-                   "unique IPs" count links to the unfiltered page — there is
-                   no per-IP filter axis on the inventory today. #}
-                {% if senderSummary.authorizedCount > 0 or senderSummary.unknownCount > 0 or senderSummary.uniqueIpCount > 0 %}
+                   inventory page. The "unique IPs" count links to the
+                   unfiltered page — there is no per-IP filter axis on the
+                   inventory today.
+
+                   The wording is SenderReviewState's, not a local invention:
+                   this row used to say "unknown" while the badge below it said
+                   "Unknown" and the tab it linked to said "Unauthorized". #}
+                {% if senderSummary.hasAnySenders() %}
                     <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-xs text-base-content/70">
                         <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId, filter: 'authorized'}) }}"
                            class="hover:underline" data-testid="sender-summary-authorized">
                             <span class="font-semibold text-success">{{ senderSummary.authorizedCount }}</span> authorized
                         </a>
                         <span class="text-base-content/30">·</span>
-                        <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId, filter: 'unauthorized'}) }}"
-                           class="hover:underline" data-testid="sender-summary-unknown">
-                            <span class="font-semibold text-warning">{{ senderSummary.unknownCount }}</span> unknown
+                        <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId, filter: 'needs_review'}) }}"
+                           class="hover:underline" data-testid="sender-summary-needs-review">
+                            <span class="font-semibold text-warning">{{ senderSummary.needsReviewCount }}</span> need review
                         </a>
+                        {% if senderSummary.notAuthorizedCount > 0 %}
+                            <span class="text-base-content/30">·</span>
+                            <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId, filter: 'not_authorized'}) }}"
+                               class="hover:underline" data-testid="sender-summary-not-authorized">
+                                <span class="font-semibold text-error">{{ senderSummary.notAuthorizedCount }}</span> not authorized
+                            </a>
+                        {% endif %}
                         <span class="text-base-content/30">·</span>
                         <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
                            class="hover:underline" data-testid="sender-summary-unique-ips">
@@ -346,18 +376,28 @@
                             </thead>
                             <tbody>
                                 {% for sender in senders %}
-                                    <tr class="hover:bg-base-200/50 relative">
+                                    {# Row-wide click delegated to the one real anchor in the
+                                       first cell. The previous `absolute inset-0` overlay
+                                       relied on `position: relative` on a `<tr>`, which CSS
+                                       2.1 §9.3.1 leaves undefined — it resolved against
+                                       daisyUI's relatively-positioned `.table`, so every
+                                       row's overlay covered the whole table and the last one
+                                       swallowed every click. #}
+                                    <tr class="hover:bg-base-200/50 cursor-pointer"
+                                        {{ stimulus_controller('row-link') }}
+                                        data-action="click->row-link#navigate">
                                         <td class="font-medium">
                                             {% if sender.knownSenderId %}
                                                 <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}#sender-{{ sender.knownSenderId }}"
-                                                   class="absolute inset-0 z-10"
-                                                   aria-label="View {{ sender.displayLabel }} in sender inventory"></a>
+                                                   class="link link-hover"
+                                                   data-row-link-target="link"
+                                                   aria-label="View {{ sender.displayLabel }} in sender inventory">{{ sender.displayLabel }}</a>
                                             {% else %}
                                                 <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}"
-                                                   class="absolute inset-0 z-10"
-                                                   aria-label="View senders for {{ sender.displayLabel }}"></a>
+                                                   class="link link-hover"
+                                                   data-row-link-target="link"
+                                                   aria-label="View senders for {{ sender.displayLabel }}">{{ sender.displayLabel }}</a>
                                             {% endif %}
-                                            {{ sender.displayLabel }}
                                         </td>
                                         <td class="text-right">{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
                                         <td class="text-right">
@@ -371,17 +411,29 @@
                                             </span>
                                         </td>
                                         <td>
-                                            {% if sender.senderIsAuthorized %}
-                                                <span class="badge badge-sm badge-success">Authorized</span>
-                                            {% else %}
-                                                <span class="badge badge-sm badge-warning">Unknown</span>
-                                            {% endif %}
+                                            {# Tri-state, not the old two-way collapse of
+                                               `{% if sender.senderIsAuthorized %}`: that read a
+                                               nullable ?bool as a boolean, so "no inventory row at
+                                               all" and "reviewed and rejected" both printed the
+                                               same amber "Unknown". #}
+                                            <twig:SenderStatusBadge :state="sender.reviewState" />
                                         </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+
+                    {# The statuses above are one hover away from an explanation, and
+                       one click away from the full guide. Neither used to exist on
+                       this page. #}
+                    <p class="text-xs text-base-content/50 mt-3" data-testid="top-senders-status-help">
+                        <span class="text-success">Authorized</span> = confirmed yours ·
+                        <span class="text-warning">Needs review</span> = waiting on your decision ·
+                        <span class="text-error">Not authorized</span> = you said it isn't yours.
+                        <a href="{{ path('knowledge_base_article', {slug: 'authorizing-senders-explained'}) }}"
+                           class="link link-hover text-primary">How to decide →</a>
+                    </p>
                 {% else %}
                     {# Educational empty state — DMARC newcomers see this on
                        day one before any reports have arrived. Explains the
@@ -413,7 +465,7 @@
             {% if reports is empty %}
                 <p class="text-sm text-base-content/50 py-4 text-center">No reports for this domain yet.</p>
             {% else %}
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto" data-testid="domain-recent-reports-table">
                     <table class="table table-sm">
                         <thead>
                             <tr>
@@ -430,15 +482,20 @@
                         <tbody>
                             {% for report in reports %}
                                 {% set reportTone = severity.pass_rate_tone(report.passRate)|trim %}
-                                <tr class="hover:bg-base-200/50 cursor-pointer relative border-l-4 border-l-{{ reportTone }}">
+                                {# Same overlay-to-row-link conversion as the senders table
+                                   above: one real anchor, clicks delegated. Without it every
+                                   row in this table opened the LAST report's detail page. #}
+                                <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ reportTone }}"
+                                    {{ stimulus_controller('row-link') }}
+                                    data-action="click->row-link#navigate">
                                     <td class="w-8">
                                         {{ severity.glyph(reportTone, 'sm') }}
                                     </td>
                                     <td class="font-medium">
                                         <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
-                                           class="absolute inset-0 z-10"
-                                           aria-label="View report from {{ report.reporterOrg }}"></a>
-                                        {{ report.reporterOrg }}
+                                           class="link link-hover"
+                                           data-row-link-target="link"
+                                           aria-label="View report from {{ report.reporterOrg }}">{{ report.reporterOrg }}</a>
                                     </td>
                                     <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                     <td class="text-right">{{ report.recordCount }}</td>

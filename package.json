@@ -1,6 +1,7 @@
 {
     "private": true,
     "dependencies": {
-        "daisyui": "^5.5.19"
+        "daisyui": "^5.5.19",
+        "tom-select": "^2.6.2"
     }
 }

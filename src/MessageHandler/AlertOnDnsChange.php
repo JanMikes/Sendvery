@@ -102,6 +102,27 @@ final readonly class AlertOnDnsChange
                 return;
             }
 
+            // Nothing → valid is a first-time publication, not a suspicious
+            // edit. Yellow "record changed, review it" made users read the
+            // successful completion of their own setup as a fault, so this
+            // transition gets its own green Success alert instead.
+            if (null === $event->previousRawRecord || '' === trim($event->previousRawRecord)) {
+                $this->alertEngine->createAlert(
+                    team: $team,
+                    monitoredDomain: $domain,
+                    type: AlertType::DnsRecordPublished,
+                    severity: AlertSeverity::Success,
+                    title: "{$typeName} record published for {$domain->domain}",
+                    message: "A valid {$typeName} record is now published for {$domain->domain}. This is the desired state — no action is needed, we're just letting you know it went live.",
+                    data: [
+                        'dns_check_type' => $event->type->value,
+                        'current_record' => $event->rawRecord,
+                    ],
+                );
+
+                return;
+            }
+
             $this->alertEngine->createAlert(
                 team: $team,
                 monitoredDomain: $domain,

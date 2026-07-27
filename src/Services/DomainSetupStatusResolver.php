@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Results\Dns\DnsProtocolStateResult;
 use App\Results\Dns\RuaScenarioResult;
 use App\Results\DnsHealthOverviewResult;
 use App\Results\DomainOverviewResult;
@@ -11,19 +12,30 @@ use App\Results\DomainSetupStatus;
 use App\Results\ProtocolSetupStatus;
 use App\Services\Dns\RuaMailboxMatcher;
 use App\Value\Dns\RuaScenario;
+use App\Value\DnsCheckType;
 use App\Value\DomainHealthFilter;
 use App\Value\DomainSetupDisplayMode;
 use App\Value\ProtocolState;
 
 /**
- * Translates the raw DNS-health snapshot into the structured verdict the
- * domain detail page renders as: a one-line status banner (TASK-067) and an
- * expanded 4-row setup checklist (TASK-080).
+ * Translates the stored DNS check results into the structured verdict the
+ * domain detail page renders as: a one-line status banner (TASK-067) and the
+ * guided per-protocol setup surface (TASK-080). The resolver owns ALL copy
+ * strings so the Twig components stay props-only renderers.
  *
- * All per-protocol state is derived from the columns already on
- * {@see DnsHealthOverviewResult} (verified-at timestamps + latest score) — no
- * new query needed. The resolver owns ALL copy strings so the Twig components
- * stay props-only renderers.
+ * Per-protocol state comes from `$protocolStates` — the newest
+ * `dns_check_result` row per protocol, which EVERY check path writes. The
+ * older derivation from {@see DnsHealthOverviewResult} (verified-at timestamps
+ * + the latest `domain_health_snapshot` score) survives only as a fallback for
+ * protocols that have no stored check row.
+ *
+ * WHY the source changed: snapshot rows are written by the 03:00
+ * `sendvery:dns:check-all` cron only, and MX has no `mx_verified_at` column to
+ * fall back on. A domain added at 10:00 with valid MX records therefore
+ * reported "MX records not detected" for the rest of the day — the DNS was
+ * right and the verdict was wrong. SPF/DKIM/DMARC merely happened to dodge it
+ * thanks to their verified-at columns; reading the check rows fixes all four at
+ * once instead of papering over one.
  */
 final readonly class DomainSetupStatusResolver
 {
@@ -61,12 +73,22 @@ final readonly class DomainSetupStatusResolver
      * domain whose connected mailbox is the rua= target. Optional so legacy
      * tests + snapshot fixtures keep working without a connected-mailbox
      * lookup.
+     *
+     * `$protocolStates` (keyed by {@see DnsCheckType}::value, produced by
+     * {@see \App\Query\GetLatestDnsCheckStates}) is the authoritative
+     * per-protocol source. An empty map means "no stored check rows for this
+     * domain" and drops every protocol back to the legacy verified-at/score
+     * derivation — which is what keeps standalone and snapshot call sites
+     * working unchanged.
+     *
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
      */
     public function resolve(
         ?DnsHealthOverviewResult $dnsHealth,
         ?RuaScenarioResult $ruaScenario = null,
         ?DomainOverviewResult $overview = null,
         ?string $domainId = null,
+        array $protocolStates = [],
     ): DomainSetupStatus {
         // The flag is load-bearing only for the PointsAtExternal branch — for
         // any other scenario the existing rendering already says the right
@@ -86,7 +108,7 @@ final readonly class DomainSetupStatusResolver
         // pending state too — otherwise a freshly-added domain renders
         // straight into the "Setup incomplete" branch with four red Missing
         // rows before any check has actually run.
-        if (null === $dnsHealth || $this->isUnchecked($dnsHealth)) {
+        if (null === $dnsHealth || $this->isUnchecked($dnsHealth, $protocolStates)) {
             // No snapshot yet — most often a brand-new domain whose first DNS
             // cron run hasn't completed. The headline tells the user where to
             // start; the four checklist rows render as Unknown.
@@ -123,7 +145,7 @@ final readonly class DomainSetupStatusResolver
                     kbSlug: null,
                     healthAnchor: 'health-mx',
                 ),
-                $this->buildRuaDestination($ruaScenario, $dnsHealth, $ruaRoutedToConnectedMailbox),
+                $this->buildRuaDestination($ruaScenario, $dnsHealth, $ruaRoutedToConnectedMailbox, $protocolStates),
             ];
 
             // PanelOnly: the banner is hidden in this state — the old
@@ -145,11 +167,11 @@ final readonly class DomainSetupStatusResolver
             );
         }
 
-        $spf = $this->buildSpf($dnsHealth);
-        $dkim = $this->buildDkim($dnsHealth);
-        $dmarc = $this->buildDmarc($dnsHealth);
-        $mx = $this->buildMx($dnsHealth);
-        $rua = $this->buildRuaDestination($ruaScenario, $dnsHealth, $ruaRoutedToConnectedMailbox);
+        $spf = $this->buildSpf($dnsHealth, $protocolStates);
+        $dkim = $this->buildDkim($dnsHealth, $protocolStates);
+        $dmarc = $this->buildDmarc($dnsHealth, $protocolStates);
+        $mx = $this->buildMx($dnsHealth, $protocolStates);
+        $rua = $this->buildRuaDestination($ruaScenario, $dnsHealth, $ruaRoutedToConnectedMailbox, $protocolStates);
 
         $protocols = [$spf, $dkim, $dmarc, $mx, $rua];
 
@@ -318,17 +340,20 @@ final readonly class DomainSetupStatusResolver
      * from `Invalid` (yellow) to `Configured` (green) and the copy names the
      * mailbox we matched against, matching the `/app/mailboxes` matrix's
      * green "Ingesting via mailbox" badge for the same domain.
+     *
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
      */
     public function buildRuaDestination(
         ?RuaScenarioResult $ruaScenario,
         ?DnsHealthOverviewResult $dnsHealth,
         bool $ruaRoutedToConnectedMailbox = false,
+        array $protocolStates = [],
     ): ProtocolSetupStatus {
         // Before any DNS check has produced data we shouldn't claim anything
         // about the RUA destination — keep the row Unknown, no nextStep, no
         // KB slug. Treat a null DnsHealthOverviewResult the same way the
         // four protocol rows above do (unchecked === pending).
-        if (null === $ruaScenario || null === $dnsHealth || $this->isUnchecked($dnsHealth)) {
+        if (null === $ruaScenario || null === $dnsHealth || $this->isUnchecked($dnsHealth, $protocolStates)) {
             return new ProtocolSetupStatus(
                 name: 'RUA destination',
                 state: ProtocolState::Unknown,
@@ -347,7 +372,7 @@ final readonly class DomainSetupStatusResolver
                 state: ProtocolState::Missing,
                 statusLine: "Not configured — Sendvery isn't receiving reports yet",
                 nextStep: sprintf('Publish a `_dmarc` TXT record with `rua=mailto:%s`', $reportAddress),
-                kbSlug: 'dmarc-quick-start',
+                kbSlug: 'what-is-dmarc',
                 healthAnchor: 'health-dmarc',
             ),
             RuaScenario::PointsAtSendvery => new ProtocolSetupStatus(
@@ -389,13 +414,23 @@ final readonly class DomainSetupStatusResolver
     }
 
     /**
-     * "Nothing has been checked yet" — no verification timestamp on ANY
-     * record and no scored snapshot. Differs from "checked and failing" in
+     * "Nothing has been checked yet" — differs from "checked and failing" in
      * that we don't want to surface red Missing rows before the very first
      * check has run.
+     *
+     * A single stored `dns_check_result` row settles it: a check HAS run, so
+     * whatever it found is real and we stop calling the domain pending. Only
+     * when there is no check row at all do we fall back to the old heuristic
+     * (no verified-at timestamp on any record and no scored snapshot).
+     *
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
      */
-    private function isUnchecked(DnsHealthOverviewResult $dnsHealth): bool
+    private function isUnchecked(DnsHealthOverviewResult $dnsHealth, array $protocolStates = []): bool
     {
+        if ([] !== $protocolStates) {
+            return false;
+        }
+
         return !$dnsHealth->isSpfVerified()
             && !$dnsHealth->isDkimVerified()
             && !$dnsHealth->isDmarcVerified()
@@ -405,139 +440,185 @@ final readonly class DomainSetupStatusResolver
             && null === $dnsHealth->latestMxScore;
     }
 
-    private function buildSpf(DnsHealthOverviewResult $dnsHealth): ProtocolSetupStatus
+    /**
+     * Authoritative per-protocol state, with the legacy derivation as fallback.
+     *
+     * The stored check row wins whenever one exists — it is written by every
+     * check path and needs no nightly cron. `$legacy` is only consulted when
+     * this protocol has no check row at all (legacy fixtures, partially seeded
+     * data), and never resolves to Unknown so a protocol can't silently vanish
+     * from the checklist.
+     *
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
+     */
+    private function stateFor(
+        DnsCheckType $type,
+        array $protocolStates,
+        ProtocolState $legacy,
+    ): ProtocolState {
+        if (!isset($protocolStates[$type->value])) {
+            return $legacy;
+        }
+
+        return $protocolStates[$type->value]->protocolState();
+    }
+
+    /**
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
+     */
+    private function buildSpf(DnsHealthOverviewResult $dnsHealth, array $protocolStates): ProtocolSetupStatus
     {
-        if ($dnsHealth->isSpfVerified()) {
-            return new ProtocolSetupStatus(
+        $legacy = match (true) {
+            $dnsHealth->isSpfVerified() => ProtocolState::Configured,
+            null === $dnsHealth->latestSpfScore => ProtocolState::Missing,
+            default => ProtocolState::Invalid,
+        };
+
+        return match ($this->stateFor(DnsCheckType::Spf, $protocolStates, $legacy)) {
+            ProtocolState::Configured => new ProtocolSetupStatus(
                 name: 'SPF',
                 state: ProtocolState::Configured,
                 statusLine: 'SPF record published and aligned',
                 nextStep: null,
                 kbSlug: null,
                 healthAnchor: 'health-spf',
-            );
-        }
-
-        if (null === $dnsHealth->latestSpfScore) {
-            return new ProtocolSetupStatus(
+            ),
+            ProtocolState::Invalid => new ProtocolSetupStatus(
+                name: 'SPF',
+                state: ProtocolState::Invalid,
+                statusLine: 'SPF record present but failing checks',
+                nextStep: 'Fix the SPF record syntax',
+                kbSlug: 'spf-record-guide',
+                healthAnchor: 'health-spf',
+            ),
+            default => new ProtocolSetupStatus(
                 name: 'SPF',
                 state: ProtocolState::Missing,
                 statusLine: 'SPF record not detected',
                 nextStep: 'Publish a TXT record starting with `v=spf1`',
-                kbSlug: 'spf-record-syntax',
+                kbSlug: 'spf-record-guide',
                 healthAnchor: 'health-spf',
-            );
-        }
-
-        return new ProtocolSetupStatus(
-            name: 'SPF',
-            state: ProtocolState::Invalid,
-            statusLine: 'SPF record present but failing checks',
-            nextStep: 'Fix the SPF record syntax',
-            kbSlug: 'spf-record-syntax',
-            healthAnchor: 'health-spf',
-        );
+            ),
+        };
     }
 
-    private function buildDkim(DnsHealthOverviewResult $dnsHealth): ProtocolSetupStatus
+    /**
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
+     */
+    private function buildDkim(DnsHealthOverviewResult $dnsHealth, array $protocolStates): ProtocolSetupStatus
     {
-        if ($dnsHealth->isDkimVerified()) {
-            return new ProtocolSetupStatus(
+        $legacy = match (true) {
+            $dnsHealth->isDkimVerified() => ProtocolState::Configured,
+            null === $dnsHealth->latestDkimScore => ProtocolState::Missing,
+            default => ProtocolState::Invalid,
+        };
+
+        return match ($this->stateFor(DnsCheckType::Dkim, $protocolStates, $legacy)) {
+            ProtocolState::Configured => new ProtocolSetupStatus(
                 name: 'DKIM',
                 state: ProtocolState::Configured,
                 statusLine: 'DKIM key published and aligned',
                 nextStep: null,
                 kbSlug: null,
                 healthAnchor: 'health-dkim',
-            );
-        }
-
-        if (null === $dnsHealth->latestDkimScore) {
-            return new ProtocolSetupStatus(
+            ),
+            ProtocolState::Invalid => new ProtocolSetupStatus(
+                name: 'DKIM',
+                state: ProtocolState::Invalid,
+                statusLine: 'DKIM key present but failing checks',
+                nextStep: 'Renew or fix the DKIM key',
+                kbSlug: 'what-is-dkim',
+                healthAnchor: 'health-dkim',
+            ),
+            default => new ProtocolSetupStatus(
                 name: 'DKIM',
                 state: ProtocolState::Missing,
                 statusLine: 'DKIM key not detected',
                 nextStep: "Add a CNAME or TXT record at your mail provider's selector",
-                kbSlug: 'dkim-setup-guide',
+                kbSlug: 'what-is-dkim',
                 healthAnchor: 'health-dkim',
-            );
-        }
-
-        return new ProtocolSetupStatus(
-            name: 'DKIM',
-            state: ProtocolState::Invalid,
-            statusLine: 'DKIM key present but failing checks',
-            nextStep: 'Renew or fix the DKIM key',
-            kbSlug: 'dkim-setup-guide',
-            healthAnchor: 'health-dkim',
-        );
+            ),
+        };
     }
 
-    private function buildDmarc(DnsHealthOverviewResult $dnsHealth): ProtocolSetupStatus
+    /**
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
+     */
+    private function buildDmarc(DnsHealthOverviewResult $dnsHealth, array $protocolStates): ProtocolSetupStatus
     {
-        if ($dnsHealth->isDmarcVerified()) {
-            return new ProtocolSetupStatus(
+        $legacy = match (true) {
+            $dnsHealth->isDmarcVerified() => ProtocolState::Configured,
+            null === $dnsHealth->latestDmarcScore => ProtocolState::Missing,
+            default => ProtocolState::Invalid,
+        };
+
+        return match ($this->stateFor(DnsCheckType::Dmarc, $protocolStates, $legacy)) {
+            ProtocolState::Configured => new ProtocolSetupStatus(
                 name: 'DMARC',
                 state: ProtocolState::Configured,
                 statusLine: 'DMARC TXT record published',
                 nextStep: null,
                 kbSlug: null,
                 healthAnchor: 'health-dmarc',
-            );
-        }
-
-        if (null === $dnsHealth->latestDmarcScore) {
-            return new ProtocolSetupStatus(
+            ),
+            ProtocolState::Invalid => new ProtocolSetupStatus(
+                name: 'DMARC',
+                state: ProtocolState::Invalid,
+                statusLine: 'DMARC TXT record present but failing checks',
+                nextStep: 'Fix the DMARC record syntax',
+                kbSlug: 'what-is-dmarc',
+                healthAnchor: 'health-dmarc',
+            ),
+            default => new ProtocolSetupStatus(
                 name: 'DMARC',
                 state: ProtocolState::Missing,
                 statusLine: 'DMARC TXT record not detected',
-                nextStep: 'Publish a `_dmarc` TXT record with `rua=mailto:reports@sendvery.com`',
-                kbSlug: 'dmarc-quick-start',
+                nextStep: sprintf(
+                    'Publish a `_dmarc` TXT record with `rua=mailto:%s`',
+                    $this->reportAddressProvider->get(),
+                ),
+                kbSlug: 'what-is-dmarc',
                 healthAnchor: 'health-dmarc',
-            );
-        }
-
-        return new ProtocolSetupStatus(
-            name: 'DMARC',
-            state: ProtocolState::Invalid,
-            statusLine: 'DMARC TXT record present but failing checks',
-            nextStep: 'Fix the DMARC record syntax',
-            kbSlug: 'dmarc-quick-start',
-            healthAnchor: 'health-dmarc',
-        );
+            ),
+        };
     }
 
-    private function buildMx(DnsHealthOverviewResult $dnsHealth): ProtocolSetupStatus
+    /**
+     * @param array<value-of<DnsCheckType>, DnsProtocolStateResult> $protocolStates
+     */
+    private function buildMx(DnsHealthOverviewResult $dnsHealth, array $protocolStates): ProtocolSetupStatus
     {
-        if (null !== $dnsHealth->latestMxScore && $dnsHealth->latestMxScore >= self::MX_CONFIGURED_MIN_SCORE) {
-            return new ProtocolSetupStatus(
+        $legacy = match (true) {
+            null === $dnsHealth->latestMxScore => ProtocolState::Missing,
+            $dnsHealth->latestMxScore >= self::MX_CONFIGURED_MIN_SCORE => ProtocolState::Configured,
+            default => ProtocolState::Invalid,
+        };
+
+        return match ($this->stateFor(DnsCheckType::Mx, $protocolStates, $legacy)) {
+            ProtocolState::Configured => new ProtocolSetupStatus(
                 name: 'MX',
                 state: ProtocolState::Configured,
                 statusLine: 'MX records resolve to your mail provider',
                 nextStep: null,
                 kbSlug: null,
                 healthAnchor: 'health-mx',
-            );
-        }
-
-        if (null === $dnsHealth->latestMxScore) {
-            return new ProtocolSetupStatus(
+            ),
+            ProtocolState::Invalid => new ProtocolSetupStatus(
+                name: 'MX',
+                state: ProtocolState::Invalid,
+                statusLine: 'MX records present but failing checks',
+                nextStep: 'Check MX records with your DNS provider',
+                kbSlug: 'mx-records-explained',
+                healthAnchor: 'health-mx',
+            ),
+            default => new ProtocolSetupStatus(
                 name: 'MX',
                 state: ProtocolState::Missing,
                 statusLine: 'MX records not detected',
                 nextStep: 'Add MX records for your mail provider',
                 kbSlug: 'mx-records-explained',
                 healthAnchor: 'health-mx',
-            );
-        }
-
-        return new ProtocolSetupStatus(
-            name: 'MX',
-            state: ProtocolState::Invalid,
-            statusLine: 'MX records present but failing checks',
-            nextStep: 'Check MX records with your DNS provider',
-            kbSlug: 'mx-records-explained',
-            healthAnchor: 'health-mx',
-        );
+            ),
+        };
     }
 }

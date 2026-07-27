@@ -11,15 +11,23 @@
 {% endblock %}
 
 {% block page_heading %}
-    <div class="mb-6">
-        <h1 class="text-2xl font-bold">DNS History</h1>
-        <p class="text-sm text-base-content/60 mt-1 max-w-2xl">
-            Every DNS check we've run for {{ domain.domainName }}. We re-check SPF, DKIM, DMARC and MX once a day — and any time you click "Re-check now". Rows highlighted in yellow show a change from the previous check.
-        </p>
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold">DNS History</h1>
+            <p class="text-sm text-base-content/60 mt-1 max-w-2xl">
+                Every DNS check we've run for {{ domain.domainName }}. We re-check SPF, DKIM, DMARC and MX once a day — and any time you click "Re-check now". Rows highlighted in yellow show a change from the previous check.
+            </p>
+        </div>
+        {# The lede above promises a "Re-check now" button; before this it only
+           existed in the no-history empty state, so the promise was false the
+           moment a single check had run. #}
+        <twig:RecheckDnsButton :domainId="domain.domainId" buttonClass="btn-sm btn-primary" />
     </div>
 {% endblock %}
 
 {% block content %}
+    <twig:DomainRecheckNotice />
+
     <twig:DomainWorkspaceTabs :domain="domain" active="history" :tabCounts="tabCounts" />
 
     {# hasAnyHistory gate: before the first DNS check the instruction card
@@ -233,9 +241,7 @@
             message="Your first DNS check was queued when the domain was added and usually completes within a few minutes — after that we re-check once a day. Trigger one now to see results immediately."
         />
         <div class="flex justify-center -mt-4">
-            <form method="post" action="{{ path('dashboard_domain_reverify', { id: domain.domainId }) }}">
-                <button type="submit" class="btn btn-primary btn-sm">Re-check now</button>
-            </form>
+            <twig:RecheckDnsButton :domainId="domain.domainId" buttonClass="btn-primary btn-sm" />
         </div>
     {% endif %}
 {% endblock %}

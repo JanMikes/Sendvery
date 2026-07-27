@@ -4,6 +4,21 @@ declare(strict_types=1);
 
 namespace App\Results;
 
+/**
+ * Read model behind every "how is this domain doing?" surface.
+ *
+ * NO-DATA CONTRACT — `$passRate` is `null`, never `0.0`, when the domain has no
+ * DMARC records in the window. `0.0` means "we counted messages and every one
+ * of them failed authentication"; `null` means "we have nothing to report on
+ * yet". Presenting the two identically was the bug this contract closes.
+ *
+ * Templates must branch on the null, not on `$totalReports`:
+ * {@see DomainOverviewResult::hasPassRateData()} and
+ * {@see DomainOverviewResult::isAwaitingFirstReport()} exist so
+ * callers never re-derive the rule, and the shared Twig macros in
+ * `components/_severity_glyph.html.twig` (`pass_rate_stat`, `pass_rate_class`)
+ * turn it into markup.
+ */
 final readonly class DomainOverviewResult
 {
     public function __construct(
@@ -11,7 +26,11 @@ final readonly class DomainOverviewResult
         public string $domainName,
         public int $totalReports,
         public ?string $latestReportDate,
-        public float $passRate,
+        /**
+         * 30-day DMARC pass rate as a percentage, or null when no DMARC
+         * records exist for the domain in the window. Never conflate with 0.0.
+         */
+        public ?float $passRate,
         public string $teamId,
         public string $teamName,
         public ?string $dmarcVerifiedAt,
@@ -43,7 +62,7 @@ final readonly class DomainOverviewResult
      *     domain_name: string,
      *     total_reports: int|string,
      *     latest_report_date: string|null,
-     *     pass_rate: float|string,
+     *     pass_rate: float|string|null,
      *     team_id: string,
      *     team_name: string,
      *     dmarc_verified_at: string|null,
@@ -63,7 +82,7 @@ final readonly class DomainOverviewResult
             domainName: $row['domain_name'],
             totalReports: (int) $row['total_reports'],
             latestReportDate: $row['latest_report_date'],
-            passRate: (float) $row['pass_rate'],
+            passRate: null === $row['pass_rate'] ? null : (float) $row['pass_rate'],
             teamId: $row['team_id'],
             teamName: $row['team_name'],
             dmarcVerifiedAt: $row['dmarc_verified_at'],
@@ -75,6 +94,26 @@ final readonly class DomainOverviewResult
             latestMxScore: self::toNullableInt($row['latest_mx_score'] ?? null),
             firstReportAt: $row['first_report_at'] ?? null,
         );
+    }
+
+    /**
+     * True when there is a real pass rate to render. False means "no DMARC
+     * records in the window" — render the awaiting/no-data state, never 0%.
+     */
+    public function hasPassRateData(): bool
+    {
+        return null !== $this->passRate;
+    }
+
+    /**
+     * True when this domain has never received a single DMARC report. Reads
+     * `firstReportAt` (an entity column that survives retention purges) rather
+     * than `totalReports`, so a domain whose reports were purged reads as
+     * "no data in this window", not as "still waiting to be set up".
+     */
+    public function isAwaitingFirstReport(): bool
+    {
+        return null === $this->firstReportAt;
     }
 
     private static function toNullableInt(int|string|null $value): ?int

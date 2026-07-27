@@ -48,7 +48,7 @@ final class RevokeSenderController extends AbstractController
             actorUserId: $user->id,
         ));
 
-        $this->addFlash('success', 'Sender marked as unknown.');
+        $this->addFlash('success', 'Sender marked not authorized.');
 
         return $this->redirectToRoute('dashboard_sender_inventory', ['domainId' => $domainId]);
     }

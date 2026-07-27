@@ -10,6 +10,7 @@ use App\Entity\Team;
 use App\Events\DnsCheckCompleted;
 use App\MessageHandler\AlertOnDnsChange;
 use App\Tests\IntegrationTestCase;
+use App\Value\AlertSeverity;
 use App\Value\AlertType;
 use App\Value\DnsCheckType;
 use Doctrine\ORM\EntityManagerInterface;
@@ -161,6 +162,66 @@ final class AlertOnDnsChangeTest extends IntegrationTestCase
         $alerts = $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]);
         self::assertCount(1, $alerts);
         self::assertSame(AlertType::DnsRecordChanged, $alerts[0]->type);
+        // A real edit of an already-published record still deserves the yellow
+        // "was this you?" treatment — only nothing→valid gets the green path.
+        self::assertSame(AlertSeverity::Warning, $alerts[0]->severity);
+    }
+
+    #[Test]
+    public function publishingARecordForTheFirstTimeIsReportedAsGoodNewsNotAWarning(): void
+    {
+        // Nothing → valid is the successful completion of the user's own setup.
+        // Reporting it in the same yellow as "record changed, review it" made
+        // users read their own success as a fault.
+        [$team, $domain] = $this->createTeamAndDomain();
+        $em = $this->getService(EntityManagerInterface::class);
+        $handler = $this->getService(AlertOnDnsChange::class);
+
+        $handler(new DnsCheckCompleted(
+            dnsCheckResultId: Uuid::uuid7(),
+            domainId: $domain->id,
+            teamId: $team->id,
+            type: DnsCheckType::Dkim,
+            hasChanged: true,
+            isValid: true,
+            rawRecord: 'v=DKIM1; k=rsa; p=MIGf',
+            previousRawRecord: null,
+        ));
+        $em->flush();
+
+        $alerts = $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]);
+        self::assertCount(1, $alerts);
+        self::assertSame(AlertType::DnsRecordPublished, $alerts[0]->type);
+        self::assertSame(AlertSeverity::Success, $alerts[0]->severity, 'A first-time publication is good news, so it must be green — never a yellow warning.');
+        self::assertStringContainsString('published for dns-alert-test.com', $alerts[0]->title);
+        self::assertStringContainsString('no action is needed', $alerts[0]->message);
+    }
+
+    #[Test]
+    public function anEmptyPreviousRecordCountsAsNeverPublished(): void
+    {
+        // A blank/whitespace previous value is "not published" as far as the
+        // user is concerned — it must take the same green path as a null one.
+        [$team, $domain] = $this->createTeamAndDomain();
+        $em = $this->getService(EntityManagerInterface::class);
+        $handler = $this->getService(AlertOnDnsChange::class);
+
+        $handler(new DnsCheckCompleted(
+            dnsCheckResultId: Uuid::uuid7(),
+            domainId: $domain->id,
+            teamId: $team->id,
+            type: DnsCheckType::Spf,
+            hasChanged: true,
+            isValid: true,
+            rawRecord: 'v=spf1 ~all',
+            previousRawRecord: '   ',
+        ));
+        $em->flush();
+
+        $alerts = $em->getRepository(Alert::class)->findBy(['team' => $team->id->toString()]);
+        self::assertCount(1, $alerts);
+        self::assertSame(AlertType::DnsRecordPublished, $alerts[0]->type);
+        self::assertSame(AlertSeverity::Success, $alerts[0]->severity);
     }
 
     #[Test]

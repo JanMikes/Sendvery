@@ -1,20 +1,26 @@
 {% extends 'emails/_layout.html.twig' %}
 {% import 'emails/_components.html.twig' as ui %}
 
+{# Only Critical severities are emailed today (SendAlertEmailNotification bails
+   on everything else), but the maps stay exhaustive so a future digest/preview
+   render of a `success` alert is green rather than falling back to blue "info". #}
 {% set accentMap = {
     critical: '#dc2626',
     warning:  '#d97706',
-    info:     '#2563eb'
+    info:     '#2563eb',
+    success:  '#16a34a'
 } %}
 {% set pretitleMap = {
     critical: 'Critical alert',
     warning:  'Warning alert',
-    info:     'Info alert'
+    info:     'Info alert',
+    success:  'Good news'
 } %}
 {% set calloutVariantMap = {
     critical: 'danger',
     warning:  'warning',
-    info:     'info'
+    info:     'info',
+    success:  'success'
 } %}
 
 {% set accent = accentMap[severity] ?? '#2563eb' %}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Results;
 
 use App\Results\SenderInventoryResult;
+use App\Value\SenderReviewState;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -41,6 +42,7 @@ final class SenderInventoryResultTest extends TestCase
         self::assertSame('2026-05-22 14:30:00', $result->updatedAt);
         self::assertSame('Mailchimp marketing IP.', $result->notes);
         self::assertSame('jane@example.com', $result->updatedByUserEmail);
+        self::assertSame(SenderReviewState::Authorized, $result->reviewState);
     }
 
     #[Test]
@@ -67,5 +69,37 @@ final class SenderInventoryResultTest extends TestCase
         self::assertNull($result->updatedAt);
         self::assertNull($result->notes);
         self::assertNull($result->updatedByUserEmail);
+        self::assertSame(
+            SenderReviewState::NeedsReview,
+            $result->reviewState,
+            'A sender nobody has touched is awaiting a decision, not rejected.',
+        );
+    }
+
+    /**
+     * The distinction the old single boolean threw away: a sender somebody
+     * reviewed and left unauthorized is a decision, and must not read as
+     * "waiting for you".
+     */
+    #[Test]
+    public function aReviewedButUnauthorizedSenderIsRejectedRatherThanAwaitingReview(): void
+    {
+        $result = SenderInventoryResult::fromDatabaseRow([
+            'id' => '550e8400-e29b-41d4-a716-446655440000',
+            'source_ip' => '9.9.9.9',
+            'hostname' => null,
+            'organization' => null,
+            'label' => null,
+            'is_authorized' => false,
+            'first_seen_at' => '2026-01-01 00:00:00',
+            'last_seen_at' => '2026-03-25 00:00:00',
+            'total_messages' => 40,
+            'pass_rate' => 5.0,
+            'updated_at' => '2026-05-22 14:30:00',
+            'notes' => null,
+            'updated_by_user_email' => 'jane@example.com',
+        ]);
+
+        self::assertSame(SenderReviewState::NotAuthorized, $result->reviewState);
     }
 }

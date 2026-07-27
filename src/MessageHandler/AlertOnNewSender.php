@@ -12,6 +12,19 @@ use App\Value\AlertType;
 use Doctrine\DBAL\Connection;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
+/**
+ * Fires once, the first time an address is seen sending as a domain.
+ *
+ * WHY it stays a one-shot rather than re-firing while a sender remains
+ * unreviewed: "a server we have never seen before started sending as you" is a
+ * point-in-time event, and an event alert that repeats stops being read. The
+ * standing condition — "senders are still waiting for your decision" — is now
+ * covered twice over, by the weekly digest's review section and by
+ * `sendvery:senders:review-reminder`, both of which read real
+ * `known_sender.is_authorized` state and are volume-gated and deduped. Making
+ * this handler re-fire on top of those would be a third voice saying the same
+ * thing on every single report ingest.
+ */
 #[AsMessageHandler]
 final readonly class AlertOnNewSender
 {
@@ -59,7 +72,7 @@ final readonly class AlertOnNewSender
             type: AlertType::NewUnknownSender,
             severity: AlertSeverity::Warning,
             title: "{$count} new sender(s) detected for {$domain->domain}",
-            message: "New source IPs sending email as {$domain->domain}: {$senderList}{$suffix}. Review these senders to ensure they are authorized.",
+            message: "New source IPs sending email as {$domain->domain}: {$senderList}{$suffix}. They are listed as \"Needs review\" until you authorize them or mark them not authorized — nothing is blocked either way.",
             data: [
                 'new_sender_ips' => $newSenders,
                 'report_id' => $event->reportId->toString(),

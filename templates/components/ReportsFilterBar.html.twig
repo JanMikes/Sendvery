@@ -60,7 +60,14 @@
             {% if showDomainFilter %}
                 <label class="flex flex-col gap-1 min-w-[180px]">
                     <span class="text-xs text-base-content/60">Domains</span>
-                    <select multiple name="domain[]" class="select select-bordered select-sm min-h-[2.25rem]">
+                    {# TomSelect wraps this native select (see tom_select_controller.js); the
+                       real element stays in the DOM so the GET form keeps submitting domain[]. #}
+                    <select multiple name="domain[]" class="select select-bordered select-sm"
+                            {{ stimulus_controller('tom-select', {
+                                placeholder: 'All domains',
+                                size: 'sm',
+                                allowCreate: false,
+                            }) }}>
                         {% for d in domains %}
                             <option value="{{ d.domainId }}" {{ d.domainId in filter.domainIds ? 'selected' : '' }}>{{ d.domainName }}</option>
                         {% endfor %}
@@ -70,7 +77,14 @@
 
             <label class="flex flex-col gap-1 min-w-[180px]">
                 <span class="text-xs text-base-content/60">Reporters</span>
-                <select multiple name="reporter[]" class="select select-bordered select-sm min-h-[2.25rem]">
+                {# allowCreate stays off: reporter names come from stored reports, so a
+                   hand-typed value could never match a row. #}
+                <select multiple name="reporter[]" class="select select-bordered select-sm"
+                        {{ stimulus_controller('tom-select', {
+                            placeholder: 'All reporters',
+                            size: 'sm',
+                            allowCreate: false,
+                        }) }}>
                     {% for org in reporterOptions %}
                         <option value="{{ org }}" {{ org in filter.reporterOrgs ? 'selected' : '' }}>{{ org }}</option>
                     {% endfor %}

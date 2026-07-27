@@ -159,16 +159,28 @@ final readonly class AnthropicAiInsightsService implements AiInsightsService
 
     private function buildDigestFacts(WeeklyDigestData $data): WeeklyDigestFacts
     {
+        // Attention alerts are team-wide and grouped; fold them back per domain
+        // so each fact still carries "how noisy was this domain this week".
+        $alertCountByDomain = [];
+        foreach ($data->attentionAlerts as $alert) {
+            if (null === $alert->domainName) {
+                continue;
+            }
+            $alertCountByDomain[$alert->domainName] = ($alertCountByDomain[$alert->domainName] ?? 0) + $alert->occurrences;
+        }
+
         $domains = [];
         foreach ($data->domains as $domain) {
             $domains[] = new WeeklyDigestDomainFact(
                 domain: $this->sanitizer->sanitize($domain->domainName),
                 messages: $domain->totalMessages,
-                passRate: round($domain->passRate, 1),
+                // Null passes through as null — never rounded into a 0% that
+                // would have the model report a healthy new domain as failing.
+                passRate: null !== $domain->passRate ? round($domain->passRate, 1) : null,
                 passRateDelta: null !== $domain->passRateDelta ? round($domain->passRateDelta, 1) : null,
                 // Counts only — never the untrusted sender names themselves.
                 newSenderCount: count($domain->newSenders),
-                alertCount: count($domain->alerts),
+                alertCount: $alertCountByDomain[$domain->domainName] ?? 0,
             );
         }
 
@@ -182,7 +194,7 @@ final readonly class AnthropicAiInsightsService implements AiInsightsService
             periodLabel: $data->periodStart->format('M j').' — '.$data->periodEnd->format('M j, Y'),
             totalDomains: $data->totalDomains,
             totalMessages: $data->totalMessages,
-            averagePassRate: round($data->averagePassRate, 1),
+            averagePassRate: null !== $data->averagePassRate ? round($data->averagePassRate, 1) : null,
             alertsCount: $data->alertsCount,
             dnsChangesCount: $data->dnsChangesCount,
             domains: $domains,

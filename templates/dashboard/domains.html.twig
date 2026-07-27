@@ -69,13 +69,17 @@
             actionLabel="Clear filter"
         />
     {% else %}
+        {# passRate / awaitingFirstReport are bound with `:` so a null pass rate
+           survives as null — `passRate="{{ … }}"` would stringify it to "" and
+           the card would read it as 0. See DomainCard's prop docs. #}
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {% for domain in domains %}
                 {% set dnsHealth = dnsHealthByDomain[domain.domainId] ?? null %}
                 <twig:DomainCard
                     domainId="{{ domain.domainId }}"
                     domainName="{{ domain.domainName }}"
-                    passRate="{{ domain.passRate }}"
+                    :passRate="domain.passRate"
+                    :awaitingFirstReport="domain.isAwaitingFirstReport()"
                     totalReports="{{ domain.totalReports }}"
                     latestReportDate="{{ domain.latestReportDate }}"
                     teamName="{{ showTeamColumn ? domain.teamName : null }}"

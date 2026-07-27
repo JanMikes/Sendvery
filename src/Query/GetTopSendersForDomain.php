@@ -14,7 +14,7 @@ use Doctrine\DBAL\Connection;
  *
  * Aggregates {@see \App\Entity\DmarcRecord} rows across all reports for one
  * domain and joins {@see \App\Entity\KnownSender} so the chart can colour
- * authorised IPs differently from unknown ones — the single most actionable
+ * authorised IPs differently from unreviewed ones — the single most actionable
  * insight a DMARC report can surface ("Mailchimp sends 40% of your mail and
  * 8% of it fails DKIM").
  */
@@ -36,7 +36,12 @@ final readonly class GetTopSendersForDomain
             return [];
         }
 
-        /** @var list<array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null}> $rows */
+        // The three per-group COUNTs exist because a group is an ORGANISATION,
+        // not an IP: "Seznam" can cover five addresses in three different
+        // review states. MAX(is_authorized) — the previous single signal —
+        // reported such a group as authorized as soon as ONE of its addresses
+        // was, hiding the four still awaiting a decision.
+        /** @var list<array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string}> $rows */
         $rows = $this->database->executeQuery(
             "SELECT
                 COALESCE(rec.resolved_org, rec.resolved_hostname, rec.source_ip) AS group_key,
@@ -45,7 +50,10 @@ final readonly class GetTopSendersForDomain
                 SUM(CASE WHEN rec.dkim_result = 'pass' THEN rec.count ELSE 0 END) AS dkim_pass_count,
                 SUM(CASE WHEN rec.spf_result  = 'pass' THEN rec.count ELSE 0 END) AS spf_pass_count,
                 MAX(ks.id::text) AS known_sender_id,
-                MAX(ks.is_authorized::int) AS sender_is_authorized
+                MAX(ks.is_authorized::int) AS sender_is_authorized,
+                COUNT(DISTINCT ks.id) AS known_sender_count,
+                COUNT(DISTINCT ks.id) FILTER (WHERE NOT ks.is_authorized AND ks.updated_at IS NULL) AS needs_review_sender_count,
+                COUNT(DISTINCT ks.id) FILTER (WHERE ks.is_authorized) AS authorized_sender_count
             FROM dmarc_record rec
             JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
             JOIN monitored_domain md ON md.id = dr.monitored_domain_id
@@ -71,28 +79,31 @@ final readonly class GetTopSendersForDomain
     }
 
     /**
-     * Headline counts for the stat row above the chart. Reads from
+     * Headline counts for the stat row above the chart, plus the numbers behind
+     * the "N senders are waiting for your review" call to action. Reads from
      * {@see \App\Entity\KnownSender} (not DMARC records) so the "X unique IPs"
-     * count mirrors what the user sees on the Sender Inventory page — same
-     * source-of-truth, no row-count drift.
+     * count mirrors what the user sees on the Sender Inventory page —
+     * same source-of-truth, no row-count drift.
      *
      * @param list<string> $teamIds
      */
     public function summaryForDomain(string $domainId, array $teamIds): DomainSenderAuthorizationSummary
     {
         if ([] === $teamIds) {
-            return new DomainSenderAuthorizationSummary(0, 0, 0);
+            return new DomainSenderAuthorizationSummary(0, 0, 0, 0, 0);
         }
 
         // SQL aggregates always return one row (even when WHERE matches
         // nothing), so we assert non-false to satisfy PHPStan without an
         // unreachable `false === $row` branch.
-        /** @var array{authorized_count: int|string, unknown_count: int|string, unique_ip_count: int|string}|false $row */
+        /** @var array{authorized_count: int|string, needs_review_count: int|string, not_authorized_count: int|string, unique_ip_count: int|string, needs_review_messages: int|string}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 COUNT(*) FILTER (WHERE ks.is_authorized) AS authorized_count,
-                COUNT(*) FILTER (WHERE NOT ks.is_authorized) AS unknown_count,
-                COUNT(DISTINCT ks.source_ip) AS unique_ip_count
+                COUNT(*) FILTER (WHERE NOT ks.is_authorized AND ks.updated_at IS NULL) AS needs_review_count,
+                COUNT(*) FILTER (WHERE NOT ks.is_authorized AND ks.updated_at IS NOT NULL) AS not_authorized_count,
+                COUNT(DISTINCT ks.source_ip) AS unique_ip_count,
+                COALESCE(SUM(ks.total_messages) FILTER (WHERE NOT ks.is_authorized AND ks.updated_at IS NULL), 0) AS needs_review_messages
             FROM known_sender ks
             JOIN monitored_domain md ON md.id = ks.monitored_domain_id
             WHERE ks.monitored_domain_id = :domainId

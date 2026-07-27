@@ -12,12 +12,20 @@
         {# Header #}
         <div class="flex items-start justify-between mb-6 gap-4">
             <div class="flex-1 min-w-0">
+                {# `success` is good news (e.g. a record went live) and maps to
+                   the green token — never the yellow "review this" treatment. #}
+                {% set alertResolved = alert.resolvedAt is not null %}
                 <div class="flex items-center gap-2 mb-2">
-                    <span class="badge {{ alert.severity == 'critical' ? 'badge-error' : (alert.severity == 'warning' ? 'badge-warning' : 'badge-info') }}">
-                        {{ alert.severity|capitalize }}
+                    <span class="badge {{ alert.severity == 'critical' ? 'badge-error' : (alert.severity == 'warning' ? 'badge-warning' : (alert.severity == 'success' ? 'badge-success' : 'badge-info')) }}">
+                        {{ alert.severity == 'success' ? 'Good news' : alert.severity|capitalize }}
                     </span>
                     <span class="badge badge-ghost">{{ alert.type|replace({'_': ' '})|capitalize }}</span>
-                    {% if not alert.isRead %}
+                    {% if alertResolved %}
+                        <span class="badge badge-success gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                            Resolved
+                        </span>
+                    {% elseif not alert.isRead %}
                         <span class="badge badge-primary badge-sm">Unread</span>
                     {% endif %}
                     {% if alert.snoozedUntil %}
@@ -27,6 +35,9 @@
                 <h1 class="text-xl font-bold">{{ alert.title }}</h1>
                 <p class="text-sm text-base-content/60 mt-1 max-w-2xl">Things Sendvery noticed and thought you'd want to know about — DNS changes, pass-rate drops, new unauthorized senders, blacklist hits. Mute the type if it's noisy for your setup.</p>
                 <p class="text-sm text-base-content/50 mt-1">{{ alert.createdAt|date('F j, Y \\a\\t H:i') }}</p>
+                {% if alertResolved %}
+                    <p class="text-sm text-success mt-1">Resolved automatically · {{ alert.resolvedAt|date('F j, Y \\a\\t H:i') }}</p>
+                {% endif %}
             </div>
 
             {# Header action row #}
@@ -123,6 +134,15 @@
                 {% endif %}
             {% endif %}
         </div>
+
+        {# Resolution notice — the alert body still describes the original
+           problem, so without this the page reads as an open incident. #}
+        {% if alertResolved %}
+            <div class="alert alert-success mb-6">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>This was resolved automatically on {{ alert.resolvedAt|date('F j, Y \\a\\t H:i') }} — a later check found the problem fixed. Nothing left to do.</span>
+            </div>
+        {% endif %}
 
         {# Message #}
         <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
