@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity;
 
 use App\Value\Dns\AsnRegistration;
+use App\Value\Dns\DnswlListing;
 use App\Value\SenderRole;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
@@ -112,6 +113,25 @@ final class SenderIdentity
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     public ?\DateTimeImmutable $asnResolvedAt;
 
+    /**
+     * The address's dnswl.org trust level, or null when it is not listed
+     * (DEC-060 WP-F). As global as everything else here: dnswl decides the
+     * listing, not the host, and the answer is identical for every tenant.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    public ?int $dnswlTrustLevel;
+
+    #[ORM\Column(type: 'integer', nullable: true)]
+    public ?int $dnswlCategory;
+
+    /**
+     * When the whitelist was last consulted, or null for a row cached before
+     * this axis existed. Same three-valued discipline as {@see $asnResolvedAt}:
+     * "not listed" and "never asked" are different facts.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $dnswlCheckedAt;
+
     /** When the cached facts were last written — successful lookup or not. */
     #[ORM\Column(type: 'datetime_immutable')]
     public \DateTimeImmutable $resolvedAt;
@@ -137,6 +157,9 @@ final class SenderIdentity
         ?int $asn = null,
         ?string $asnOrganization = null,
         ?\DateTimeImmutable $asnResolvedAt = null,
+        ?int $dnswlTrustLevel = null,
+        ?int $dnswlCategory = null,
+        ?\DateTimeImmutable $dnswlCheckedAt = null,
     ) {
         $this->id = $id;
         $this->sourceIp = $sourceIp;
@@ -151,6 +174,27 @@ final class SenderIdentity
         $this->asn = $asn;
         $this->asnOrganization = $asnOrganization;
         $this->asnResolvedAt = $asnResolvedAt;
+        $this->dnswlTrustLevel = $dnswlTrustLevel;
+        $this->dnswlCategory = $dnswlCategory;
+        $this->dnswlCheckedAt = $dnswlCheckedAt;
+    }
+
+    /**
+     * Records the outcome of a whitelist lookup, including "not listed" — which
+     * is the answer for almost every address and is cached as one.
+     */
+    public function recordDnswlLookup(?DnswlListing $listing, \DateTimeImmutable $at): void
+    {
+        $this->dnswlTrustLevel = $listing?->trustLevel;
+        $this->dnswlCategory = $listing?->category;
+        $this->dnswlCheckedAt = $at;
+    }
+
+    public function dnswlListing(): ?DnswlListing
+    {
+        return null === $this->dnswlTrustLevel || null === $this->dnswlCategory
+            ? null
+            : new DnswlListing($this->dnswlTrustLevel, $this->dnswlCategory);
     }
 
     /**
@@ -223,7 +267,9 @@ final class SenderIdentity
             // earn an answer. A row that has never been asked for its AS is due
             // on the same terms, and for the same reason: never asked is not an
             // answer.
-            return null === $this->forwardConfirmed || null === $this->asnResolvedAt;
+            return null === $this->forwardConfirmed
+                || null === $this->asnResolvedAt
+                || null === $this->dnswlCheckedAt;
         }
 
         if (null === $this->lastAttemptAt) {

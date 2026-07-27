@@ -639,7 +639,7 @@ tiers D and below may never grant trust on their own.**
 | **A** | An aligned DKIM signature that verified | No — cryptographic |
 | **B** | A receiver-attested policy override (`<reason>`) | No — the receiver wrote it |
 | **C** | Cross-receiver correlation of a signed stream | Partly — see (c) |
-| **D** | PTR + forward confirmation; ASN | Hard — needs a second zone, or BGP |
+| **D** | PTR + forward confirmation; ASN; a dnswl.org listing | Hard — needs a second zone, BGP, or a third party's assent |
 | **E** | Envelope shape; volume and topology | Trivially |
 
 Sub-decisions:
@@ -685,7 +685,20 @@ Sub-decisions:
       beside an unidentified address, never instead of it ("203.0.113.9 (AS16509
       AMAZON-02)"), and is never part of the identity key: half the internet rents from
       the same handful of networks.
-  (f) **Explained is not broken.** A forwarder whose mail was quarantined or rejected gets
+  (f) **A dnswl.org listing corroborates and never grants.** The RFC 8904
+      whitelist lists forwarders and relaying MTAs heavily, which is most of what
+      "a legitimate mail source that is not the original sender" means, and dnswl
+      decides the listing so a sender cannot add itself — tier D, the strongest
+      of the three corroborating signals. It still stops at the same line,
+      because a listing is a statement about the operator's general conduct and
+      not about the message in front of us: a listed relay forwards a spoofed
+      message exactly as willingly as a genuine one, and a compromised account at
+      a listed provider is the textbook way abuse arrives from a good address.
+      Only `medium` and above counts — dnswl's `none` level is dnswl declining to
+      vouch — and `127.0.0.255` (its answer to resolvers over their rate limit,
+      which a self-hosted install can reach without noticing) is read as *not
+      listed*, so an exhausted quota can never soften a verdict.
+  (g) **Explained is not broken.** A forwarder whose mail was quarantined or rejected gets
       the plain reason on the report pane — the gateway rewrote the message, SPF cannot
       survive the hop by design, DKIM did not survive the rewrite — together with the
       honest answer that there is nothing to fix, and the explicit statement that it is not
@@ -698,14 +711,18 @@ Sub-decisions:
       grade), and the digest already frames forwarders correctly.
 **Impact:** `ForwardingAttestation`, `EnvelopeRewriteRegistry`, `ForwardedMailExplainer`
 + `ForwardedMailExplanation`/`ForwardedMailOutcome`, `AsnResolver`/`SystemAsnResolver`/
-`FakeAsnResolver` + `AsnRegistration`, `GetSendersSharingASignedStream`; a new
+`FakeAsnResolver` + `AsnRegistration`, `DnswlResolver`/`SystemDnswlResolver`/
+`FakeDnswlResolver` + `DnswlListing`, `GetSendersSharingASignedStream`; a new
 `ReportSenderSignals` service replacing the two near-identical aggregations
 `AlertOnNewSender` and `SenderDiscovery` each maintained (two copies of the evidence behind
-one classifier is how the alert and the inventory end up disagreeing); three additive
-`sender_identity` columns (`Version20260727190000`) and the per-batch identification cap
-cut from 12 to 8 to hold the DNS budget; `<twig:ForwardedMailNotice>` on report detail.
-**Ops:** the migration is additive and existing rows self-heal one at a time on their next
-ingest; `bin/console sendvery:senders:backfill-identities` fills the ASN columns in one pass.
+one classifier is how the alert and the inventory end up disagreeing); six additive
+`sender_identity` columns (`Version20260727190000`, `Version20260727200000`) and the
+per-batch identification cap cut from 12 to 6 to hold the DNS budget at 30 queries
+(6 × PTR + forward + AS origin + whitelist, plus one AS-name lookup per distinct AS);
+`<twig:ForwardedMailNotice>` on report detail.
+**Ops:** both migrations are additive and existing rows self-heal one at a time on their
+next ingest; `bin/console sendvery:senders:backfill-identities` fills the ASN and whitelist
+columns in one pass.
 **Detail:** `docs/18-forwarder-trust-verification-plan.md`
 
 ---

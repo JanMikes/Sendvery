@@ -6,6 +6,7 @@ namespace App\Tests;
 
 use App\Services\Dns\FakeAsnResolver;
 use App\Services\Dns\FakeDns;
+use App\Services\Dns\FakeDnswlResolver;
 use App\Services\Dns\FakeReverseDnsResolver;
 use App\Services\Dns\FakeSmtpProbe;
 
@@ -43,6 +44,14 @@ trait ScriptsDnsRecords
         assert($asn instanceof FakeAsnResolver);
 
         return $asn;
+    }
+
+    protected function scriptDnswl(): FakeDnswlResolver
+    {
+        $dnswl = self::getContainer()->get(FakeDnswlResolver::class);
+        assert($dnswl instanceof FakeDnswlResolver);
+
+        return $dnswl;
     }
 
     protected function scriptDns(): FakeDns

@@ -7,6 +7,7 @@ namespace App\Tests\Integration\Services;
 use App\Entity\SenderIdentity;
 use App\Repository\SenderIdentityRepository;
 use App\Services\Dns\FakeAsnResolver;
+use App\Services\Dns\FakeDnswlResolver;
 use App\Services\Dns\FakeReverseDnsResolver;
 use App\Services\Dns\ForwardConfirmedReverseDns;
 use App\Services\IdentityProvider;
@@ -16,6 +17,7 @@ use App\Services\SenderIdentityResolver;
 use App\Services\SenderRoleClassifier;
 use App\Tests\IntegrationTestCase;
 use App\Tests\ScriptsDnsRecords;
+use App\Value\Dns\DnswlListing;
 use App\Value\ResolvedSender;
 use App\Value\SenderAuthSignals;
 use App\Value\SenderRole;
@@ -95,6 +97,37 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
 
         self::assertSame(SenderRole::Suspicious, $resolved->role);
         self::assertTrue($resolved->role->warrantsAlert());
+    }
+
+    public function testDoesNotCallAWhitelistedRelayAnAttackerButStillSurfacesIt(): void
+    {
+        $this->scriptReverseDns()->withHostname('198.51.100.7', 'mail.stranger.example');
+        $this->scriptDnswl()->withListing('198.51.100.7', DnswlListing::TRUST_HIGH);
+
+        $resolved = $this->resolver()->resolve(
+            '198.51.100.7',
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 500),
+        );
+
+        self::assertSame(SenderRole::Unknown, $resolved->role);
+        self::assertTrue(
+            $resolved->role->warrantsAlert(),
+            'A whitelist describes the operator, not this message: a listed relay forwards a spoofed message as willingly as a genuine one.',
+        );
+    }
+
+    public function testAsksAWhitelistAboutAnAddressOnceForTheWholeSystem(): void
+    {
+        $this->scriptReverseDns()->withHostname('40.93.13.60', 'mail.outbound.protection.outlook.com');
+        $dnswl = $this->scriptDnswl()->withListing('40.93.13.60', DnswlListing::TRUST_HIGH);
+
+        $resolver = $this->resolver();
+        $resolver->resolve('40.93.13.60');
+        $this->getService(EntityManagerInterface::class)->flush();
+
+        $resolver->resolve('40.93.13.60');
+
+        self::assertSame(1, $dnswl->lookupCount(), 'The whitelist lookup shares the identity cache, so a warm address costs nothing.');
     }
 
     public function testAsksTheNetworkOfAnAddressOnceForTheWholeSystem(): void
@@ -514,6 +547,7 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
             lastAttemptAt: new \DateTimeImmutable(self::NOW),
             forwardConfirmed: true,
             asnResolvedAt: new \DateTimeImmutable(self::NOW),
+            dnswlCheckedAt: new \DateTimeImmutable(self::NOW),
         ));
         $em->flush();
         $em->clear();
@@ -543,6 +577,7 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
             reverseDns: $reverseDns,
             forwardConfirmation: new ForwardConfirmedReverseDns($reverseDns),
             asnResolver: $this->getService(FakeAsnResolver::class),
+            dnswlResolver: $this->getService(FakeDnswlResolver::class),
             registrableDomainExtractor: $this->getService(RegistrableDomainExtractor::class),
             organizationMapper: $this->getService(OrganizationMapper::class),
             classifier: $this->getService(SenderRoleClassifier::class),

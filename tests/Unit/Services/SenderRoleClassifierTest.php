@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Services;
 
 use App\Services\ForwarderRegistry;
 use App\Services\SenderRoleClassifier;
+use App\Value\Dns\DnswlListing;
 use App\Value\ForwardingAttestation;
 use App\Value\PolicyOverrideReasonType;
 use App\Value\SenderAuthSignals;
@@ -416,6 +417,57 @@ final class SenderRoleClassifierTest extends TestCase
 
         self::assertNotSame(SenderRole::Forwarder, $role);
         self::assertTrue($role->warrantsAlert(), 'The sender still comes up for review; only the accusation is withdrawn.');
+    }
+
+    #[Test]
+    public function stopsShortOfAccusingAHostAWhitelistVouchesFor(): void
+    {
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 400),
+            hostnameForwardConfirmed: true,
+            dnswl: new DnswlListing(DnswlListing::TRUST_HIGH, 2),
+        );
+
+        self::assertSame(SenderRole::Unknown, $role);
+    }
+
+    #[Test]
+    public function aWhitelistListingNeverBuysTheSilenceAForwarderGets(): void
+    {
+        // dnswl describes the operator's general conduct, not the message in
+        // front of us: a listed relay forwards a spoofed message exactly as
+        // willingly as a genuine one, and a compromised account at a listed
+        // provider is the textbook way abuse arrives from a good address.
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 400),
+            hostnameForwardConfirmed: true,
+            dnswl: new DnswlListing(DnswlListing::TRUST_HIGH, 2),
+        );
+
+        self::assertNotSame(SenderRole::Forwarder, $role);
+        self::assertTrue($role->warrantsAlert());
+    }
+
+    #[Test]
+    public function aListingTheWhitelistDoesNotStandBehindCorroboratesNothing(): void
+    {
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 400),
+            hostnameForwardConfirmed: true,
+            dnswl: new DnswlListing(DnswlListing::TRUST_NONE, 2),
+        );
+
+        self::assertSame(
+            SenderRole::Suspicious,
+            $role,
+            'dnswl\'s "none" level is the list declining to vouch; reading it as an endorsement would invert its meaning.',
+        );
     }
 
     #[Test]

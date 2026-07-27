@@ -6,6 +6,7 @@ namespace App\Tests\Unit\Entity;
 
 use App\Entity\SenderIdentity;
 use App\Value\Dns\AsnRegistration;
+use App\Value\Dns\DnswlListing;
 use App\Value\SenderRole;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -57,6 +58,7 @@ final class SenderIdentityTest extends TestCase
         $identity = $this->newIdentity();
         $identity->recordResolution('mxb.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp, true, new \DateTimeImmutable('2026-07-27 10:00:00'));
         $identity->recordAsnLookup(new AsnRegistration(43037, 'SEZNAM-AS'), new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordDnswlLookup(new DnswlListing(DnswlListing::TRUST_HIGH, 2), new \DateTimeImmutable('2026-07-27 10:00:00'));
 
         self::assertFalse(
             $identity->isDueForRetry(new \DateTimeImmutable('2027-07-27 10:00:00')),
@@ -70,6 +72,7 @@ final class SenderIdentityTest extends TestCase
         $identity = $this->newIdentity();
         $identity->recordResolution('claims.mimecast.com', 'mimecast.com', null, SenderRole::Unknown, false, new \DateTimeImmutable('2026-07-27 10:00:00'));
         $identity->recordAsnLookup(null, new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordDnswlLookup(null, new \DateTimeImmutable('2026-07-27 10:00:00'));
 
         self::assertFalse($identity->isForwardConfirmed());
         self::assertFalse(
@@ -84,6 +87,7 @@ final class SenderIdentityTest extends TestCase
         $identity = $this->newIdentity();
         $identity->recordResolution('mail.nowhere.example', 'nowhere.example', null, SenderRole::Unknown, true, new \DateTimeImmutable('2026-07-27 10:00:00'));
         $identity->recordAsnLookup(null, new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordDnswlLookup(null, new \DateTimeImmutable('2026-07-27 10:00:00'));
 
         self::assertNull($identity->asn);
         self::assertNull($identity->asnRegistration());
@@ -123,6 +127,29 @@ final class SenderIdentityTest extends TestCase
         self::assertSame(16509, $identity->asn);
         self::assertSame('AMAZON-02', $identity->asnOrganization);
         self::assertSame('AS16509 AMAZON-02', $identity->asnRegistration()?->label());
+    }
+
+    #[Test]
+    public function keepsWhetherTheWhitelistVouchesForAnAddress(): void
+    {
+        $identity = $this->newIdentity();
+        $identity->recordDnswlLookup(new DnswlListing(DnswlListing::TRUST_MEDIUM, 2), new \DateTimeImmutable('2026-07-27 10:00:00'));
+
+        self::assertSame(DnswlListing::TRUST_MEDIUM, $identity->dnswlTrustLevel);
+        self::assertTrue($identity->dnswlListing()?->isTrusted());
+    }
+
+    #[Test]
+    public function remembersThatAnAddressIsOnNoWhitelist(): void
+    {
+        $identity = $this->newIdentity();
+        $identity->recordDnswlLookup(null, new \DateTimeImmutable('2026-07-27 10:00:00'));
+
+        self::assertNull($identity->dnswlTrustLevel);
+        self::assertNull(
+            $identity->dnswlListing(),
+            'Not listed is the answer for almost every address, and caching it is what stops every ingest asking again.',
+        );
     }
 
     #[Test]

@@ -30,6 +30,9 @@ return App::config([
         'App\Services\Dns\AsnResolver' => [
             'alias' => 'App\Services\Dns\SystemAsnResolver',
         ],
+        'App\Services\Dns\DnswlResolver' => [
+            'alias' => 'App\Services\Dns\SystemDnswlResolver',
+        ],
         'SPFLib\Decoder' => [
             'autoconfigure' => true,
         ],
@@ -137,6 +140,15 @@ return App::config([
                 'public' => true,
             ],
             'App\Services\Dns\FakeAsnResolver' => [
+                'public' => true,
+            ],
+            // And for the RFC 8904 whitelist: production queries dnswl.org over
+            // DNS, and no test may.
+            'App\Services\Dns\DnswlResolver' => [
+                'alias' => 'App\Services\Dns\FakeDnswlResolver',
+                'public' => true,
+            ],
+            'App\Services\Dns\FakeDnswlResolver' => [
                 'public' => true,
             ],
             // SPFLib uses its own DNS resolver, outside the App namespace and

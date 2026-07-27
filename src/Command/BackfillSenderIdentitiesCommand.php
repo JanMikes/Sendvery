@@ -149,12 +149,13 @@ final class BackfillSenderIdentitiesCommand extends Command
      * let a block of unresolvable hosts consume every run's budget and starve
      * the ones that would actually resolve.
      *
-     * `asn_resolved_at IS NULL` is the DEC-060 WP-D half. A row cached before
-     * the AS lookup existed is perfectly enriched by the old definition and
-     * would never be revisited by the hostname test alone. Those rows do
-     * self-heal on their next ingest — {@see \App\Entity\SenderIdentity::isDueForRetry()}
-     * makes them due exactly once — but an operator should not have to wait for
-     * a sender to send again to finish a migration.
+     * The `asn_resolved_at` and `dnswl_checked_at` tests are the DEC-060 half.
+     * A row cached before those lookups existed is perfectly enriched by the old
+     * definition and would never be revisited by the hostname test alone. Those
+     * rows do self-heal on their next ingest —
+     * {@see \App\Entity\SenderIdentity::isDueForRetry()} makes them due exactly
+     * once — but an operator should not have to wait for a sender to send again
+     * to finish a migration.
      *
      * @return list<string>
      */
@@ -167,6 +168,7 @@ final class BackfillSenderIdentitiesCommand extends Command
             WHERE rec.resolved_hostname IS NULL
                OR si.id IS NULL
                OR si.asn_resolved_at IS NULL
+               OR si.dnswl_checked_at IS NULL
             ORDER BY never_looked_up DESC, rec.source_ip
             LIMIT :limit',
             ['limit' => $limit],

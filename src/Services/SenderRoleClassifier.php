@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Value\Dns\DnswlListing;
 use App\Value\SenderAuthSignals;
 use App\Value\SenderRole;
 
@@ -70,15 +71,19 @@ final readonly class SenderRoleClassifier
     }
 
     /**
-     * @param bool $hostnameForwardConfirmed whether $hostname passed
-     *                                       forward-confirmed reverse DNS; see
-     *                                       {@see Dns\ForwardConfirmedReverseDns}
+     * @param bool              $hostnameForwardConfirmed whether $hostname passed
+     *                                                    forward-confirmed reverse DNS; see
+     *                                                    {@see Dns\ForwardConfirmedReverseDns}
+     * @param DnswlListing|null $dnswl                    the host's RFC 8904 whitelist entry, if
+     *                                                    any; corroboration only, see
+     *                                                    {@see hasForwardingStory()}
      */
     public function classify(
         ?string $hostname,
         ?string $organization,
         ?SenderAuthSignals $signals,
         bool $hostnameForwardConfirmed,
+        ?DnswlListing $dnswl = null,
     ): SenderRole {
         if (null !== $signals && $signals->isAuthorized) {
             return SenderRole::OwnRelay;
@@ -172,7 +177,7 @@ final readonly class SenderRoleClassifier
             && 0.0 === $signals->dkimPassRate
             && 0.0 === $signals->spfPassRate
             && $signals->totalMessages >= self::SUSPICIOUS_MIN_MESSAGES
-            && !$this->hasForwardingStory($signals)
+            && !$this->hasForwardingStory($signals, $dnswl)
         ) {
             return SenderRole::Suspicious;
         }
@@ -209,16 +214,27 @@ final readonly class SenderRoleClassifier
      * spoofer naming the victim's own domain has the passing half of the
      * correlation supplied by the victim's real mail.
      *
-     * Downgrading Suspicious to Unknown is the whole of what either may buy:
-     * the sender stops being called an attacker on this evidence, and still
+     * A dnswl.org listing (WP-F) is the third, and the strongest of the three —
+     * tier D, because dnswl decides who is listed and a sender cannot add
+     * itself. It still stops here rather than granting the role, because the
+     * listing is a statement about the operator's general conduct and not about
+     * the message in front of us: a listed relay forwards a spoofed message
+     * exactly as willingly as a genuine one, and a compromised account at a
+     * listed provider is the textbook way abuse arrives from a good address.
+     * Only `medium` and above counts — dnswl's `none` level is dnswl saying it
+     * has no confidence in its own entry.
+     *
+     * Downgrading Suspicious to Unknown is the whole of what any of them may
+     * buy: the sender stops being called an attacker on this evidence, and still
      * shows up for review — {@see SenderRole::Unknown} warrants an alert just as
      * Suspicious does. Withholding an accusation is free; withholding an alert
      * is not.
      */
-    private function hasForwardingStory(SenderAuthSignals $signals): bool
+    private function hasForwardingStory(SenderAuthSignals $signals, ?DnswlListing $dnswl): bool
     {
         return $signals->rewrittenEnvelopeMessageCount > 0
-            || $signals->signedStreamSeenFromAnotherHost;
+            || $signals->signedStreamSeenFromAnotherHost
+            || true === $dnswl?->isTrusted();
     }
 
     /**
