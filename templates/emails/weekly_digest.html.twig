@@ -1,18 +1,24 @@
 {% extends 'emails/_layout.html.twig' %}
 {% import 'emails/_components.html.twig' as ui %}
 
-{% set passRateColor = digest.averagePassRate >= 95
-    ? '#16a34a'
-    : (digest.averagePassRate >= 80 ? '#d97706' : '#dc2626') %}
+{# A null pass rate means "no DMARC records in this window" — never 0%. Emails
+   are inline-styled, so the no-data tint is the same muted slate the rest of
+   the template uses for absent values. #}
+{% set passRateColor = digest.averagePassRate is null
+    ? '#94a3b8'
+    : (digest.averagePassRate >= 95
+        ? '#16a34a'
+        : (digest.averagePassRate >= 80 ? '#d97706' : '#dc2626')) %}
 
 {% block subject %}Sendvery weekly report — {{ digest.teamName }}{% endblock %}
-{% block preheader %}{{ digest.totalMessages|number_format }} messages · {{ digest.averagePassRate|number_format(1) }}% pass rate · {{ digest.totalDomains }} domain{{ digest.totalDomains != 1 ? 's' : '' }}.{% endblock %}
+{% block preheader %}{{ digest.totalMessages|number_format }} messages · {{ digest.averagePassRate is null ? 'no reports yet' : digest.averagePassRate|number_format(1) ~ '% pass rate' }} · {{ digest.totalDomains }} domain{{ digest.totalDomains != 1 ? 's' : '' }}.{% endblock %}
 {% block header_meta %}{{ dateRange }}{% endblock %}
 
 {% block content %}
+    {# The date range already shows in the header meta slot — repeating it here
+       cost a line of vertical space and said nothing new. #}
     {{ ui.pretitle('Weekly report') }}
     {{ ui.heading('How ' ~ digest.teamName|e ~ ' did this week') }}
-    {{ ui.muted(dateRange|e) }}
 
     {# Summary stat tiles #}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 8px 0 24px 0;">
@@ -28,7 +34,7 @@
             <td width="33%" style="padding: 4px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
                     <tr><td style="padding: 16px 12px; text-align: center;">
-                        <div style="font-size: 26px; font-weight: 700; color: {{ passRateColor }}; line-height: 1.1; letter-spacing: -0.02em;">{{ digest.averagePassRate|number_format(1) }}%</div>
+                        <div style="font-size: {{ digest.averagePassRate is null ? '18px' : '26px' }}; font-weight: 700; color: {{ passRateColor }}; line-height: 1.1; letter-spacing: -0.02em;">{{ digest.averagePassRate is null ? '—' : digest.averagePassRate|number_format(1) ~ '%' }}</div>
                         <div style="margin-top: 6px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em;">Pass rate</div>
                     </td></tr>
                 </table>
@@ -72,13 +78,20 @@
                 <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; background-color: #f8fafc; text-align: right; border-radius: 0 8px 8px 0;">Δ</td>
             </tr>
             {% for domain in digest.domains %}
-                {% set domainColor = domain.passRate >= 95
-                    ? '#16a34a'
-                    : (domain.passRate >= 80 ? '#d97706' : '#dc2626') %}
+                {# Same no-data rule as the dashboard cards: a domain that
+                   received nothing this week reads "waiting for first report",
+                   not a red 0% that accuses it of failing every message. #}
+                {% set domainColor = not domain.hasPassRateData()
+                    ? '#64748b'
+                    : (domain.passRate >= 95
+                        ? '#16a34a'
+                        : (domain.passRate >= 80 ? '#d97706' : '#dc2626')) %}
                 <tr>
                     <td style="padding: 12px; font-size: 13px; color: #0f172a; font-weight: 500; border-bottom: 1px solid #f1f5f9; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;">{{ domain.domainName }}</td>
                     <td style="padding: 12px; font-size: 13px; color: #475569; text-align: right; border-bottom: 1px solid #f1f5f9;">{{ domain.totalMessages|number_format }}</td>
-                    <td style="padding: 12px; font-size: 13px; color: {{ domainColor }}; font-weight: 600; text-align: right; border-bottom: 1px solid #f1f5f9;">{{ domain.passRate|number_format(1) }}%</td>
+                    <td style="padding: 12px; font-size: {{ domain.hasPassRateData() ? '13px' : '12px' }}; color: {{ domainColor }}; font-weight: {{ domain.hasPassRateData() ? '600' : '500' }}; text-align: right; border-bottom: 1px solid #f1f5f9;">
+                        {{- domain.hasPassRateData() ? domain.passRate|number_format(1) ~ '%' : 'Waiting for first report' -}}
+                    </td>
                     <td style="padding: 12px; font-size: 13px; text-align: right; border-bottom: 1px solid #f1f5f9;">
                         {% if domain.passRateDelta is not null %}
                             <span style="color: {{ domain.passRateDelta >= 0 ? '#16a34a' : '#dc2626' }}; font-weight: 500;">
@@ -93,41 +106,123 @@
         </table>
     {% endif %}
 
-    {# Alerts this week #}
-    {% if digest.alertsCount > 0 %}
-        {{ ui.subheading('Alerts this week <span style="font-weight:400;color:#94a3b8;font-size:13px;">(' ~ digest.alertsCount ~ ')</span>') }}
-        {% for domain in digest.domains %}
-            {% for alert in domain.alerts %}
-                {% set alertPalette = {
-                    critical: { bg: '#fef2f2', border: '#dc2626', label: '#991b1b' },
-                    warning:  { bg: '#fffbeb', border: '#d97706', label: '#92400e' },
-                    info:     { bg: '#eff6ff', border: '#2563eb', label: '#1e3a8a' }
-                } %}
-                {% set ap = alertPalette[alert.severity] ?? alertPalette.info %}
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 6px 0;">
-                    <tr><td style="padding: 10px 14px; background-color: {{ ap.bg }}; border-left: 3px solid {{ ap.border }}; border-radius: 0 8px 8px 0;">
-                        <div style="font-size: 11px; font-weight: 600; color: {{ ap.label }}; text-transform: uppercase; letter-spacing: 0.06em;">{{ domain.domainName }}</div>
-                        <div style="margin-top: 2px; font-size: 13px; color: #0f172a;">{{ alert.title }}</div>
-                    </td></tr>
-                </table>
-            {% endfor %}
+    {# Needs your attention — the few most severe UNRESOLVED problems, grouped
+       per domain + type so a chatty week doesn't turn into a dozen
+       near-identical amber rows. Already-resolved and Success-severity alerts
+       are excluded by the generator: listing a fixed problem as outstanding is
+       how a digest teaches people to ignore it. #}
+    {% if digest.attentionAlerts|length > 0 %}
+        {# Counts GROUPS, not raw alerts — the "×N this week" badge on each row
+           carries the volume, and "(20)" above a list of 5 rows just looked
+           like the email had swallowed something. #}
+        {{ ui.subheading('Needs your attention <span style="font-weight:400;color:#94a3b8;font-size:13px;">(' ~ digest.attentionAlertGroups ~ ')</span>') }}
+        {% set alertPalette = {
+            critical: { bg: '#fef2f2', border: '#dc2626', label: '#991b1b' },
+            warning:  { bg: '#fffbeb', border: '#d97706', label: '#92400e' },
+            info:     { bg: '#eff6ff', border: '#2563eb', label: '#1e3a8a' }
+        } %}
+        {% for alert in digest.attentionAlerts %}
+            {% set ap = alertPalette[alert.severity.value] ?? alertPalette.info %}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 6px 0;">
+                <tr><td style="padding: 10px 14px; background-color: {{ ap.bg }}; border-left: 3px solid {{ ap.border }}; border-radius: 0 8px 8px 0;">
+                    <div style="font-size: 11px; font-weight: 600; color: {{ ap.label }}; text-transform: uppercase; letter-spacing: 0.06em;">
+                        {{- alert.domainName ?? 'Account' -}}
+                        {%- if alert.occurrences > 1 %} · {{ alert.occurrences }}× this week{% endif -%}
+                    </div>
+                    <div style="margin-top: 2px; font-size: 13px; color: #0f172a;">{{ alert.title }}</div>
+                </td></tr>
+            </table>
         {% endfor %}
+        {% if digest.hasMoreAttentionAlerts() %}
+            <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b;">
+                Showing {{ digest.attentionAlerts|length }} of {{ digest.attentionAlertGroups }} —
+                <a href="{{ alertsUrl }}" style="color: #0f766e; text-decoration: none; font-weight: 500;">see all alerts</a>
+            </p>
+        {% endif %}
     {% endif %}
 
-    {# New senders #}
-    {% set has_new_senders = false %}
+    {# Good news: problems that got fixed. Balances the section above so the
+       digest is a status report, not a list of complaints. #}
+    {% if digest.resolvedAlertsCount > 0 %}
+        {{ ui.callout(
+            'success',
+            '<strong>' ~ digest.resolvedAlertsCount ~ '</strong> issue' ~ (digest.resolvedAlertsCount != 1 ? 's' : '') ~ ' resolved this week.'
+        ) }}
+    {% endif %}
+
+    {# Senders waiting for a decision — driven by real authorization state
+       (`known_sender`), not by "appeared this week". A sender discovered a
+       month ago and never reviewed keeps showing up here until somebody
+       decides, which is exactly what the "New senders discovered" section
+       below cannot do.
+
+       Links are generated with url() rather than passed in: this template is
+       rendered from a worker with no request, so url() resolves against
+       framework.router.default_uri — the same source the handler's
+       $dashboardUrl comes from. #}
+    {% set awaitingReview = digest.sendersAwaitingReviewCount() %}
+    {% if awaitingReview > 0 %}
+        {{ ui.subheading('Waiting for your review <span style="font-weight:400;color:#94a3b8;font-size:13px;">(' ~ awaitingReview ~ ')</span>') }}
+
+        <p style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+            These servers have sent mail as your domains and nobody has said yet whether they are yours. Nothing is
+            blocked either way — marking them just stops us flagging mail you already trust.
+        </p>
+
+        {% for domain in digest.domains %}
+            {% if domain.senderReview.hasAny() %}
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 8px 0;">
+                    <tr><td style="padding: 12px 16px; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;">
+                        <div style="font-size: 13px; font-weight: 600; color: #92400e;">
+                            <span style="font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;">{{ domain.domainName }}</span>
+                            &middot; {{ domain.senderReview.needsReviewCount }} sender{{ domain.senderReview.needsReviewCount != 1 ? 's' : '' }}
+                            {%- if domain.senderReview.needsReviewMessages > 0 %}, {{ domain.senderReview.needsReviewMessages|number_format }} message{{ domain.senderReview.needsReviewMessages != 1 ? 's' : '' }}{% endif -%}
+                        </div>
+                        <div style="margin-top: 6px; font-size: 12px; color: #78350f; line-height: 1.8;">
+                            {% for sender in domain.senderReview.topSenderNames %}
+                                <span style="display: inline-block; padding: 2px 9px; margin: 2px 4px 2px 0; background-color: #ffffff; color: #92400e; border: 1px solid #fde68a; border-radius: 999px; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;">{{ sender }}</span>
+                            {% endfor %}
+                            {% if domain.senderReview.hasMoreThanNamed() %}
+                                <span style="display: inline-block; padding: 2px 9px; margin: 2px 4px 2px 0; color: #a16207;">+{{ domain.senderReview.unnamedCount() }} more</span>
+                            {% endif %}
+                        </div>
+                        <div style="margin-top: 8px; font-size: 13px;">
+                            <a href="{{ url('dashboard_sender_inventory', { domainId: domain.domainId, filter: 'needs_review' }) }}"
+                               style="color: #0f766e; text-decoration: none; font-weight: 500;">Review these senders &rarr;</a>
+                        </div>
+                    </td></tr>
+                </table>
+            {% endif %}
+        {% endfor %}
+
+        <p style="margin: 8px 0 16px 0; font-size: 12px; line-height: 1.6; color: #94a3b8;">
+            Not sure how to tell? Strong signs a sender is yours: you recognise the organisation, DKIM and SPF pass
+            close to 100%, and the volume matches mail you actually send.
+        </p>
+    {% endif %}
+
+    {# New senders — one block per domain with a total, then at most
+       `senderChipLimit` chips and a "+N more" tail. A domain that discovers
+       thirty senders in a week must not push the rest of the digest off screen. #}
+    {% set senderChipLimit = 8 %}
+    {% set totalNewSenders = 0 %}
     {% for domain in digest.domains %}
-        {% if domain.newSenders|length > 0 %}{% set has_new_senders = true %}{% endif %}
+        {% set totalNewSenders = totalNewSenders + domain.newSenders|length %}
     {% endfor %}
-    {% if has_new_senders %}
-        {{ ui.subheading('New senders discovered') }}
+    {% if totalNewSenders > 0 %}
+        {{ ui.subheading('New senders discovered <span style="font-weight:400;color:#94a3b8;font-size:13px;">(' ~ totalNewSenders ~ ')</span>') }}
         {% for domain in digest.domains %}
             {% if domain.newSenders|length > 0 %}
-                <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em;">{{ domain.domainName }}</p>
+                <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em;">
+                    {{ domain.domainName }} · {{ domain.newSenders|length }} new
+                </p>
                 <p style="margin: 0 0 14px 0; line-height: 1.9;">
-                    {% for sender in domain.newSenders %}
+                    {% for sender in domain.newSenders|slice(0, senderChipLimit) %}
                         <span style="display: inline-block; padding: 3px 10px; margin: 2px 4px 2px 0; background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 999px; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;">{{ sender }}</span>
                     {% endfor %}
+                    {% if domain.newSenders|length > senderChipLimit %}
+                        <span style="display: inline-block; padding: 3px 10px; margin: 2px 4px 2px 0; font-size: 12px; color: #64748b;">+{{ domain.newSenders|length - senderChipLimit }} more</span>
+                    {% endif %}
                 </p>
             {% endif %}
         {% endfor %}

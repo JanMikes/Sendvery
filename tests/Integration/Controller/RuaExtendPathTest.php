@@ -14,13 +14,18 @@ use PHPUnit\Framework\Attributes\Test;
 use Ramsey\Uuid\Uuid;
 
 /**
- * TASK-167 — DMARC RUA "extend" path UX.
+ * DMARC RUA "extend" path UX.
  *
- * Covers the extend option in the domain setup checklist's RUA destination
- * row when the user's DMARC record points at an external address. Verifies
- * that Sendvery offers to extend (add alongside) rather than only replace,
- * surfaces the authorization record warning, and warns about the RFC 7489
- * 2-address practical limit.
+ * When a domain already publishes a `_dmarc` record pointing somewhere else,
+ * Sendvery offers to be ADDED alongside the existing address rather than only to
+ * replace it — plus the two consequences of doing so: reports only arrive once an
+ * authorization record exists, and RFC 7489 lets receivers cap delivery at two
+ * addresses.
+ *
+ * The presentation moved from a sub-card inside the old five-row setup checklist
+ * to the report-delivery step of the guided setup surface, so the hooks are
+ * `guided-dns-record*`. The two cautions kept their original identifiers because
+ * the facts they state did not change.
  */
 final class RuaExtendPathTest extends WebTestCase
 {
@@ -42,13 +47,24 @@ final class RuaExtendPathTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
 
-        $extendOption = $crawler->filter('[data-testid="rua-extend-option"]');
-        self::assertCount(1, $extendOption, 'The extend option must render when rua= points at an external address so the user knows they can add Sendvery alongside their existing address.');
+        // Editing, not adding: a `_dmarc` record already exists, and telling the
+        // user to add a second one would break DMARC for the domain.
+        self::assertStringContainsString(
+            'Edit the existing record',
+            $crawler->filter('[data-testid="guided-dns-record-action"]')->text(),
+        );
 
-        $extendRecord = $crawler->filter('[data-testid="rua-extend-record"]');
+        $extendRecord = $crawler->filter('[data-testid="guided-dns-record-final"]');
         self::assertCount(1, $extendRecord, 'The extended DMARC record must be visible for copy-to-clipboard.');
         self::assertStringContainsString('reports@sendvery.test', $extendRecord->text(), 'The extended record must include the Sendvery report address.');
         self::assertStringContainsString('dmarc@example.com', $extendRecord->text(), 'The extended record must preserve the user\'s existing rua address.');
+
+        // And the value they are replacing is shown next to it, so the change is
+        // visible rather than something they have to trust.
+        self::assertStringContainsString(
+            'dmarc@example.com',
+            $crawler->filter('[data-testid="guided-dns-record-current"]')->text(),
+        );
     }
 
     #[Test]
@@ -69,7 +85,7 @@ final class RuaExtendPathTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
 
-        $copyBtn = $crawler->filter('[data-testid="rua-extend-copy"]');
+        $copyBtn = $crawler->filter('[data-testid="guided-dns-record-copy"]');
         self::assertCount(1, $copyBtn, 'A copy button must render next to the extended record so the user can paste it into their DNS provider.');
     }
 
@@ -163,8 +179,14 @@ final class RuaExtendPathTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
 
-        $extendOption = $crawler->filter('[data-testid="rua-extend-option"]');
-        self::assertCount(0, $extendOption, 'The extend option must not render when Sendvery is already in the rua — the "already configured" case shows green status instead.');
+        // Nothing to extend: reports already reach us, so the delivery step is
+        // finished and carries neither a record nor its cautions.
+        self::assertCount(
+            0,
+            $crawler->filter('[data-testid="guided-setup-step-delivery"]'),
+            'A domain whose reports already reach Sendvery must not be asked to change its DMARC record.',
+        );
+        self::assertCount(0, $crawler->filter('[data-testid="rua-authorization-warning"]'));
     }
 
     #[Test]
@@ -180,8 +202,13 @@ final class RuaExtendPathTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
 
-        $extendOption = $crawler->filter('[data-testid="rua-extend-option"]');
-        self::assertCount(0, $extendOption, 'The extend option must not render when no DMARC record exists — there is nothing to extend.');
+        // With no record to extend there is no address list to overflow, so the
+        // RFC 7489 caution would be noise.
+        self::assertCount(
+            0,
+            $crawler->filter('[data-testid="rua-address-limit-warning"]'),
+            'The address-limit caution belongs to the extend path only.',
+        );
     }
 
     private function insertDmarcCheckResult(

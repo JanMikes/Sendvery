@@ -1,0 +1,29 @@
+{# The one and only "re-check DNS now" control (DEC-059).
+
+   Every surface that offers a manual DNS check renders THIS component. The
+   health page previously had no button at all while ReverifyDomainController's
+   own comment claimed it did — a second copy-pasted form is exactly how that
+   drift happened, and a shared component is how it stops.
+
+   The check runs live DNS lookups inside the web request, so it is throttled
+   to one run per domain per 3 minutes. When the bucket is empty the button
+   renders disabled with the remaining wait rather than inviting a click that
+   would only be bounced back with a notice.
+
+   Props:
+     - domainId (string)
+     - label (string)         Button copy while a re-check is available.
+     - buttonClass (string)   daisyUI modifiers appended to `btn`.
+     - formTestid (string|null)  Optional test hook on the wrapping form.
+#}
+{% props domainId, label = 'Re-check now', buttonClass = 'btn-sm btn-primary', formTestid = null %}
+
+{% set recheck = domain_recheck_availability(domainId) %}
+
+<form method="post" action="{{ path('dashboard_domain_reverify', { id: domainId }) }}" class="shrink-0"{% if formTestid is not null %} data-testid="{{ formTestid }}"{% endif %}>
+    <button type="submit"
+            class="btn {{ buttonClass }}"
+            data-testid="recheck-dns-button"
+            {% if not recheck.isAvailable %}disabled title="We re-check a domain at most once every 3 minutes so we don't hammer your DNS provider."{% endif %}
+    >{% if recheck.isAvailable %}{{ label }}{% else %}Re-check available in {{ recheck.cooldownLabel }}{% endif %}</button>
+</form>

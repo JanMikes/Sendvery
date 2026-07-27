@@ -12,6 +12,29 @@ use Doctrine\DBAL\Connection;
 
 final readonly class GetDomainOverview
 {
+    /**
+     * 30-day-window pass rate, deliberately NULL-when-no-data.
+     *
+     * `NULLIF(SUM(rec.count), 0)` makes the divisor NULL when the domain has no
+     * `dmarc_record` rows, so the whole expression evaluates to NULL. There is
+     * no `COALESCE(..., 0)` wrapper on purpose: collapsing "we have never seen a
+     * message" into a hard `0` made a brand-new domain indistinguishable from
+     * one where every single message failed authentication, which is what the
+     * `/app/domains` cards were reporting as a red "0.0%".
+     *
+     * Do NOT reintroduce a zero fallback here. Consumers get `?float` and
+     * render an explicit "waiting for first report" state instead.
+     */
+    private const string PASS_RATE_EXPR = 'SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100';
+
+    /**
+     * Ordering-only variant of {@see PASS_RATE_EXPR}. ORDER BY needs a total
+     * order over rows including the no-data ones, and the sort semantics below
+     * were designed against a 0-for-no-data value. Never selected — display
+     * always uses the nullable expression.
+     */
+    private const string PASS_RATE_SORT_EXPR = 'COALESCE('.self::PASS_RATE_EXPR.', 0)';
+
     public function __construct(
         private Connection $database,
     ) {
@@ -33,27 +56,40 @@ final readonly class GetDomainOverview
 
         // Compose conditional WHERE/HAVING fragments per filter:
         //   - null         → no fragments, returns every domain
-        //   - Unverified   → WHERE dmarc_verified_at IS NULL,                no HAVING
-        //   - Healthy      → no extra WHERE,                                 HAVING pass_rate >= 90
-        //   - Attention    → WHERE dmarc_verified_at IS NOT NULL,            HAVING pass_rate < 90
-        // A verified domain with zero reports gets pass_rate = 0 (COALESCE fallback) → Attention. Intentional.
+        //   - Unverified   → WHERE dmarc_verified_at IS NULL,      no HAVING
+        //   - Healthy      → WHERE dmarc_verified_at IS NOT NULL,  HAVING pass_rate >= 90 OR pass_rate IS NULL
+        //   - Attention    → WHERE dmarc_verified_at IS NOT NULL,  HAVING pass_rate < 90
         //
-        // NOTE: the Healthy/Attention SQL filters here are looser than the
-        // TASK-098 in-app `DomainHealthClassifier` verdict (which ALSO requires
-        // all 4 DNS protocols configured before declaring Healthy). Tightening
-        // the SQL filter to match would require pushing the per-protocol score
-        // thresholds into SQL and is a v2 refinement — the immediate goal is
-        // the on-page glyph + banner agreeing for ANY single domain you click,
-        // not bit-for-bit parity between the filter dropdown and the glyph.
+        // `pass_rate` is genuinely NULL when the domain has no `dmarc_record`
+        // rows at all — see {@see buildBaseSelect()}. A verified, brand-new
+        // domain therefore does NOT fall into Attention just because no report
+        // has landed yet: `NULL < 90` is NULL (not true), so it drops out of
+        // Attention, and the explicit `IS NULL` arm keeps it in Healthy. This
+        // mirrors `DomainHealthClassifier::classifyOverview()`, which returns
+        // Healthy for "correctly configured, awaiting first report" — without
+        // the two agreeing, clicking "Need attention" would surface cards
+        // rendering a green glyph.
+        //
+        // The `dmarc_verified_at IS NOT NULL` guard on Healthy exists for the
+        // same agreement reason: an unverified domain always classifies as
+        // Unverified, so it must never be listed under Healthy — which it
+        // would be now that "no reports" no longer disqualifies.
+        //
+        // NOTE: the Healthy/Attention SQL filters here are still looser than
+        // the TASK-098 in-app `DomainHealthClassifier` verdict (which ALSO
+        // requires all 4 DNS protocols configured before declaring Healthy).
+        // Tightening the SQL filter to match would require pushing the
+        // per-protocol score thresholds into SQL and is a v2 refinement.
         $whereClause = '';
         $havingClause = '';
         if (DomainHealthFilter::Unverified === $statusFilter) {
             $whereClause = ' AND md.dmarc_verified_at IS NULL';
         } elseif (DomainHealthFilter::Healthy === $statusFilter) {
-            $havingClause = ' HAVING COALESCE(SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100, 0) >= 90';
+            $whereClause = ' AND md.dmarc_verified_at IS NOT NULL';
+            $havingClause = ' HAVING '.self::PASS_RATE_EXPR.' >= 90 OR '.self::PASS_RATE_EXPR.' IS NULL';
         } elseif (DomainHealthFilter::Attention === $statusFilter) {
             $whereClause = ' AND md.dmarc_verified_at IS NOT NULL';
-            $havingClause = ' HAVING COALESCE(SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100, 0) < 90';
+            $havingClause = ' HAVING '.self::PASS_RATE_EXPR.' < 90';
         }
 
         // ORDER BY axis driven by the TASK-040 ?domain_health_sort= param:
@@ -71,16 +107,14 @@ final readonly class GetDomainOverview
         //             drops the COALESCE around $passRateExpr.
         //   - Most  → total_reports DESC then pass_rate ASC (ties → surface
         //             the worst high-volume domain first).
-        $passRateExpr = 'COALESCE(SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100, 0)';
-        $passRateNullableExpr = 'SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float / NULLIF(SUM(rec.count), 0) * 100';
         $orderClause = match ($sort) {
-            DomainHealthSort::Worst => 'NULLIF(SUM(rec.count), 0) IS NULL, '.$passRateExpr.' ASC, COUNT(dr.id) DESC',
-            DomainHealthSort::Best => $passRateNullableExpr.' DESC NULLS LAST, COUNT(dr.id) DESC',
-            DomainHealthSort::Most => 'COUNT(dr.id) DESC, '.$passRateExpr.' ASC',
+            DomainHealthSort::Worst => 'NULLIF(SUM(rec.count), 0) IS NULL, '.self::PASS_RATE_SORT_EXPR.' ASC, COUNT(dr.id) DESC',
+            DomainHealthSort::Best => self::PASS_RATE_EXPR.' DESC NULLS LAST, COUNT(dr.id) DESC',
+            DomainHealthSort::Most => 'COUNT(dr.id) DESC, '.self::PASS_RATE_SORT_EXPR.' ASC',
             null => 'md.domain ASC',
         };
 
-        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}> $data */
+        /** @var list<array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}> $data */
         $data = $this->database->executeQuery(
             $this->buildBaseSelect().'
             WHERE md.team_id IN (:teamIds)'.$whereClause.'
@@ -113,7 +147,7 @@ final readonly class GetDomainOverview
             return null;
         }
 
-        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}|false $row */
+        /** @var array{domain_id: string, domain_name: string, total_reports: int|string, latest_report_date: string|null, pass_rate: float|string|null, team_id: string, team_name: string, dmarc_verified_at: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, latest_spf_score: int|string|null, latest_dkim_score: int|string|null, latest_dmarc_score: int|string|null, latest_mx_score: int|string|null, first_report_at: string|null}|false $row */
         $row = $this->database->executeQuery(
             $this->buildBaseSelect().'
             WHERE md.id = :domainId AND md.team_id IN (:teamIds)
@@ -205,12 +239,7 @@ final readonly class GetDomainOverview
                 t.name AS team_name,
                 COUNT(dr.id) AS total_reports,
                 MAX(dr.date_range_end) AS latest_report_date,
-                COALESCE(
-                    SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
-                    / NULLIF(SUM(rec.count), 0)
-                    * 100,
-                    0
-                ) AS pass_rate,
+                '.self::PASS_RATE_EXPR.' AS pass_rate,
                 dhs.spf_score   AS latest_spf_score,
                 dhs.dkim_score  AS latest_dkim_score,
                 dhs.dmarc_score AS latest_dmarc_score,

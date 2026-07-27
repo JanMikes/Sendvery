@@ -24,8 +24,10 @@ use App\Value\DomainHealthFilter;
  *  - Unverified ← DMARC not verified (no reports flow yet → the headline
  *    blocker no matter what else is going on).
  *  - Healthy    ← DMARC verified AND all 4 DNS protocols configured AND
- *    30-day pass rate ≥ 90. "Configured" mirrors the `DomainSetupStatusResolver`
- *    thresholds: SPF/DKIM/DMARC verified-at present, MX score ≥ 80.
+ *    (30-day pass rate ≥ 90 OR no pass-rate data yet). "Configured" mirrors the
+ *    `DomainSetupStatusResolver` thresholds: SPF/DKIM/DMARC verified-at present,
+ *    MX score ≥ 80. The "no data yet" arm is deliberate — see
+ *    {@see self::awaitingFirstReportVerdict()}.
  *  - Attention  ← any verified domain that isn't Healthy. Includes both the
  *    "missing a protocol" case (covers the green-on-list / yellow-on-detail
  *    bug for `DMARC verified + SPF missing + 95% pass`) and the
@@ -58,6 +60,10 @@ final readonly class DomainHealthClassifier
             return DomainHealthFilter::Attention;
         }
 
+        if (!$overview->hasPassRateData()) {
+            return $this->awaitingFirstReportVerdict();
+        }
+
         if ($overview->passRate < self::HEALTHY_PASS_RATE_THRESHOLD) {
             return DomainHealthFilter::Attention;
         }
@@ -85,10 +91,42 @@ final readonly class DomainHealthClassifier
             return DomainHealthFilter::Attention;
         }
 
+        if (!$overview->hasPassRateData()) {
+            return $this->awaitingFirstReportVerdict();
+        }
+
         if ($overview->passRate < self::HEALTHY_PASS_RATE_THRESHOLD) {
             return DomainHealthFilter::Attention;
         }
 
+        return DomainHealthFilter::Healthy;
+    }
+
+    /**
+     * Verdict for "DMARC verified, all four protocols configured, but we have
+     * no pass-rate data yet" — i.e. a correctly set up domain still waiting for
+     * its first DMARC report (reporters typically send one per UTC day, so this
+     * state legitimately lasts up to ~24h after setup), or one whose reports
+     * have aged out of the retention window.
+     *
+     * It is Healthy, not Attention. The domain's *setup* — the only thing this
+     * classifier judges — is complete; there is simply nothing to grade yet.
+     * Before this branch existed the missing data arrived as `passRate = 0.0`
+     * and tripped the `< 90` check, so a brand-new, perfectly configured domain
+     * was accused of failing every message: amber border, warning triangle, and
+     * a red "0.0%" on the card.
+     *
+     * Deliberately NOT a fourth `DomainHealthFilter` case. The three cases map
+     * 1:1 onto the three filter chips, the three glyph tones, and the three
+     * `HealthSummaryResolver` buckets; a fourth would need a chip, a tone, a
+     * bucket, and a matching SQL predicate everywhere for a state that is
+     * transient by nature. The *presentation* of "no data yet" belongs to the
+     * pass-rate widget (`pass_rate_stat` in `components/_severity_glyph.html.twig`,
+     * driven by `DomainOverviewResult::$passRate` being null), not to the
+     * setup-health verdict.
+     */
+    private function awaitingFirstReportVerdict(): DomainHealthFilter
+    {
         return DomainHealthFilter::Healthy;
     }
 

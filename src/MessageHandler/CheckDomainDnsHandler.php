@@ -38,6 +38,11 @@ final readonly class CheckDomainDnsHandler
                 continue;
             }
 
+            // These timestamps exist for the verification/quarantine-release
+            // rules, NOT as the source of truth for "is this record healthy?" —
+            // that is read straight off the `dns_check_result` rows persisted
+            // above (see App\Query\GetLatestDnsCheckStates). MX therefore needs
+            // no column of its own; it never gates verification.
             match ($result->type) {
                 DnsCheckType::Spf => $domain->spfVerifiedAt = $result->checkedAt,
                 DnsCheckType::Dkim => $domain->dkimVerifiedAt = $result->checkedAt,

@@ -61,7 +61,7 @@ final readonly class SenderAuthorizationAdvisor
                 senderId: $sender->id,
                 severity: SenderAdvisorSeverity::RecommendAuthorize,
                 reasonText: sprintf(
-                    '%s has sent %s messages as this domain in the last 30 days with %s%% DMARC pass. Looks legitimate — authorize to stop being alerted.',
+                    '%s has sent %s messages as this domain in the last 30 days with %s%% DMARC pass. That is strong evidence it is legitimately yours — authorize it and we stop asking.',
                     $sender->organization ?? 'This sender',
                     number_format($activity->totalMessages, 0, '.', ','),
                     self::formatRate($activity->dkimPassRate),
@@ -71,19 +71,24 @@ final readonly class SenderAuthorizationAdvisor
         }
 
         if ($this->shouldRecommendRevoke($sender, $activity)) {
-            $who = null !== $sender->organization && '' !== $sender->organization
-                ? $sender->organization
-                : sprintf('Unknown sender at %s', $sender->sourceIp);
+            // No organisation branch here: shouldRecommendRevoke() only fires
+            // when we could NOT resolve one, so a "if we know the org, name it"
+            // arm was unreachable.
+            //
+            // Not "Unknown sender at …" either: "Unknown" was the word the badge
+            // used for a *state*, and reusing it for "we could not resolve who
+            // owns this IP" is what made the two indistinguishable.
+            $who = sprintf('The unidentified server at %s', $sender->sourceIp);
 
             return new SenderAdvisorResult(
                 senderId: $sender->id,
                 severity: SenderAdvisorSeverity::RecommendRevoke,
                 reasonText: sprintf(
-                    '%s has sent %s failing messages as this domain — likely spoofing. Mark as revoked to make this visible in your alerts.',
+                    '%s has sent %s failing messages as this domain — likely spoofing. Mark it not authorized so it stays flagged instead of blending in.',
                     $who,
                     number_format($activity->totalMessages, 0, '.', ','),
                 ),
-                primaryActionLabel: 'Mark as revoked',
+                primaryActionLabel: 'Mark not authorized',
             );
         }
 

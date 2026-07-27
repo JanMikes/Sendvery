@@ -183,9 +183,13 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {# Stretched-link row navigation per TASK-018 (TASK-035).
-                                   The "Re-test" form gets `relative z-20` so submitting
-                                   the button doesn't fall through to the row anchor.
+                                {# Row navigation: real anchor on the host cell + the generic
+                                   `row-link` Stimulus controller (see
+                                   assets/controllers/row_link_controller.js). The "Re-test" form is
+                                   marked `data-row-link-ignore` so submitting it never falls through
+                                   to the row link — no z-index stacking required, and no dependence
+                                   on positioning a `<tr>` (undefined in CSS, and the reason every
+                                   row of the reports table used to open the same report).
                                    Leading severity glyph + `border-l-4 border-l-{tone}`
                                    per TASK-068: errored rows visually punch out of a
                                    long list without needing the user to read the Status
@@ -202,15 +206,17 @@
                                         {% set mailboxTone = 'base-300' %}
                                         {% set mailboxSeverity = 'neutral' %}
                                     {% endif %}
-                                    <tr class="hover:bg-base-200/50 relative border-l-4 border-l-{{ mailboxTone }}">
+                                    <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ mailboxTone }}"
+                                        {{ stimulus_controller('row-link') }}
+                                        data-action="click->row-link#navigate">
                                         <td class="w-10">
                                             {{ severity.glyph(mailboxSeverity, 'sm') }}
                                         </td>
                                         <td class="font-medium">
                                             <a href="{{ path('dashboard_mailbox_detail', { id: mailbox.id }) }}"
-                                               class="absolute inset-0 z-10"
-                                               aria-label="Open mailbox detail for {{ mailbox.host }}"></a>
-                                            {{ mailbox.host }}:{{ mailbox.port }}
+                                               class="link link-hover"
+                                               data-row-link-target="link"
+                                               aria-label="Open mailbox detail for {{ mailbox.host }}">{{ mailbox.host }}:{{ mailbox.port }}</a>
                                         </td>
                                         <td>{{ mailbox.type.value }}</td>
                                         <td>
@@ -228,7 +234,7 @@
                                         </td>
                                         <td class="text-xs text-error max-w-xs truncate">{{ mailbox.lastError ?? '—' }}</td>
                                         <td>
-                                            <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.id }) }}" class="relative z-20">
+                                            <form method="post" action="{{ path('dashboard_mailbox_retest', { id: mailbox.id }) }}" data-row-link-ignore>
                                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('mailbox_retest') }}">
                                                 <button type="submit" class="btn btn-ghost btn-xs">Re-test</button>
                                             </form>

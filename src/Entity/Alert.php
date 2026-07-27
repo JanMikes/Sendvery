@@ -16,6 +16,13 @@ use Ramsey\Uuid\UuidInterface;
 #[ORM\Index(name: 'idx_alert_team_unread', columns: ['team_id', 'is_read'])]
 #[ORM\Index(name: 'idx_alert_created_at', columns: ['created_at'])]
 #[ORM\Index(name: 'idx_alert_team_unread_snoozed', columns: ['team_id', 'is_read', 'snoozed_until'])]
+// Every "needs attention" read path (unread badge, critical badge, attention
+// summary) filters on resolved_at IS NULL on top of team + is_read, and the
+// existing idx_alert_team_unread_snoozed cannot serve that predicate.
+#[ORM\Index(name: 'idx_alert_team_unread_resolved', columns: ['team_id', 'is_read', 'resolved_at'])]
+// Auto-resolution looks alerts up by (domain, type, still-unresolved) on every
+// DNS check — four times per domain per sweep.
+#[ORM\Index(name: 'idx_alert_domain_type_resolved', columns: ['monitored_domain_id', 'type', 'resolved_at'])]
 final class Alert implements EntityWithEvents
 {
     use HasEvents;
@@ -58,6 +65,14 @@ final class Alert implements EntityWithEvents
     public ?\DateTimeImmutable $snoozedUntil;
 
     /**
+     * When the underlying problem was observed to be fixed. Resolved alerts
+     * stay in the list (with a green check) as a record that the fix landed,
+     * but they no longer count towards anything that demands attention.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $resolvedAt;
+
+    /**
      * @param array<string, mixed> $data
      */
     public function __construct(
@@ -72,6 +87,7 @@ final class Alert implements EntityWithEvents
         \DateTimeImmutable $createdAt,
         bool $isRead = false,
         ?\DateTimeImmutable $snoozedUntil = null,
+        ?\DateTimeImmutable $resolvedAt = null,
     ) {
         $this->id = $id;
         $this->team = $team;
@@ -84,6 +100,7 @@ final class Alert implements EntityWithEvents
         $this->isRead = $isRead;
         $this->createdAt = $createdAt;
         $this->snoozedUntil = $snoozedUntil;
+        $this->resolvedAt = $resolvedAt;
 
         $this->recordThat(new AlertCreated(
             alertId: $this->id,
@@ -113,5 +130,24 @@ final class Alert implements EntityWithEvents
     public function isSnoozed(\DateTimeImmutable $now): bool
     {
         return null !== $this->snoozedUntil && $this->snoozedUntil > $now;
+    }
+
+    /**
+     * Idempotent on purpose: the DNS sweep re-runs every night and would
+     * otherwise keep bumping the timestamp, making a months-old fix look like
+     * it happened last night.
+     */
+    public function resolve(\DateTimeImmutable $now): void
+    {
+        if (null !== $this->resolvedAt) {
+            return;
+        }
+
+        $this->resolvedAt = $now;
+    }
+
+    public function isResolved(): bool
+    {
+        return null !== $this->resolvedAt;
     }
 }

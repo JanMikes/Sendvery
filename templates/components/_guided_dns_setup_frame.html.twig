@@ -1,0 +1,6 @@
+{# Turbo-frame response body for the guided DNS setup surface's live updates.
+
+   The component already renders the matching <turbo-frame id="domain-dns-setup">
+   wrapper, so a polled refresh swaps exactly the same markup a full page load
+   produces — there is no second, drift-prone copy of the surface here. #}
+<twig:GuidedDnsSetup :setup="setup" :domainId="domainId" :domainName="domainName" :mode="mode" />

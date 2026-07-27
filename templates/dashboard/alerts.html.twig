@@ -31,7 +31,7 @@
     {# Filters #}
     <div class="flex flex-wrap gap-2 mb-4">
         <a href="{{ path('dashboard_alerts') }}"
-           class="btn btn-sm {{ currentSeverity is null and currentType is null and currentRead is null and not currentSnoozed ? 'btn-primary' : 'btn-ghost' }}">
+           class="btn btn-sm {{ currentSeverity is null and currentType is null and currentRead is null and not currentSnoozed and currentResolved is null ? 'btn-primary' : 'btn-ghost' }}">
             All
         </a>
         <a href="{{ path('dashboard_alerts', { read: 'false' }) }}"
@@ -41,6 +41,12 @@
         <a href="{{ path('dashboard_alerts', { snoozed: '1' }) }}"
            class="btn btn-sm {{ currentSnoozed ? 'btn-primary' : 'btn-ghost' }}">
             Snoozed
+        </a>
+        {# Resolved alerts stay in the default list too — this pill is the way
+           to review just the ones Sendvery closed on its own. #}
+        <a href="{{ path('dashboard_alerts', { resolved: '1' }) }}"
+           class="btn btn-sm {{ currentResolved == true ? 'btn-success' : 'btn-ghost' }}">
+            Resolved
         </a>
         <div class="divider divider-horizontal mx-0"></div>
         <a href="{{ path('dashboard_alerts', { severity: 'critical' }) }}"
@@ -55,6 +61,12 @@
            class="btn btn-sm {{ currentSeverity == 'info' ? 'btn-info' : 'btn-ghost' }}">
             Info
         </a>
+        {# `success` alerts are good news (e.g. a record went live). Without a
+           pill they'd be findable only by scrolling the mixed list. #}
+        <a href="{{ path('dashboard_alerts', { severity: 'success' }) }}"
+           class="btn btn-sm {{ currentSeverity == 'success' ? 'btn-success' : 'btn-ghost' }}">
+            Good news
+        </a>
     </div>
 
     {% if alerts is empty %}
@@ -63,25 +75,43 @@
             message="No alerts to show. Alerts will appear here when important events are detected for your domains."
         />
     {% else %}
-        {# Bulk-action form wrapping the list. The Stimulus controller toggles
-           the toolbar visibility based on per-row checkbox state. #}
+        {# Bulk-action form wrapping the list. The Stimulus controller keeps the
+           always-visible toolbar in sync with per-row checkbox state. #}
         <form method="post"
               action="{{ path('dashboard_alerts_bulk') }}"
               {{ stimulus_controller('alert-selection') }}>
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('bulk_alert_action') }}">
 
-            {# Sticky bulk toolbar — hidden by default, revealed when ≥1 row checked. #}
+            {# Sticky bulk toolbar — ALWAYS visible. A panel that only appeared
+               after the first checkbox click hid the fact that bulk actions
+               exist at all. The selection-scoped buttons start `disabled` so
+               the visible panel is honest rather than a trap; "Mark all as
+               read" is team-wide and therefore never disabled. #}
             <div data-alert-selection-target="toolbar"
-                 class="hidden sticky top-0 z-20 flex flex-wrap items-center gap-2 bg-base-100 border border-base-200 rounded-box shadow-sm px-3 py-2 mb-3">
-                <span class="text-sm font-medium" data-alert-selection-target="count">0 selected</span>
+                 class="sticky top-0 z-20 flex flex-wrap items-center gap-2 bg-base-100 border border-base-200 rounded-box shadow-sm px-3 py-2 mb-3">
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox"
+                           class="checkbox checkbox-sm"
+                           data-alert-selection-target="selectAll"
+                           data-action="change->alert-selection#toggleAll"
+                           aria-label="Select all alerts on this page">
+                    <span class="font-medium" data-alert-selection-target="count">0 selected</span>
+                </label>
                 <div class="divider divider-horizontal mx-0"></div>
-                <button type="submit" name="action" value="mark_read" class="btn btn-sm btn-ghost">
+                <button type="submit" name="action" value="mark_read" class="btn btn-sm btn-ghost"
+                        data-alert-selection-target="scoped" disabled>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                     Mark selected as read
                 </button>
-                <button type="submit" name="action" value="snooze_7d" class="btn btn-sm btn-ghost">
+                <button type="submit" name="action" value="snooze_7d" class="btn btn-sm btn-ghost"
+                        data-alert-selection-target="scoped" disabled>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     Snooze selected 7 days
+                </button>
+                <button type="submit" name="action" value="mark_all_read" class="btn btn-sm btn-ghost"
+                        title="Marks every unread alert for this team, not just the rows shown here">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7M11 17l4 4L23 11"></path></svg>
+                    Mark all as read
                 </button>
                 <button type="button" class="btn btn-sm btn-ghost ml-auto" data-action="alert-selection#clearAll">Clear</button>
             </div>
@@ -93,9 +123,16 @@
                        TASK-070: unread rows get a faint `bg-{tone}/5` wash so a single
                        critical-unread alert in a long list is unmistakable from peripheral
                        vision; read rows fall back to plain `bg-base-100`. #}
-                    {% set alertTone = alert.severity == 'critical' ? 'error' : (alert.severity == 'warning' ? 'warning' : 'info') %}
-                    {% set alertBg = alert.isRead ? 'bg-base-100' : 'bg-' ~ alertTone ~ '/5' %}
-                    <div class="relative card {{ alertBg }} border border-base-200 shadow-sm hover:shadow-md transition-shadow flex-row items-center gap-3 p-4 {{ not alert.isRead ? 'border-l-4' : '' }} border-l-{{ alertTone }}">
+                    {% set alertTone = alert.severity == 'critical' ? 'error' : (alert.severity == 'warning' ? 'warning' : (alert.severity == 'success' ? 'success' : 'info')) %}
+                    {# A resolved alert describes a problem that no longer
+                       exists: it keeps its place in the list as the receipt
+                       that the fix landed, but drops the attention tint and
+                       wears the green "resolved" accent instead of its
+                       original severity tone. #}
+                    {% set alertResolved = alert.resolvedAt is not null %}
+                    {% set alertBg = (alert.isRead or alertResolved) ? 'bg-base-100' : 'bg-' ~ alertTone ~ '/5' %}
+                    {% set accentTone = alertResolved ? 'success' : alertTone %}
+                    <div class="relative card {{ alertBg }} border border-base-200 shadow-sm hover:shadow-md transition-shadow flex-row items-center gap-3 p-4 {{ alertResolved or not alert.isRead ? 'border-l-4' : '' }} border-l-{{ accentTone }}">
                         <input type="checkbox"
                                name="alertIds[]"
                                value="{{ alert.alertId }}"
@@ -103,9 +140,18 @@
                                data-action="change->alert-selection#updateCount"
                                aria-label="Select alert {{ alert.title }}">
 
-                        {# Severity icon #}
+                        {# Severity icon — a resolved alert shows the green check
+                           regardless of the severity it was raised at. #}
                         <div class="flex-shrink-0">
-                            {% if alert.severity == 'critical' %}
+                            {% if alertResolved %}
+                                <div class="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center" aria-hidden="true">
+                                    <svg class="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </div>
+                            {% elseif alert.severity == 'success' %}
+                                <div class="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center" aria-hidden="true">
+                                    <svg class="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </div>
+                            {% elseif alert.severity == 'critical' %}
                                 <div class="w-8 h-8 rounded-full bg-error/10 flex items-center justify-center">
                                     <svg class="w-4 h-4 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path></svg>
                                 </div>
@@ -130,17 +176,27 @@
                                    redundant `badge-xs badge-primary` "New" badge. The dot,
                                    tinted bg, and bold title already convey unread state — the
                                    removed badge was duplicate signal that crowded the title row. #}
-                                {% if not alert.isRead %}
+                                {% if not alert.isRead and not alertResolved %}
                                     <span class="w-2 h-2 rounded-full bg-{{ alertTone }} shrink-0" aria-label="Unread"></span>
                                 {% endif %}
-                                <h3 class="text-sm font-semibold truncate {{ not alert.isRead ? 'text-base-content' : 'text-base-content/70' }}">
+                                <h3 class="text-sm font-semibold truncate {{ not alert.isRead and not alertResolved ? 'text-base-content' : 'text-base-content/70' }}">
                                     {{ alert.title }}
                                 </h3>
+                                {% if alertResolved %}
+                                    <span class="badge badge-xs badge-success gap-1">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                        Resolved
+                                    </span>
+                                {% endif %}
                                 {% if alert.snoozedUntil %}
                                     <span class="badge badge-xs badge-outline">Snoozed</span>
                                 {% endif %}
                             </div>
-                            <p class="text-xs text-base-content/50 mt-0.5 truncate">{{ alert.message }}</p>
+                            {% if alertResolved %}
+                                <p class="text-xs text-success mt-0.5 truncate">Resolved automatically · {{ alert.resolvedAt|date('M j, Y H:i') }}</p>
+                            {% else %}
+                                <p class="text-xs text-base-content/50 mt-0.5 truncate">{{ alert.message }}</p>
+                            {% endif %}
                         </div>
 
                         {# Meta #}

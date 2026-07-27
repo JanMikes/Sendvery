@@ -82,7 +82,95 @@
                     <span class="text-sm text-base-content/50 block">total messages</span>
                 </div>
                 <div {{ stimulus_controller('chart', { config: donutConfig }) }} style="min-height: 200px"></div>
+                {# Where this total and the per-message rows below could look like they
+                   disagree: both use the reporter's <policy_evaluated> DKIM/SPF results,
+                   which already have DMARC alignment applied — that is also what the Pass
+                   Rate column on the reports list counts, so the numbers match. The rows
+                   below add the raw identifiers behind those results, and an aggregate
+                   report names only one DKIM signature even when a message carried
+                   several, so an identifier can look unaligned on a passing message. #}
+                <p class="text-xs text-base-content/50 mt-2">
+                    Counted from the reporter's evaluated DKIM and SPF results, which already include DMARC alignment — the same rule behind the Pass Rate column on the reports list. The breakdown below adds the identifiers behind each result.
+                </p>
             </div>
+        </div>
+    </div>
+
+    {# Plain-language failure explanation. Deliberately NOT gated behind `aiEnabled`:
+       knowing why your mail failed DMARC is not a paid feature, and this is the part
+       users came to the page for. #}
+    {% set failingRecords = report.records|filter(record => not alignment[record.recordId].dmarcPass) %}
+    <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+        <div class="card-body p-4">
+            {% if report.records is empty %}
+                {# Reporters do send reports with no rows at all. Saying "nothing
+                   failed" there would claim a clean bill of health we never got. #}
+                <h2 class="text-lg font-semibold">This report contains no message data</h2>
+                <p class="text-sm text-base-content/60">
+                    {{ report.reporterOrg }} sent a report for {{ report.policyDomain }} without any message rows, so there is nothing to pass or fail here.
+                </p>
+            {% elseif failingRecords is empty %}
+                <h2 class="text-lg font-semibold">Nothing failed DMARC in this report</h2>
+                <p class="text-sm text-base-content/60">
+                    Every message {{ report.reporterOrg }} saw for {{ report.policyDomain }} authenticated and aligned with the From domain.
+                </p>
+            {% else %}
+                <h2 class="text-lg font-semibold">What failed, and what it means</h2>
+                <p class="text-sm text-base-content/60">
+                    {{ failMessages }} of {{ totalMessages }} messages failed DMARC. A message passes only when DKIM or SPF
+                    <em>authenticates</em> and its domain <em>aligns</em> with the From address — so each source below says which of the two broke, and why.
+                </p>
+
+                <div class="space-y-3 mt-3">
+                    {% for record in failingRecords|slice(0, 10) %}
+                        {% set verdict = alignment[record.recordId] %}
+                        <div class="border-l-4 border-l-error bg-base-200/40 rounded-box p-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="badge badge-sm badge-{{ verdict.tone }}">{{ verdict.headline }}</span>
+                                <span class="font-mono text-sm">{{ record.sourceIp }}</span>
+                                {% if record.resolvedHostname ?? record.resolvedOrg %}
+                                    <span class="text-sm text-base-content/60">{{ record.resolvedHostname ?? record.resolvedOrg }}</span>
+                                {% endif %}
+                                <span class="text-sm text-base-content/60">{{ record.count }} msg</span>
+                                <span class="badge badge-sm badge-{{ verdict.dkim.badgeTone }}">DKIM {{ verdict.dkim.label }}</span>
+                                <span class="badge badge-sm badge-{{ verdict.spf.badgeTone }}">SPF {{ verdict.spf.label }}</span>
+                                <twig:StatusBadge status="{{ record.disposition }}" />
+                            </div>
+
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs mt-3">
+                                <div>
+                                    <span class="text-base-content/50 block">From domain (header_from)</span>
+                                    <span class="font-mono">{{ record.headerFrom }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-base-content/50 block">DKIM signing domain (d=)</span>
+                                    <span class="font-mono">{{ record.dkimDomain ?? 'not signed' }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-base-content/50 block">DKIM selector (s=)</span>
+                                    <span class="font-mono">{{ record.dkimSelector ?? '—' }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-base-content/50 block">SPF envelope domain</span>
+                                    <span class="font-mono">{{ record.spfDomain ?? 'not reported' }}</span>
+                                </div>
+                            </div>
+
+                            <ul class="list-disc list-inside text-sm space-y-1 mt-3">
+                                {% for sentence in verdict.explanations %}
+                                    <li>{{ sentence }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                {% if failingRecords|length > 10 %}
+                    <p class="text-xs text-base-content/50 mt-3">
+                        Showing the 10 largest failing sources of {{ failingRecords|length }}. The rest are in the raw records table below.
+                    </p>
+                {% endif %}
+            {% endif %}
         </div>
     </div>
 
@@ -113,7 +201,12 @@
         <h2 class="text-lg font-semibold mb-3">By sender</h2>
         <div class="space-y-2">
             {% for group in senderGroups %}
-                <details class="group">
+                {% set groupRecords = report.records|filter(record => record.sourceIp in group.sourceIps) %}
+                {% set groupFailing = groupRecords|filter(record => not alignment[record.recordId].dmarcPass) %}
+                {# Senders with a DMARC failure start expanded — a failing source the user
+                   has to go hunting for behind a closed disclosure is a failing source the
+                   user never fixes. #}
+                <details class="group"{{ groupFailing is not empty ? ' open' : '' }}>
                     <summary class="card bg-base-100 border border-base-200 shadow-sm cursor-pointer list-none">
                         <div class="card-body p-3 flex flex-row flex-wrap items-center gap-3">
                             <span class="font-medium truncate max-w-[18rem]" title="{{ group.displayLabel }}">
@@ -146,19 +239,32 @@
                                     <th>Hostname</th>
                                     <th class="text-right">Count</th>
                                     <th>Disposition</th>
+                                    <th>DMARC</th>
                                     <th>DKIM</th>
                                     <th>SPF</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for record in report.records|filter(record => record.sourceIp in group.sourceIps) %}
+                                {% for record in groupRecords %}
+                                    {% set verdict = alignment[record.recordId] %}
                                     <tr>
                                         <td class="font-mono text-xs">{{ record.sourceIp }}</td>
                                         <td class="text-xs">{{ record.resolvedHostname ?? record.resolvedOrg ?? '—' }}</td>
                                         <td class="text-right font-medium">{{ record.count }}</td>
                                         <td><twig:StatusBadge status="{{ record.disposition }}" /></td>
-                                        <td><twig:StatusBadge status="{{ record.dkimResult }}" /></td>
-                                        <td><twig:StatusBadge status="{{ record.spfResult }}" /></td>
+                                        <td><span class="badge badge-sm badge-{{ verdict.tone }}">{{ verdict.dmarcPass ? 'pass' : 'fail' }}</span></td>
+                                        <td>
+                                            <twig:StatusBadge status="{{ record.dkimResult }}" />
+                                            <span class="block text-xs text-base-content/60">
+                                                {{ record.dkimDomain ? 'd=' ~ record.dkimDomain : 'no signature' }}{{ record.dkimSelector ? ' s=' ~ record.dkimSelector }} · {{ verdict.dkim.label }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <twig:StatusBadge status="{{ record.spfResult }}" />
+                                            <span class="block text-xs text-base-content/60">
+                                                {{ record.spfDomain ?? 'not reported' }} · {{ verdict.spf.label }}
+                                            </span>
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -188,6 +294,7 @@
                                 <th>Hostname</th>
                                 <th class="text-right">Count</th>
                                 <th>Disposition</th>
+                                <th>DMARC</th>
                                 <th>DKIM</th>
                                 <th>SPF</th>
                                 <th>Header From</th>
@@ -195,13 +302,25 @@
                         </thead>
                         <tbody>
                             {% for record in report.records %}
+                                {% set verdict = alignment[record.recordId] %}
                                 <tr>
                                     <td class="font-mono text-xs">{{ record.sourceIp }}</td>
                                     <td class="text-xs">{{ record.resolvedHostname ?? record.resolvedOrg ?? '—' }}</td>
                                     <td class="text-right font-medium">{{ record.count }}</td>
                                     <td><twig:StatusBadge status="{{ record.disposition }}" /></td>
-                                    <td><twig:StatusBadge status="{{ record.dkimResult }}" /></td>
-                                    <td><twig:StatusBadge status="{{ record.spfResult }}" /></td>
+                                    <td><span class="badge badge-sm badge-{{ verdict.tone }}">{{ verdict.dmarcPass ? 'pass' : 'fail' }}</span></td>
+                                    <td>
+                                        <twig:StatusBadge status="{{ record.dkimResult }}" />
+                                        <span class="block text-xs text-base-content/60">
+                                            {{ record.dkimDomain ? 'd=' ~ record.dkimDomain : 'no signature' }}{{ record.dkimSelector ? ' s=' ~ record.dkimSelector }} · {{ verdict.dkim.label }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <twig:StatusBadge status="{{ record.spfResult }}" />
+                                        <span class="block text-xs text-base-content/60">
+                                            {{ record.spfDomain ?? 'not reported' }} · {{ verdict.spf.label }}
+                                        </span>
+                                    </td>
                                     <td class="text-xs">{{ record.headerFrom }}</td>
                                 </tr>
                             {% endfor %}

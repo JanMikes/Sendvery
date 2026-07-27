@@ -22,6 +22,7 @@
         .footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #e5e7eb; font-size: 10px; color: #9ca3af; text-align: center; }
         .pass { color: #22c55e; }
         .fail { color: #ef4444; }
+        .nodata { color: #6b7280; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -49,7 +50,15 @@
         <table>
             <tr><td class="stat-label">Total Reports</td><td class="stat-value">{{ reportData.total_reports }}</td></tr>
             <tr><td class="stat-label">Total Messages</td><td class="stat-value">{{ reportData.total_messages|number_format(0, '.', ',') }}</td></tr>
-            <tr><td class="stat-label">Pass Rate</td><td class="stat-value {{ reportData.pass_rate >= 90 ? 'pass' : 'fail' }}">{{ reportData.pass_rate|number_format(1) }}%</td></tr>
+            {# A null pass rate means no DMARC records were counted. Printing
+               "0.0%" in an exported report would be a false failing grade. #}
+            <tr><td class="stat-label">Pass Rate</td>
+                {% if reportData.pass_rate is null %}
+                    <td class="stat-value nodata">No reports received yet</td>
+                {% else %}
+                    <td class="stat-value {{ reportData.pass_rate >= 90 ? 'pass' : 'fail' }}">{{ reportData.pass_rate|number_format(1) }}%</td>
+                {% endif %}
+            </tr>
             <tr><td class="stat-label">Known Senders</td><td class="stat-value">{{ reportData.total_senders }} ({{ reportData.authorized_senders }} authorized)</td></tr>
             <tr><td class="stat-label">Blacklisted IPs (7d)</td><td class="stat-value {{ reportData.blacklisted_ips > 0 ? 'fail' : 'pass' }}">{{ reportData.blacklisted_ips }}</td></tr>
         </table>
@@ -69,7 +78,7 @@
                         <td>{{ sender.organization ?? '-' }}</td>
                         <td>{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
                         <td class="{{ sender.passRate >= 90 ? 'pass' : 'fail' }}">{{ sender.passRate|number_format(1) }}%</td>
-                        <td>{{ sender.isAuthorized ? 'Authorized' : 'Unknown' }}</td>
+                        <td>{{ sender.reviewState.label }}</td>
                     </tr>
                 {% endfor %}
             </tbody>

@@ -31,6 +31,13 @@ final class BulkSenderActionController extends AbstractController
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
 
+        // `mark_unknown` is the wire value, not the vocabulary: the user-facing
+        // word for this action is "Mark not authorized" everywhere (see
+        // App\Value\SenderReviewState). The POST value and the
+        // `dashboard_sender_revoke` route name keep their old spelling because
+        // they pair with the BulkMarkSendersUnknown / MarkSenderAuthorized
+        // commands — renaming the label was the point, renaming the plumbing is
+        // churn.
         $action = $request->request->getString('action');
         if (!in_array($action, ['authorize', 'mark_unknown'], true)) {
             throw $this->createNotFoundException('Unknown bulk action.');
@@ -70,7 +77,7 @@ final class BulkSenderActionController extends AbstractController
                 teamId: $teamId,
                 actorUserId: $user->id,
             ));
-            $this->addFlash('success', sprintf('Marked %d sender%s as unknown.', count($senderIds), 1 === count($senderIds) ? '' : 's'));
+            $this->addFlash('success', sprintf('Marked %d sender%s not authorized.', count($senderIds), 1 === count($senderIds) ? '' : 's'));
         }
 
         return $this->redirectToRoute('dashboard_sender_inventory', ['domainId' => $domainId]);

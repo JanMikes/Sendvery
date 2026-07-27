@@ -241,6 +241,78 @@ final class SetupChecklistTest extends WebTestCase
     }
 
     #[Test]
+    public function theChecklistNamesTheDomainItIsAskingYouToSetUpAndLinksStraightToIt(): void
+    {
+        // The reported gap: "Finish setting up Sendvery" named no domain, so a
+        // user with several could not tell which one the steps were about, and
+        // "Do it →" dropped them on the domains list to work it out themselves.
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+
+        $persona = $fixtures->persona()
+            ->emailPrefix('checklist-named-'.substr(uniqid('', true), -6))
+            ->withDomain('checklist-named-'.substr(uniqid('', true), -6).'.example')
+            ->build();
+        assert(null !== $persona->domain);
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertStringContainsString('Publish the DMARC record for '.$persona->domain->domain, $body);
+        self::assertStringContainsString('setting up <span class="font-medium text-base-content">'.$persona->domain->domain.'</span>', $body);
+        self::assertStringContainsString(
+            '/app/domains/'.$persona->domain->id->toString().'/health#health-dmarc',
+            $body,
+            'The step CTA must open that domain\'s DNS setup surface at the DMARC section.',
+        );
+    }
+
+    #[Test]
+    public function theOtherDomainsStillMissingDmarcAreOfferedAsLinks(): void
+    {
+        // One focused domain keeps the card a three-step onboarding track rather
+        // than three steps per domain, so the ones it is NOT naming still have to
+        // be reachable in a click.
+        $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+        $fixtures = TestFixtures::fromContainer(self::getContainer());
+
+        $persona = $fixtures->persona()
+            ->emailPrefix('checklist-others-'.substr(uniqid('', true), -6))
+            ->withDomain('checklist-focus-'.substr(uniqid('', true), -6).'.example')
+            ->build();
+        $suffix = substr(uniqid('', true), -6);
+        $zeta = $fixtures->addExtraDomain($persona->team, 'zeta-checklist-'.$suffix);
+        $alpha = $fixtures->addExtraDomain($persona->team, 'alpha-checklist-'.$suffix);
+        $em->flush();
+
+        $client->loginUser($persona->user);
+        $client->request('GET', '/app');
+
+        self::assertResponseIsSuccessful();
+        $body = (string) $client->getResponse()->getContent();
+
+        self::assertStringContainsString('Also still waiting on DNS', $body);
+        self::assertStringContainsString('/app/domains/'.$zeta->id->toString().'/health', $body);
+        self::assertStringContainsString('/app/domains/'.$alpha->id->toString().'/health', $body);
+
+        // Alphabetical, deliberately: the footnote must not reshuffle when the
+        // user re-sorts the unrelated Domain Health card further down the page.
+        $alphaPosition = strpos($body, $alpha->domain);
+        $zetaPosition = strpos($body, $zeta->domain);
+        self::assertNotFalse($alphaPosition);
+        self::assertNotFalse($zetaPosition);
+        self::assertLessThan($zetaPosition, $alphaPosition);
+    }
+
+    #[Test]
     public function dismissedChecklistReSurfacesOnDmarcRegression(): void
     {
         // Once verified, then dismissed, then DMARC regresses → checklist

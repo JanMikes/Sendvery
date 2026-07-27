@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Results;
 
+use App\Value\SenderReviewState;
+
 /**
  * Aggregated sender data for the "Top Senders" card on the domain detail page.
  *
@@ -23,11 +25,18 @@ final readonly class TopSenderForDomainResult
         public float $spfPassRate,
         public ?string $knownSenderId,
         public ?bool $senderIsAuthorized,
+        /**
+         * The badge this row renders. Null means no `known_sender` row backs
+         * this group at all, so there is nothing for the user to decide yet —
+         * the table shows a neutral "Not tracked yet" instead of implying that
+         * an action is pending.
+         */
+        public ?SenderReviewState $reviewState,
     ) {
     }
 
     /**
-     * @param array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null} $row
+     * @param array{group_key: string, display_label: string, total_messages: int|string, dkim_pass_count: int|string, spf_pass_count: int|string, known_sender_id: string|null, sender_is_authorized: int|string|bool|null, known_sender_count: int|string, needs_review_sender_count: int|string, authorized_sender_count: int|string} $row
      */
     public static function fromDatabaseRow(array $row): self
     {
@@ -47,6 +56,36 @@ final readonly class TopSenderForDomainResult
             senderIsAuthorized: null !== $row['sender_is_authorized']
                 ? (bool) (is_string($row['sender_is_authorized']) ? (int) $row['sender_is_authorized'] : $row['sender_is_authorized'])
                 : null,
+            reviewState: self::groupReviewState(
+                (int) $row['known_sender_count'],
+                (int) $row['needs_review_sender_count'],
+                (int) $row['authorized_sender_count'],
+            ),
         );
+    }
+
+    /**
+     * A row here is a *group* — senders are grouped by resolved organisation,
+     * so "Seznam" can cover five IPs in five different states. The badge shows
+     * the state that most deserves the reader's attention, worst first:
+     * an explicitly rejected IP still delivering mail is a live red flag, an
+     * unreviewed one is a pending request, and only an all-authorized group is
+     * settled.
+     */
+    private static function groupReviewState(int $knownSenderCount, int $needsReviewCount, int $authorizedCount): ?SenderReviewState
+    {
+        if (0 === $knownSenderCount) {
+            return null;
+        }
+
+        if ($knownSenderCount > $needsReviewCount + $authorizedCount) {
+            return SenderReviewState::NotAuthorized;
+        }
+
+        if ($needsReviewCount > 0) {
+            return SenderReviewState::NeedsReview;
+        }
+
+        return SenderReviewState::Authorized;
     }
 }

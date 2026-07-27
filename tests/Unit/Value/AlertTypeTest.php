@@ -21,13 +21,14 @@ final class AlertTypeTest extends TestCase
         self::assertSame('dns_record_changed', AlertType::DnsRecordChanged->value);
         self::assertSame('dns_record_invalid', AlertType::DnsRecordInvalid->value);
         self::assertSame('dns_record_missing', AlertType::DnsRecordMissing->value);
+        self::assertSame('dns_record_published', AlertType::DnsRecordPublished->value);
         self::assertSame('mailbox_connection_error', AlertType::MailboxConnectionError->value);
         self::assertSame('ip_blacklisted', AlertType::IpBlacklisted->value);
         self::assertSame('managed_dmarc_regression', AlertType::ManagedDmarcRegression->value);
         self::assertSame('managed_dmarc_dangling', AlertType::ManagedDmarcDangling->value);
         self::assertSame('managed_dmarc_advanced', AlertType::ManagedDmarcAdvanced->value);
         self::assertSame('managed_dmarc_ready', AlertType::ManagedDmarcReady->value);
-        self::assertCount(12, AlertType::cases());
+        self::assertCount(13, AlertType::cases());
     }
 
     #[Test]
@@ -52,5 +53,6 @@ final class AlertTypeTest extends TestCase
         yield 'dns invalid is critical' => [AlertType::DnsRecordInvalid, AlertSeverity::Critical];
         yield 'dns missing is critical' => [AlertType::DnsRecordMissing, AlertSeverity::Critical];
         yield 'dns changed is critical' => [AlertType::DnsRecordChanged, AlertSeverity::Critical];
+        yield 'publishing a record for the first time is good news' => [AlertType::DnsRecordPublished, AlertSeverity::Success];
     }
 }

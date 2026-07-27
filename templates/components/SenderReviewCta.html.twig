@@ -1,0 +1,77 @@
+{# "N senders are waiting for your review" — the quantified call to action.
+
+   Rendered on BOTH the domain detail page and the Sender Inventory page so the
+   expected action is stated wherever the amber badges appear, not only once
+   the per-row advisor thresholds are crossed. Renders nothing when there is
+   nothing to decide.
+
+   `needsDecisionCount` is the higher-confidence subset — senders with enough
+   30-day history for the SenderAuthorizationAdvisor to actually recommend a
+   verdict. It is offered as a shortcut ("start with these"), never as a
+   replacement for the honest total.
+
+   Props:
+     - domainId           (string)   domain to link the filtered list for
+     - needsReviewCount   (int)      senders in the Needs review state
+     - needsReviewMessages(int)      lifetime volume those senders carry (materiality)
+     - needsDecisionCount (int)      subset the advisor has a recommendation for
+#}
+{% props domainId, needsReviewCount = 0, needsReviewMessages = 0, needsDecisionCount = 0 %}
+
+{% if needsReviewCount > 0 %}
+    <div class="card border border-warning/30 bg-warning/5 shadow-sm mb-6"
+         data-testid="sender-review-cta">
+        <div class="card-body p-4 sm:p-5">
+            <div class="flex items-start gap-3">
+                <div class="w-9 h-9 rounded-full bg-warning/15 text-warning flex items-center justify-center shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+
+                <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold text-sm sm:text-base" data-testid="sender-review-cta-headline">
+                        {{ needsReviewCount }} sender{{ needsReviewCount == 1 ? '' : 's' }} waiting for your review
+                    </h3>
+
+                    <p class="text-sm text-base-content/70 mt-1 leading-relaxed max-w-3xl">
+                        {% if needsReviewMessages > 0 %}
+                            They have sent {{ needsReviewMessages|number_format(0, '.', ',') }} message{{ needsReviewMessages == 1 ? '' : 's' }} as this domain
+                            and carry a <span class="badge badge-xs badge-warning align-middle">Needs review</span> badge because nobody has said yet whether they are yours.
+                        {% else %}
+                            Each carries a <span class="badge badge-xs badge-warning align-middle">Needs review</span> badge because nobody has said yet whether it is yours.
+                        {% endif %}
+                        Marking them costs nothing and changes no DNS — it just stops Sendvery flagging mail you already trust.
+                    </p>
+
+                    <p class="text-xs text-base-content/60 mt-2 max-w-3xl">
+                        <strong class="text-base-content/80">If you do nothing:</strong> no mail is blocked or released, but these
+                        senders keep showing up amber here, in your alerts and in your weekly email.
+                    </p>
+
+                    <div class="mt-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-wrap">
+                        <a href="{{ path('dashboard_sender_inventory', { domainId: domainId, filter: 'needs_review' }) }}"
+                           class="btn btn-sm btn-warning"
+                           data-testid="sender-review-cta-primary">
+                            Review {{ needsReviewCount }} sender{{ needsReviewCount == 1 ? '' : 's' }}
+                        </a>
+
+                        {% if needsDecisionCount > 0 %}
+                            <a href="{{ path('dashboard_sender_inventory', { domainId: domainId, recommendation: 'needs_decision' }) }}"
+                               class="btn btn-sm btn-ghost"
+                               data-testid="sender-needs-decision-stat">
+                                Start with the {{ needsDecisionCount }} we can advise on
+                            </a>
+                        {% endif %}
+
+                        <a href="{{ path('knowledge_base_article', { slug: 'authorizing-senders-explained' }) }}"
+                           class="link link-hover text-xs sm:text-sm text-base-content/70"
+                           data-testid="sender-review-cta-kb-link">
+                            How do I tell if a sender is really mine? →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

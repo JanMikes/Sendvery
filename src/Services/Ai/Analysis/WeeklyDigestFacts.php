@@ -22,7 +22,8 @@ final readonly class WeeklyDigestFacts
         public string $periodLabel,
         public int $totalDomains,
         public int $totalMessages,
-        public float $averagePassRate,
+        /** Null when no domain reported in the window — not the same as 0%. */
+        public ?float $averagePassRate,
         public int $alertsCount,
         public int $dnsChangesCount,
         public array $domains,

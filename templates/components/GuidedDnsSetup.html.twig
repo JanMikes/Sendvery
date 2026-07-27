@@ -1,0 +1,366 @@
+{# The ONE guided DNS setup surface for a domain.
+
+   Rendered by /app/domains/{id} in `compact` mode (lead action expanded, the
+   rest summarised, drilling into the health page) and by
+   /app/domains/{id}/health in `full` mode (every tier expanded). Both read the
+   same App\Value\Dns\GuidedDnsSetup, so the two pages can no longer disagree
+   about what the user should do — which is how the health page ended up
+   offering only the self-managed TXT path.
+
+   Three explicit tiers replace the old flat "N of 5 checks passing" list:
+   Action required now → Waiting on you later → Done. At most ONE step is ever
+   in the first tier.
+
+   Wrapped in a turbo-frame so the "first check still running" state can update
+   itself in place instead of the user reloading and watching a spinner turn
+   red. Polling stops the moment the frame renders `data-dns-setup-settled`.
+
+   Props:
+     - setup (App\Value\Dns\GuidedDnsSetup)
+     - domainId (string)
+     - domainName (string)
+     - mode ('full'|'compact')
+#}
+{% props setup, domainId, domainName, mode = 'full' %}
+
+{% set isCompact = mode == 'compact' %}
+
+<turbo-frame id="domain-dns-setup" class="block"
+    {% if setup.checkInProgress %}
+        {{ stimulus_controller('dns-verify-poll', {
+            verified: false,
+            url: path('dashboard_domain_dns_setup_frame', { id: domainId, mode: mode }),
+            interval: 5000,
+            maxAttempts: 36,
+            settledSelector: '[data-dns-setup-settled]',
+        }) }}
+    {% endif %}
+>
+    <div class="card bg-base-100 border border-base-200 shadow-sm rounded-2xl mb-6"
+         data-testid="guided-dns-setup"
+         data-setup-mode="{{ mode }}"
+         {% if not setup.checkInProgress %}data-dns-setup-settled="true"{% endif %}>
+        <div class="card-body p-5 sm:p-6 space-y-5">
+
+            {# ── Header ─────────────────────────────────────────────────────
+               No re-check button here on purpose: both pages that render this
+               surface already carry one in their heading row, and DEC-059's
+               shared RecheckDnsButton is worth nothing if the same page offers
+               the same action twice. The in-progress panel below is the one
+               exception — that state has no other way forward. #}
+            <div class="min-w-0">
+                <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-1">DNS setup</div>
+                <h2 class="text-lg font-semibold text-base-content" data-testid="guided-dns-setup-headline">{{ setup.headline }}</h2>
+                <p class="text-sm text-base-content/60 mt-1">{{ setup.lede }}</p>
+            </div>
+
+            {% if setup.checkInProgress %}
+                {# ── ① Check running: honest pending state, no verdicts ──── #}
+                <div class="rounded-2xl border border-info/30 bg-info/5 p-5" data-testid="dns-check-pending-banner">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-info animate-spin shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-dns-verify-poll-target="spinner">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v2m0 12v2m8-8h-2M6 12H4m13.657-5.657l-1.414 1.414M7.757 16.243l-1.414 1.414m0-11.314l1.414 1.414m9.9 9.9l1.414 1.414"/>
+                        </svg>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-semibold text-base-content">DNS check in progress</div>
+                            <p class="text-sm text-base-content/70 mt-1">
+                                We haven't published any verdicts for {{ domainName }} yet — we won't guess before we know.
+                                This panel refreshes on its own <span data-dns-verify-poll-target="status">as soon as there is something to show…</span>
+                            </p>
+                            <div class="mt-3">
+                                <twig:RecheckDnsButton :domainId="domainId" label="Check now" buttonClass="btn-sm btn-info btn-outline" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            {% elseif not setup.hasOutstandingWork %}
+                {# ── All finished: confirm, then list what passed ────────── #}
+                <div class="rounded-2xl border border-success/30 bg-success/5 p-5" data-testid="guided-dns-setup-complete">
+                    <div class="flex items-start gap-3">
+                        <div class="w-9 h-9 rounded-full bg-success/15 text-success flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <div class="font-semibold text-base-content">Nothing to fix</div>
+                            <p class="text-sm text-base-content/70 mt-1">
+                                Every record we check for {{ domainName }} is in place. We keep watching and will raise an alert if that changes.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {{ _self.tierSummary(setup.done, 'done', domainId) }}
+
+            {% else %}
+                {# ── ① Action required now ───────────────────────────────── #}
+                <div class="space-y-4" data-testid="dns-record-recommendations">
+                    {% for step in setup.actionRequired %}
+                        {{ _self.tierHeading(step.tier, 1) }}
+                        <div class="rounded-2xl border-l-4 border-l-warning border border-base-200 bg-base-100 p-4 sm:p-5 space-y-4"
+                             data-testid="guided-setup-step-{{ step.key }}"
+                             data-setup-tier="{{ step.tier.value }}">
+                            {# The how-to card renders its own title + why, so the
+                               wrapper only supplies a heading for the branches
+                               that don't — otherwise the same sentence appears
+                               twice, one line apart. #}
+                            {% if step.offersDeliveryChoice or step.hasCopyableRecord %}
+                                <div>
+                                    <h3 class="font-bold text-base sm:text-lg leading-snug">{{ step.title }}</h3>
+                                    <p class="text-sm text-base-content/60 mt-1 leading-relaxed">
+                                        <span class="font-semibold text-base-content/80">Why:</span> {{ step.whyText }}
+                                    </p>
+                                </div>
+                            {% endif %}
+
+                            {% if step.offersDeliveryChoice %}
+                                {{ _self.deliveryChoice(setup.deliveryOptions, step, domainId) }}
+                            {% elseif step.hasCopyableRecord %}
+                                {{ _self.recordBlock(step) }}
+                            {% else %}
+                                <twig:DnsRecordHowTo
+                                    recordType="{{ step.recordType }}"
+                                    host="{{ step.recordFqdn }}"
+                                    whatText="{{ step.title }}"
+                                    whyText="{{ step.whyText }}"
+                                    kbSlug="{{ step.kbSlug }}" />
+                            {% endif %}
+
+                            {{ _self.cautions(step) }}
+
+                            <p class="text-xs text-base-content/50">
+                                Right now: {{ step.statusLine }}
+                            </p>
+                        </div>
+                    {% endfor %}
+
+                    {# ── ② Waiting on you later ──────────────────────────── #}
+                    {% if setup.later is not empty %}
+                        {{ _self.tierHeading((setup.later|first).tier, 2) }}
+                        {% if isCompact %}
+                            {{ _self.tierSummary(setup.later, 'later', domainId) }}
+                        {% else %}
+                            <div class="space-y-4">
+                                {% for step in setup.later %}
+                                    <div class="rounded-2xl border border-base-200 bg-base-100 p-4 sm:p-5 space-y-4"
+                                         data-testid="guided-setup-step-{{ step.key }}"
+                                         data-setup-tier="{{ step.tier.value }}">
+                                        {% if step.hasCopyableRecord %}
+                                            <div>
+                                                <h3 class="font-semibold text-base leading-snug">{{ step.title }}</h3>
+                                                <p class="text-sm text-base-content/60 mt-1 leading-relaxed">
+                                                    <span class="font-semibold text-base-content/80">Why:</span> {{ step.whyText }}
+                                                </p>
+                                            </div>
+                                            {{ _self.recordBlock(step) }}
+                                        {% else %}
+                                            <twig:DnsRecordHowTo
+                                                recordType="{{ step.recordType }}"
+                                                host="{{ step.recordFqdn }}"
+                                                whatText="{{ step.title }}"
+                                                whyText="{{ step.whyText }}"
+                                                kbSlug="{{ step.kbSlug }}" />
+                                        {% endif %}
+                                        {{ _self.cautions(step) }}
+                                        <p class="text-xs text-base-content/50">Right now: {{ step.statusLine }}</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                {# ── ③ Done ─────────────────────────────────────────────── #}
+                {% if setup.done is not empty %}
+                    {{ _self.tierHeading((setup.done|first).tier, 3) }}
+                    {{ _self.tierSummary(setup.done, 'done', domainId) }}
+                {% endif %}
+            {% endif %}
+
+            {% if isCompact and not setup.checkInProgress %}
+                <a href="{{ path('dashboard_domain_health', { id: domainId }) }}"
+                   class="link link-primary text-sm"
+                   data-testid="guided-dns-setup-drilldown">
+                    Open the full DNS setup guide →
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</turbo-frame>
+
+{# Consequences of publishing the record above — shown WITH it, never instead of
+   it, so the user is informed rather than blocked. #}
+{% macro cautions(step) %}
+    {% for caution in step.cautions %}
+        <p class="text-xs text-{{ caution.tone }}" data-testid="{{ caution.key }}">{{ caution.text }}</p>
+    {% endfor %}
+{% endmacro %}
+
+{# Tier heading — the number is what makes the ordering explicit rather than
+   something the user has to infer from colour. #}
+{% macro tierHeading(tier, ordinal) %}
+    <div class="flex items-baseline gap-2 flex-wrap" data-testid="guided-setup-tier-{{ tier.value }}">
+        <span class="badge badge-{{ tier.tone }} badge-sm font-semibold">{{ ordinal }}</span>
+        <span class="text-sm font-semibold uppercase tracking-wide text-{{ tier.tone }}">{{ tier.label }}</span>
+        <span class="text-xs text-base-content/50">{{ tier.description }}</span>
+    </div>
+{% endmacro %}
+
+{# One-line-per-step summary, used for tiers we are not asking the user to act
+   on right now (and for everything below tier 1 in compact mode). #}
+{% macro tierSummary(steps, kind, domainId) %}
+    <ul class="space-y-2" data-testid="guided-setup-summary-{{ kind }}">
+        {% for step in steps %}
+            <li class="flex items-start gap-3" data-testid="guided-setup-summary-row-{{ step.key }}">
+                <span class="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 {{ kind == 'done' ? 'bg-success/15 text-success' : 'bg-info/15 text-info' }}">
+                    {% if kind == 'done' %}
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                    {% else %}
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 6v6l4 2"/></svg>
+                    {% endif %}
+                </span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-medium text-sm text-base-content">{{ step.name }}</span>
+                        <span class="text-sm text-base-content/70">{{ step.statusLine }}</span>
+                    </div>
+                    {% if kind != 'done' %}
+                        <a href="{{ path('dashboard_domain_health', { id: domainId }) }}#{{ step.healthAnchor }}"
+                           class="link link-primary text-sm">{{ step.title }} →</a>
+                    {% endif %}
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% endmacro %}
+
+{# The record, laid out the way a DNS provider's own panel lays it out: the
+   operation first, then the three fields you have to fill in, then the value —
+   with what is published today next to what it should become, so the change is
+   visible rather than implied. #}
+{% macro recordBlock(step) %}
+    <div class="rounded-xl border border-base-200 overflow-hidden"
+         data-testid="guided-dns-record"
+         data-record-type="{{ step.recordType|lower }}">
+        <div class="flex items-center gap-2 flex-wrap px-4 py-3 bg-base-200/60">
+            <span class="text-xs uppercase tracking-wide font-semibold text-base-content/50">Action</span>
+            <span class="badge badge-{{ step.action.tone }} badge-sm font-semibold" data-testid="guided-dns-record-action">{{ step.action.label }}</span>
+            <span class="text-xs text-base-content/50">at your DNS provider</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-base-200">
+            <div class="bg-base-100 px-4 py-3">
+                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Type</div>
+                <div class="font-mono font-semibold">{{ step.recordType }}</div>
+            </div>
+            <div class="bg-base-100 px-4 py-3">
+                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">Name</div>
+                <div class="font-mono font-semibold break-all">{{ step.recordName }}</div>
+                <div class="text-xs text-base-content/50 mt-1">
+                    Full name: <span class="font-mono break-all">{{ step.recordFqdn }}</span>
+                </div>
+            </div>
+            <div class="bg-base-100 px-4 py-3">
+                <div class="text-xs uppercase tracking-wide font-semibold text-base-content/50 mb-1">TTL</div>
+                <div class="font-mono font-semibold">{{ step.ttl }}</div>
+                <div class="text-xs text-base-content/50 mt-1">or your provider's default</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-base-200">
+            <div class="bg-base-100">
+                <div class="px-4 py-2 bg-base-200/60 text-xs uppercase tracking-wide font-semibold text-base-content/60">Current value</div>
+                <div class="px-4 py-3 font-mono text-xs break-all">
+                    {% if step.currentValue %}
+                        <span class="text-base-content/80" data-testid="guided-dns-record-current">{{ step.currentValue }}</span>
+                    {% else %}
+                        <span class="italic text-base-content/40" data-testid="guided-dns-record-current">No record exists yet</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="bg-primary/5" {{ stimulus_controller('clipboard-copy', { text: step.finalValue }) }}>
+                <div class="px-4 py-2 bg-primary/10 text-xs uppercase tracking-wide font-semibold text-primary flex items-center gap-2">
+                    Final value — paste this
+                    <button type="button" class="btn btn-xs btn-ghost ml-auto" data-action="clipboard-copy#copy" data-testid="guided-dns-record-copy">
+                        <span data-clipboard-copy-target="label">Copy</span>
+                    </button>
+                </div>
+                <div class="px-4 py-3 font-mono text-xs break-all select-all" data-testid="guided-dns-record-final">{{ step.finalValue }}</div>
+            </div>
+        </div>
+    </div>
+{% endmacro %}
+
+{# Both report-delivery paths, side by side. The unavailable one is rendered
+   greyed out WITH the reason, never hidden: the complaint that started this was
+   "it does not allow me at all", which is what happens when an option exists in
+   the product but not on the page. #}
+{% macro deliveryChoice(options, step, domainId) %}
+    <div {{ stimulus_controller('delivery-choice') }} data-testid="report-delivery-options" class="space-y-4">
+        <div>
+            <div class="text-sm font-semibold text-base-content mb-2">Choose how Sendvery gets your reports</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {% for option in options %}
+                    <label class="flex items-start gap-3 rounded-xl border p-3 {{ option.available ? 'cursor-pointer' : '' }} {{ option.selected ? 'border-primary bg-primary/5' : 'border-base-200' }}"
+                           data-delivery-choice-target="option"
+                           data-delivery-choice-mode="{{ option.mode.value }}"
+                           data-delivery-choice-selected="{{ option.selected ? 'true' : 'false' }}"
+                           data-testid="report-delivery-option-{{ option.mode.value }}">
+                        <input type="radio"
+                               name="delivery_choice_{{ step.key }}"
+                               value="{{ option.mode.value }}"
+                               class="radio radio-primary radio-sm mt-0.5"
+                               {{ option.selected ? 'checked' : '' }}
+                               {{ option.available ? '' : 'disabled' }}
+                               data-action="change->delivery-choice#select">
+                        <span class="min-w-0">
+                            <span class="flex items-center gap-2 flex-wrap">
+                                <span class="font-semibold text-sm">{{ option.label }}</span>
+                                {% if option.isPremium %}
+                                    <span class="badge badge-primary badge-xs">Premium</span>
+                                {% endif %}
+                            </span>
+                            <span class="block text-xs text-base-content/60 mt-1">{{ option.summary }}</span>
+                            {# The reason lives in the always-visible label, not in a
+                               collapsible panel: an option the user cannot select is
+                               exactly the one whose explanation must not be one
+                               interaction away. #}
+                            {% if not option.available %}
+                                <span class="block text-xs text-base-content/70 mt-2" data-testid="report-delivery-upsell-{{ option.mode.value }}">
+                                    {{ option.unavailableReason }}
+                                    {% if option.upgradeRoute %}
+                                        <a href="{{ path(option.upgradeRoute) }}" class="link link-primary font-semibold">See plans →</a>
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                        </span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% for option in options|filter(option => option.available) %}
+            <div data-delivery-choice-target="panel"
+                 data-delivery-choice-mode="{{ option.mode.value }}"
+                 data-testid="report-delivery-panel-{{ option.mode.value }}"
+                 {% if not option.selected %}hidden{% endif %}>
+                {% if option.selected %}
+                    {{ _self.recordBlock(step) }}
+                {% else %}
+                    <div class="rounded-xl border border-base-200 bg-base-200/40 p-4 space-y-3">
+                        <p class="text-sm text-base-content/70">{{ option.summary }}</p>
+                        {% if option.switchRoute %}
+                            <form method="post" action="{{ path(option.switchRoute, { id: domainId }) }}">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token(option.csrfTokenId) }}">
+                                <button type="submit" class="btn btn-sm btn-primary" data-testid="report-delivery-switch-{{ option.mode.value }}">
+                                    {{ option.switchLabel }}
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+{% endmacro %}

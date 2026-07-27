@@ -1,0 +1,25 @@
+{# The one badge every sender status renders through — domain detail's Top
+   Senders table and the Sender Inventory table both use it, so the two pages
+   can never disagree about what a colour means again.
+
+   The `title` carries SenderReviewState::meaning(), which is what turns an
+   opaque amber pill into an answer to "does this require any action?". The
+   legend and the KB article say the same thing at length; this is the version
+   you get for free by hovering.
+
+   Props:
+     - state  (?SenderReviewState)  null = no known_sender row backs this row yet
+#}
+{% props state = null %}
+
+{% if state is null %}
+    <span class="badge badge-sm badge-ghost"
+          title="No inventory entry for this sender yet — nothing to decide."
+          data-testid="sender-status-badge"
+          data-sender-state="untracked">Not tracked yet</span>
+{% else %}
+    <span class="badge badge-sm {{ state.badgeClass }}"
+          title="{{ state.meaning }}"
+          data-testid="sender-status-badge"
+          data-sender-state="{{ state.value }}">{{ state.label }}</span>
+{% endif %}

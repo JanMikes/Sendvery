@@ -28,6 +28,9 @@ use Twig\Extension\GlobalsInterface;
  * its own well-named global) while collapsing the security/team-resolve
  * overhead to a single pass per request.
  *
+ * Auto-resolved alerts never reach these badges — {@see GetAlerts} drops them
+ * from both unread counts, so a fixed DNS record clears the badge on its own.
+ *
  * The counts are wrapped in a defensive try/catch: the layout is also rendered
  * on unauth/onboarding pages where {@see DashboardContext} throws (no user,
  * no memberships). We treat those as "0" for every count instead of

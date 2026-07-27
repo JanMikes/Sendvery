@@ -19,27 +19,34 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {# Row-level navigation via stretched-link (a11y, middle-click, keyboard safe).
-                           The <tr> is position:relative; the <a> is absolute inset-0 inside the first <td>.
-                           If a future row adds a <button> or secondary <a>, give its containing <td>
-                           (or the control itself) class="relative z-20" so it wins pointer events.
-                           data-turbo-frame="_top" is required here because this table is wrapped in
-                           <turbo-frame id="reports-table"> — without it, the link would try to swap
-                           the report-detail page into this frame instead of loading as a full page.
+                        {# Row navigation: ONE real, visible anchor on the domain cell plus the
+                           generic `row-link` Stimulus controller for whole-row click convenience.
+                           The previous stretched-link overlay (`absolute inset-0 z-10` inside a
+                           `<tr class="relative">`) is deliberately gone: CSS 2.1 §9.3.1 leaves the
+                           effect of position:relative on a table-row UNDEFINED and daisyUI's
+                           `.table` is itself position:relative, so in browsers that ignore it every
+                           row's overlay sized itself to the whole table, they stacked, and the last
+                           row in DOM order swallowed every click — making every row open the oldest
+                           report. See assets/controllers/row_link_controller.js for the contract.
+                           data-turbo-frame="_top" is required because this table lives in
+                           <turbo-frame id="reports-table"> — without it the report-detail page
+                           would be swapped into this frame instead of loading as a full page.
                            Leading severity glyph + `border-l-{tone}` per TASK-069: a single failing
                            report jumps off the page instead of forcing the user to read every number. #}
                         {% for report in reports %}
                             {% set reportTone = severity.pass_rate_tone(report.passRate)|trim %}
-                            <tr class="hover:bg-base-200/50 cursor-pointer relative border-l-4 border-l-{{ reportTone }}">
+                            <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ reportTone }}"
+                                {{ stimulus_controller('row-link') }}
+                                data-action="click->row-link#navigate">
                                 <td class="w-8">
                                     {{ severity.glyph(reportTone, 'sm') }}
                                 </td>
                                 <td class="font-medium">
                                     <a href="{{ path('dashboard_report_detail', { id: report.reportId }) }}"
-                                       class="absolute inset-0 z-10"
+                                       class="link link-hover"
+                                       data-row-link-target="link"
                                        data-turbo-frame="_top"
-                                       aria-label="View report from {{ report.reporterOrg }}"></a>
-                                    {{ report.domainName }}
+                                       aria-label="View report from {{ report.reporterOrg }} for {{ report.domainName }}">{{ report.domainName }}</a>
                                 </td>
                                 <td>{{ report.reporterOrg }}</td>
                                 <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>

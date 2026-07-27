@@ -1,0 +1,86 @@
+{#
+   "Needs your attention" — the domains that are not fully healthy, WHY each
+   one isn't, and one link per row straight to the surface that fixes it.
+
+   Every string here is passed through from DomainAttentionResolver, which reads
+   them off the same DomainSetupStatus the per-domain page renders. Do not write
+   DNS copy in this template: the whole point is that a reason shown here is
+   word-for-word the reason the domain page shows.
+
+   Renders nothing when no domain needs attention. The focus card above already
+   says "All domains healthy" — a second all-clear panel would be chatter, and
+   an empty card would read as broken.
+#}
+{% props attention %}
+
+{% import 'components/_severity_glyph.html.twig' as severity %}
+
+{% if attention.totalCount > 0 %}
+    {# Explicit maps rather than `bg-{{ tone }}`: Tailwind only compiles classes
+       it can see as literal text, and an interpolated class name is invisible
+       to the scanner. #}
+    {% set dotClass = { error: 'bg-error', warning: 'bg-warning', info: 'bg-info' } %}
+    {% set btnClass = { error: 'btn-error', warning: 'btn-warning', info: 'btn-info', success: 'btn-success' } %}
+
+    <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+        <div class="card-body p-4">
+            <div class="flex items-start justify-between gap-3 mb-1">
+                <div class="min-w-0">
+                    <h2 class="text-sm font-semibold">Needs your attention</h2>
+                    <p class="text-xs text-base-content/60 mt-0.5">
+                        {{ attention.totalCount }}
+                        {{- attention.totalCount == 1 ? ' domain isn\'t' : ' domains aren\'t' }} fully set up. Each row links to where you fix it.
+                    </p>
+                </div>
+                <a href="{{ path('dashboard_domains', { status: 'attention' }) }}" class="text-xs text-primary hover:underline shrink-0">All domains</a>
+            </div>
+
+            <ul class="divide-y divide-base-200">
+                {% for domain in attention.domains %}
+                    {% set domainTone = domain.severityTone() %}
+                    <li class="flex items-start gap-3 py-3">
+                        {{ severity.glyph(domainTone, 'sm') }}
+
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center flex-wrap gap-x-3 gap-y-1">
+                                <a href="{{ path('dashboard_domain_detail', { id: domain.domainId }) }}"
+                                   class="font-semibold text-sm hover:underline">{{ domain.domainName }}</a>
+                                {{ severity.pass_rate_stat(domain.passRate, domain.awaitingFirstReport, 'sm') }}
+                            </div>
+
+                            <p class="text-sm text-base-content/80 mt-1">{{ domain.headline }}</p>
+
+                            <ul class="mt-1.5 space-y-1">
+                                {% for reason in domain.reasons %}
+                                    <li class="flex items-start gap-2 text-xs text-base-content/70">
+                                        <span class="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 {{ dotClass[reason.tone] ?? 'bg-base-300' }}" aria-hidden="true"></span>
+                                        <span><span class="font-medium text-base-content">{{ reason.label }}</span> — {{ reason.detail }}</span>
+                                    </li>
+                                {% endfor %}
+                                {% if domain.hiddenReasons > 0 %}
+                                    <li class="text-xs text-base-content/50">
+                                        +{{ domain.hiddenReasons }} more on the domain page
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+
+                        <a href="{{ path(domain.ctaRoute, domain.ctaRouteParams) }}"
+                           class="btn btn-xs btn-outline shrink-0 {{ btnClass[domainTone] ?? 'btn-primary' }}">
+                            {{ domain.ctaLabel }}
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+
+            {% if attention.hiddenCount > 0 %}
+                <div class="pt-3 border-t border-base-200">
+                    <a href="{{ path('dashboard_domains', { status: 'attention' }) }}" class="text-xs text-primary hover:underline">
+                        and {{ attention.hiddenCount }} more {{ attention.hiddenCount == 1 ? 'domain' : 'domains' }} needing attention
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}

@@ -1,0 +1,81 @@
+{# "What do these statuses mean?" — the answer, in the place where the user
+   meets the badge, not only behind a threshold-gated recommendation callout.
+
+   This exists because the original page showed five amber "Unknown" pills at
+   100% DKIM and 100% SPF with an Authorize button and no explanation of what
+   Unknown meant, whether action was expected, or how to decide. All three
+   questions are answered here.
+
+   Opens by default while any sender is still awaiting review, because that is
+   exactly when a first-time reader needs it. Collapsed once everything is
+   decided so it stops taking space.
+
+   Props:
+     - needsReviewCount  (int)  how many senders are still awaiting a decision
+#}
+{% props needsReviewCount = 0 %}
+
+<details class="collapse collapse-arrow border border-base-200 bg-base-100 rounded-box mb-4"
+         data-testid="sender-status-legend"
+         {{ needsReviewCount > 0 ? 'open' : '' }}>
+    <summary class="collapse-title text-sm font-medium min-h-0 py-3">
+        What do Authorized, Needs review and Not authorized mean?
+    </summary>
+    <div class="collapse-content text-sm text-base-content/70 space-y-3">
+        <p>
+            Every server that sends mail claiming to be your domain shows up here — your own mail host, your
+            newsletter tool, your invoicing system, and anyone spoofing you. Sendvery cannot tell those apart for
+            you, so each one carries a status you own.
+        </p>
+
+        <ul class="space-y-2">
+            <li class="flex items-start gap-2">
+                <span class="badge badge-sm badge-success shrink-0 mt-0.5">Authorized</span>
+                <span>You confirmed this server is allowed to send as your domain. It drops out of alerts and reminders.</span>
+            </li>
+            <li class="flex items-start gap-2">
+                <span class="badge badge-sm badge-warning shrink-0 mt-0.5">Needs review</span>
+                <span>
+                    We have seen it, but nobody has decided about it yet. <strong>This is the one that wants something from you.</strong>
+                </span>
+            </li>
+            <li class="flex items-start gap-2">
+                <span class="badge badge-sm badge-error shrink-0 mt-0.5">Not authorized</span>
+                <span>You looked at it and said it is not yours. It stays flagged so it cannot quietly become normal.</span>
+            </li>
+        </ul>
+
+        <div>
+            <p class="font-semibold text-base-content">How do I verify a sender is really mine?</p>
+            <p class="mt-1">
+                Three signals together are strong evidence. Take
+                <code class="font-mono text-xs bg-base-200 px-1 rounded">mxb.seznam.cz</code> at 100% DKIM and 100% SPF:
+            </p>
+            <ol class="list-decimal list-inside mt-1 space-y-1">
+                <li><strong>You recognise the name.</strong> Seznam is your mail provider, or your newsletter tool, or your CRM — something you pay for.</li>
+                <li><strong>DKIM and SPF pass close to 100%.</strong> A spoofer cannot sign with your DKIM key. Consistently passing DKIM means whoever runs that server holds your key.</li>
+                <li><strong>The volume matches mail you actually send.</strong> If your team sends a few hundred messages a week, a sender at that scale is plausible; one at 50,000 is not.</li>
+            </ol>
+            <p class="mt-2">
+                If all three hold, authorize it. If you do not recognise the name <em>and</em> its mail is failing,
+                mark it not authorized. If you are unsure, leave it — see below.
+            </p>
+        </div>
+
+        <div>
+            <p class="font-semibold text-base-content">What happens if I do nothing?</p>
+            <p class="mt-1">
+                Nothing breaks. Statuses are notes to yourself — they never change your DNS, SPF, DKIM or DMARC
+                policy, and they never block or release a single message. What actually stops spoofed mail is your
+                DMARC policy. Leaving senders in Needs review only means Sendvery keeps flagging them here, in your
+                alerts and in your weekly email, because it has no way of knowing they are fine.
+            </p>
+        </div>
+
+        <p>
+            <a href="{{ path('knowledge_base_article', { slug: 'authorizing-senders-explained' }) }}"
+               class="link link-primary"
+               data-testid="sender-legend-kb-link">Read the full guide to authorizing senders →</a>
+        </p>
+    </div>
+</details>

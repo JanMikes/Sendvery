@@ -10,7 +10,9 @@ use App\Repository\TeamRepository;
 use App\Services\Ai\AiInsightsService;
 use App\Services\Ai\Result\WeeklyDigestResult;
 use App\Services\Digest\WeeklyDigestGenerator;
+use App\Value\WeeklyDigestData;
 use Doctrine\DBAL\Connection;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Mime\Email;
@@ -28,6 +30,7 @@ final readonly class SendWeeklyDigestHandler
         private Environment $twig,
         private Connection $database,
         private UrlGeneratorInterface $urlGenerator,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -42,8 +45,17 @@ final readonly class SendWeeklyDigestHandler
             return;
         }
 
+        // Absolute URLs in a CLI/worker context come from
+        // framework.router.default_uri (env DEFAULT_URI) — there is no incoming
+        // request to derive a host from. If those links ever come out as
+        // localhost in production, that env var is the thing to fix.
         $dashboardUrl = $this->urlGenerator->generate(
             'dashboard_overview',
+            [],
+            UrlGeneratorInterface::ABSOLUTE_URL,
+        );
+        $alertsUrl = $this->urlGenerator->generate(
+            'dashboard_alerts',
             [],
             UrlGeneratorInterface::ABSOLUTE_URL,
         );
@@ -64,11 +76,12 @@ final readonly class SendWeeklyDigestHandler
         $html = $this->twig->render('emails/weekly_digest.html.twig', [
             'digest' => $digestData,
             'dashboardUrl' => $dashboardUrl,
+            'alertsUrl' => $alertsUrl,
             'dateRange' => $dateRange,
             'aiSummary' => $aiSummary,
         ]);
 
-        $plainText = $this->renderPlainText($digestData, $dashboardUrl, $dateRange, $aiSummary);
+        $plainText = $this->renderPlainText($digestData, $dashboardUrl, $alertsUrl, $dateRange, $aiSummary);
 
         foreach ($recipients as $recipientEmail) {
             $email = (new Email())
@@ -104,10 +117,25 @@ final readonly class SendWeeklyDigestHandler
             return null;
         }
 
-        return $this->aiService->generateWeeklyDigest($message->teamId);
+        // The AI narration is additive garnish on a digest that is already
+        // complete without it. A failing upstream call (expired key, rate limit,
+        // provider outage) used to bubble out of the handler and abort the whole
+        // send, so an AI-plan team got NO email at all — strictly worse than the
+        // free-plan behaviour they are paying to improve on. Degrade to the
+        // plain digest instead and leave a trail for whoever is on call.
+        try {
+            return $this->aiService->generateWeeklyDigest($message->teamId);
+        } catch (\Throwable $exception) {
+            $this->logger->error('Weekly digest AI summary failed; sending the digest without it.', [
+                'teamId' => $message->teamId->toString(),
+                'exception' => $exception,
+            ]);
+
+            return null;
+        }
     }
 
-    private function renderPlainText(\App\Value\WeeklyDigestData $digest, string $dashboardUrl, string $dateRange, ?WeeklyDigestResult $aiSummary): string
+    private function renderPlainText(WeeklyDigestData $digest, string $dashboardUrl, string $alertsUrl, string $dateRange, ?WeeklyDigestResult $aiSummary): string
     {
         $lines = [];
         $lines[] = "Sendvery Weekly Report — {$digest->teamName}";
@@ -126,10 +154,39 @@ final readonly class SendWeeklyDigestHandler
         $lines[] = 'Summary:';
         $lines[] = "  Domains monitored: {$digest->totalDomains}";
         $lines[] = "  Total messages: {$digest->totalMessages}";
-        $lines[] = sprintf('  Average pass rate: %.1f%%', $digest->averagePassRate);
-        $lines[] = "  Alerts this week: {$digest->alertsCount}";
+        $lines[] = '  Average pass rate: '.(
+            null === $digest->averagePassRate
+                ? 'no reports yet'
+                : sprintf('%.1f%%', $digest->averagePassRate)
+        );
+        $lines[] = "  Needs attention: {$digest->alertsCount}";
+
+        if ($digest->resolvedAlertsCount > 0) {
+            $lines[] = "  Resolved this week: {$digest->resolvedAlertsCount}";
+        }
+
         $lines[] = "  DNS changes: {$digest->dnsChangesCount}";
         $lines[] = '';
+
+        if ([] !== $digest->attentionAlerts) {
+            $lines[] = 'Needs your attention:';
+            foreach ($digest->attentionAlerts as $alert) {
+                $scope = null !== $alert->domainName ? " ({$alert->domainName})" : '';
+                $multiplier = $alert->occurrences > 1 ? " ×{$alert->occurrences}" : '';
+                $lines[] = "  [{$alert->severity->value}] {$alert->title}{$scope}{$multiplier}";
+            }
+
+            if ($digest->hasMoreAttentionAlerts()) {
+                $lines[] = sprintf(
+                    '  … showing %d of %d — full list: %s',
+                    count($digest->attentionAlerts),
+                    $digest->attentionAlertGroups,
+                    $alertsUrl,
+                );
+            }
+
+            $lines[] = '';
+        }
 
         if ([] !== $digest->currentlyBrokenDns) {
             $lines[] = 'DNS Records Still Broken:';
@@ -146,7 +203,11 @@ final readonly class SendWeeklyDigestHandler
             $lines[] = str_repeat('-', 40);
             $lines[] = $domain->domainName;
             $lines[] = "  Messages: {$domain->totalMessages}";
-            $lines[] = sprintf('  Pass rate: %.1f%%', $domain->passRate);
+            $lines[] = '  Pass rate: '.(
+                $domain->hasPassRateData()
+                    ? sprintf('%.1f%%', (float) $domain->passRate)
+                    : 'waiting for first report'
+            );
 
             if (null !== $domain->passRateDelta) {
                 $arrow = $domain->passRateDelta >= 0 ? '+' : '';
@@ -154,14 +215,31 @@ final readonly class SendWeeklyDigestHandler
             }
 
             if ([] !== $domain->newSenders) {
-                $lines[] = '  New senders: '.implode(', ', $domain->newSenders);
+                $lines[] = sprintf(
+                    '  New senders (%d): %s',
+                    count($domain->newSenders),
+                    implode(', ', $domain->newSenders),
+                );
             }
 
-            if ([] !== $domain->alerts) {
-                $lines[] = '  Alerts:';
-                foreach ($domain->alerts as $alert) {
-                    $lines[] = "    [{$alert['severity']}] {$alert['title']}";
+            // Mirrors the HTML "Waiting for your review" block. Unlike the
+            // new-senders line above this is real authorization state, not a
+            // this-week window, so it keeps reporting until somebody decides.
+            $senderReview = $domain->senderReview;
+
+            if ($senderReview->hasAny()) {
+                $named = implode(', ', $senderReview->topSenderNames);
+
+                if ($senderReview->hasMoreThanNamed()) {
+                    $named .= sprintf(' and %d more', $senderReview->unnamedCount());
                 }
+
+                $lines[] = sprintf(
+                    '  Waiting for your review (%d, %d messages): %s',
+                    $senderReview->needsReviewCount,
+                    $senderReview->needsReviewMessages,
+                    $named,
+                );
             }
         }
 

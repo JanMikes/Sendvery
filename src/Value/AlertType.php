@@ -12,6 +12,14 @@ enum AlertType: string
     case DnsRecordChanged = 'dns_record_changed';
     case DnsRecordInvalid = 'dns_record_invalid';
     case DnsRecordMissing = 'dns_record_missing';
+
+    /**
+     * A record went from "not published" (or empty) straight to a VALID value.
+     * That is the outcome the setup flow asks for, so it must not share the
+     * yellow "record changed, review it" treatment — it is reported green and
+     * never emailed.
+     */
+    case DnsRecordPublished = 'dns_record_published';
     case MailboxConnectionError = 'mailbox_connection_error';
     case IpBlacklisted = 'ip_blacklisted';
 
@@ -43,6 +51,7 @@ enum AlertType: string
             self::PolicyRecommendation,
             self::ManagedDmarcAdvanced,
             self::ManagedDmarcReady => AlertSeverity::Info,
+            self::DnsRecordPublished => AlertSeverity::Success,
         };
     }
 }

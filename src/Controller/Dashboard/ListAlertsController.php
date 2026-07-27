@@ -6,6 +6,7 @@ namespace App\Controller\Dashboard;
 
 use App\Query\GetAlerts;
 use App\Services\DashboardContext;
+use App\Value\AlertSeverity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -24,11 +25,16 @@ final class ListAlertsController extends AbstractController
     {
         $teamIds = $this->dashboardContext->getTeamIdStrings();
 
-        $severity = $request->query->get('severity');
+        $rawSeverity = $request->query->get('severity');
         $type = $request->query->get('type');
         $domainId = $request->query->get('domain');
         $readFilter = $request->query->get('read');
         $snoozedFilter = $request->query->get('snoozed');
+        $resolvedFilter = $request->query->get('resolved');
+
+        // A hand-typed / stale `?severity=` value must degrade to "no filter"
+        // rather than silently returning an empty list that looks like a bug.
+        $severity = is_string($rawSeverity) ? AlertSeverity::tryFrom($rawSeverity)?->value : null;
 
         $isRead = match ($readFilter) {
             'true' => true,
@@ -38,13 +44,22 @@ final class ListAlertsController extends AbstractController
 
         $onlySnoozed = '1' === $snoozedFilter;
 
+        // Default (null) keeps resolved alerts in the list — they are the
+        // receipt that the fix landed. `?resolved=1` narrows to just those.
+        $isResolved = match ($resolvedFilter) {
+            '1' => true,
+            '0' => false,
+            default => null,
+        };
+
         $alerts = $this->getAlerts->forTeams(
             teamIds: $teamIds,
-            severity: is_string($severity) ? $severity : null,
+            severity: $severity,
             type: is_string($type) ? $type : null,
             domainId: is_string($domainId) ? $domainId : null,
             isRead: $isRead,
             onlySnoozed: $onlySnoozed,
+            isResolved: $isResolved,
         );
 
         $unreadCount = $this->getAlerts->countUnreadForTeams($teamIds);
@@ -56,6 +71,7 @@ final class ListAlertsController extends AbstractController
             'currentType' => $type,
             'currentRead' => $readFilter,
             'currentSnoozed' => $onlySnoozed,
+            'currentResolved' => $isResolved,
         ]);
     }
 }

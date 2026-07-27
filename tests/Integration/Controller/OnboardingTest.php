@@ -601,17 +601,43 @@ final class OnboardingTest extends WebTestCase
     }
 
     #[Test]
-    public function dashboardShowsVerificationBannerForUnverifiedDmarc(): void
+    public function dashboardListsAnUnverifiedDomainByNameWithALinkToItsSetupSurface(): void
     {
+        // Used to assert the page-level "DMARC record not detected" banner. That
+        // banner is gone: it could only ever speak about ONE domain, and this
+        // fixture has never had a DNS check run, so declaring a record missing
+        // was a claim we had not earned. The domain now appears by name in the
+        // `/app` attention list, honestly reporting the in-progress check, with a
+        // link to its own setup surface.
         $client = self::createClient();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
         $user = $this->createCompletedUser();
+        $membership = $em->getRepository(TeamMembership::class)->findOneBy(['user' => $user->id->toString()]);
+        self::assertNotNull($membership);
+        $domain = $em->getRepository(MonitoredDomain::class)->findOneBy(['team' => $membership->team->id->toString()]);
+        self::assertNotNull($domain);
 
         $client->loginUser($user);
         $client->request('GET', '/app');
 
         self::assertResponseIsSuccessful();
         $body = (string) $client->getResponse()->getContent();
-        self::assertStringContainsString('DMARC record not detected', $body);
+
+        self::assertStringContainsString('Needs your attention', $body);
+        self::assertStringContainsString($domain->domain, $body);
+        self::assertStringContainsString('Checking your DNS now', $body);
+        self::assertStringNotContainsString(
+            'DMARC record not detected',
+            $body,
+            'No DNS check has run for this domain yet, so nothing may claim a record is missing.',
+        );
+        self::assertStringContainsString(
+            '/app/domains/'.$domain->id->toString().'/health',
+            $body,
+            'The attention row must link straight to that domain\'s own setup surface.',
+        );
     }
 
     #[Test]

@@ -38,8 +38,9 @@
             />
         {% endif %}
     {% else %}
-        <turbo-frame id="domain-reports-table">
-            {% include 'dashboard/_domain_reports_table.html.twig' %}
-        </turbo-frame>
+        {# No wrapping <turbo-frame> here: the partial opens
+           <turbo-frame id="domain-reports-table"> itself, so wrapping it duplicated
+           the DOM id on first load. #}
+        {% include 'dashboard/_domain_reports_table.html.twig' %}
     {% endif %}
 {% endblock %}

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Fixtures;
 
+use App\Entity\KnownSender;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
+use App\Value\SenderReviewState;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Container\ContainerInterface;
@@ -87,6 +89,47 @@ final class TestFixtures
         $this->entityManager->flush();
 
         return $domain;
+    }
+
+    /**
+     * Attach a `known_sender` row to an existing domain, for the cases the
+     * fluent {@see PersonaBuilder::withKnownSender()} cannot cover (extra
+     * domains added after the persona was built).
+     *
+     * `reviewState` mirrors how the columns encode the three states — see
+     * {@see SenderReviewState}.
+     */
+    public function addKnownSender(
+        MonitoredDomain $domain,
+        string $sourceIp,
+        int $totalMessages = 100,
+        float $passRate = 100.0,
+        ?string $organization = null,
+        ?string $hostname = null,
+        SenderReviewState $reviewState = SenderReviewState::NeedsReview,
+        ?User $decidedBy = null,
+    ): KnownSender {
+        $sender = new KnownSender(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            sourceIp: $sourceIp,
+            firstSeenAt: new \DateTimeImmutable('-30 days'),
+            lastSeenAt: new \DateTimeImmutable('-1 day'),
+            totalMessages: $totalMessages,
+            passRate: $passRate,
+            hostname: $hostname,
+            organization: $organization,
+            isAuthorized: SenderReviewState::Authorized === $reviewState,
+        );
+
+        if (SenderReviewState::NotAuthorized === $reviewState && null !== $decidedBy) {
+            $sender->markUnknown($decidedBy, new \DateTimeImmutable('-2 days'));
+        }
+
+        $this->entityManager->persist($sender);
+        $this->entityManager->flush();
+
+        return $sender;
     }
 
     public function nonExistentUuid(): UuidInterface

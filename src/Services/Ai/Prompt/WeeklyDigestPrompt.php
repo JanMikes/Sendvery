@@ -18,6 +18,10 @@ final class WeeklyDigestPrompt
         past week of email authentication across all its domains, write a brief, plain-language summary
         for a non-expert customer.
 
+        A null `passRate` or `averagePassRate` means NO DMARC reports arrived in the window — the domain is
+        waiting for its first report, which is normal for the first day after setup. Never describe that as
+        0%, as a failure, or as something the customer must fix.
+
         OUTPUT CONTRACT
         - Respond by calling the `emit_weekly_digest` tool exactly once.
         - `summary`: 2-4 short sentences on the week overall — volume, how authentication is trending, and

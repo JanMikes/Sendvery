@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Fixtures;
 
+use App\Entity\KnownSender;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
+use App\Value\SenderReviewState;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
@@ -26,6 +28,9 @@ final class PersonaBuilder
     private bool $withDomain = true;
     private string $domainName = 'test.example';
     private string $teamName = 'Test Team';
+
+    /** @var list<array{sourceIp: string, totalMessages: int, passRate: float, organization: string|null, hostname: string|null, reviewState: SenderReviewState}> */
+    private array $knownSenders = [];
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -83,6 +88,34 @@ final class PersonaBuilder
         return $this;
     }
 
+    /**
+     * Queue a `known_sender` row for the persona's domain.
+     *
+     * `reviewState` mirrors how the columns actually encode the three states
+     * (see {@see SenderReviewState}) so a test can say "this sender is awaiting
+     * review" or "somebody rejected this one" without knowing that the
+     * distinction lives in `updated_at`.
+     */
+    public function withKnownSender(
+        string $sourceIp,
+        int $totalMessages = 100,
+        float $passRate = 100.0,
+        ?string $organization = null,
+        ?string $hostname = null,
+        SenderReviewState $reviewState = SenderReviewState::NeedsReview,
+    ): self {
+        $this->knownSenders[] = [
+            'sourceIp' => $sourceIp,
+            'totalMessages' => $totalMessages,
+            'passRate' => $passRate,
+            'organization' => $organization,
+            'hostname' => $hostname,
+            'reviewState' => $reviewState,
+        ];
+
+        return $this;
+    }
+
     public function build(): Persona
     {
         $userId = Uuid::uuid7();
@@ -124,6 +157,29 @@ final class PersonaBuilder
             );
             $domain->popEvents();
             $this->entityManager->persist($domain);
+
+            foreach ($this->knownSenders as $spec) {
+                $sender = new KnownSender(
+                    id: Uuid::uuid7(),
+                    monitoredDomain: $domain,
+                    sourceIp: $spec['sourceIp'],
+                    firstSeenAt: new \DateTimeImmutable('-30 days'),
+                    lastSeenAt: new \DateTimeImmutable('-1 day'),
+                    totalMessages: $spec['totalMessages'],
+                    passRate: $spec['passRate'],
+                    hostname: $spec['hostname'],
+                    organization: $spec['organization'],
+                    isAuthorized: SenderReviewState::Authorized === $spec['reviewState'],
+                );
+
+                // NotAuthorized is "a human looked at it and said no", which the
+                // schema records as is_authorized=false plus a decision stamp.
+                if (SenderReviewState::NotAuthorized === $spec['reviewState']) {
+                    $sender->markUnknown($user, new \DateTimeImmutable('-2 days'));
+                }
+
+                $this->entityManager->persist($sender);
+            }
         }
 
         $this->entityManager->flush();

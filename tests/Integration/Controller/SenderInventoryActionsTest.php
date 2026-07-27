@@ -174,7 +174,7 @@ final class SenderInventoryActionsTest extends WebTestCase
         self::assertIsString($content);
         self::assertStringContainsString('name="senderIds[]"', $content);
         self::assertStringContainsString('Authorize selected', $content);
-        self::assertStringContainsString('Mark unknown selected', $content);
+        self::assertStringContainsString('Mark selected not authorized', $content);
         self::assertStringContainsString('note-dialog-'.$data['senderId']->toString(), $content);
     }
 

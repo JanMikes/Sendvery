@@ -177,6 +177,90 @@ final class DomainHealthClassifierTest extends TestCase
     }
 
     #[Test]
+    public function aFullyConfiguredDomainAwaitingItsFirstReportIsNotAccusedOfBeingUnhealthy(): void
+    {
+        // No pass-rate data arrives as null, not 0.0. Treating the absence of
+        // data as a 0% pass rate flagged every brand-new, correctly-configured
+        // domain as needing attention for its first day of life.
+        $classifier = new DomainHealthClassifier();
+
+        $severity = $classifier->classify(
+            overview: $this->overview(dmarcVerifiedAt: '2026-05-01 00:00:00', passRate: null),
+            dnsHealth: $this->dnsHealthAllConfigured(),
+        );
+
+        self::assertSame(DomainHealthFilter::Healthy, $severity);
+    }
+
+    #[Test]
+    public function aDomainAwaitingItsFirstReportIsStillJudgedOnItsDnsSetup(): void
+    {
+        // "No data yet" excuses the missing pass rate, not a missing SPF record.
+        $classifier = new DomainHealthClassifier();
+
+        $severity = $classifier->classify(
+            overview: $this->overview(dmarcVerifiedAt: '2026-05-01 00:00:00', passRate: null),
+            dnsHealth: $this->dnsHealthAllConfigured(spfVerifiedAt: null),
+        );
+
+        self::assertSame(DomainHealthFilter::Attention, $severity);
+    }
+
+    #[Test]
+    public function anUnverifiedDomainWithNoReportsIsStillUnverified(): void
+    {
+        $classifier = new DomainHealthClassifier();
+
+        $severity = $classifier->classify(
+            overview: $this->overview(dmarcVerifiedAt: null, passRate: null),
+            dnsHealth: $this->dnsHealthAllConfigured(),
+        );
+
+        self::assertSame(DomainHealthFilter::Unverified, $severity);
+    }
+
+    #[Test]
+    public function aDomainWhereEveryMessageFailedIsStillFlaggedForAttention(): void
+    {
+        // The counterpart guard: a real, measured 0% must keep its warning. If
+        // the "no data" branch ever swallowed a genuine zero we would be hiding
+        // total authentication failure behind a green tick.
+        $classifier = new DomainHealthClassifier();
+
+        $severity = $classifier->classify(
+            overview: $this->overview(dmarcVerifiedAt: '2026-05-01 00:00:00', passRate: 0.0),
+            dnsHealth: $this->dnsHealthAllConfigured(),
+        );
+
+        self::assertSame(DomainHealthFilter::Attention, $severity);
+    }
+
+    #[Test]
+    public function classifyOverviewMatchesClassifyForADomainAwaitingItsFirstReport(): void
+    {
+        $classifier = new DomainHealthClassifier();
+        $overview = $this->overview(
+            dmarcVerifiedAt: '2026-05-01 00:00:00',
+            passRate: null,
+            spfVerifiedAt: '2026-05-01 00:00:00',
+            dkimVerifiedAt: '2026-05-01 00:00:00',
+            latestSpfScore: 100,
+            latestDkimScore: 100,
+            latestDmarcScore: 100,
+            latestMxScore: 95,
+        );
+
+        self::assertSame(
+            DomainHealthFilter::Healthy,
+            $classifier->classifyOverview($overview),
+        );
+        self::assertSame(
+            $classifier->classify($overview, $this->buildDnsHealthFromOverview($overview)),
+            $classifier->classifyOverview($overview),
+        );
+    }
+
+    #[Test]
     public function classifyOverviewMatchesClassifyForUnverifiedDomains(): void
     {
         $classifier = new DomainHealthClassifier();
@@ -292,7 +376,7 @@ final class DomainHealthClassifierTest extends TestCase
 
     private function overview(
         ?string $dmarcVerifiedAt,
-        float $passRate,
+        ?float $passRate,
         ?string $spfVerifiedAt = null,
         ?string $dkimVerifiedAt = null,
         ?int $latestSpfScore = null,

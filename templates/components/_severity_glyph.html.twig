@@ -46,15 +46,100 @@
 {% endmacro %}
 
 {#
-   Convenience: passRate → severity. Mirrors the pass-rate text-color
-   thresholds already used inline across templates (≥90 success, 70–89.99
-   warning, <70 error). Null pass-rate is treated as warning — "data missing"
-   should be a "look at me" cue, not a green-tinted lie.
+   ── NO-DATA PASS-RATE CONVENTION ─────────────────────────────────────────────
+
+   A null `passRate` means "we have no DMARC records to grade" — NOT "0% of
+   messages passed". Rendering the two the same way told users their
+   brand-new, correctly-configured domain was failing every single message.
+
+   Every surface that shows a pass rate uses these macros so the honest state
+   is written once:
+
+       {% import 'components/_severity_glyph.html.twig' as severity %}
+
+       {# right-aligned hero number on a card #}
+       {{ severity.pass_rate_stat(domain.passRate, domain.isAwaitingFirstReport(), 'lg') }}
+
+       {# compact number in a list row #}
+       {{ severity.pass_rate_stat(domain.passRate, domain.isAwaitingFirstReport(), 'sm') }}
+
+       {# just the tint, e.g. to colour a sparkline that sits next to it #}
+       <span class="{{ severity.pass_rate_class(domain.passRate)|trim }}">…</span>
+
+   `isAwaitingFirstReport()` (never received a report) vs. "received, but
+   nothing in this window" only changes the wording — both suppress the number.
+#}
+
+{#
+   passRate → severity tone. Mirrors the thresholds used inline across
+   templates (≥90 success, 70–89.99 warning, <70 error). Null pass-rate is
+   `neutral`, deliberately: an absence of data is not a warning, and painting
+   it amber is what made "waiting for the first report" read as a failure.
+   Domains that genuinely need attention are flagged by the health classifier,
+   which has DNS state to judge — not by a missing number.
 #}
 {% macro pass_rate_tone(passRate) %}
-    {%- if passRate is null -%}warning
+    {%- if passRate is null -%}neutral
     {%- elseif passRate >= 90 -%}success
     {%- elseif passRate >= 70 -%}warning
     {%- else -%}error
+    {%- endif -%}
+{% endmacro %}
+
+{#
+   Ready-to-use text colour class for a pass rate. Wraps `pass_rate_tone` and
+   maps the `neutral` tone onto the muted base-content tint the glyph macro
+   already uses for undifferentiated rows.
+#}
+{% macro pass_rate_class(passRate) %}
+    {%- if passRate is null -%}text-base-content/40
+    {%- elseif passRate >= 90 -%}text-success
+    {%- elseif passRate >= 70 -%}text-warning
+    {%- else -%}text-error
+    {%- endif -%}
+{% endmacro %}
+
+{#
+   The pass-rate figure itself, or an em-dash when there is nothing to show.
+   Matches the placeholder `DomainPassRateSparkline` renders for an empty
+   series, so the number and the trend line never contradict each other.
+#}
+{% macro pass_rate_value(passRate) %}
+    {%- if passRate is null -%}—
+    {%- else -%}{{ passRate|number_format(1) }}%
+    {%- endif -%}
+{% endmacro %}
+
+{#
+   Complete pass-rate stat block — the number plus its caption, or the honest
+   "waiting" state when `passRate` is null.
+
+   `awaitingFirstReport` = true  → the domain has never received a report.
+   `awaitingFirstReport` = false → it has, but not inside the current window
+                                   (e.g. reports aged out of retention).
+
+   `size`: 'lg' for the hero number on a card (two lines, number + caption),
+           'sm' for a single inline figure in a dense list row.
+#}
+{% macro pass_rate_stat(passRate, awaitingFirstReport = true, size = 'lg') %}
+    {%- import _self as severity -%}
+    {%- if passRate is null -%}
+        {%- set waitingLabel = awaitingFirstReport ? 'Waiting for first report' : 'No reports in this period' -%}
+        {%- if size == 'sm' -%}
+            <span class="text-xs font-medium text-base-content/50 whitespace-nowrap">{{ waitingLabel }}</span>
+        {%- else -%}
+            <div class="text-sm font-semibold text-base-content/60">{{ waitingLabel }}</div>
+            <span class="text-xs text-base-content/50">
+                {{- awaitingFirstReport ? 'usually within 24 hours' : 'nothing to grade yet' -}}
+            </span>
+        {%- endif -%}
+    {%- else -%}
+        {%- set toneClass = severity.pass_rate_class(passRate)|trim -%}
+        {%- if size == 'sm' -%}
+            <span class="text-sm font-semibold {{ toneClass }}">{{ passRate|number_format(1) }}%</span>
+        {%- else -%}
+            <div class="text-2xl font-bold {{ toneClass }}">{{ passRate|number_format(1) }}%</div>
+            <span class="text-xs text-base-content/50">pass rate</span>
+        {%- endif -%}
     {%- endif -%}
 {% endmacro %}

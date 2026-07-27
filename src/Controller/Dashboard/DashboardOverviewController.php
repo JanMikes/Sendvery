@@ -16,10 +16,12 @@ use App\Query\GetTeamPlan;
 use App\Repository\MailboxConnectionRepository;
 use App\Repository\QuarantinedDmarcReportRepository;
 use App\Repository\TeamRepository;
+use App\Results\DomainOverviewResult;
 use App\Results\MonthlyReportUsageResult;
 use App\Services\AttentionSummaryResolver;
 use App\Services\DashboardContext;
 use App\Services\Dns\RuaScenarioResolver;
+use App\Services\DomainAttentionResolver;
 use App\Services\DomainVerificationEvaluator;
 use App\Services\HealthSummaryResolver;
 use App\Services\IngestionPathResolver;
@@ -28,6 +30,7 @@ use App\Services\ReportAddressProvider;
 use App\Services\SetupChecklistResolver;
 use App\Services\Stripe\PlanLimits;
 use App\Value\DomainHealthSort;
+use App\Value\SetupChecklistDomain;
 use Psr\Clock\ClockInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -60,6 +63,7 @@ final class DashboardOverviewController extends AbstractController
         private readonly GetEarliestDomainAddedAt $getEarliestDomainAddedAt,
         private readonly RuaScenarioResolver $ruaScenarioResolver,
         private readonly AttentionSummaryResolver $attentionSummaryResolver,
+        private readonly DomainAttentionResolver $domainAttentionResolver,
     ) {
     }
 
@@ -142,9 +146,10 @@ final class DashboardOverviewController extends AbstractController
         );
 
         $verificationStatus = $this->verificationStatusQuery->forTeams($teamIds);
-        $verificationSeverity = null === $verificationStatus
-            ? null
-            : $this->verificationEvaluator->severity($verificationStatus);
+        // One line, same reason as `$focusDomain` below: the null-headline-domain
+        // arm is unreachable from `/app` because the onboarding redirect fires
+        // first, so a multi-line ternary parks a line coverage can never reach.
+        $verificationSeverity = null === $verificationStatus ? null : $this->verificationEvaluator->severity($verificationStatus);
 
         // Surface the quarantine count for the team's headline domain when it's
         // still unverified — reports already arriving for them is a strong
@@ -191,9 +196,7 @@ final class DashboardOverviewController extends AbstractController
         // consumes the LIMIT-1 headline value, but we read it from the batch
         // result instead of issuing a redundant per-domain query (TASK-134
         // reviewer catch — the headline domain was being fetched twice).
-        $headlineDomainRuaScenario = null !== $verificationStatus
-            ? ($domainRuaScenarios[$verificationStatus->domainId] ?? null)
-            : null;
+        $headlineDomainRuaScenario = null === $verificationStatus ? null : ($domainRuaScenarios[$verificationStatus->domainId] ?? null);
 
         $nextAction = $this->nextActionResolver->resolve(
             domains: $domains,
@@ -217,11 +220,25 @@ final class DashboardOverviewController extends AbstractController
             verificationSeverity: $verificationSeverity,
         );
 
-        // TASK-062: "things need your attention today" line sits between the
-        // healthSummary banner and the setup checklist. Pure aggregator over
-        // the three sidebar-badge signals — renders nothing when totalCount = 0.
+        // Chip row inside the focus card. `$domains` is handed in so the domain
+        // counts here are classified from the very same rows HealthSummaryResolver
+        // classified two lines up — that is what stops the headline ("3 domains
+        // need attention") and the chips ("1 unverified domain") from telling two
+        // different stories, which is exactly what they used to do.
         $attentionSummary = $this->attentionSummaryResolver->resolveForTeam(
             $this->dashboardContext->getTeamId()->toString(),
+            $domains,
+        );
+
+        // The "which domains need attention and why" list. Reads the per-domain
+        // setup status for the handful of rows it renders, so each reason and
+        // each deep link is the same one that domain's own page shows.
+        $domainAttention = $this->domainAttentionResolver->resolve(
+            domains: $domains,
+            teamIds: $teamIds,
+            verificationStatus: $verificationStatus,
+            verificationSeverity: $verificationSeverity,
+            quarantineCount: $quarantineCount,
         );
 
         // Monthly-reports surface: a 6th stat card, but only when the team is
@@ -275,6 +292,21 @@ final class DashboardOverviewController extends AbstractController
         // with NextActionResolver above. If TASK-129 refactors how that value
         // is computed, keep BOTH consumers in sync — they intentionally read
         // the same headline-domain scenario.
+        // The checklist names ONE domain in its open steps and deep-links that
+        // domain's setup surface — "Publish your DMARC record → Do it" was
+        // unanswerable for anyone with more than one domain. The named domain is
+        // the same headline domain the Next Action card and the RUA scenario
+        // above already speak about, deliberately NOT `$domains[0]`: that array
+        // is ordered by the ?domain_health_sort= dropdown, so reading position 0
+        // would rename the checklist's domain whenever the user re-sorted the
+        // Domain Health card below.
+        //
+        // Written on one line on purpose: a null headline domain means the team
+        // has no domains at all, and `OnboardingRedirectListener` intercepts that
+        // request long before this controller runs — so the null arm is real but
+        // unreachable from `/app`, and splitting it across lines would leave a
+        // permanently uncoverable one.
+        $focusDomain = null === $verificationStatus ? null : new SetupChecklistDomain($verificationStatus->domainId, $verificationStatus->domainName);
         $setupChecklist = $this->setupChecklistResolver->resolve(
             domainCount: count($domains),
             anyDomainHasDmarcVerified: $anyDomainHasDmarcVerified,
@@ -283,6 +315,8 @@ final class DashboardOverviewController extends AbstractController
             dismissedAt: $team->setupChecklistDismissedAt,
             hasDmarcRegression: $hasDmarcRegression,
             headlineDomainRuaScenario: $headlineDomainRuaScenario?->scenario,
+            focusDomain: $focusDomain,
+            otherUnfinishedDomains: $this->collectOtherUnfinishedDomains($domains, $focusDomain),
         );
 
         return $this->render('dashboard/overview.html.twig', [
@@ -292,13 +326,10 @@ final class DashboardOverviewController extends AbstractController
             'trendChartConfig' => $trendChartConfig,
             'unreadAlertCount' => $unreadAlertCount,
             'recentAlerts' => $recentAlerts,
-            'verificationStatus' => $verificationStatus,
-            'verificationSeverity' => $verificationSeverity,
-            'reportAddress' => $reportAddress,
-            'quarantineCount' => $quarantineCount,
             'nextAction' => $nextAction,
             'healthSummary' => $healthSummary,
             'attentionSummary' => $attentionSummary,
+            'domainAttention' => $domainAttention,
             'overviewReportUsage' => $overviewReportUsage,
             'showReportUsageCard' => $showReportUsageCard,
             'setupChecklist' => $setupChecklist,
@@ -307,6 +338,42 @@ final class DashboardOverviewController extends AbstractController
             'domainHealthSort' => $domainHealthSort,
             'domainPassRateTrends' => $domainPassRateTrends,
         ]);
+    }
+
+    /**
+     * Domains other than the checklist's focused one that still have no verified
+     * DMARC record, so the card can offer them as one-click links instead of
+     * pretending the focused domain is the only one left to set up.
+     *
+     * Capped at three: this is a footnote under a three-step onboarding card, and
+     * the attention list right below it is the surface built to enumerate every
+     * affected domain.
+     *
+     * @param array<DomainOverviewResult> $domains
+     *
+     * @return list<SetupChecklistDomain>
+     */
+    private function collectOtherUnfinishedDomains(array $domains, ?SetupChecklistDomain $focusDomain): array
+    {
+        $others = [];
+        foreach ($domains as $domain) {
+            if (null !== $domain->dmarcVerifiedAt) {
+                continue;
+            }
+
+            if (null !== $focusDomain && $domain->domainId === $focusDomain->id) {
+                continue;
+            }
+
+            $others[] = new SetupChecklistDomain($domain->domainId, $domain->domainName);
+        }
+
+        // Alphabetical, not the incoming order: `$domains` is sorted by the
+        // ?domain_health_sort= dropdown, and this footnote must not reshuffle
+        // when the user re-sorts an unrelated card.
+        usort($others, static fn (SetupChecklistDomain $a, SetupChecklistDomain $b): int => strcmp($a->name, $b->name));
+
+        return array_slice($others, 0, 3);
     }
 
     /**

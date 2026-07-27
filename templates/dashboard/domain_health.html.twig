@@ -14,6 +14,11 @@
             <p class="text-sm text-base-content/60 mt-1">Health score and trend for {{ domain.domainName }}</p>
         </div>
         <div class="flex items-center gap-2">
+            {# Someone who has just published a record lands here to find out
+               whether it took. Waiting for the 03:00 cron is not an answer, so
+               the re-check is the page's primary action and sits in the header
+               row where the other page-level actions already live. #}
+            <twig:RecheckDnsButton :domainId="domain.domainId" label="Re-check DNS" buttonClass="btn-sm btn-primary" />
             <a href="{{ path('dashboard_export_domain_pdf', { id: domain.domainId }) }}" class="btn btn-ghost btn-sm">
                 Export PDF
             </a>
@@ -27,6 +32,8 @@
 {% endblock %}
 
 {% block content %}
+    <twig:DomainRecheckNotice />
+
     <twig:DomainWorkspaceTabs :domain="domain" active="dns" :tabCounts="tabCounts" />
 
     {# AI guidance narrates the fix in plain language; the exact records to
@@ -41,61 +48,15 @@
         </div>
     {% endif %}
 
-    {# First DNS check hasn't completed yet — showing the record cards below
-       would falsely claim "no record exists". Be transparent about the real
-       state instead and offer the manual check. #}
-    {% if dnsCheckPending is defined and dnsCheckPending %}
-        <twig:DnsCheckPendingBanner :domainId="domain.domainId" />
-    {% endif %}
-
-    {% if (dnsCheckPending is not defined or not dnsCheckPending) and ruaInstruction is defined and ruaInstruction is not null and not ruaInstruction.alreadyConfigured %}
-        <div class="mb-6">
-            <twig:DnsRecordInstruction
-                recordType="TXT"
-                host="_dmarc.{{ domain.domainName }}"
-                whatText="Forward DMARC reports to Sendvery"
-                whyText="DMARC reports are how mail providers tell you who's sending email as your domain. This TXT record points those reports at us so we can show them to you as charts and alerts."
-                currentValue="{{ ruaInstruction.currentRecord }}"
-                finalValue="{{ ruaInstruction.finalRecord }}"
-                :alreadyConfigured="false"
-            />
-        </div>
-    {% endif %}
-
-    {# TASK-095: per-category DNS recommendations. Renders one card per
-       category that has actionable guidance — SPF "missing" / "over the
-       lookup limit", DKIM "no key found", DMARC "publish me" (in addition
-       to the rua= add card above). When the recommender has a literal record
-       to publish we use the existing DnsRecordInstruction card; otherwise
-       a lighter DnsRecordHowTo text-only variant. #}
-    {% if dnsRecommendations is defined and dnsRecommendations|length > 0 %}
-        <div class="space-y-4 mb-6" data-testid="dns-record-recommendations">
-            {% for rec in dnsRecommendations %}
-                {# DMARC's recommendation is already covered by the ruaInstruction
-                   card above — skip the duplicate render. #}
-                {% if rec.category.value != 'dmarc' %}
-                    {% if rec.recommendedValue is not null %}
-                        <twig:DnsRecordInstruction
-                            recordType="{{ rec.recordType }}"
-                            host="{{ rec.recordHost }}"
-                            whatText="{{ rec.whatText }}"
-                            whyText="{{ rec.whyText }}"
-                            finalValue="{{ rec.recommendedValue }}"
-                            :alreadyConfigured="false"
-                        />
-                    {% else %}
-                        <twig:DnsRecordHowTo
-                            recordType="{{ rec.recordType }}"
-                            host="{{ rec.recordHost }}"
-                            whatText="{{ rec.whatText }}"
-                            whyText="{{ rec.whyText }}"
-                            kbSlug="{{ rec.category.value == 'dkim' ? 'what-is-dkim' : (rec.category.value == 'spf' ? 'spf-record-guide' : null) }}"
-                        />
-                    {% endif %}
-                {% endif %}
-            {% endfor %}
-        </div>
-    {% endif %}
+    {# The canonical per-domain DNS setup surface, in full mode: every tier
+       expanded, both report-delivery paths offered. The domain detail page
+       renders the same component compactly and links here — there is no second
+       presentation of these facts any more. #}
+    <twig:GuidedDnsSetup
+        :setup="guidedDnsSetup"
+        :domainId="domain.domainId"
+        :domainName="domain.domainName"
+        mode="full" />
 
     {% if latest %}
         {# Current score #}
@@ -151,8 +112,8 @@
     {% else %}
         <div class="card bg-base-100 shadow">
             <div class="card-body text-center py-12">
-                <p class="text-base-content/60">No health snapshots yet.</p>
-                <p class="text-sm text-base-content/50 mt-2">Health snapshots are generated automatically during the nightly DNS check.</p>
+                <p class="text-base-content/60">No health score yet.</p>
+                <p class="text-sm text-base-content/50 mt-2">A score is recorded every time we check your DNS — including the check that runs the moment you add a domain. The setup guide above is up to date either way.</p>
             </div>
         </div>
     {% endif %}

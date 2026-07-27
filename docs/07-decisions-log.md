@@ -574,6 +574,51 @@ controls `p` only — it preserves the customer's `sp`/`pct` on BOTH advance and
 never auto-overrides their explicit subdomain policy; a regression pauses + alerts the human to
 adjust `sp` if a subdomain is implicated).
 
+### DEC-059: Sender identity is a global classified entity, not an IP
+**Date:** 2026-07-27
+**Status:** Decided
+**Trigger:** The 2026-07-27 production weekly digest told a customer to investigate seven
+IP addresses and "fix misconfigured sending sources". Every one was benign — the team's
+own Seznam relay plus recipient-side security gateways forwarding legitimate mail — and
+Sendvery had already computed the reverse-DNS evidence proving it, into a table the
+digest does not read. Zero spoofing existed in the data.
+**Decision:** Introduce `sender_identity`, a global IP-keyed cache of objective network
+facts (hostname, registrable domain, organization, role), separate from `known_sender`
+which remains the per-domain, user-owned record (authorization, label, notes, volume).
+Sub-decisions:
+  (a) Identity is the **registrable domain of the PTR**, not the IP. `OrganizationMapper`
+      supplies only a display name. The hardcoded 60-entry pattern list will never be
+      complete — `cloud-sec-av.com` and `inkyphishfence.com` were both absent — so PTR
+      derivation must work with no mapping entry. This collapses a rotating IPv6 relay
+      pool from 15 "new senders" to one.
+  (b) Classify a `SenderRole` (OwnRelay/Esp/Forwarder/Unknown/Suspicious) deterministically
+      in PHP, no AI in the hot path. The PTR forwarder match must be evaluated BEFORE the
+      "both auth methods fail ⇒ suspicious" rule: a gateway that rewrites the body fails
+      both, so the existing signature-only heuristic misclassifies it as spoofing.
+  (c) Reverse DNS moves behind an injectable, faked interface with a hard timeout and a
+      cached negative result + backoff. It was previously an unbounded blocking call
+      inside a message handler.
+  (d) The digest reports a **message-weighted** pass rate. The unweighted per-domain mean
+      shipped 97.9% where the truth was 96.5%, and is unstable — one new domain sending a
+      single failing message swings the headline ~33 points.
+  (e) "No data" is never rendered as 0%. Pass rate and delta become nullable; a domain
+      awaiting its first report says so. A delta is emitted only when the prior window
+      actually had messages — the previous query's LEFT JOIN was manufacturing a phantom
+      0% baseline, producing "+100.0%" for a domain added two days earlier.
+  (f) New-sender detection is team-scoped and identity-grouped, suppressed on a domain's
+      first-ever report, and silent for OwnRelay/Forwarder roles. `new_unknown_sender` was
+      the largest alert category (13/30d, 11 on one day), all noise.
+  (g) `first_seen_at`/`last_seen_at` derive from the report period, not ingest time. They
+      were off by 23 days and made reprocessing non-idempotent.
+  (h) User-triggered DNS re-check gets a rate limit (1/domain/3min, keyed on domain not
+      IP). The control was missing from the health page entirely, and the existing
+      endpoint ran synchronous live DNS lookups with no throttle.
+**Deferred:** Digest windowing on `date_range_end` while reports arrive days later means
+a late report can land in an already-sent window and never be reported, and can
+retroactively mutate the prior-period baseline. Fixing it changes the meaning of every
+digest period, so it is tracked separately.
+**Detail:** `docs/16-sender-identity-and-digest-truthfulness.md`
+
 ---
 
 *Add new decisions above this line*

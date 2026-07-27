@@ -39,8 +39,10 @@
             />
         {% endif %}
     {% else %}
-        <turbo-frame id="reports-table">
-            {% include 'dashboard/_reports_table.html.twig' %}
-        </turbo-frame>
+        {# No wrapping <turbo-frame> here: the included partial opens
+           <turbo-frame id="reports-table"> itself (it is also rendered standalone
+           for frame requests), and wrapping it produced two elements with the
+           same DOM id on first load. #}
+        {% include 'dashboard/_reports_table.html.twig' %}
     {% endif %}
 {% endblock %}

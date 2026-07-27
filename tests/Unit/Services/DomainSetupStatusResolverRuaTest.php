@@ -71,7 +71,10 @@ final class DomainSetupStatusResolverRuaTest extends TestCase
         self::assertStringContainsString("isn't receiving reports", $rua->statusLine);
         self::assertNotNull($rua->nextStep);
         self::assertStringContainsString('rua=mailto:reports@sendvery.com', $rua->nextStep);
-        self::assertSame('dmarc-quick-start', $rua->kbSlug);
+        // The slug has to name a knowledge-base article that actually exists —
+        // now that the guided setup surface renders kbSlug as a link, the old
+        // placeholder `dmarc-quick-start` would have shipped a 404.
+        self::assertSame('what-is-dmarc', $rua->kbSlug, 'The row links to a real knowledge-base article.');
     }
 
     #[Test]

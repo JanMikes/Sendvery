@@ -1,0 +1,12 @@
+{# Neutral notice for a "Re-check DNS" POST that landed inside the cooldown
+   window (DEC-059). Impatience — or a second tab with a stale, still-enabled
+   button — is normal behaviour, not an error, so this renders as info and
+   never as alert-error.
+
+   Rendered by every page dashboard_domain_reverify can redirect back to, so
+   the user always learns why nothing appeared to happen. #}
+{% for message in app.flashes('domain_recheck') %}
+    <div class="alert alert-info mb-4" data-testid="domain-recheck-notice">
+        <span>{{ message }}</span>
+    </div>
+{% endfor %}

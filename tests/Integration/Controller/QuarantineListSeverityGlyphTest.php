@@ -196,10 +196,10 @@ final class QuarantineListSeverityGlyphTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $crawler = $data['client']->getCrawler();
 
-        // Each row's leading-icon column is an anchor (`relative z-20`) whose
-        // href applies the same-reason filter. Three rows → three leading-icon
-        // anchors. The crawler scopes the lookup to the body of the table so
-        // the navigation chips above aren't double-counted.
+        // Each row's leading-icon column is an anchor whose href applies the
+        // same-reason filter. Three rows → three leading-icon anchors. The
+        // crawler scopes the lookup to the body of the table so the navigation
+        // chips above aren't double-counted.
         $leadingAnchors = $crawler->filter('table tbody tr td.w-8 a');
         self::assertCount(3, $leadingAnchors, 'Each quarantine row should expose its reason via the leading-icon anchor.');
 
@@ -212,10 +212,15 @@ final class QuarantineListSeverityGlyphTest extends WebTestCase
             '/app/quarantine?reason=unverified_domain',
         ], $hrefs);
 
-        // The leading-icon anchors must carry `relative z-20` so they win
-        // over the stretched-row anchor (TASK-018 stacking-order contract).
-        $zClasses = $crawler->filter('table tbody tr td.w-8 a.relative.z-20');
-        self::assertCount(3, $zClasses);
+        // The leading-icon anchor must stay a separate destination from the row's
+        // own "open this quarantined report" link, so clicking the glyph filters
+        // instead of navigating into the detail page. The row-link controller
+        // defers to any nested <a>, which is what makes that hold.
+        $rowLinks = $crawler->filter('table tbody tr a[data-row-link-target="link"]');
+        self::assertCount(3, $rowLinks, 'Each row nominates exactly one anchor as its row destination.');
+        foreach ($rowLinks->extract(['href']) as $href) {
+            self::assertStringStartsWith('/app/quarantine/', $href, 'The row destination is the quarantine detail page, not a filter.');
+        }
     }
 
     #[Test]

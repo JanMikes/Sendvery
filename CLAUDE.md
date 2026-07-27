@@ -13,7 +13,10 @@ docker compose exec app <command>
 **After every code change**, always run the quality tools to verify:
 1. `docker compose exec app vendor/bin/phpunit` — tests
 2. `docker compose exec app vendor/bin/phpstan` — static analysis
-3. `docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff` — code style
+3. `docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes` — code style
+
+`--allow-risky=yes` is required: the ruleset includes `declare_strict_types`, which
+php-cs-fixer classifies as risky, so the command aborts without it.
 
 ## Local dev bootstrap
 
@@ -426,15 +429,34 @@ The marketing-site top nav (`templates/components/Nav.html.twig`) intentionally 
 
 ## Crons
 
-Recurring jobs are plain Symfony Console Commands scheduled by **system cron**, not Symfony Scheduler. The crontab lives in `~/www/spare.srv/deployment/crontab` on the deployment host and is committed alongside the other projects' schedules. Each entry runs the command via `docker compose run --rm worker bin/console …` wrapped in `sentry-cli monitors run` so missed runs page us.
+Recurring jobs are plain Symfony Console Commands scheduled by **system cron**, not Symfony Scheduler.
+
+Sendvery runs on the **lily** host, and its crontab is versioned per-app in the lily infra repo at
+`~/www/lily.srv/apps/sendvery/cron.d/sendvery` (lily decision D30). It is installed to
+`/etc/cron.d/sendvery` by that app's `deploy.sh` (`install_cron`), and an app's cron changes also go
+live on a push to the infra repo's `main` (the D36 reconciler treats cron as a class-C row with
+`apply=none` — cron re-reads the directory itself, nothing is restarted).
+
+> The old path `~/www/spare.srv/deployment/crontab` is **obsolete** — that was the pre-migration host.
+
+Each entry is wrapped twice: `lily-cron-run <app> <slug>` (emits the lily metric feeding
+`LilyCronJobFailed` and ships the line to Loki) *and* `sentry-cli monitors run` (Sentry catches a
+*missed* run; lily catches *ran-and-failed*). Output goes to `/var/log/lily/sendvery-cron.log`. The
+service invoked is `messenger-consumer`, not `worker`.
 
 When you add a new scheduled command:
 
 1. Build it as an idempotent `bin/console sendvery:*` command in `src/Command/`.
-2. Add a line to `~/www/spare.srv/deployment/crontab` under the `## Sendvery` block with a stable monitor slug.
-3. Do **not** add `#[AsSchedule]` or `RecurringMessage` in the app — system cron owns scheduling.
+2. Add a line to `~/www/lily.srv/apps/sendvery/cron.d/sendvery` with a stable monitor slug, following
+   the wrapping of the lines already there. Sub-hourly jobs carry `--failure-issue-threshold 2` (lily
+   D37: a transient Sentry ingest stall otherwise fakes a missed check-in); daily-or-rarer jobs keep
+   the default threshold so a genuine miss pages on the first occurrence.
+3. **Deploy the app code before pushing the cron.** The cron goes live on push, so installing it ahead
+   of the image that carries the command produces a failing job and a `LilyCronJobFailed` page.
+4. Do **not** add `#[AsSchedule]` or `RecurringMessage` in the app — system cron owns scheduling.
+5. Log the change in `~/www/lily.srv/docs/journal.md` (newest entry first) — that repo requires it.
 
-Current entries (kept in sync with `crontab`):
+Current entries (kept in sync with `apps/sendvery/cron.d/sendvery`):
 
 - `*/15 * * * *` — `sendvery:mailbox:poll` (per-user IMAP/POP3 polling)
 - `*/5 * * * *` — `sendvery:reports:poll-inbox` (central reports@sendvery.com inbox)
@@ -448,6 +470,8 @@ Current entries (kept in sync with `crontab`):
 - `0 4 * * *` — `sendvery:dns:sync-authorization-records` (reconcile Cloudflare RFC 7489 TXT records with active domains; creates missing, deletes stale)
 - `30 5 * * *` — `sendvery:dmarc:auto-ramp` (DEC-058 auto-drive: safely advance managed DMARC policies with readiness gates + rollback; runs after the 03:00 DNS sweep refreshes cnameVerifiedAt, clear of the 04:xx purge window)
 - `45 5 * * *` — `sendvery:dmarc:sync-hosted-records` (reconcile hosted managed-DMARC policy records: recreate/repair drift, dangling-safe teardown)
+- `15 8 * * 1` — `sendvery:senders:review-reminder` (email team owners when senders awaiting review cross a volume threshold; deduped 30 days by a `NewUnknownSender` alert stamped `data.notification = 'senders_awaiting_review'`)
+- `0 */6 * * *` — `sendvery:opensource:refresh-github-stats` (refresh cached GitHub stars/forks for the open-source page)
 - Blacklist checks: daily (later phase)
 
 Ops:
