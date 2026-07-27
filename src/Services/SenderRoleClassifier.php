@@ -202,13 +202,23 @@ final readonly class SenderRoleClassifier
      * role for the price of one DNS record. That is the exact hole DEC-060 was
      * written to close, one field further down the message.
      *
-     * Downgrading Suspicious to Unknown is the whole of what it may buy: the
-     * sender stops being called an attacker on this evidence, and still shows up
-     * for review. Withholding an accusation is free; withholding an alert is not.
+     * Cross-receiver correlation (WP-C) joins it here for the same reason, and
+     * the plan asks explicitly that the limit be encoded rather than left to
+     * rule ordering. Its own weakness is different but no smaller: every field
+     * of a *failing* record is chosen by whoever sent it, `d=` included, so a
+     * spoofer naming the victim's own domain has the passing half of the
+     * correlation supplied by the victim's real mail.
+     *
+     * Downgrading Suspicious to Unknown is the whole of what either may buy:
+     * the sender stops being called an attacker on this evidence, and still
+     * shows up for review — {@see SenderRole::Unknown} warrants an alert just as
+     * Suspicious does. Withholding an accusation is free; withholding an alert
+     * is not.
      */
     private function hasForwardingStory(SenderAuthSignals $signals): bool
     {
-        return $signals->rewrittenEnvelopeMessageCount > 0;
+        return $signals->rewrittenEnvelopeMessageCount > 0
+            || $signals->signedStreamSeenFromAnotherHost;
     }
 
     /**

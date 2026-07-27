@@ -376,6 +376,49 @@ final class SenderRoleClassifierTest extends TestCase
     }
 
     #[Test]
+    public function stopsShortOfAccusingAHostRelayingAStreamThatPassesElsewhere(): void
+    {
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 0.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                signedStreamSeenFromAnotherHost: true,
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertSame(SenderRole::Unknown, $role);
+    }
+
+    #[Test]
+    public function correlationAloneNeverBuysTheSilenceAForwarderGets(): void
+    {
+        // Every field of a failing record is chosen by whoever sent it, `d=`
+        // included — so a spoofer naming the victim's own domain gets the
+        // passing half of the correlation supplied by the victim's real mail.
+        // The plan asks for this limit to be encoded, not left to rule order.
+        $role = $this->classifier->classify(
+            'mail.unrecognised-host.example',
+            null,
+            new SenderAuthSignals(
+                dkimPassRate: 0.0,
+                spfPassRate: 0.0,
+                isAuthorized: false,
+                totalMessages: 400,
+                signedStreamSeenFromAnotherHost: true,
+            ),
+            hostnameForwardConfirmed: true,
+        );
+
+        self::assertNotSame(SenderRole::Forwarder, $role);
+        self::assertTrue($role->warrantsAlert(), 'The sender still comes up for review; only the accusation is withdrawn.');
+    }
+
+    #[Test]
     public function anOrdinaryAlignmentFailureIsStillJudgedOnItsResults(): void
     {
         $role = $this->classifier->classify(

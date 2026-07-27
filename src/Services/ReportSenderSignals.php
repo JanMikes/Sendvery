@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Query\GetSendersSharingASignedStream;
 use App\Value\DmarcAlignment;
 use App\Value\ForwardingAttestation;
 use App\Value\Reports\DomainAlignment;
@@ -33,6 +34,7 @@ final readonly class ReportSenderSignals
     public function __construct(
         private Connection $database,
         private EnvelopeRewriteRegistry $envelopeRewriteRegistry,
+        private GetSendersSharingASignedStream $sendersSharingASignedStreamQuery,
     ) {
     }
 
@@ -53,6 +55,8 @@ final readonly class ReportSenderSignals
                 rec.spf_domain,
                 dr.policy_adkim,
                 dr.policy_aspf,
+                dr.monitored_domain_id,
+                dr.date_range_end,
                 SUM(rec.count) AS total_messages,
                 SUM(CASE WHEN rec.dkim_result = :pass THEN rec.count ELSE 0 END) AS dkim_pass_count,
                 SUM(CASE WHEN rec.spf_result = :pass THEN rec.count ELSE 0 END) AS spf_pass_count,
@@ -66,7 +70,8 @@ final readonly class ReportSenderSignals
             FROM dmarc_record rec
             JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
             WHERE rec.dmarc_report_id = :reportId
-            GROUP BY rec.source_ip, rec.header_from, rec.dkim_domain, rec.spf_domain, dr.policy_adkim, dr.policy_aspf',
+            GROUP BY rec.source_ip, rec.header_from, rec.dkim_domain, rec.spf_domain,
+                     dr.policy_adkim, dr.policy_aspf, dr.monitored_domain_id, dr.date_range_end',
             [
                 'reportId' => $reportId->toString(),
                 'pass' => 'pass',
@@ -106,6 +111,13 @@ final readonly class ReportSenderSignals
             }
         }
 
+        // One correlation query for the whole report rather than one per record
+        // — the plan's "not on the hot path" rule. It reads across the domain's
+        // whole window, so doing it per record would multiply a range scan by
+        // the report's record count for an answer that cannot differ between
+        // two records of the same address.
+        $sharingASignedStream = $this->sendersSharingASignedStream($rows, array_keys($totals));
+
         $signals = [];
 
         foreach ($totals as $sourceIp => $total) {
@@ -117,10 +129,32 @@ final readonly class ReportSenderSignals
                 forwarding: $this->attestation($total['reasons']),
                 alignedDkimPassed: $total['alignedDkim'],
                 rewrittenEnvelopeMessages: $total['rewritten'],
+                signedStreamSeenFromAnotherHost: in_array($sourceIp, $sharingASignedStream, true),
             );
         }
 
         return $signals;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @param list<string>               $sourceIps
+     *
+     * @return list<string>
+     */
+    private function sendersSharingASignedStream(array $rows, array $sourceIps): array
+    {
+        $first = $rows[0] ?? null;
+
+        if (null === $first || !is_string($first['monitored_domain_id']) || !is_string($first['date_range_end'])) {
+            return [];
+        }
+
+        return $this->sendersSharingASignedStreamQuery->forDomain(
+            $first['monitored_domain_id'],
+            new \DateTimeImmutable($first['date_range_end']),
+            $sourceIps,
+        );
     }
 
     /**

@@ -178,6 +178,59 @@ final class ReportSenderSignalsTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function noticesAHostCarryingASignedStreamThatPassesFromSomewhereElse(): void
+    {
+        $origin = $this->givenReport();
+        $this->givenRecord($origin, '203.0.113.80', 40, AuthResult::Pass, AuthResult::Pass, dkimDomain: 'sendvery.com');
+        $this->em->flush();
+
+        $relay = $this->givenReport();
+        $this->givenRecord($relay, '203.0.113.81', 3, AuthResult::Fail, AuthResult::Fail, dkimDomain: 'sendvery.com');
+        // A different stream entirely: nothing else in the window signs for it.
+        $this->givenRecord($relay, '203.0.113.82', 3, AuthResult::Fail, AuthResult::Fail, dkimDomain: 'nowhere.example');
+        $this->em->flush();
+
+        $signals = $this->signals->forReport($relay->id);
+
+        self::assertTrue(
+            $signals['203.0.113.81']->signedStreamSeenFromAnotherHost,
+            'The same signed stream passing from one address and failing from another is what a relay looks like.',
+        );
+        self::assertFalse($signals['203.0.113.82']->signedStreamSeenFromAnotherHost);
+    }
+
+    #[Test]
+    public function doesNotLetAHostCorroborateItself(): void
+    {
+        $report = $this->givenReport();
+        $this->givenRecord($report, '203.0.113.90', 40, AuthResult::Pass, AuthResult::Pass, dkimDomain: 'sendvery.com');
+        $this->givenRecord($report, '203.0.113.90', 3, AuthResult::Fail, AuthResult::Fail, dkimDomain: 'sendvery.com');
+        $this->em->flush();
+
+        self::assertFalse(
+            $this->signals->forReport($report->id)['203.0.113.90']->signedStreamSeenFromAnotherHost,
+            'One address sending some mail that passes and some that fails is an ordinary sender having an ordinary day, not a relay.',
+        );
+    }
+
+    #[Test]
+    public function willNotCorrelateWithAStreamFromOutsideTheWindow(): void
+    {
+        $ancient = $this->givenReport(periodEnd: '2026-05-01 00:00:00');
+        $this->givenRecord($ancient, '203.0.113.100', 40, AuthResult::Pass, AuthResult::Pass, dkimDomain: 'sendvery.com');
+        $this->em->flush();
+
+        $recent = $this->givenReport();
+        $this->givenRecord($recent, '203.0.113.101', 3, AuthResult::Fail, AuthResult::Fail, dkimDomain: 'sendvery.com');
+        $this->em->flush();
+
+        self::assertFalse(
+            $this->signals->forReport($recent->id)['203.0.113.101']->signedStreamSeenFromAnotherHost,
+            'A signing domain retired months ago cannot vouch for a host sending today.',
+        );
+    }
+
+    #[Test]
     public function marksOnlyTheAddressesTheCallerVouchedFor(): void
     {
         $report = $this->givenReport();
@@ -200,16 +253,18 @@ final class ReportSenderSignalsTest extends IntegrationTestCase
         self::assertSame([], $this->signals->forReport($report->id));
     }
 
-    private function givenReport(DmarcAlignment $adkim = DmarcAlignment::Relaxed): DmarcReport
-    {
+    private function givenReport(
+        DmarcAlignment $adkim = DmarcAlignment::Relaxed,
+        string $periodEnd = '2026-07-26 00:00:00',
+    ): DmarcReport {
         $report = new DmarcReport(
             id: Uuid::uuid7(),
             monitoredDomain: $this->domain,
             reporterOrg: 'google.com',
             reporterEmail: 'noreply-dmarc-support@google.com',
             externalReportId: 'signals-'.Uuid::uuid7()->toString(),
-            dateRangeBegin: new \DateTimeImmutable('2026-07-25 00:00:00'),
-            dateRangeEnd: new \DateTimeImmutable('2026-07-26 00:00:00'),
+            dateRangeBegin: new \DateTimeImmutable($periodEnd)->modify('-1 day'),
+            dateRangeEnd: new \DateTimeImmutable($periodEnd),
             policyDomain: $this->domain->domain,
             policyAdkim: $adkim,
             policyAspf: DmarcAlignment::Relaxed,

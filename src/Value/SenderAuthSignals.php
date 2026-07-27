@@ -61,6 +61,18 @@ final readonly class SenderAuthSignals
          * one.
          */
         public int $rewrittenEnvelopeMessageCount = 0,
+        /**
+         * Whether the DKIM signing domain on this host's mail also *passed*
+         * from a different address in the same window — the cross-receiver
+         * correlation of DEC-060 WP-C, computed by
+         * {@see \App\Query\GetSendersSharingASignedStream}.
+         *
+         * Corroboration only. `d=` on a failing record is chosen by whoever
+         * sent it, so a spoofer naming the victim's own domain gets the passing
+         * half of the pair supplied by the victim's real mail. It may soften a
+         * verdict; it may never grant one.
+         */
+        public bool $signedStreamSeenFromAnotherHost = false,
     ) {
     }
 
@@ -76,6 +88,7 @@ final readonly class SenderAuthSignals
         ?ForwardingAttestation $forwarding = null,
         int $alignedDkimPassed = 0,
         int $rewrittenEnvelopeMessages = 0,
+        bool $signedStreamSeenFromAnotherHost = false,
     ): self {
         return new self(
             dkimPassRate: $totalMessages > 0 ? $dkimPassed / $totalMessages * 100 : 0.0,
@@ -85,6 +98,7 @@ final readonly class SenderAuthSignals
             forwarding: $forwarding ?? ForwardingAttestation::none(),
             alignedDkimPassCount: $alignedDkimPassed,
             rewrittenEnvelopeMessageCount: $rewrittenEnvelopeMessages,
+            signedStreamSeenFromAnotherHost: $signedStreamSeenFromAnotherHost,
         );
     }
 }
