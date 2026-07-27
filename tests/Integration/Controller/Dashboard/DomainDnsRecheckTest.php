@@ -222,6 +222,18 @@ final class DomainDnsRecheckTest extends WebTestCase
     private function signedInPersonaWithCheckedDomain(): array
     {
         $client = self::createClient();
+
+        // Every throttle test here spans more than one request and asserts on
+        // rate-limiter state carried between them. That state lives in the
+        // cache.rate_limiter pool, whose filesystem namespace is seeded by the
+        // compiled container — so a kernel reboot that happens to rebuild the
+        // container lands the second request on a DIFFERENT, empty namespace
+        // and the cooldown silently vanishes. That made these tests pass alone
+        // and fail intermittently in a full suite run. Pinning the kernel keeps
+        // both requests on one container, so the limiter is exercised for real
+        // instead of racing the cache namespace.
+        $client->disableReboot();
+
         $persona = TestFixtures::fromContainer(self::getContainer())->persona()->build();
         assert(null !== $persona->domain);
 
