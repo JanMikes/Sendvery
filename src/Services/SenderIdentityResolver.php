@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Entity\SenderIdentity;
 use App\Repository\SenderIdentityRepository;
+use App\Services\Dns\AsnResolver;
 use App\Services\Dns\ForwardConfirmedReverseDns;
 use App\Services\Dns\ReverseDnsResolver;
 use App\Value\ResolvedSender;
@@ -42,18 +43,30 @@ final readonly class SenderIdentityResolver
      * one or two ingests — so this only ever bites on a pathological report,
      * which is exactly when a worker must not be allowed to stall.
      *
-     * Identifying one address costs at most two DNS queries: the reverse
-     * lookup, then the forward lookup that confirms it. The cap is deliberately
-     * expressed in identifications rather than lookups so that forward
-     * confirmation tightened this budget instead of doubling it — a batch still
-     * issues at most 24 queries, where before it issued 25.
+     * The cap is expressed in identifications rather than lookups because what
+     * one identification costs has changed twice. The arithmetic today:
+     *
+     *   1 reverse lookup
+     * + 1 forward lookup confirming it
+     * + 1 origin lookup for the AS number
+     * + 1 name lookup per *distinct* AS in the batch (DEC-060 WP-D)
+     *
+     * so 8 identifications issue 24 queries plus at most 8 more — and in
+     * practice far fewer, because a report's addresses cluster in a handful of
+     * networks and a rotating relay pool is one AS. That holds the worst case
+     * at 32 queries against the 24 the previous cap of 12 allowed, which at the
+     * resolver's two-second ceiling is roughly a minute for a report that would
+     * have to be pathological to reach it. Recall is not lost, only deferred:
+     * whatever falls off the end keeps its place in the retry schedule and is
+     * identified by the next ingest.
      */
-    public const int MAX_IDENTIFICATIONS_PER_BATCH = 12;
+    public const int MAX_IDENTIFICATIONS_PER_BATCH = 8;
 
     public function __construct(
         private SenderIdentityRepository $repository,
         private ReverseDnsResolver $reverseDns,
         private ForwardConfirmedReverseDns $forwardConfirmation,
+        private AsnResolver $asnResolver,
         private RegistrableDomainExtractor $registrableDomainExtractor,
         private OrganizationMapper $organizationMapper,
         private SenderRoleClassifier $classifier,
@@ -160,6 +173,14 @@ final readonly class SenderIdentityResolver
             forwardConfirmed: $forwardConfirmed,
             at: $now,
         );
+
+        // Asked unconditionally, unlike the forward confirmation: an address
+        // with no PTR record still belongs to a network, and that is exactly
+        // the case where the AS is the only thing standing between the reader
+        // and a bare address. It grants no role either way — see
+        // {@see \App\Value\Dns\AsnRegistration} for why an ASN identifies
+        // without excusing.
+        $identity->recordAsnLookup($this->asnResolver->resolve($sourceIp), $now);
 
         return $identity;
     }

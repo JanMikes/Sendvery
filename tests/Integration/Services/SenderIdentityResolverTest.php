@@ -6,6 +6,7 @@ namespace App\Tests\Integration\Services;
 
 use App\Entity\SenderIdentity;
 use App\Repository\SenderIdentityRepository;
+use App\Services\Dns\FakeAsnResolver;
 use App\Services\Dns\FakeReverseDnsResolver;
 use App\Services\Dns\ForwardConfirmedReverseDns;
 use App\Services\IdentityProvider;
@@ -64,6 +65,51 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
             $reverseDns->lookupCount(),
             'Reverse DNS on the ingest path is what risks stalling a worker; a cached address must never be queried again.',
         );
+    }
+
+    public function testIdentifiesTheNetworkBehindAnAddressThatPublishesNoReverseRecord(): void
+    {
+        // The case ASN exists for: no PTR, so no hostname, no registrable
+        // domain and no organisation. Without it the reader gets a bare address.
+        $this->scriptAsn()->withAsn('203.0.113.9', 16509, 'AMAZON-02');
+
+        $resolved = $this->resolver()->resolve('203.0.113.9');
+
+        self::assertSame('203.0.113.9 (AS16509 AMAZON-02)', $resolved->displayLabel());
+        self::assertFalse($resolved->isResolved(), 'Knowing whose network announces an address is not knowing the host.');
+    }
+
+    public function testAKnownNetworkNeverExcusesASenderTheEvidenceDoesNot(): void
+    {
+        // AS8075 Microsoft is not something a VPS renter can claim — which makes
+        // ASN good evidence of *who* and no evidence at all of *whether*. The
+        // gateways this product recognises announce from their cloud provider's
+        // AS anyway, so an ASN that could grant a role would be granting it on
+        // the strength of a rented machine.
+        $this->scriptAsn()->withAsn('198.51.100.7', 8075, 'MICROSOFT-CORP-MSN-AS-BLOCK');
+
+        $resolved = $this->resolver()->resolve(
+            '198.51.100.7',
+            new SenderAuthSignals(dkimPassRate: 0.0, spfPassRate: 0.0, isAuthorized: false, totalMessages: 500),
+        );
+
+        self::assertSame(SenderRole::Suspicious, $resolved->role);
+        self::assertTrue($resolved->role->warrantsAlert());
+    }
+
+    public function testAsksTheNetworkOfAnAddressOnceForTheWholeSystem(): void
+    {
+        $this->scriptReverseDns()->withHostname('77.75.76.89', 'mxb.seznam.cz');
+        $asn = $this->scriptAsn()->withAsn('77.75.76.89', 43037, 'SEZNAM-AS');
+
+        $resolver = $this->resolver();
+        $resolver->resolve('77.75.76.89');
+        $this->getService(EntityManagerInterface::class)->flush();
+
+        $resolved = $resolver->resolve('77.75.76.89');
+
+        self::assertSame(1, $asn->lookupCount(), 'The AS lookup shares the identity cache, so a warm address costs nothing.');
+        self::assertSame(43037, $resolved->asn?->number);
     }
 
     public function testGivesTheWholeRotatingRelayPoolOneIdentity(): void
@@ -467,6 +513,7 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
             resolutionAttempts: 1,
             lastAttemptAt: new \DateTimeImmutable(self::NOW),
             forwardConfirmed: true,
+            asnResolvedAt: new \DateTimeImmutable(self::NOW),
         ));
         $em->flush();
         $em->clear();
@@ -495,6 +542,7 @@ final class SenderIdentityResolverTest extends IntegrationTestCase
             repository: $this->getService(SenderIdentityRepository::class),
             reverseDns: $reverseDns,
             forwardConfirmation: new ForwardConfirmedReverseDns($reverseDns),
+            asnResolver: $this->getService(FakeAsnResolver::class),
             registrableDomainExtractor: $this->getService(RegistrableDomainExtractor::class),
             organizationMapper: $this->getService(OrganizationMapper::class),
             classifier: $this->getService(SenderRoleClassifier::class),

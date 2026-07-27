@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests;
 
+use App\Services\Dns\FakeAsnResolver;
 use App\Services\Dns\FakeDns;
 use App\Services\Dns\FakeReverseDnsResolver;
 use App\Services\Dns\FakeSmtpProbe;
@@ -17,6 +18,7 @@ use App\Services\Dns\FakeSmtpProbe;
  *   $this->scriptDns()->withTxt('_dmarc.example.com', 'v=DMARC1; p=quarantine; rua=mailto:reports@sendvery.com;');
  *   $this->scriptSmtp()->withReachable('192.0.2.10', tlsSupported: true);
  *   $this->scriptReverseDns()->withHostname('77.75.76.89', 'mxb.seznam.cz');
+ *   $this->scriptAsn()->withAsn('77.75.76.89', 43037, 'SEZNAM-AS');
  *
  * withHostname() scripts a *genuine* host: the address answers with that PTR
  * hostname and the hostname resolves back to the address, which is what
@@ -33,6 +35,14 @@ trait ScriptsDnsRecords
         assert($reverseDns instanceof FakeReverseDnsResolver);
 
         return $reverseDns;
+    }
+
+    protected function scriptAsn(): FakeAsnResolver
+    {
+        $asn = self::getContainer()->get(FakeAsnResolver::class);
+        assert($asn instanceof FakeAsnResolver);
+
+        return $asn;
     }
 
     protected function scriptDns(): FakeDns

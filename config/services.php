@@ -27,6 +27,9 @@ return App::config([
         'App\Services\Dns\ReverseDnsResolver' => [
             'alias' => 'App\Services\Dns\SystemReverseDnsResolver',
         ],
+        'App\Services\Dns\AsnResolver' => [
+            'alias' => 'App\Services\Dns\SystemAsnResolver',
+        ],
         'SPFLib\Decoder' => [
             'autoconfigure' => true,
         ],
@@ -125,6 +128,15 @@ return App::config([
                 'public' => true,
             ],
             'App\Services\Dns\FakeReverseDnsResolver' => [
+                'public' => true,
+            ],
+            // Same rule for the AS lookup: production asks Team Cymru over DNS,
+            // and no test may. Scripted per address by the in-memory fake.
+            'App\Services\Dns\AsnResolver' => [
+                'alias' => 'App\Services\Dns\FakeAsnResolver',
+                'public' => true,
+            ],
+            'App\Services\Dns\FakeAsnResolver' => [
                 'public' => true,
             ],
             // SPFLib uses its own DNS resolver, outside the App namespace and

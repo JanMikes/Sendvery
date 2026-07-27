@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Entity;
 
 use App\Entity\SenderIdentity;
+use App\Value\Dns\AsnRegistration;
 use App\Value\SenderRole;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -55,6 +56,7 @@ final class SenderIdentityTest extends TestCase
     {
         $identity = $this->newIdentity();
         $identity->recordResolution('mxb.seznam.cz', 'seznam.cz', 'Seznam', SenderRole::Esp, true, new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordAsnLookup(new AsnRegistration(43037, 'SEZNAM-AS'), new \DateTimeImmutable('2026-07-27 10:00:00'));
 
         self::assertFalse(
             $identity->isDueForRetry(new \DateTimeImmutable('2027-07-27 10:00:00')),
@@ -67,12 +69,60 @@ final class SenderIdentityTest extends TestCase
     {
         $identity = $this->newIdentity();
         $identity->recordResolution('claims.mimecast.com', 'mimecast.com', null, SenderRole::Unknown, false, new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordAsnLookup(null, new \DateTimeImmutable('2026-07-27 10:00:00'));
 
         self::assertFalse($identity->isForwardConfirmed());
         self::assertFalse(
             $identity->isDueForRetry(new \DateTimeImmutable('2027-07-27 10:00:00')),
             'A failed confirmation is an answer, not an open question.',
         );
+    }
+
+    #[Test]
+    public function remembersThatAnAddressIsAnnouncedByNobody(): void
+    {
+        $identity = $this->newIdentity();
+        $identity->recordResolution('mail.nowhere.example', 'nowhere.example', null, SenderRole::Unknown, true, new \DateTimeImmutable('2026-07-27 10:00:00'));
+        $identity->recordAsnLookup(null, new \DateTimeImmutable('2026-07-27 10:00:00'));
+
+        self::assertNull($identity->asn);
+        self::assertNull($identity->asnRegistration());
+        self::assertFalse(
+            $identity->isDueForRetry(new \DateTimeImmutable('2027-07-27 10:00:00')),
+            '"Announced by nobody" is an answer, and caching it is what stops every ingest asking again.',
+        );
+    }
+
+    #[Test]
+    public function asksOnceMoreAboutARowCachedBeforeTheNetworkAxisExisted(): void
+    {
+        $identity = new SenderIdentity(
+            id: Uuid::uuid7(),
+            sourceIp: '52.212.19.177',
+            resolvedAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+            hostname: 'eu.cloud-sec-av.com',
+            registrableDomain: 'cloud-sec-av.com',
+            role: SenderRole::Forwarder,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+            forwardConfirmed: true,
+        );
+
+        self::assertTrue(
+            $identity->isDueForRetry(new \DateTimeImmutable('2026-07-27 10:00:00')),
+            'The row is complete by the old definition and would otherwise never be revisited, leaving the new axis empty forever.',
+        );
+    }
+
+    #[Test]
+    public function keepsTheNetworkThatAnnouncesAnAddress(): void
+    {
+        $identity = $this->newIdentity();
+        $identity->recordAsnLookup(new AsnRegistration(16509, 'AMAZON-02'), new \DateTimeImmutable('2026-07-27 10:00:00'));
+
+        self::assertSame(16509, $identity->asn);
+        self::assertSame('AMAZON-02', $identity->asnOrganization);
+        self::assertSame('AS16509 AMAZON-02', $identity->asnRegistration()?->label());
     }
 
     #[Test]

@@ -7,8 +7,10 @@ namespace App\Tests\Integration\Command;
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
 use App\Entity\MonitoredDomain;
+use App\Entity\SenderIdentity;
 use App\Entity\Team;
 use App\Repository\SenderIdentityRepository;
+use App\Services\IdentityProvider;
 use App\Tests\IntegrationTestCase;
 use App\Tests\ScriptsDnsRecords;
 use App\Value\AuthResult;
@@ -218,6 +220,40 @@ final class BackfillSenderIdentitiesCommandTest extends IntegrationTestCase
         self::assertNull($this->getService(SenderIdentityRepository::class)->findByIp('77.75.76.89'));
         self::assertStringContainsString('Dry run, nothing written', $tester->getDisplay());
         self::assertStringContainsString('and name 2', $tester->getDisplay());
+    }
+
+    public function testFillsInAnIdentityAxisAddedAfterTheAddressWasCached(): void
+    {
+        // A row cached before DEC-060 is perfectly enriched by the old
+        // definition — hostname, organisation, every record named — so the
+        // hostname test alone would never revisit it and the new column would
+        // stay empty until the sender happened to send again.
+        $this->scriptReverseDns()->withHostname('40.93.13.60', 'mail-dm2pr04.outbound.protection.outlook.com');
+        $this->scriptAsn()->withAsn('40.93.13.60', 8075, 'MICROSOFT-CORP-MSN-AS-BLOCK');
+
+        $this->getService(SenderIdentityRepository::class)->add(new SenderIdentity(
+            id: $this->getService(IdentityProvider::class)->nextIdentity(),
+            sourceIp: '40.93.13.60',
+            resolvedAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+            hostname: 'mail-dm2pr04.outbound.protection.outlook.com',
+            registrableDomain: 'outlook.com',
+            organization: 'Microsoft',
+            role: SenderRole::Forwarder,
+            resolutionAttempts: 1,
+            lastAttemptAt: new \DateTimeImmutable('2026-07-20 10:00:00'),
+            forwardConfirmed: true,
+        ));
+        $this->givenRecord('40.93.13.60', resolvedHostname: 'mail-dm2pr04.outbound.protection.outlook.com', resolvedOrg: 'Microsoft');
+        $this->em->flush();
+
+        $this->tester()->execute([]);
+        $this->em->clear();
+
+        $identity = $this->getService(SenderIdentityRepository::class)->findByIp('40.93.13.60');
+
+        self::assertNotNull($identity);
+        self::assertSame(8075, $identity->asn);
+        self::assertSame('MICROSOFT-CORP-MSN-AS-BLOCK', $identity->asnOrganization);
     }
 
     public function testSaysSoWhenThereIsNothingToBackfill(): void

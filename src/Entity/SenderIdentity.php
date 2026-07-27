@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use App\Value\Dns\AsnRegistration;
 use App\Value\SenderRole;
 use Doctrine\ORM\Mapping as ORM;
 use Ramsey\Uuid\UuidInterface;
@@ -33,6 +34,7 @@ use Ramsey\Uuid\UuidInterface;
 #[ORM\Table(name: 'sender_identity')]
 #[ORM\UniqueConstraint(name: 'uniq_sender_identity_source_ip', columns: ['source_ip'])]
 #[ORM\Index(name: 'idx_sender_identity_registrable_domain', columns: ['registrable_domain'])]
+#[ORM\Index(name: 'idx_sender_identity_asn', columns: ['asn'])]
 final class SenderIdentity
 {
     /**
@@ -82,6 +84,34 @@ final class SenderIdentity
     #[ORM\Column(type: 'boolean', nullable: true)]
     public ?bool $forwardConfirmed;
 
+    /**
+     * The autonomous system announcing {@see $sourceIp} (DEC-060 WP-D).
+     *
+     * As global and as objective as the hostname, and from a source the sender
+     * does not write: BGP and the RIR that allocated the number, rather than a
+     * reverse zone handed to whoever rents the address. Null means the address
+     * is in no announced prefix, or the lookup did not answer — which is why
+     * "have we ever asked?" needs its own column below rather than being
+     * inferred from this one.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    public ?int $asn;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    public ?string $asnOrganization;
+
+    /**
+     * When the AS lookup was last performed, or null for a row cached before
+     * this axis existed.
+     *
+     * The same three-valued discipline {@see $forwardConfirmed} uses, for the
+     * same reason: `asn IS NULL` would otherwise mean both "this address is
+     * announced by nobody" and "we have never looked", and those are not the
+     * same fact. Null makes the row due for exactly one re-resolution.
+     */
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    public ?\DateTimeImmutable $asnResolvedAt;
+
     /** When the cached facts were last written — successful lookup or not. */
     #[ORM\Column(type: 'datetime_immutable')]
     public \DateTimeImmutable $resolvedAt;
@@ -104,6 +134,9 @@ final class SenderIdentity
         int $resolutionAttempts = 0,
         ?\DateTimeImmutable $lastAttemptAt = null,
         ?bool $forwardConfirmed = null,
+        ?int $asn = null,
+        ?string $asnOrganization = null,
+        ?\DateTimeImmutable $asnResolvedAt = null,
     ) {
         $this->id = $id;
         $this->sourceIp = $sourceIp;
@@ -115,6 +148,25 @@ final class SenderIdentity
         $this->resolutionAttempts = $resolutionAttempts;
         $this->lastAttemptAt = $lastAttemptAt;
         $this->forwardConfirmed = $forwardConfirmed;
+        $this->asn = $asn;
+        $this->asnOrganization = $asnOrganization;
+        $this->asnResolvedAt = $asnResolvedAt;
+    }
+
+    /**
+     * Records the outcome of an AS lookup, including the outcome "this address
+     * is announced by nobody" — which is a real answer and is cached as one.
+     */
+    public function recordAsnLookup(?AsnRegistration $registration, \DateTimeImmutable $at): void
+    {
+        $this->asn = $registration?->number;
+        $this->asnOrganization = $registration?->organization;
+        $this->asnResolvedAt = $at;
+    }
+
+    public function asnRegistration(): ?AsnRegistration
+    {
+        return null === $this->asn ? null : new AsnRegistration($this->asn, $this->asnOrganization);
     }
 
     /**
@@ -163,12 +215,15 @@ final class SenderIdentity
     public function isDueForRetry(\DateTimeImmutable $now): bool
     {
         if ($this->isResolved()) {
-            // Except once, for rows cached before forward confirmation existed.
-            // Their hostname carries no verdict either way, and an unverified
-            // PTR must never be trusted — so instead of freezing them as
-            // permanently unconfirmed (which would demote genuine forwarders
-            // forever) they get exactly one re-resolution to earn an answer.
-            return null === $this->forwardConfirmed;
+            // Except once, for rows cached before forward confirmation or the
+            // AS lookup existed. Their hostname carries no verdict either way,
+            // and an unverified PTR must never be trusted — so instead of
+            // freezing them as permanently unconfirmed (which would demote
+            // genuine forwarders forever) they get exactly one re-resolution to
+            // earn an answer. A row that has never been asked for its AS is due
+            // on the same terms, and for the same reason: never asked is not an
+            // answer.
+            return null === $this->forwardConfirmed || null === $this->asnResolvedAt;
         }
 
         if (null === $this->lastAttemptAt) {

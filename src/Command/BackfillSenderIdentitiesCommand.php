@@ -141,12 +141,20 @@ final class BackfillSenderIdentitiesCommand extends Command
     }
 
     /**
-     * Addresses that still show up as raw IPs on the dashboard.
+     * Addresses that still show up as raw IPs on the dashboard, plus those
+     * whose identity is missing an axis added since they were cached.
      *
      * Addresses with no `sender_identity` row yet come first: an address with no
      * PTR record stays unenriched forever, so ordering by address alone would
      * let a block of unresolvable hosts consume every run's budget and starve
      * the ones that would actually resolve.
+     *
+     * `asn_resolved_at IS NULL` is the DEC-060 WP-D half. A row cached before
+     * the AS lookup existed is perfectly enriched by the old definition and
+     * would never be revisited by the hostname test alone. Those rows do
+     * self-heal on their next ingest — {@see \App\Entity\SenderIdentity::isDueForRetry()}
+     * makes them due exactly once — but an operator should not have to wait for
+     * a sender to send again to finish a migration.
      *
      * @return list<string>
      */
@@ -157,6 +165,8 @@ final class BackfillSenderIdentitiesCommand extends Command
             FROM dmarc_record rec
             LEFT JOIN sender_identity si ON si.source_ip = rec.source_ip
             WHERE rec.resolved_hostname IS NULL
+               OR si.id IS NULL
+               OR si.asn_resolved_at IS NULL
             ORDER BY never_looked_up DESC, rec.source_ip
             LIMIT :limit',
             ['limit' => $limit],

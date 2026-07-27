@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Unit\Value;
 
 use App\Entity\SenderIdentity;
+use App\Value\Dns\AsnRegistration;
 use App\Value\ResolvedSender;
 use App\Value\SenderRole;
 use PHPUnit\Framework\Attributes\Test;
@@ -80,6 +81,43 @@ final class ResolvedSenderTest extends TestCase
     public function showsTheRawAddressOnlyWhenThereIsNothingElseToSay(): void
     {
         self::assertSame('192.0.2.10', ResolvedSender::unresolved('192.0.2.10')->displayLabel());
+    }
+
+    #[Test]
+    public function namesTheNetworkBesideTheAddressWhenNothingNamedTheHost(): void
+    {
+        $sender = new ResolvedSender('203.0.113.9', null, null, null, SenderRole::Unknown, new AsnRegistration(16509, 'AMAZON-02'));
+
+        self::assertSame(
+            '203.0.113.9 (AS16509 AMAZON-02)',
+            $sender->displayLabel(),
+            'Beside the address, not instead of it: "whose network announces this" is true, where a bare "Amazon" would claim Amazon sent the mail and read as an endorsement.',
+        );
+    }
+
+    #[Test]
+    public function neverLetsTheNetworkDisplaceANameTheHostEarned(): void
+    {
+        $sender = new ResolvedSender('52.212.19.177', 'eu.cloud-sec-av.com', 'cloud-sec-av.com', null, SenderRole::Forwarder, new AsnRegistration(16509, 'AMAZON-02'));
+
+        self::assertSame(
+            'cloud-sec-av.com',
+            $sender->displayLabel(),
+            'The gateways this product exists to recognise run on rented cloud capacity, so their AS is the cloud provider\'s and says nothing about who they are.',
+        );
+    }
+
+    #[Test]
+    public function neverGroupsTwoSendersTogetherJustForSharingANetwork(): void
+    {
+        $first = new ResolvedSender('203.0.113.9', null, null, null, SenderRole::Unknown, new AsnRegistration(16509, 'AMAZON-02'));
+        $second = new ResolvedSender('203.0.113.10', null, null, null, SenderRole::Unknown, new AsnRegistration(16509, 'AMAZON-02'));
+
+        self::assertNotSame(
+            $first->identityKey(),
+            $second->identityKey(),
+            'Half the internet rents from the same handful of networks; grouping on that would merge unrelated senders into one.',
+        );
     }
 
     #[Test]
