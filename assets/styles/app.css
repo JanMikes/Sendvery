@@ -102,6 +102,43 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Prose flow spacing
+ *
+ * `@tailwindcss/typography` is NOT installed. daisyUI ships only the
+ * `--tw-prose-*` colour bridge (it assumes the plugin consumes those vars), so
+ * every `prose prose-lg` container on the public site — tool pages, legal
+ * pages, Knowledge Base articles — resolves to no typographic rules at all, and
+ * Preflight's `p { margin: 0 }` glues consecutive paragraphs into one block.
+ *
+ * Scoped to `.prose` on purpose: paragraphs outside it are spaced by their
+ * parent's `space-y-*` / flex `gap-*` and must not gain a second margin.
+ *
+ * Symmetric margins rather than margin-bottom alone, because these containers
+ * interleave `<p>` with `<ul>`/`<ol>`/`<h2>` that also have no margin of their
+ * own — bottom-only would space `p → ul` but leave `ul → p` touching. Adjacent
+ * paragraphs collapse to a single 1.25em gap, not a doubled one.
+ *
+ * `:where()` keeps specificity at 0,1,0 and `@layer components` sits before
+ * `utilities`, so an explicit `mt-*`/`mb-*` on an individual element still wins
+ * — including the `mt-10 mb-4` headings on the legal pages.
+ * ------------------------------------------------------------------------- */
+@layer components {
+    .prose :where(p):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+        margin-block: 1.25em;
+    }
+
+    /* No leading or trailing gap on the container itself — the surrounding
+     * section already owns that spacing. */
+    .prose > :where(:first-child) {
+        margin-block-start: 0;
+    }
+
+    .prose > :where(:last-child) {
+        margin-block-end: 0;
+    }
+}
+
+/* ---------------------------------------------------------------------------
  * TomSelect — theme layer
  *
  * Mirrors daisyUI's own `input`/`select` recipe (same --size scale, same
