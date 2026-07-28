@@ -943,7 +943,7 @@ write or touch; the pre-existing debt is recorded, frozen, and burned down.
       and it hides the debt from the diff, which is the only place gaming is catchable.
   (e) **The baseline is recorded from CI's own `coverage-clover` artifact**, not from a local run.
       An earlier revision switched CI from pcov to Xdebug to force local/CI driver parity; that was
-      reverted. The two drivers disagree on **2 files out of 777 and 26 statements out of 15,923**
+      reverted. The two drivers disagree on **2 files out of 777 and 26 statements out of 15,889**
       (0.16% — the `#[ApiResource(...)]` attribute-argument lines), while Xdebug coverage measured
       3.4× pcov's overhead, ~85s added to every run in perpetuity. Worse, the parity was
       unenforceable: `Selector::forLineCoverage()` prefers pcov whenever it is present, so anyone
@@ -964,7 +964,11 @@ nothing (leaves no ratchet and no burn-down); auto-updating baseline (ratchets b
 from review); line-number granularity (churns); installing pcov in the dev image (a cross-repo
 base-image change made unnecessary by (e)).
 **Impact:** `bin/coverage-audit.php` gains `--ratchet`/`--update`, new committed
-`coverage-baseline.json` (**147 files, 1,246 uncovered statements of 15,923 — 92.17%**; the largest
+`coverage-baseline.json` (**147 files, 1,258 uncovered statements of 15,889 — 92.08%**, recorded from
+CI's own clover artifact — the first CI run proved why that matters: a local pcov recording differed
+on four files, three of them improvements and one, `GenericObjectSerializer`, by 15 statements,
+because a file that is *loaded* during a run gets driver∩analyser executable lines while an unloaded
+one gets analyser-only; the largest
 debts are infrastructure adapters: `ImapCentralInboxClient` 135, `ImapMailClient` 113,
 `Stripe/SubscriptionManager` 73, `SpfChecker` 46), a "Coverage ratchet" step plus a
 `coverage-clover` artifact upload in the `tests` job, `bin` added to `phpstan.neon` (475 lines that

@@ -396,7 +396,7 @@ php bin/coverage-audit.php coverage.xml --ratchet
 ```
 
 `coverage-baseline.json` records, per file, how many uncovered statements that file is allowed. Today
-that is **147 files and 1,246 statements** of debt out of 15,923 — **92.17% line coverage** — mostly
+that is **147 files and 1,258 statements** of debt out of 15,889 — **92.08% line coverage** — mostly
 infrastructure adapters (IMAP, Stripe, API Platform state providers, the GitHub client, console
 commands). **Existing debt is tolerated. New debt is not.** The gate fails when:
 
