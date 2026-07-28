@@ -66,6 +66,11 @@ final readonly class GetMailboxDetail
                 COALESCE((
                     SELECT COUNT(*) FROM dmarc_report dr
                     JOIN received_report_email e ON e.id = dr.source_envelope_id
+                    -- A report is owned by its DOMAIN\'s team, not by the mailbox
+                    -- the mail arrived in, and the two can disagree. Counting a
+                    -- foreign report here would state a number about data this
+                    -- team cannot open.
+                    JOIN monitored_domain rmd ON rmd.id = dr.monitored_domain_id AND rmd.team_id = mc.team_id
                     WHERE e.mailbox_connection_id = mc.id
                 ), 0) AS reports_parsed,
                 COALESCE((
@@ -144,13 +149,23 @@ final readonly class GetMailboxDetail
 
         /** @var list<array{mailbox_id: string, envelopes_30d: int|string, reports_30d: int|string, quarantined_30d: int|string}> $rows */
         $rows = $this->database->executeQuery(
+            // Same tenant boundary as forMailbox(): a report belongs to its
+            // domain\'s team, which is not necessarily the team that owns the
+            // mailbox the mail landed in. `rmd` is the scoped view of the report,
+            // and counting IT rather than `dr` is what keeps a foreign report out
+            // of this mailbox\'s inline activity cell.
             'SELECT
                 e.mailbox_connection_id AS mailbox_id,
-                COUNT(*) FILTER (WHERE e.received_at >= NOW() - INTERVAL \'30 days\') AS envelopes_30d,
-                COUNT(dr.id) FILTER (WHERE e.received_at >= NOW() - INTERVAL \'30 days\') AS reports_30d,
+                COUNT(DISTINCT e.id) FILTER (WHERE e.received_at >= NOW() - INTERVAL \'30 days\') AS envelopes_30d,
+                COUNT(rmd.report_id) FILTER (WHERE e.received_at >= NOW() - INTERVAL \'30 days\') AS reports_30d,
                 COUNT(q.id) FILTER (WHERE e.received_at >= NOW() - INTERVAL \'30 days\') AS quarantined_30d
             FROM received_report_email e
-            LEFT JOIN dmarc_report dr ON dr.source_envelope_id = e.id
+            JOIN mailbox_connection mc ON mc.id = e.mailbox_connection_id
+            LEFT JOIN (
+                SELECT dr.id AS report_id, dr.source_envelope_id, md.team_id
+                FROM dmarc_report dr
+                JOIN monitored_domain md ON md.id = dr.monitored_domain_id
+            ) rmd ON rmd.source_envelope_id = e.id AND rmd.team_id = mc.team_id
             LEFT JOIN quarantined_dmarc_report q ON q.received_email_id = e.id
             WHERE e.mailbox_connection_id IN (:mailboxIds)
             GROUP BY e.mailbox_connection_id',

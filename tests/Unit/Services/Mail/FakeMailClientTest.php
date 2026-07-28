@@ -51,6 +51,7 @@ final class FakeMailClientTest extends TestCase
             from: 'dmarc@google.com',
             date: new \DateTimeImmutable(),
             attachments: [new MailAttachment('report.xml', '<feedback/>', 'text/xml')],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         );
 
         $this->client->addMessage($message);
@@ -85,6 +86,7 @@ final class FakeMailClientTest extends TestCase
             from: 'test@test.com',
             date: new \DateTimeImmutable(),
             attachments: [],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         ));
 
         $result = $this->client->testConnection($this->connection);
@@ -113,6 +115,7 @@ final class FakeMailClientTest extends TestCase
             from: 'test@test.com',
             date: new \DateTimeImmutable(),
             attachments: [],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         );
 
         $this->client->markAsProcessed($this->connection, $message);
@@ -128,6 +131,7 @@ final class FakeMailClientTest extends TestCase
             from: 'test@test.com',
             date: new \DateTimeImmutable(),
             attachments: [],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         ));
         $this->client->simulateFailure('fail');
         $this->client->reset();

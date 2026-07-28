@@ -14,9 +14,35 @@ use Ramsey\Uuid\UuidInterface;
  * source so we can re-parse if our extractor or parser changes, and tracks
  * processing status so we can audit what came in and what we did with it.
  */
+/*
+ * TWO partial unique indexes, not one plain one, because the two ingestion
+ * paths have genuinely different key spaces.
+ *
+ * `Message-ID` is a header chosen by whoever sent the mail. The central inbox
+ * is a single global mailbox, so `(source, message_id)` is a sound key there
+ * and the index is the backstop against two concurrent workers inserting the
+ * same message. But `ReportSource::ByoMailbox` is the same value for every
+ * customer, so the same pair spans all of them — and two tenants receiving one
+ * reporter message (a domain publishing `rua=` to both its owner and its
+ * agency) is ordinary, not adversarial. BYO envelopes are therefore unique
+ * per mailbox connection.
+ *
+ * A single three-column index would NOT do: PostgreSQL treats NULLs as
+ * distinct, and every central-inbox row has a NULL connection, so the central
+ * inbox would silently lose its uniqueness backstop entirely.
+ */
 #[ORM\Entity]
 #[ORM\Table(name: 'received_report_email')]
-#[ORM\UniqueConstraint(name: 'uniq_envelope_source_msgid', columns: ['source', 'message_id'])]
+#[ORM\UniqueConstraint(
+    name: 'uniq_envelope_global_source_msgid',
+    columns: ['source', 'message_id'],
+    options: ['where' => '(mailbox_connection_id IS NULL)'],
+)]
+#[ORM\UniqueConstraint(
+    name: 'uniq_envelope_mailbox_source_msgid',
+    columns: ['source', 'message_id', 'mailbox_connection_id'],
+    options: ['where' => '(mailbox_connection_id IS NOT NULL)'],
+)]
 #[ORM\Index(name: 'idx_envelope_status', columns: ['processing_status', 'ingested_at'])]
 final class ReceivedReportEmail
 {

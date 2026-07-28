@@ -62,6 +62,7 @@ final class PollMailboxHandlerTest extends IntegrationTestCase
             from: 'noreply-dmarc-support@google.com',
             date: new \DateTimeImmutable(),
             attachments: [new MailAttachment('report.xml', $xml, 'text/xml')],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         ));
 
         $handler = $this->getService(PollMailboxHandler::class);
@@ -114,6 +115,7 @@ final class PollMailboxHandlerTest extends IntegrationTestCase
             from: 'dmarc@google.com',
             date: new \DateTimeImmutable(),
             attachments: [new MailAttachment('report.xml', $xml, 'text/xml')],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         ));
 
         $handler = $this->getService(PollMailboxHandler::class);

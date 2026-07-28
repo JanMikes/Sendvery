@@ -115,7 +115,17 @@ readonly class GetDomainIngestionMatrix
                 mc.port AS mailbox_port
             FROM monitored_domain md
             LEFT JOIN per_domain pd ON pd.monitored_domain_id = md.id
-            LEFT JOIN mailbox_connection mc ON mc.id = pd.recent_mailbox_id
+            -- `AND mc.team_id = md.team_id` is a tenant boundary, not a tidy-up.
+            -- This column renders the mailbox host and port on /app/domains, and
+            -- the join arrives here via dmarc_report -> received_report_email ->
+            -- mailbox_connection: three hops, only the first of which is scoped
+            -- by the CTE above. A report cross-linked to another team's envelope
+            -- would print that team's mail server to a stranger. There is no
+            -- global Doctrine tenant filter to catch it, so the predicate lives
+            -- here. Matching md.team_id rather than the caller's whole team list
+            -- is deliberate: a user in two teams still must not see team B's
+            -- mailbox against team A's domain.
+            LEFT JOIN mailbox_connection mc ON mc.id = pd.recent_mailbox_id AND mc.team_id = md.team_id
             WHERE md.id IN (SELECT id FROM eligible_domain_ids)
             ORDER BY md.domain ASC
             SQL;

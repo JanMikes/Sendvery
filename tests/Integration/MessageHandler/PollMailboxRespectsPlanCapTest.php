@@ -131,6 +131,7 @@ final class PollMailboxRespectsPlanCapTest extends IntegrationTestCase
             from: 'noreply-dmarc-support@google.com',
             date: new \DateTimeImmutable(),
             attachments: [new MailAttachment('report.xml', $xml, 'text/xml')],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         ));
 
         $this->getService(PollMailboxHandler::class)(new PollMailbox(connectionId: $connection->id));

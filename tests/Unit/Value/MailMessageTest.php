@@ -21,6 +21,7 @@ final class MailMessageTest extends TestCase
             from: 'noreply-dmarc-support@google.com',
             date: $date,
             attachments: [$attachment],
+            rawEml: "Message-ID: raw\r\nSubject: raw\r\n\r\nbody",
         );
 
         self::assertSame('<msg-123@example.com>', $message->messageId);

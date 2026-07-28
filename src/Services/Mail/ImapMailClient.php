@@ -7,6 +7,7 @@ namespace App\Services\Mail;
 use App\Entity\MailboxConnection;
 use App\Services\CredentialEncryptor;
 use App\Services\Mailbox\ImapMailboxConnectionTester;
+use App\Services\Reports\ImapCentralInboxClient;
 use App\Value\ConnectionTestResult;
 use App\Value\MailAttachment;
 use App\Value\MailboxConnectionErrorCode;
@@ -65,6 +66,13 @@ final readonly class ImapMailClient implements MailClient
                     from: $message->getFrom()->first()->mail ?? '',
                     date: $message->getDate()->first()?->toDate() ?? new \DateTimeImmutable(),
                     attachments: $attachments,
+                    // Shared with the central inbox rather than reimplemented:
+                    // Webklex's getRawBody() drops the headers, and a blob
+                    // stored without them has no top-level Content-Type, so a
+                    // later re-parse finds no MIME structure and no attachments.
+                    // Getting that subtlety wrong twice is how the two ingestion
+                    // paths drift.
+                    rawEml: ImapCentralInboxClient::fullRawEml($message),
                 );
             }
         } finally {

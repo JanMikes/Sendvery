@@ -8,6 +8,7 @@ final readonly class MailMessage
 {
     /**
      * @param array<MailAttachment> $attachments
+     * @param string                $rawEml      the original message bytes, headers included
      */
     public function __construct(
         public string $messageId,
@@ -15,6 +16,7 @@ final readonly class MailMessage
         public string $from,
         public \DateTimeImmutable $date,
         public array $attachments,
+        public string $rawEml,
     ) {
     }
 }
