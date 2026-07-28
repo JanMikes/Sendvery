@@ -206,6 +206,32 @@ jobs:
         # the shared libraries a headless Chromium needs on a bare runner.
         run: npx playwright install --with-deps chromium
 
+      - name: Wire the sign-in bypass into the app
+        # The job-level SENDVERY_TEST_LOGIN_SECRET reaches the Playwright process
+        # for free — Node reads process.env — but it does NOT reliably reach the
+        # app, and the first run of this job proved it: TestLoginController 404'd
+        # at its empty-secret gate.
+        #
+        # The app resolves the secret through Symfony Dotenv, and committed .env
+        # and .env.dev both set it EMPTY on purpose (the endpoint signs in as any
+        # existing user, so no value may be published). Dotenv only leaves a real
+        # environment variable alone when PHP has already put the name in $_ENV or
+        # $_SERVER, and whether it did depends on `variables_order` AND on the
+        # SAPI. Measured both ways: plain CLI finds it in $_SERVER and resolves
+        # correctly, while `php -S` rebuilds $_SERVER per request from request data
+        # and never sees it — so under php.ini-production's default "GPCS" the
+        # committed empty value wins and the endpoint goes inert.
+        #
+        # .env.dev.local is loaded LAST, so it wins regardless of any of that. It
+        # is also byte-for-byte the procedure CLAUDE.md documents for a developer,
+        # which means CI now exercises the same wiring a human does — worth having
+        # in a suite whose entire value is fidelity. Gitignored and dockerignored,
+        # and this runner is thrown away at the end of the job.
+        #
+        # The value must stay dotenv-safe (no spaces, quotes or #) — it is a fixed
+        # literal in this file's `env:` block, so that is a property we control.
+        run: echo "SENDVERY_TEST_LOGIN_SECRET=$SENDVERY_TEST_LOGIN_SECRET" > .env.dev.local
+
       - name: Start the app
         # PHP's built-in server with the front controller as the router script.
         # PHP_CLI_SERVER_WORKERS keeps a page's asset requests from queueing

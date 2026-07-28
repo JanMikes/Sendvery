@@ -103,6 +103,78 @@ async function assertAppIsReachable(baseURL: string): Promise<void> {
     }
 }
 
+const SECRET_NAME = 'SENDVERY_TEST_LOGIN_SECRET';
+
+/**
+ * The order Symfony Dotenv loads these for APP_ENV=dev. LAST ONE WINS, and that
+ * is the whole reason the secret belongs in `.env.dev.local`.
+ */
+const ENV_FILES_IN_LOAD_ORDER = ['.env', '.env.local', '.env.dev', '.env.dev.local'] as const;
+
+/**
+ * `undefined` when the file does not exist or never mentions the name, `''` when
+ * it sets it to nothing. Those are different facts and the diagnostic needs both:
+ * a committed empty value is not a missing value, it is an override.
+ */
+function readConfiguredSecret(file: string): string | undefined {
+    const path = resolve(PROJECT_ROOT, file);
+
+    if (!existsSync(path)) {
+        return undefined;
+    }
+
+    return readFileSync(path, 'utf8').match(new RegExp(`^${SECRET_NAME}=(.*)$`, 'm'))?.[1]?.trim();
+}
+
+/**
+ * Lengths and presence, NEVER values, and deliberately no hash either: a
+ * truncated digest of a short human-chosen secret is a dictionary attack, and it
+ * would have had nothing to compare against anyway — see the comment on
+ * assertLoginBypassAnswers for why the app cannot be asked what it resolved.
+ */
+function describeSecretWiring(suiteSource: string, suiteSecret: string): string {
+    const lines = [
+        `The suite resolved its secret from ${suiteSource} (${suiteSecret.length} characters).`,
+        '',
+        'What the APP resolves is a separate question, and these are the files that decide it,',
+        'in the order Symfony Dotenv loads them — the last one to set the name wins:',
+        '',
+    ];
+
+    const configured = ENV_FILES_IN_LOAD_ORDER.map((file) => ({ file, value: readConfiguredSecret(file) }));
+
+    // File-over-file precedence is unconditional — a value already loaded from an
+    // earlier .env IS overridden by a later one. Only file-versus-real-variable is
+    // the conditional part, which the paragraph after this list explains. So
+    // naming one last writer is a fact; annotating two of them would contradict
+    // the sentence above.
+    const setters = configured.filter(({ value }) => undefined !== value);
+    const lastWriter = setters[setters.length - 1];
+
+    for (const { file, value } of configured) {
+        let state: string;
+
+        if (undefined === value) {
+            state = existsSync(resolve(PROJECT_ROOT, file)) ? 'exists, does not set it' : 'absent';
+        } else if ('' === value) {
+            state = 'sets it EMPTY';
+        } else {
+            state = `sets it (${value.length} characters)`;
+        }
+
+        if (undefined !== lastWriter && file === lastWriter.file) {
+            state +=
+                '' === lastWriter.value
+                    ? '   <-- last writer: the endpoint is inert, every request 404s'
+                    : '   <-- last writer, so this is the value the app gets';
+        }
+
+        lines.push(`    ${file.padEnd(16)} ${state}`);
+    }
+
+    return lines.join('\n');
+}
+
 /**
  * Never a literal copy of the secret: it is configured outside this file, so
  * changing it there must not silently turn every test into a 404.
@@ -111,25 +183,19 @@ async function assertAppIsReachable(baseURL: string): Promise<void> {
  * in any team, and `.env.dev` is committed to a public repository. Only
  * `.env.*.local` is ignored by both .gitignore and .dockerignore.
  */
-function resolveLoginSecret(): string {
+function resolveLoginSecret(): { secret: string; source: string } {
     const fromEnvironment = process.env.SENDVERY_TEST_LOGIN_SECRET;
 
     if (undefined !== fromEnvironment && '' !== fromEnvironment) {
-        return fromEnvironment;
+        return { secret: fromEnvironment, source: `the ${SECRET_NAME} environment variable` };
     }
 
     // Same precedence Symfony Dotenv uses: the .local file wins.
     for (const file of ['.env.dev.local', '.env.dev']) {
-        const path = resolve(PROJECT_ROOT, file);
-
-        if (!existsSync(path)) {
-            continue;
-        }
-
-        const configured = readFileSync(path, 'utf8').match(/^SENDVERY_TEST_LOGIN_SECRET=(.+)$/m)?.[1]?.trim();
+        const configured = readConfiguredSecret(file);
 
         if (undefined !== configured && '' !== configured) {
-            return configured;
+            return { secret: configured, source: file };
         }
     }
 
@@ -209,8 +275,25 @@ function assertOwnerBelongsOnlyToTheDemoTeam(email: string): void {
  * Proves the login bypass is switched on in the app we are about to drive.
  * Without this a misconfigured secret surfaces as every single test timing out
  * on a login page, which is the least diagnosable failure available.
+ *
+ * This HTTP round-trip is the ONLY authoritative answer, and asking `bin/console`
+ * instead would actively mislead. Measured, in the exact state that broke CI —
+ * secret in a real environment variable, nothing in `.env.dev.local` — the two
+ * SAPIs disagree: plain CLI finds the name in `$_SERVER`, so Dotenv leaves it
+ * alone and `debug:dotenv` proudly prints the correct value, while `php -S`
+ * rebuilds `$_SERVER` per request from request data, never sees it, and lets
+ * `.env`'s empty value through. Symfony's own `debug:dotenv` footer says as much:
+ * "Note that values might be different between web and CLI." So the failure below
+ * reports what the suite sent and what is on disk — both certain — and never
+ * pretends to know what the web process resolved.
  */
-async function assertLoginBypassAnswers(baseURL: string, context: BrowserSuiteContext): Promise<void> {
+async function assertLoginBypassAnswers(
+    baseURL: string,
+    context: BrowserSuiteContext,
+    // Not folded into BrowserSuiteContext: the fixtures do not need it, and that
+    // type is serialised to var/playwright/context.json for every worker to read.
+    secretSource: string,
+): Promise<void> {
     const url = new URL('/_test/login', baseURL);
     url.searchParams.set('secret', context.loginSecret);
     url.searchParams.set('email', context.demoOwnerEmail);
@@ -221,10 +304,29 @@ async function assertLoginBypassAnswers(baseURL: string, context: BrowserSuiteCo
 
     if (302 !== status) {
         throw new Error(
-            `/_test/login answered ${status} instead of a redirect. The app must be running ` +
-                'with APP_ENV=dev and the SAME SENDVERY_TEST_LOGIN_SECRET this suite resolved. If you ' +
-                'just created or changed .env.dev.local, the app has not read it yet:\n\n' +
-                '    docker compose restart app',
+            [
+                `/_test/login answered ${status} instead of the 302 redirect a successful sign-in returns.`,
+                `It signed in as ${context.demoOwnerEmail}, which the database confirmed owns the demo team,`,
+                'so the account exists and the remaining suspect is the secret.',
+                '',
+                describeSecretWiring(secretSource, context.loginSecret),
+                '',
+                'A REAL ENVIRONMENT VARIABLE IS NOT ENOUGH. The app resolves the secret through Symfony',
+                'Dotenv, which only leaves an existing variable alone when PHP has put the name in $_ENV or',
+                '$_SERVER — and whether it did depends on `variables_order` and on the SAPI. Under `php -S`',
+                'with php.ini-production\'s default "GPCS" it does not, so a committed empty value wins and',
+                'TestLoginController refuses at its empty-secret gate. Every refusal there is a 404 on',
+                'purpose, so the status cannot tell you which gate closed; the app\'s own log names the line.',
+                '',
+                'The fix is the same everywhere, because .env.dev.local is loaded LAST:',
+                '',
+                `    echo '${SECRET_NAME}=pick-something-random' > .env.dev.local`,
+                '    docker compose restart app        # the app reads env files at boot',
+                '',
+                'In CI the `browser` job writes that file from its job-level environment variable — see',
+                '.github/workflows/ci.yml. If you just changed the file locally, the restart is the fix:',
+                'a running FrankenPHP worker is still holding the value it booted with.',
+            ].join('\n'),
         );
     }
 }
@@ -235,13 +337,14 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     await assertAppIsReachable(baseURL);
     seedDemoData();
 
+    const { secret, source } = resolveLoginSecret();
     const context: BrowserSuiteContext = {
-        loginSecret: resolveLoginSecret(),
+        loginSecret: secret,
         demoOwnerEmail: resolveDemoOwnerEmail(),
     };
 
     assertOwnerBelongsOnlyToTheDemoTeam(context.demoOwnerEmail);
-    await assertLoginBypassAnswers(baseURL, context);
+    await assertLoginBypassAnswers(baseURL, context, source);
 
     mkdirSync(dirname(CONTEXT_FILE), { recursive: true });
     writeFileSync(CONTEXT_FILE, JSON.stringify(context, null, 2));
