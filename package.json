@@ -1,8 +1,9 @@
 {
     "private": true,
+    "comment:dependencies": "EXACT versions here too, for the same reason as devDependencies, and it is not theoretical: with the caret, CI's first run resolved daisyui 5.7.4 against a baseline recorded on 5.5.19, and axe reported color-contrast spreading from 33 to 35 nodes on /app. These two ARE the runtime the browser suite measures - daisyUI generates every colour the axe color-contrast rule reads, and tom-select's .ts-wrapper/.ts-dropdown class names are the selectors tests/Browser/reports-filter.spec.ts drives. Bumping either is a deliberate act that re-records the baseline, never a side effect of a fresh npm install.",
     "dependencies": {
-        "daisyui": "^5.5.19",
-        "tom-select": "^2.6.2"
+        "daisyui": "5.5.19",
+        "tom-select": "2.6.2"
     },
     "comment:devDependencies": "EXACT versions, no carets, because package-lock.json is gitignored and CI therefore re-resolves on every run. @playwright/test fixes the Chromium build, and @axe-core/playwright + axe-core fix the rule set: an axe minor ADDS rules, and a new rule reads as a NEW violation against tests/Browser/axe-baseline.json, i.e. red CI for a dependency bump nobody made.",
     "devDependencies": {

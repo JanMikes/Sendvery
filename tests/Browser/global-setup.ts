@@ -1,3 +1,5 @@
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { FullConfig } from '@playwright/test';
@@ -15,11 +17,79 @@ import { BrowserSuiteContext, CONTEXT_FILE, PROJECT_ROOT } from './support/conte
 
 const DEMO_TEAM_SLUG = 'demo-team';
 
+/**
+ * Generous for a loopback request, short enough that an app which accepts the
+ * connection and then never answers fails with a sentence instead of sitting
+ * until the job's 15-minute ceiling. Playwright puts no time limit on
+ * globalSetup, so this file is the only place that limit can exist.
+ */
+const PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * One request, status code only, body drained and discarded — and deliberately
+ * NOT through `fetch`.
+ *
+ * The `fetch` version of this crashed the entire CI job: not a failed
+ * assertion but a process-level AssertionError out of Node's bundled undici
+ * (`assert(!this.paused)` in `Parser.finish`), with no frame of our code in the
+ * stack and therefore no diagnostic at all. It needs three things at once, and
+ * CI supplied every one of them while a laptop supplies none:
+ *
+ *   1. a response body nobody reads. Taking `.status` and returning leaves
+ *      undici's parser paused on backpressure once the body passes the stream's
+ *      high-water mark. The 125 KB marketing homepage this probes does; a small
+ *      302 like /_test/login's does not, which is why only the first probe
+ *      actually crashed and the second was one template change away from it.
+ *   2. a server that frames the body by closing the connection. `php -S`, which
+ *      the CI job runs, sends `Connection: close` and NO `Content-Length`, so
+ *      the message is complete only at EOF — and undici finishes an EOF-framed
+ *      message from the socket's `end` handler, which is where it asserts.
+ *      FrankenPHP locally sends `Transfer-Encoding: chunked` over a keep-alive
+ *      socket, so the message completes and the socket never ends.
+ *   3. Node 22. Reproduced against `php -S` on 22.23.1, the version CI resolves
+ *      from `node-version: '22'`; survives on 24 and on the 25 a laptop has.
+ *
+ * `await res.text()` also fixes it, and is not enough: it leaves the next probe
+ * one forgotten `await` away from an uncatchable crash on a path nobody tests,
+ * and the crash tells you nothing. `node:http` cannot fail this way — an unread
+ * IncomingMessage is an ordinary paused stream, `resume()` is the drain, and no
+ * assertion sits behind it. It never follows redirects either, which is what
+ * assertLoginBypassAnswers is asserting on.
+ */
+function probe(target: string | URL): Promise<number> {
+    const url = new URL(target);
+    // agent: false — one socket, closed as soon as the response ends, rather
+    // than parked in the global keep-alive pool with nobody left to use it.
+    const request = ('https:' === url.protocol ? httpsRequest : httpRequest)(url, { method: 'GET', agent: false });
+
+    return new Promise<number>((settle, fail) => {
+        request.setTimeout(PROBE_TIMEOUT_MS, () => {
+            request.destroy(
+                new Error(`${url.href} accepted the connection but sent no response within ${PROBE_TIMEOUT_MS}ms.`),
+            );
+        });
+
+        request.on('error', fail);
+
+        request.on('response', (response) => {
+            const status = response.statusCode ?? 0;
+
+            // Drain first, resolve second: settling on `end` means that by the
+            // time a caller acts on the status there is nothing left in flight.
+            response.resume();
+            response.on('error', fail);
+            response.on('end', () => settle(status));
+        });
+
+        request.end();
+    });
+}
+
 async function assertAppIsReachable(baseURL: string): Promise<void> {
     let status: number;
 
     try {
-        status = (await fetch(baseURL, { redirect: 'manual' })).status;
+        status = await probe(baseURL);
     } catch (cause) {
         throw new Error(
             `The app is not answering on ${baseURL}. Start it (\`docker compose up -d\`) or point ` +
@@ -145,11 +215,13 @@ async function assertLoginBypassAnswers(baseURL: string, context: BrowserSuiteCo
     url.searchParams.set('secret', context.loginSecret);
     url.searchParams.set('email', context.demoOwnerEmail);
 
-    const response = await fetch(url, { redirect: 'manual' });
+    // probe() does not follow redirects, so a 302 here is the app's own answer
+    // and not the dashboard's.
+    const status = await probe(url);
 
-    if (302 !== response.status) {
+    if (302 !== status) {
         throw new Error(
-            `/_test/login answered ${response.status} instead of a redirect. The app must be running ` +
+            `/_test/login answered ${status} instead of a redirect. The app must be running ` +
                 'with APP_ENV=dev and the SAME SENDVERY_TEST_LOGIN_SECRET this suite resolved. If you ' +
                 'just created or changed .env.dev.local, the app has not read it yet:\n\n' +
                 '    docker compose restart app',
