@@ -11,6 +11,7 @@ parameters:
     level: 8
     treatPhpDocTypesAsCertain: false
     paths:
+        - bin
         - src
         - tests
     symfony:

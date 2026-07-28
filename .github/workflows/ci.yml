@@ -42,6 +42,13 @@ jobs:
         with:
           php-version: '8.5'
           extensions: pdo_pgsql, intl, sodium
+          # pcov, not Xdebug: measured at 35s of coverage overhead against
+          # Xdebug's 120s on this suite. The two drivers do disagree slightly —
+          # CodeCoverage::applyExecutableLinesFilter() intersects the driver's
+          # line map with its own static analysis, and they differ over
+          # attribute arguments in two API Platform resource classes, 26
+          # statements in all — which is why coverage-baseline.json is recorded
+          # from a pcov report and CI's own clover is uploaded below.
           coverage: pcov
 
       - name: Install dependencies
@@ -52,6 +59,30 @@ jobs:
 
       - name: Run PHPUnit
         run: vendor/bin/phpunit --coverage-clover=coverage.xml
+
+      - name: Coverage ratchet
+        # The 100%-coverage rule is enforced as a ratchet, not a cliff: the debt
+        # recorded in coverage-baseline.json is tolerated, a new uncovered line
+        # is not. Reuses the clover the step above already wrote — a second full
+        # run with coverage would roughly double this job.
+        #
+        # Deliberately not `if: always()`: a failed suite produces a partial
+        # clover, and gating on that would bury the real failure under hundreds
+        # of phantom regressions.
+        run: php bin/coverage-audit.php coverage.xml --ratchet
+
+      - name: Upload coverage report
+        # This artifact is how the baseline is re-recorded: download it from the
+        # run that failed and --update against it. CI is the reference
+        # environment, so recording from its own clover is immune to whatever
+        # driver or PHP patch version a developer happens to have locally.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-clover
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 7
 
   phpstan:
     name: Static Analysis
@@ -94,3 +125,115 @@ jobs:
 
       - name: Check code style
         run: vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes
+
+  browser:
+    # The smoke net for defects PHPUnit cannot see: CSS hit-testing (every
+    # report row opening the same report), Stimulus/Turbo breakage that only
+    # surfaces as a console error, and the axe accessibility baseline.
+    # Separate job because it needs a booted app, a database with demo data and
+    # a real browser — none of which the other jobs want.
+    name: Browser Smoke
+    runs-on: ubuntu-latest
+    # The whole suite is ~25s locally. Anything past this is a hang, and the
+    # 360-minute default would burn a runner all afternoon to tell us so.
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: sendvery
+          POSTGRES_PASSWORD: sendvery
+          POSTGRES_DB: sendvery
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # dev, not test: /_test/login answers in dev and test only, the demo
+      # seeder refuses prod, and dev is the environment a developer running this
+      # suite locally is driving — a browser net that exercises a different
+      # environment than anybody looks at is worth less.
+      APP_ENV: dev
+      DATABASE_URL: postgresql://sendvery:sendvery@localhost:5432/sendvery?serverVersion=17
+      SENDVERY_BASE_URL: http://localhost:8000
+      # No Docker here: bin/console runs on the runner itself.
+      SENDVERY_CONSOLE_PREFIX: php
+      # Enables /_test/login for this job only. Set HERE and not in a committed
+      # .env file because the endpoint signs in as any existing user, so its
+      # secret must never be published or baked into an image — locally it lives
+      # in the gitignored .env.dev.local. A real env var wins over every .env
+      # file, so the app started below and the Playwright process both see this
+      # one value. Not a repository secret: this database is created and thrown
+      # away inside this job.
+      SENDVERY_TEST_LOGIN_SECRET: ci-browser-smoke-only
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: pdo_pgsql, intl, sodium
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Run migrations
+        run: bin/console doctrine:migrations:migrate --no-interaction
+
+      - name: Build frontend assets
+        # Without this the pages render unstyled, which would make every
+        # colour-contrast number in the axe baseline meaningless.
+        run: |
+          bin/console importmap:install
+          bin/console tailwind:build
+
+      - name: Install Chromium
+        # Not cached here, unlike a developer's machine: --with-deps also pulls
+        # the shared libraries a headless Chromium needs on a bare runner.
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the app
+        # PHP's built-in server with the front controller as the router script.
+        # PHP_CLI_SERVER_WORKERS keeps a page's asset requests from queueing
+        # behind each other on a single-threaded server.
+        run: |
+          PHP_CLI_SERVER_WORKERS=4 php -S 0.0.0.0:8000 -t public public/index.php > /tmp/php-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://localhost:8000/; then
+              echo "app is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "app did not start; server log:" && cat /tmp/php-server.log && exit 1
+
+      - name: Run browser smoke tests
+        # global-setup seeds the demo team and asserts the app answers before
+        # any spec runs.
+        run: npx playwright test
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: var/playwright/
+          retention-days: 7
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/php-server.log
