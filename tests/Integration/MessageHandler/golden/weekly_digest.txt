@@ -1,0 +1,37 @@
+Sendvery Weekly Report — Parity Team
+{reporting period}
+==================================================
+
+Mail volume held steady and the two new senders both look like ordinary traffic.
+  • Publish a DMARC record so the missing-record alert can clear.
+
+Summary:
+  Domains monitored: 1
+  Total messages: 24
+  Overall pass rate: 83.3%
+  Needs attention: 2
+  Resolved this week: 1
+  DNS changes: 1
+
+Needs your attention:
+  [critical] DMARC record is missing (parity.example)
+  [warning] New senders detected (parity.example) ×3
+
+DNS Records Still Broken:
+  [DMARC] parity.example — last checked Mar 10, 07:15
+    No DMARC record found.
+
+----------------------------------------
+parity.example
+  Messages: 24
+  Pass rate: 83.3%
+  Trend: +33.3%
+  New senders (2):
+    Seznam — Email service provider, 10 messages, 100.0% pass
+    cloud-sec-av.com — Forwarder or mail gateway, 4 messages, 0.0% pass
+  Waiting for your review (2, 252 messages): Seznam, 203.0.113.17
+    Review these senders: https://sendvery.test/app/domains/{domainId}/senders?filter=needs_review
+
+View full dashboard: https://sendvery.test/app
+
+— Sendvery

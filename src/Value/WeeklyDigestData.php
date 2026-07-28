@@ -89,4 +89,21 @@ final readonly class WeeklyDigestData
             $this->domains,
         ));
     }
+
+    /**
+     * Senders seen for the first time this week, across all domains — the
+     * headline number for the "new senders discovered" section.
+     *
+     * Lives here rather than being summed with `{% set %}` inside the HTML
+     * template: the plain-text alternative and the section registry need the
+     * same total, and a number computed inside one renderer is invisible to
+     * everything else.
+     */
+    public function newSendersCount(): int
+    {
+        return array_sum(array_map(
+            static fn (WeeklyDigestDomainData $domain): int => count($domain->newSenders),
+            $this->domains,
+        ));
+    }
 }

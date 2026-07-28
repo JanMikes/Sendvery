@@ -8,6 +8,10 @@ use App\Command\SendAllWeeklyDigestsCommand;
 use App\Entity\Team;
 use App\Entity\TeamMembership;
 use App\Entity\User;
+use App\Message\SendWeeklyDigest;
+use App\Query\GetDigestRecipients;
+use App\Repository\TeamRepository;
+use App\Services\Digest\WeeklyDigestRenderer;
 use App\Tests\IntegrationTestCase;
 use App\Value\TeamRole;
 use Doctrine\DBAL\Connection;
@@ -17,6 +21,8 @@ use Ramsey\Uuid\Uuid;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
@@ -159,11 +165,17 @@ final class SendAllWeeklyDigestsCommandTest extends IntegrationTestCase
         $urlGenerator->getContext()->setHost('localhost');
 
         try {
+            assert(null !== self::$kernel);
             $tester = new CommandTester(new SendAllWeeklyDigestsCommand(
                 $this->getService(Connection::class),
                 $this->getService(MessageBusInterface::class),
                 $urlGenerator,
+                $this->getService(TeamRepository::class),
+                $this->getService(WeeklyDigestRenderer::class),
+                $this->getService(GetDigestRecipients::class),
+                new Filesystem(),
                 'prod',
+                self::$kernel->getProjectDir(),
             ));
 
             $tester->execute([]);
@@ -184,11 +196,91 @@ final class SendAllWeeklyDigestsCommandTest extends IntegrationTestCase
         );
     }
 
+    #[Test]
+    public function oneTeamFailingDoesNotCostEveryOtherTeamItsDigest(): void
+    {
+        // `SendWeeklyDigest` is not routed to a transport, so it is handled
+        // synchronously — no Messenger retry, no failure transport, no
+        // isolation. An exception raised while rendering one team's digest used
+        // to abort the loop, and every team sorted after it silently got
+        // nothing for a week.
+        $failing = $this->seedOnboardedTeam('AAA Failing Team');
+        $healthy = $this->seedOnboardedTeam('ZZZ Healthy Team');
+        $bus = new FailingForOneTeamMessageBus($failing->id->toString());
+
+        $tester = new CommandTester($this->commandWith($bus));
+        $tester->execute([]);
+
+        self::assertSame(
+            [$healthy->id->toString()],
+            $bus->dispatched,
+            'The teams after the failure must still get their digest.',
+        );
+        self::assertSame(
+            Command::FAILURE,
+            $tester->getStatusCode(),
+            'A swallowed failure with a zero exit is invisible: the cron wrapper only pages on non-zero.',
+        );
+        self::assertStringContainsString(
+            $failing->name,
+            $tester->getDisplay(),
+            'The run must name the team that failed, or nobody can act on the page.',
+        );
+    }
+
+    private function commandWith(MessageBusInterface $bus, string $environment = 'test'): SendAllWeeklyDigestsCommand
+    {
+        assert(null !== self::$kernel);
+
+        return new SendAllWeeklyDigestsCommand(
+            $this->getService(Connection::class),
+            $bus,
+            $this->getService(UrlGeneratorInterface::class),
+            $this->getService(TeamRepository::class),
+            $this->getService(WeeklyDigestRenderer::class),
+            $this->getService(GetDigestRecipients::class),
+            new Filesystem(),
+            $environment,
+            self::$kernel->getProjectDir(),
+        );
+    }
+
     private function tester(): CommandTester
     {
         assert(null !== self::$kernel);
         $application = new Application(self::$kernel);
 
         return new CommandTester($application->find('sendvery:digest:send-all'));
+    }
+}
+
+/**
+ * Stands in for whatever can go wrong while one team's digest is produced —
+ * a render error, a missing team, a mailer refusal.
+ */
+final class FailingForOneTeamMessageBus implements MessageBusInterface
+{
+    /** @var list<string> */
+    public array $dispatched = [];
+
+    public function __construct(
+        private readonly string $failingTeamId,
+    ) {
+    }
+
+    /**
+     * @param array<mixed> $stamps
+     */
+    public function dispatch(object $message, array $stamps = []): Envelope
+    {
+        assert($message instanceof SendWeeklyDigest);
+
+        if ($message->teamId->toString() === $this->failingTeamId) {
+            throw new \RuntimeException('Simulated failure while producing this team’s digest.');
+        }
+
+        $this->dispatched[] = $message->teamId->toString();
+
+        return new Envelope($message);
     }
 }
