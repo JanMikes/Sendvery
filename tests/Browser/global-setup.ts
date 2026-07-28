@@ -116,40 +116,35 @@ const ENV_FILES_IN_LOAD_ORDER = ['.env', '.env.local', '.env.dev', '.env.dev.loc
  * it sets it to nothing. Those are different facts and the diagnostic needs both:
  * a committed empty value is not a missing value, it is an override.
  */
-function readConfiguredSecret(file: string): string | undefined {
+function readConfiguredValue(file: string, name: string): string | undefined {
     const path = resolve(PROJECT_ROOT, file);
 
     if (!existsSync(path)) {
         return undefined;
     }
 
-    return readFileSync(path, 'utf8').match(new RegExp(`^${SECRET_NAME}=(.*)$`, 'm'))?.[1]?.trim();
+    return readFileSync(path, 'utf8').match(new RegExp(`^${name}=(.*)$`, 'm'))?.[1]?.trim();
 }
 
 /**
- * Lengths and presence, NEVER values, and deliberately no hash either: a
- * truncated digest of a short human-chosen secret is a dictionary attack, and it
- * would have had nothing to compare against anyway — see the comment on
+ * The .env files in load order and what each does to one variable, so a reader
+ * can see which file the app actually obeys instead of guessing.
+ *
+ * Lengths and presence, NEVER values, and deliberately no hash either: DATABASE_URL
+ * carries a password and a truncated digest of a short human-chosen secret is a
+ * dictionary attack. There is also nothing to compare a hash against — see
  * assertLoginBypassAnswers for why the app cannot be asked what it resolved.
  */
-function describeSecretWiring(suiteSource: string, suiteSecret: string): string {
-    const lines = [
-        `The suite resolved its secret from ${suiteSource} (${suiteSecret.length} characters).`,
-        '',
-        'What the APP resolves is a separate question, and these are the files that decide it,',
-        'in the order Symfony Dotenv loads them — the last one to set the name wins:',
-        '',
-    ];
-
-    const configured = ENV_FILES_IN_LOAD_ORDER.map((file) => ({ file, value: readConfiguredSecret(file) }));
+function describeEnvFileState(name: string, emptyMeans: string): string {
+    const configured = ENV_FILES_IN_LOAD_ORDER.map((file) => ({ file, value: readConfiguredValue(file, name) }));
 
     // File-over-file precedence is unconditional — a value already loaded from an
     // earlier .env IS overridden by a later one. Only file-versus-real-variable is
-    // the conditional part, which the paragraph after this list explains. So
-    // naming one last writer is a fact; annotating two of them would contradict
-    // the sentence above.
+    // the conditional part, which the callers explain. So naming one last writer is
+    // a fact; annotating two of them would contradict the sentence above the table.
     const setters = configured.filter(({ value }) => undefined !== value);
     const lastWriter = setters[setters.length - 1];
+    const lines: string[] = [];
 
     for (const { file, value } of configured) {
         let state: string;
@@ -165,7 +160,7 @@ function describeSecretWiring(suiteSource: string, suiteSecret: string): string 
         if (undefined !== lastWriter && file === lastWriter.file) {
             state +=
                 '' === lastWriter.value
-                    ? '   <-- last writer: the endpoint is inert, every request 404s'
+                    ? `   <-- last writer: ${emptyMeans}`
                     : '   <-- last writer, so this is the value the app gets';
         }
 
@@ -173,6 +168,74 @@ function describeSecretWiring(suiteSource: string, suiteSecret: string): string 
     }
 
     return lines.join('\n');
+}
+
+function describeSecretWiring(suiteSource: string, suiteSecret: string): string {
+    return [
+        `The suite resolved its secret from ${suiteSource} (${suiteSecret.length} characters).`,
+        '',
+        'What the APP resolves is a separate question, and these are the files that decide it,',
+        'in the order Symfony Dotenv loads them — the last one to set the name wins:',
+        '',
+        describeEnvFileState(SECRET_NAME, 'the endpoint is inert, every request 404s'),
+    ].join('\n');
+}
+
+/**
+ * The app answering on `/` proves far less than it looks. The marketing homepage
+ * touches no database, so a web process pointed at an unreachable one still serves
+ * it 200 — measured in CI, where `/` was 200 while every dashboard URL was a 500.
+ * The first request that noticed was /_test/login, so a DATABASE_URL problem
+ * reported itself as a sign-in problem and cost a whole run plus a dig through the
+ * server-log step.
+ *
+ * Unauthenticated /app is the cheapest URL that boots the app AND touches the
+ * database: 302 to the login page when healthy, 500 when it cannot. There is no
+ * database-backed health endpoint to use instead — /status renders a JSON file and
+ * /-/health-check/liveness is a static payload, correctly, since liveness is not
+ * readiness.
+ *
+ * Called AFTER seedDemoData(), and that ordering IS the diagnostic rather than an
+ * accident: by this point `bin/console` has connected to the database, seeded it
+ * and queried the owner back. So a 500 here cannot be a database that is down — it
+ * can only be the web process resolving a different DATABASE_URL than the console
+ * did, which is the asymmetry that hid this defect for three CI runs.
+ */
+async function assertAppCanReachItsDatabase(baseURL: string): Promise<void> {
+    const url = new URL('/app', baseURL);
+    const status = await probe(url);
+
+    if (status < 500) {
+        return;
+    }
+
+    throw new Error(
+        [
+            `${url.pathname} answered ${status}, so the app is running but a request that touches the`,
+            'database failed inside it.',
+            '',
+            'This is NOT a database that is down. bin/console reached it seconds ago — it seeded the demo',
+            'team and read the owner back — so the server, the credentials and the schema are all fine.',
+            'What differs is WHO IS ASKING. The CLI SAPI puts environment variables in $_SERVER, where',
+            'Symfony Dotenv leaves them alone; `php -S` rebuilds $_SERVER per request from request data',
+            'and, under php.ini-production\'s variables_order="GPCS", $_ENV is never filled either. So a',
+            'committed .env value wins in the web process and only in the web process.',
+            '',
+            'First suspect is therefore DATABASE_URL: committed .env points it at the docker-compose',
+            'service hostname `database`, which resolves nowhere outside compose.',
+            '',
+            'Env files on disk, in the order Dotenv loads them — the last one to set it wins:',
+            '',
+            describeEnvFileState('DATABASE_URL', 'the app has no database configured at all'),
+            '',
+            'The fix is the one the sign-in secret already uses, for the same reason: .env.dev.local is',
+            'loaded LAST, so it wins regardless of SAPI or variables_order.',
+            '',
+            'In CI that file is written by the "Wire this job\'s environment into the app" step in',
+            '.github/workflows/ci.yml — add the variable there. The app\'s own exception names the real',
+            'cause, and the "Show server log on failure" step prints it.',
+        ].join('\n'),
+    );
 }
 
 /**
@@ -192,7 +255,7 @@ function resolveLoginSecret(): { secret: string; source: string } {
 
     // Same precedence Symfony Dotenv uses: the .local file wins.
     for (const file of ['.env.dev.local', '.env.dev']) {
-        const configured = readConfiguredSecret(file);
+        const configured = readConfiguredValue(file, SECRET_NAME);
 
         if (undefined !== configured && '' !== configured) {
             return { secret: configured, source: file };
@@ -336,6 +399,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
     await assertAppIsReachable(baseURL);
     seedDemoData();
+    await assertAppCanReachItsDatabase(baseURL);
 
     const { secret, source } = resolveLoginSecret();
     const context: BrowserSuiteContext = {

@@ -206,31 +206,64 @@ jobs:
         # the shared libraries a headless Chromium needs on a bare runner.
         run: npx playwright install --with-deps chromium
 
-      - name: Wire the sign-in bypass into the app
-        # The job-level SENDVERY_TEST_LOGIN_SECRET reaches the Playwright process
-        # for free — Node reads process.env — but it does NOT reliably reach the
-        # app, and the first run of this job proved it: TestLoginController 404'd
-        # at its empty-secret gate.
+      - name: Wire this job's environment into the app
+        # EVERY variable the web process needs goes here, and what makes this work
+        # is the file's POSITION, not its contents: Dotenv loads .env.dev.local
+        # LAST, after .env and .env.dev, so it wins outright. That is immunity
+        # rather than a workaround — it does not care what `variables_order` says
+        # or which SAPI is asking, which is the whole problem with relying on the
+        # job's `env:` block reaching the app.
         #
-        # The app resolves the secret through Symfony Dotenv, and committed .env
-        # and .env.dev both set it EMPTY on purpose (the endpoint signs in as any
-        # existing user, so no value may be published). Dotenv only leaves a real
-        # environment variable alone when PHP has already put the name in $_ENV or
-        # $_SERVER, and whether it did depends on `variables_order` AND on the
-        # SAPI. Measured both ways: plain CLI finds it in $_SERVER and resolves
-        # correctly, while `php -S` rebuilds $_SERVER per request from request data
-        # and never sees it — so under php.ini-production's default "GPCS" the
-        # committed empty value wins and the endpoint goes inert.
+        # Why the `env:` block is not enough, measured rather than assumed: Dotenv
+        # only leaves an existing variable alone when PHP has already put the name
+        # in $_ENV or $_SERVER. Plain CLI does — so `bin/console` (migrations,
+        # seeding, tailwind:build) resolved everything correctly and hid this for
+        # three runs — but `php -S` rebuilds $_SERVER per request from request data
+        # and, under php.ini-production's default variables_order="GPCS", $_ENV is
+        # never filled either. The committed default then wins and the web process
+        # quietly runs on docker-compose values. It cost two red runs: an inert
+        # /_test/login (empty secret) and then a 500 on every dashboard URL
+        # ("could not translate host name 'database'") while / still served 200,
+        # because the marketing homepage touches no database.
         #
-        # .env.dev.local is loaded LAST, so it wins regardless of any of that. It
-        # is also byte-for-byte the procedure CLAUDE.md documents for a developer,
-        # which means CI now exercises the same wiring a human does — worth having
-        # in a suite whose entire value is fidelity. Gitignored and dockerignored,
-        # and this runner is thrown away at the end of the job.
+        # The list, and why each variable is or is not here:
+        #   SENDVERY_TEST_LOGIN_SECRET — committed .env and .env.dev set it EMPTY
+        #     on purpose (the endpoint signs in as any existing user, so no working
+        #     value may be published), and empty is an inert endpoint.
+        #   DATABASE_URL — committed .env points at the docker-compose service
+        #     hostname `database`, which does not exist on a runner.
+        #   MAILER_DSN — committed .env points at `mailpit`, the other
+        #     compose-only hostname, and SendEmailMessage is NOT routed to a
+        #     transport, so mail is sent in-request: any path that sends one would
+        #     500 on DNS. null://null is what .env.test already uses for the same
+        #     reason.
+        #   APP_ENV — deliberately absent, and it cannot be fixed here anyway:
+        #     this file is only loaded BECAUSE APP_ENV resolved to dev, so setting
+        #     it here is circular. It is safe today for two independent reasons
+        #     that agree — Dotenv's own default is 'dev' and committed .env says
+        #     `dev` — so the job's value is never actually consulted by the web
+        #     process. A job that wanted APP_ENV=test would silently run as dev;
+        #     that would need .env.local, or a different filename here.
+        #   SENDVERY_BASE_URL, SENDVERY_CONSOLE_PREFIX — deliberately absent: the
+        #     app never reads them (grep-confirmed across src/, config/ and
+        #     templates/). They are Playwright-side only, and Node reads
+        #     process.env directly, where the job's `env:` block always wins.
         #
-        # The value must stay dotenv-safe (no spaces, quotes or #) — it is a fixed
-        # literal in this file's `env:` block, so that is a property we control.
-        run: echo "SENDVERY_TEST_LOGIN_SECRET=$SENDVERY_TEST_LOGIN_SECRET" > .env.dev.local
+        # Anything added to `env:` above for the APP's benefit must be added here
+        # too, or it will be silently ignored by the web process. Values must stay
+        # dotenv-safe (no spaces, quotes or #); both of these are fixed literals in
+        # this file, so that is a property we control. .env.dev.local is gitignored
+        # and dockerignored, and this runner is destroyed with the job.
+        #
+        # This is also byte-for-byte the procedure CLAUDE.md documents for a
+        # developer, so CI now exercises the same wiring a human does — worth
+        # having in a suite whose entire value is fidelity.
+        run: |
+          {
+            echo "SENDVERY_TEST_LOGIN_SECRET=$SENDVERY_TEST_LOGIN_SECRET"
+            echo "DATABASE_URL=$DATABASE_URL"
+            echo "MAILER_DSN=null://null"
+          } > .env.dev.local
 
       - name: Start the app
         # PHP's built-in server with the front controller as the router script.
