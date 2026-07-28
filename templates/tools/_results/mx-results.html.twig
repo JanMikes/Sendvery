@@ -29,11 +29,22 @@
                                 <td class="font-mono">{{ record.priority }}</td>
                                 <td class="font-mono text-sm">{{ record.host }}</td>
                                 <td class="font-mono text-sm">{{ record.ip|default('N/A') }}</td>
+                                {#
+                                   Reachability is a measurement of OUR egress as much as of the
+                                   user's mail server — MxCheckResult::isPassing() deliberately
+                                   ignores it, and the issue note underneath says outright that a
+                                   silent port 25 is usually a restriction on our side. A red badge
+                                   here would be the alarming half of two surfaces disagreeing
+                                   about the same measurement. Not-probed (no address resolved) is
+                                   a third state again: we never asked, so we cannot answer.
+                                #}
                                 <td>
                                     {% if record.reachable %}
                                         <span class="badge badge-success badge-sm">Yes</span>
+                                    {% elseif record.ip is null %}
+                                        <span class="badge badge-ghost badge-sm">Not probed</span>
                                     {% else %}
-                                        <span class="badge badge-error badge-sm">No</span>
+                                        <span class="badge badge-ghost badge-sm">No answer</span>
                                     {% endif %}
                                 </td>
                                 <td>

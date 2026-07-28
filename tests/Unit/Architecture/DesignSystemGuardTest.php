@@ -195,6 +195,71 @@ final class DesignSystemGuardTest extends TestCase
     }
 
     #[Test]
+    public function everyStimulusTargetATemplateMarksUpIsDeclaredByItsController(): void
+    {
+        $offenders = [];
+        foreach (ProjectSource::files('templates', 'twig') as $path => $contents) {
+            foreach (self::stimulusTargetReferences($contents) as $reference) {
+                $problem = self::describeMissingStimulusTarget($reference['controller'], $reference['target']);
+                if (null === $problem) {
+                    continue;
+                }
+
+                $offenders[] = sprintf('%s:%d — %s', $path, ProjectSource::lineOfOffset($contents, $reference['offset']), $problem);
+            }
+        }
+
+        self::assertSame(
+            [],
+            $offenders,
+            <<<'TXT'
+                A template marks up a Stimulus target its controller does not declare.
+
+                Stimulus only creates `this.xTarget` for names in `static targets`. An
+                undeclared one is inert: the attribute reads like a wiring contract, a human
+                maintaining either side trusts it, and touching the element from the
+                controller throws "Missing target element" — or, worse, the attribute is
+                simply a lie nobody notices until they try to use it.
+
+                Either declare the target in assets/controllers/<name>_controller.js or drop
+                the attribute. Do not leave the markup claiming a wire that is not there.
+
+                Undeclared targets:
+                TXT."\n".implode("\n", $offenders),
+        );
+    }
+
+    #[Test]
+    public function stimulusTargetGuardItselfFailsOnAnUndeclaredTarget(): void
+    {
+        self::assertSame(
+            ['row-link has no "linkk" target (declares: link)'],
+            self::undeclaredStimulusTargets('<tr data-row-link-target="linkk">'),
+        );
+        self::assertSame([], self::undeclaredStimulusTargets('<tr data-row-link-target="link">'));
+        self::assertSame(
+            ['sidebar has no "drawer" target (declares: sidebar, overlay)'],
+            self::undeclaredStimulusTargets("{{ stimulus_target('sidebar', 'drawer') }}"),
+            'The helper spelling has to be covered too — half the dashboard layout uses it.',
+        );
+        self::assertSame([], self::undeclaredStimulusTargets("{{ stimulus_target('sidebar', 'overlay') }}"));
+        self::assertSame(
+            ['no-such-thing has no assets/controllers/no_such_thing_controller.js'],
+            self::undeclaredStimulusTargets('<div data-no-such-thing-target="x">'),
+        );
+        self::assertSame(
+            [],
+            self::undeclaredStimulusTargets('<div data-live-target="whatever">'),
+            'Third-party UX controllers declare their targets in vendor code, which this scan cannot read.',
+        );
+        self::assertSame(
+            [],
+            self::undeclaredStimulusTargets('<div data-{{ name }}-target="x">'),
+            'A dynamically built attribute name is not a static claim about any controller.',
+        );
+    }
+
+    #[Test]
     public function stimulusGuardItselfFailsOnAMissingControllerOrMethod(): void
     {
         $missingController = '<div data-controller="row-linkk" data-action="click->row-linkk#navigate">';
@@ -351,6 +416,95 @@ final class DesignSystemGuardTest extends TestCase
         }
 
         return sprintf('%s#%s (%s has no %s() method)', $controller, $method, $controller, $method);
+    }
+
+    /**
+     * Every target a template marks up, from both spellings the codebase uses:
+     * `data-<controller>-target="name"` and `{{ stimulus_target('x', 'name') }}`.
+     * Stimulus allows several names in one attribute, space separated.
+     *
+     * @return list<array{offset: int, controller: string, target: string}>
+     */
+    private static function stimulusTargetReferences(string $twig): array
+    {
+        $references = [];
+
+        // The controller name is inside the attribute NAME, so a template that
+        // builds it from a Twig expression makes no static claim to check.
+        preg_match_all('/data-([a-z0-9-]+)-target="([^"{]*)"/i', $twig, $matches, \PREG_OFFSET_CAPTURE);
+        foreach ($matches[1] as $index => $match) {
+            foreach (preg_split('/\s+/', (string) $matches[2][$index][0]) ?: [] as $target) {
+                if ('' === $target) {
+                    continue;
+                }
+
+                $references[] = ['offset' => (int) $match[1], 'controller' => (string) $match[0], 'target' => $target];
+            }
+        }
+
+        preg_match_all('/stimulus_target\(\s*[\'"]([a-z0-9_-]+)[\'"]\s*,\s*[\'"]([A-Za-z0-9_-]+)[\'"]/i', $twig, $matches, \PREG_OFFSET_CAPTURE);
+        foreach ($matches[1] as $index => $match) {
+            $references[] = ['offset' => (int) $match[1], 'controller' => (string) $match[0], 'target' => (string) $matches[2][$index][0]];
+        }
+
+        return $references;
+    }
+
+    private static function describeMissingStimulusTarget(string $controller, string $target): ?string
+    {
+        if (\in_array($controller, self::VENDOR_CONTROLLERS, true)) {
+            return null;
+        }
+
+        $file = sprintf('%s/assets/controllers/%s_controller.js', ProjectSource::projectDir(), str_replace('-', '_', $controller));
+        if (!is_file($file)) {
+            return sprintf('%s has no assets/controllers/%s_controller.js', $controller, str_replace('-', '_', $controller));
+        }
+
+        $declared = self::declaredStimulusTargets((string) file_get_contents($file));
+        if (\in_array($target, $declared, true)) {
+            return null;
+        }
+
+        return sprintf(
+            '%s has no "%s" target (declares: %s)',
+            $controller,
+            $target,
+            [] === $declared ? 'none' : implode(', ', $declared),
+        );
+    }
+
+    /**
+     * The names in `static targets = [...]`, which Stimulus may spread over
+     * several lines.
+     *
+     * @return list<string>
+     */
+    private static function declaredStimulusTargets(string $controllerSource): array
+    {
+        if (1 !== preg_match('/static\s+targets\s*=\s*\[(.*?)\]/s', $controllerSource, $block)) {
+            return [];
+        }
+
+        preg_match_all('/[\'"]([A-Za-z0-9_-]+)[\'"]/', $block[1], $names);
+
+        return $names[1];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function undeclaredStimulusTargets(string $twig): array
+    {
+        $problems = [];
+        foreach (self::stimulusTargetReferences($twig) as $reference) {
+            $problem = self::describeMissingStimulusTarget($reference['controller'], $reference['target']);
+            if (null !== $problem) {
+                $problems[] = $problem;
+            }
+        }
+
+        return array_values(array_unique($problems));
     }
 
     /**

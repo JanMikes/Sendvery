@@ -30,11 +30,30 @@ final readonly class SocketSmtpProbe implements SmtpProbe
         );
     }
 
+    /**
+     * fsockopen() builds `tcp://<hostname>:<port>`, so a bare IPv6 literal
+     * turns into an address the parser cannot split — the colons in the literal
+     * are indistinguishable from the port separator, and the connection never
+     * reaches the host. Measured: `fsockopen('::1', 25)` fails with
+     * "getaddrinfo for  failed" (note the empty host) while `fsockopen('[::1]', 25)`
+     * genuinely reaches loopback and is refused.
+     *
+     * That mattered beyond a missing tick: an IPv6-only mail host read as
+     * unreachable, and MxChecker's copy for "nothing answered" blames our own
+     * egress filtering. We were telling users their perfectly deliverable mail
+     * server was fine but our network was restricted, when in fact we had
+     * dialled an address that does not exist.
+     */
+    private function dialAddress(string $ip): string
+    {
+        return str_contains($ip, ':') ? '['.$ip.']' : $ip;
+    }
+
     private function openAndReadBanner(string $ip): ?string
     {
         $errno = 0;
         $errstr = '';
-        $socket = @fsockopen($ip, 25, $errno, $errstr, self::CONNECT_TIMEOUT_SECONDS);
+        $socket = @fsockopen($this->dialAddress($ip), 25, $errno, $errstr, self::CONNECT_TIMEOUT_SECONDS);
 
         if (false === $socket) {
             return null;
@@ -54,7 +73,7 @@ final readonly class SocketSmtpProbe implements SmtpProbe
     {
         $errno = 0;
         $errstr = '';
-        $socket = @fsockopen($ip, 25, $errno, $errstr, self::CONNECT_TIMEOUT_SECONDS);
+        $socket = @fsockopen($this->dialAddress($ip), 25, $errno, $errstr, self::CONNECT_TIMEOUT_SECONDS);
 
         if (false === $socket) {
             return false;

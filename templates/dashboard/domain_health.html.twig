@@ -123,7 +123,7 @@
             <div id="health-trend" class="card bg-base-100 shadow mb-6">
                 <div class="card-body">
                     <h3 class="card-title text-lg">Score Trend</h3>
-                    <div {{ stimulus_controller('chart') }} {{ stimulus_target('chart', 'canvas') }} data-chart-config-value="{{ trendChartConfig|json_encode }}"></div>
+                    <div {{ stimulus_controller('chart') }} data-chart-config-value="{{ trendChartConfig|json_encode }}"></div>
                 </div>
             </div>
         {% endif %}

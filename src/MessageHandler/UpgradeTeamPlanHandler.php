@@ -23,9 +23,14 @@ final readonly class UpgradeTeamPlanHandler
     {
         $team = $this->teamRepository->get($message->teamId);
         $team->plan = $message->plan->value;
-        $team->stripeSubscriptionId = $message->stripeSubscriptionId;
         // Stripe sometimes fires customer.subscription.updated with no customer
-        // string (or an unexpected shape); never wipe the existing ID with ''.
+        // string (or an unexpected shape); never wipe an existing ID with ''.
+        // The same rule lets `sendvery:team:set-plan` grant a plan by hand
+        // without a Stripe side: an empty identifier means "nothing to say
+        // about Stripe here", not "the customer stopped paying".
+        if ('' !== $message->stripeSubscriptionId) {
+            $team->stripeSubscriptionId = $message->stripeSubscriptionId;
+        }
         if ('' !== $message->stripeCustomerId) {
             $team->stripeCustomerId = $message->stripeCustomerId;
         }
