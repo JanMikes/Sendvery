@@ -29,7 +29,10 @@ docker compose exec app vendor/bin/phpstan            # Static analysis
 docker compose exec app vendor/bin/php-cs-fixer fix --dry-run --diff  # Code style
 ```
 
-- **100% test coverage** is required
+- **100% test coverage for code you write or touch.** CI enforces this as a ratchet over the
+  pre-existing debt (`bin/coverage-audit.php coverage.xml --ratchet`), not as a hard `--coverage-min=100`:
+  a new uncovered line, or a listed file getting worse, fails the build. See "Coverage is a ratchet"
+  in `CLAUDE.md`.
 - Follow the patterns in `CLAUDE.md` (CQRS, readonly classes, etc.)
 - Use strict types everywhere
 

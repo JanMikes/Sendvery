@@ -41,7 +41,8 @@ PHP 8.5 · Symfony 8 · FrankenPHP · PostgreSQL 16 · Tailwind CSS · Stimulus/
 - **Teams from day one** in the data model
 - **AI as opt-in add-on** ($3.99/mo), not default — keeps base price low ($5.99)
 - **Two ingestion methods:** user IMAP OR our hosted mail (Seznam Email Profi)
-- **100% test coverage** mandatory — tests ARE the business spec
+- **100% test coverage** for new and touched code — tests ARE the business spec. CI enforces a
+  ratchet over the pre-existing debt, not a hard `--coverage-min=100` (see DEC-064)
 - **English only** at launch, i18n infrastructure ready for adding languages later
 - **Magic link auth** — no passwords
 - **OAuth2** for Gmail/Microsoft from the start

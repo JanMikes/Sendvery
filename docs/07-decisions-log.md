@@ -86,7 +86,9 @@ Track key decisions, their rationale, and any alternatives considered.
 
 ### DEC-009: 100% test coverage as business specification
 **Date:** 2026-03-24
-**Status:** Decided
+**Status:** Decided — **enforcement amended by DEC-064 (2026-07-28)**. The principle stands; the
+claim below that "CI blocks on coverage < 100%" was aspirational and was never wired up. CI now
+enforces a ratchet over recorded debt. Left unedited as the historical record.
 **Decision:** 100% test coverage is mandatory. Tests describe business requirements. PHPUnit coverage enforcement in CI.
 **Rationale:** Project is fully vibecoded — tests are the safety net and the specification. Without Jan writing the code himself, tests are the primary way to verify correctness. Test-first workflow: write requirement as test → vibe-code implementation → verify.
 **Alternatives considered:** N/A — this is a hard requirement
@@ -864,6 +866,114 @@ pushing the cron row**. The migration re-grades history on the way up; grades dr
 imperfect domain, which is the point. Expect customer-visible grade changes on the public
 share page and in PDF exports.
 **Detail:** `docs/17-product-hardening-plan.md` §W1
+
+### DEC-063: Browser smoke tests in Playwright, not Symfony Panther
+**Date:** 2026-07-28
+**Status:** Decided
+**Decision:** The browser-level smoke net (`tests/Browser/`) is **Playwright**, pinned exactly,
+run as a separate CI job — not Symfony Panther, and not an extension of the PHPUnit suite.
+**Rationale:**
+  (a) **The deciding factor is the zero-console-error assertion.** It is the highest-value
+      requirement in the workstream — it catches a whole class of Stimulus/Turbo breakage for
+      one line per page — and Panther cannot do it reliably. Panther drives Chrome over W3C
+      WebDriver, where the `browser` log type is a non-standard ChromeDriver extension.
+      Playwright exposes `page.on('console')` and `page.on('pageerror')` natively.
+  (b) **Locators auto-scroll.** Raw `page.mouse.click(x, y)` does not, so below-the-fold
+      elements get clicked at off-screen coordinates and report a *false* failure. The suite
+      forbids coordinate clicks outright.
+  (c) **The defect that motivated the workstream was invisible to 3400+ PHPUnit tests and
+      inherently so** — every report row opening the same report is CSS hit-testing. Staying
+      in PHP would have kept the blind spot; the point was to leave it.
+  (d) **Node was already in the toolchain** (`package.json`, daisyUI, the Tailwind build), so
+      this adds a dev dependency, not a platform. `@axe-core/playwright` is the standard axe
+      integration, which closed the accessibility baseline deferred in
+      `docs/cx-improvement-backlog.md` for lack of exactly this infrastructure.
+  (e) **Everything is pinned exactly and `package-lock.json` is gitignored**, so CI re-resolves
+      on every run: `@playwright/test` fixes the Chromium build, `@axe-core/playwright` +
+      `axe-core` fix the rule set. An axe minor *adds* rules, and a new rule reads as a new
+      violation against the committed baseline — i.e. red CI for a dependency bump nobody made.
+  (f) **The login bypass is the price, and it is fenced.** Magic-link auth throttles at 5/hour
+      and fails *silently*, so a real-login suite would pass a few times and then hang with no
+      diagnosis. `/_test/login` therefore exists behind three gates: an environment **allow-list**
+      (`dev`/`test`, so an unnamed future `staging` is refused by default), a shared secret that
+      is **empty in `.env`**, and a requirement that the user already exists. Every refusal is a
+      404, never a 403. The secret lives only in gitignored `.env.dev.local` and is set
+      explicitly in CI — an earlier revision committed it in `.env.dev`, which the production
+      image also shipped (`.dockerignore` covered `.env.*.local` but not `.env.dev`), collapsing
+      two "independent" gates into one on a public AGPL repo.
+**Alternatives considered:** Symfony Panther (rejected — (a)); Cypress (rejected — heavier, and
+its console handling is no better than Playwright's); extending PHPUnit with a headless driver
+(rejected — reproduces Panther's WebDriver limits with more glue).
+**Impact:** `tests/Browser/` (5 specs, 13 checks, ~22s), `playwright.config.ts`,
+`src/Controller/TestLoginController.php` + `config/services.php` binding, `.env`/`.env.dev`/
+`.env.test`, `.dockerignore` (`.env.dev`, `node_modules/`), `Dockerfile`
+(`npm install --omit=dev` — the dev deps are the browser suite and prod can never run it),
+`package.json`, a `browser` job in `.github/workflows/ci.yml` with `timeout-minutes: 15`, and an
+axe baseline of 5 pages / 3 rules / 140 nodes, all `serious`, **no rule disabled**. The axe
+ratchet fails on a new rule and on a node-count increase. It briefly carried one measured `+1`
+allowance on `/app`, recording a real ordering defect — `GetAllReports` ordered by
+`date_range_end DESC` with no tiebreaker while the seeder writes three reports per date, so which
+rows filled the Recent Reports card, and therefore how many pass-rate labels failed contrast,
+moved between identical requests. W3 added the `, dr.id DESC` tiebreaker and W7 removed the
+allowance; determinism was then confirmed over **42 cold Chromium starts**, all at exactly 33
+nodes. The allowance is gone and the gate is back to zero tolerance.
+**Detail:** `docs/17-product-hardening-plan.md` §W4
+
+### DEC-064: Coverage is enforced as a ratchet over recorded debt, not as a 100% cliff
+**Date:** 2026-07-28
+**Status:** Decided — amends the enforcement half of [DEC-009](#dec-009-100-test-coverage-as-business-specification)
+**Decision:** CI runs `php bin/coverage-audit.php coverage.xml --ratchet` against a committed
+`coverage-baseline.json`. It fails on a **new uncovered line**, on a **recorded file regressing**,
+and on a **stale baseline** (an improvement nobody re-recorded). The 100% rule stands for code you
+write or touch; the pre-existing debt is recorded, frozen, and burned down.
+**Rationale:**
+  (a) **The doc was lying and the lie was load-bearing.** `CLAUDE.md` asserted CI enforced
+      `--coverage-min=100`; `ci.yml` emitted clover and gated on **nothing**, and ~148 `src/` files
+      were below 100%. A doc that lies about CI teaches everyone to discount the doc — so the choice
+      was enforce it or stop asserting it. The same false claim was removed from `CONTRIBUTING.md`,
+      `docs/00-project-overview.md` and two places in `docs/02-architecture.md`; DEC-009 keeps its
+      original text as the historical record and carries a status amendment.
+  (b) **A hard 100% gate fails on day one**, so it would have been switched off in a week. The
+      ratchet is the version that survives contact with an existing codebase.
+  (c) **Per-file uncovered-statement counts**, not line numbers (which churn on every insertion
+      above them, training people to re-record without reading) and never one project total (which
+      lets one file rot while another improves — the snapshot trap).
+  (d) **Recording is manual and strict.** An improvement *fails* as stale until a human re-records.
+      Auto-update was rejected: it ratchets backwards the first time it runs on a degraded build,
+      and it hides the debt from the diff, which is the only place gaming is catchable.
+  (e) **The baseline is recorded from CI's own `coverage-clover` artifact**, not from a local run.
+      An earlier revision switched CI from pcov to Xdebug to force local/CI driver parity; that was
+      reverted. The two drivers disagree on **2 files out of 777 and 26 statements out of 15,923**
+      (0.16% — the `#[ApiResource(...)]` attribute-argument lines), while Xdebug coverage measured
+      3.4× pcov's overhead, ~85s added to every run in perpetuity. Worse, the parity was
+      unenforceable: `Selector::forLineCoverage()` prefers pcov whenever it is present, so anyone
+      installing it locally would silently diverge with no warning. Recording from the artifact
+      makes the local driver *and* patch version irrelevant, and costs nothing — the tool already
+      resolves CI paths.
+  (f) **Two holes are disclosed rather than papered over.** Swapping one uncovered line for another
+      inside a listed file keeps the count equal; and because any improvement fails as stale, a
+      change that both improves and degrades the same file is *pushed* to re-record, laundering new
+      debt into a smaller number. The stale rule is both the burn-down and the bypass — read what
+      moved inside a file, not just the direction.
+  (g) **The gate fails closed.** Thirteen paths were exercised adversarially — missing, garbled,
+      empty, partial and driverless clover; missing, malformed and misshapen baseline; non-`src/`
+      keys; non-integer counts; unknown and contradictory flags — and every one exits 2 rather than
+      passing with zero findings. An absent baseline is explicitly *not* an empty one.
+**Alternatives considered:** hard `--coverage-min=100` (fails day one); delete the claim and gate on
+nothing (leaves no ratchet and no burn-down); auto-updating baseline (ratchets backwards, hides debt
+from review); line-number granularity (churns); installing pcov in the dev image (a cross-repo
+base-image change made unnecessary by (e)).
+**Impact:** `bin/coverage-audit.php` gains `--ratchet`/`--update`, new committed
+`coverage-baseline.json` (**147 files, 1,246 uncovered statements of 15,923 — 92.17%**; the largest
+debts are infrastructure adapters: `ImapCentralInboxClient` 135, `ImapMailClient` 113,
+`Stripe/SubscriptionManager` 73, `SpfChecker` 46), a "Coverage ratchet" step plus a
+`coverage-clover` artifact upload in the `tests` job, `bin` added to `phpstan.neon` (475 lines that
+decide whether CI is green previously had neither tests nor static analysis), and a new
+`### Coverage is a ratchet` section in `CLAUDE.md`.
+**Unverified:** this has never executed on GitHub Actions. The baseline is recorded under CI's
+driver from a pcov-only container, which removes the largest known divergence, but the first real
+CI run is the first true test.
+**Detail:** `docs/17-product-hardening-plan.md` §W5
 
 ---
 

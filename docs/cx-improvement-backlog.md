@@ -1122,6 +1122,11 @@ Note `MAX(is_authorized::int)`: across multiple records in a group, if any IP is
   - Mobile (<lg breakpoint): verify the sidebar overlay closes on link click (currently it does via the Stimulus controller, but worth a Cypress / Panther smoke).
   - Test plan note: include an axe-core accessibility scan baseline for `/app` and `/app/reports` in the PR.
 - Notes:
+  - **The axe-core baseline deferral below is closed (2026-07-28, W4).** The architect plan skipped it
+    for lack of browser infrastructure; that infrastructure now exists. `tests/Browser/` runs
+    Playwright + `@axe-core/playwright` against `/app`, `/app/reports`, `/app/alerts`, `/app/domains`
+    and a domain detail page, and `tests/Browser/axe-baseline.json` records what is currently owed.
+    The `browser` CI job fails when a rule fires on a page the baseline does not record it on.
 
 ### Architect plan (2026-05-23)
 

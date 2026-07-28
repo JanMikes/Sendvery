@@ -24,7 +24,7 @@
 | **Docker base** | `ghcr.io/thedevs-cz/php8.5:latest` | FrankenPHP + Caddy, worker mode, opcache, extensions included |
 | **Error tracking** | Sentry | PHP SDK + Symfony integration |
 | **Frontend** | Twig + Stimulus/Turbo (Hotwire) | Server-rendered via Symfony UX, part of the monolith |
-| **Testing** | PHPUnit + Symfony Test | **100% coverage mandatory** — tests ARE the business spec |
+| **Testing** | PHPUnit + Symfony Test | **100% coverage for code you write or touch** — tests ARE the business spec; CI enforces a ratchet over recorded debt (DEC-064) |
 | **Deployment** | Docker + Docker Compose | Self-hosted on Hetzner dedicated (Ubuntu) |
 
 ## High-Level Architecture
@@ -226,7 +226,8 @@ FrankenPHP worker mode keeps the Symfony kernel booted in memory between request
 - PHPUnit 11+ (Symfony's default)
 - Symfony WebTestCase / ApiTestCase
 - Doctrine test fixtures
-- PHPUnit coverage enforcement in CI (`--coverage-min=100`)
+- PHPUnit coverage enforcement in CI — a **ratchet** (`bin/coverage-audit.php --ratchet`) over
+  recorded debt, not `--coverage-min=100`
 - Possibly: Infection (mutation testing) for quality beyond coverage
 
 ### Test-first approach:
@@ -604,7 +605,8 @@ tests/
 - Pattern from https://github.com/JanMikes/fajnesklady.cz/blob/main/tests/bootstrap.php and `TestingDatabaseCaching.php`
 - **IdentityProvider** mocked in tests to provide deterministic UUIDs
 - **ClockInterface** (PSR-20) mocked for deterministic timestamps
-- **100% coverage enforced in CI** — `--coverage-min=100`
+- **Coverage enforced in CI as a ratchet**, not a cliff — `bin/coverage-audit.php coverage.xml --ratchet`
+  fails on a new uncovered line or a recorded file regressing. `--coverage-min=100` was never wired up.
 - **Infection mutation testing** from the start
 
 ### Entities

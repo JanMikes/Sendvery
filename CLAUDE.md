@@ -56,7 +56,7 @@ Sendvery is an email health & deliverability micro-SaaS. DMARC report parsing wi
 - **Convention over configuration** — follow Symfony defaults
 - **Simple, decoupled, readable** — minimal inheritance, prefer composition
 - **12-factor app** — config from env vars, stateless processes
-- **100% test coverage mandatory** — tests ARE the business specification
+- **100% test coverage for code you write or touch** — tests ARE the business specification. CI enforces this as a ratchet over the pre-existing debt, not as a cliff: [Coverage is a ratchet](#coverage-is-a-ratchet)
 - **Unknown is not failure** — absent/not-yet-measured state never renders as an error, and a desired outcome never renders as a warning. Worked examples and the grep-able tells: [Unknown Is Not Failure](#unknown-is-not-failure)
 
 ## PHP Class Conventions
@@ -295,7 +295,7 @@ return App::config([
 src/
 ├── Attribute/              # Custom PHP attributes
 ├── Controller/             # Single-action controllers (__invoke)
-├── Doctrine/               # Custom Doctrine types, filters (team scoping)
+├── Doctrine/               # Custom Doctrine types (no team-scoping filter — see Multi-Tenancy)
 ├── Entity/                 # Doctrine entities (with HasEvents)
 ├── Events/                 # Domain events (readonly final class)
 ├── Exceptions/             # Domain exceptions
@@ -342,7 +342,26 @@ readonly final class DnsRecord
 ## Multi-Tenancy
 
 - Every tenant-scoped entity has `team_id` FK
-- Doctrine SQL filter for automatic team scoping (registered globally)
+- **There is NO global Doctrine SQL filter, and nothing scopes your query for you.**
+  `config/packages/doctrine.php` explains the choice: a filter covers only ORM queries, silently
+  skipping raw DBAL reads — which is most of this read side — and it hides the security check from
+  the call site. So **every** query touching tenant data must carry its own predicate, normally
+  `team_id IN (:teamIds)` from `DashboardContext::getTeamIds()`.
+- **This line used to claim the opposite**, and that is not a harmless doc bug. A cross-tenant defect
+  shipped in the BYO-mailbox envelope ledger on 2026-07-28 precisely because an author deduped on a
+  sender-supplied `Message-ID` with no tenant qualifier — reasonable if you believe a global filter
+  has your back. If you are writing a query and cannot point at its team predicate, it does not have
+  one.
+- Watch the joins, not just the FROM. The 2026-07-28 fix also had to add predicates to a
+  `mailbox_connection` join in `GetDomainIngestionMatrix` and a `dmarc_report` join in
+  `GetMailboxDetail`: both queries scoped their primary table correctly and then joined out of the
+  tenant. A row is owned by the team of the table it hangs off — a `dmarc_report` belongs to its
+  *domain's* team, which is not necessarily the team of the mailbox the mail arrived in.
+- Unique indexes are a tenancy surface too. `(source, message_id)` was global, so a
+  sender-controlled header became a key shared across every tenant. Where a natural key comes from
+  outside, scope the index — and beware that PostgreSQL treats NULLs as distinct, so simply appending
+  a nullable tenant column silently stops constraining the NULL rows (see `Version20260728120000`,
+  which uses two partial indexes for exactly this reason).
 - API Platform extension for team-scoped queries
 - Authorization via Symfony Security Voters
 - Teams from day one in the data model
@@ -355,7 +374,7 @@ readonly final class DnsRecord
 
 ## Testing
 
-- **100% test coverage mandatory** — `--coverage-min=100` in CI
+- **100% coverage for new and changed code** — enforced by a ratchet over recorded debt, not by `--coverage-min=100`. See [Coverage is a ratchet](#coverage-is-a-ratchet)
 - **DAMA DoctrineTestBundle** — wraps each test in a transaction, rolls back after
 - **Test bootstrap** creates and caches test DB via Doctrine migrations + fixtures
 - Pattern from https://github.com/JanMikes/fajnesklady.cz/blob/main/tests/bootstrap.php and `TestingDatabaseCaching.php`
@@ -364,6 +383,140 @@ readonly final class DnsRecord
 - **Infection mutation testing** from the start
 - Tests describe business requirements — they are the specification
 - **Never assert specific CSS/Tailwind classes** (spacing, font-size, responsive breakpoints, layout utilities) in tests. These change constantly during UI prototyping and have no business impact. Only assert semantic daisyUI tokens (e.g. `text-error`, `border-l-success`) when the test verifies a business rule like severity mapping.
+
+### Coverage is a ratchet
+
+CI does **not** run `--coverage-min=100`; on a codebase with several hundred partially-covered
+infrastructure files that gate would fail on its first run and be switched off the same afternoon.
+What `.github/workflows/ci.yml` actually runs, in the `tests` job, against the clover the test step
+already produced:
+
+```bash
+php bin/coverage-audit.php coverage.xml --ratchet
+```
+
+`coverage-baseline.json` records, per file, how many uncovered statements that file is allowed. Today
+that is **147 files and 1,246 statements** of debt out of 15,923 — **92.17% line coverage** — mostly
+infrastructure adapters (IMAP, Stripe, API Platform state providers, the GitHub client, console
+commands). **Existing debt is tolerated. New debt is not.** The gate fails when:
+
+- a listed file's uncovered count **rises above** its recorded number;
+- a file that is **not** listed has any uncovered line — new code is 100% covered, or it is an
+  explicit exception someone added to the baseline in the same commit and justified in the PR;
+- the baseline is **stale** — a file improved, reached 100%, or was deleted, and the number was not
+  updated.
+
+Per file, never one total: a single project-wide number lets one file improve while another rots.
+Per count, never per line number: line numbers shift on every insertion above them, which would
+report a wall of phantom findings after a formatting change and train everyone to re-record without
+reading. The known hole in counting is that swapping one uncovered line for another inside an
+already-listed file keeps the count equal — the new code is still in the diff, and the total cannot
+grow.
+
+That third rule is the burn-down, and it is why recording is manual: CI never writes the baseline
+itself. An auto-update would ratchet *backwards* the first time it ran on a degraded build, and it
+would hide the debt from the only place gaming is catchable — the diff.
+
+The wider version of the counting hole is worth knowing, because that same stale rule creates it: a
+change that both improves and degrades one listed file (113 → 110 while adding five uncovered lines)
+fails as stale and is therefore *told* to re-record, which launders the new debt into a
+smaller-looking number. The stale rule is both the burn-down and the bypass. When a re-record moves
+a file, read what moved inside it, not just the direction.
+
+For a line that genuinely cannot be reached from a test — a `false ===` guard on a syscall that
+never fails in the suite — the existing `// @codeCoverageIgnore` convention still applies
+(`ReportAttachmentExtractor`, `ImportDmarcReportCommand`). Like a baseline entry it is an exception
+in plain sight; unlike one, it sits next to the line it excuses. Neither is a way to skip writing a
+test you could have written.
+
+```bash
+# report every file below 100% and its uncovered lines — the distance still to go
+docker compose exec app php bin/coverage-audit.php coverage.xml
+
+# re-record after an improvement, then commit the smaller numbers
+docker compose exec app php bin/coverage-audit.php coverage.xml --update
+```
+
+**Where the numbers come from.** The baseline is recorded from **CI's own clover**, downloadable as
+the `coverage-clover` artifact of any run of the `tests` job. `php-code-coverage` intersects the
+coverage driver's line map with its own static analysis, so pcov (CI) and Xdebug (the container)
+disagree — measured at 26 statements across two files, the `#[ApiResource(...)]` argument lines in
+`DomainResource` and `ReportResource`. Small, but the ratchet compares exact per-file counts, and CI
+pins neither its PHP patch version nor its driver version. Recording from the report CI produced is
+the only way to be sure of agreeing with the report CI will produce.
+
+Measuring locally is still worth doing before you push — the container has Xdebug, not pcov, so the
+driver needs switching on:
+
+```bash
+docker compose exec -e XDEBUG_MODE=coverage app vendor/bin/phpunit --coverage-clover=coverage.xml
+docker compose exec app php bin/coverage-audit.php coverage.xml --ratchet
+```
+
+A local run therefore always ends with those two files reported as stale — `DomainResource` and
+`ReportResource`, allowed 14, showing 1. Measured on one identical tree, that is the *entire*
+difference between the drivers; anything else in the output is yours. **Do not `--update` from a
+local report to silence them** — that records Xdebug's numbers and turns CI red instead. Re-record
+from the artifact.
+
+A `bin/console cache:clear --env=test` first is cheap insurance against a half-stale container,
+though full runs across warm, cold and fresh-checkout caches produced identical numbers. If a report
+and the baseline ever disagree wholesale, the tool lists the findings and then says it does not
+believe them, so an environment mismatch is not mistaken for 40 real regressions.
+
+### Browser smoke tests (`tests/Browser/`)
+
+Playwright, run on the **host** (not in the app container). A deliberately small net for the
+defects PHPUnit cannot see: CSS hit-testing (every report row opening the same report),
+Stimulus/Turbo breakage that only shows up as a console error, and the axe accessibility
+baseline. Everything else belongs in `tests/Unit` / `tests/Integration`.
+
+**One-time setup on a fresh clone** — the sign-in secret is deliberately not committed:
+
+```bash
+echo 'SENDVERY_TEST_LOGIN_SECRET=pick-something-random' > .env.dev.local
+docker compose restart app    # the app reads env files at boot
+```
+
+Then:
+
+```bash
+docker compose up -d          # the suite drives the running app at http://localhost
+npx playwright test           # ~13 checks, ~25s; seeds demo data itself
+npx playwright test reports   # one spec
+```
+
+- **Prerequisites are asserted, not assumed.** `tests/Browser/global-setup.ts` runs
+  `sendvery:demo:seed` on every run (so specs can assert *exact* row counts), resolves the demo
+  team's owner from the database, and fails with the exact commands to run if the app is
+  unreachable, the secret is missing, or the login bypass does not answer.
+- **Sign-in uses `/_test/login`**, not a magic link: `RequestMagicLinkHandler::MAX_REQUESTS_PER_HOUR`
+  is 5 and fails silently past the cap. The route (`src/Controller/TestLoginController.php`) answers
+  only in `dev`/`test`, only with the `SENDVERY_TEST_LOGIN_SECRET` shared secret, and only for a user
+  that already exists. **The secret lives in `.env.dev.local` (gitignored *and* dockerignored) — never
+  in `.env.dev`**, which is committed to a public repo and copied into every image: the endpoint signs
+  in as any existing user in any team, so "it only answers in dev" is one gate, not two.
+- **Never `page.mouse.click(x, y)`.** It does not scroll, so a below-the-fold element gets clicked
+  at an off-screen point and reports a failure that is the test's fault. Use locators.
+- **Zero console errors is enforced by the shared `context` fixture** in
+  `tests/Browser/support/harness.ts` via `context.on('page', …)`, not by a block each spec copies.
+  That covers the built-in `page` and any `context.newPage()`; a spec that builds its own context from
+  the `browser` fixture escapes it, so take `page` or `context`. Two categories are annotated instead
+  of failing — the dev toolbar's own `/_wdt/` requests, and resource failures from a **third-party
+  origin** (the page loads Google Fonts, and a CDN blip must not fail the suite with a message
+  blaming us). App-origin failures and every uncaught exception still fail.
+- **The axe baseline is a ratchet**, not a gate: `tests/Browser/axe-baseline.json` records what is
+  currently owed, and CI fails when a rule fires on a page the baseline does not record it on, or when
+  a known rule spreads to more nodes. Fixes pass. No axe rule is disabled. Regenerate deliberately
+  with `UPDATE_AXE_BASELINE=1 npx playwright test accessibility`. `/app` carries a documented ±1
+  allowance (`MEASURED_NODE_SPREAD` in `support/axe.ts`) because `GetAllReports` has no ORDER BY
+  tiebreaker — delete the entry once that lands.
+- **Playwright and axe are pinned to exact versions** (and `playwright-core`/`axe-core` are pinned via
+  `overrides`). `package-lock.json` is gitignored, so CI re-resolves every run; an axe minor adds
+  rules, and a new rule reads as a new violation — red CI for a bump nobody made.
+- CI runs this as the separate `browser` job in `.github/workflows/ci.yml`, against the PHP built-in
+  server on port 8000 with `SENDVERY_CONSOLE_PREFIX=php` and `SENDVERY_TEST_LOGIN_SECRET` set in the
+  job env.
 
 ## Unknown Is Not Failure
 
