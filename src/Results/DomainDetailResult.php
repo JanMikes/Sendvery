@@ -17,7 +17,14 @@ final readonly class DomainDetailResult
         public string $createdAt,
         public int $totalReports,
         public int $totalMessages,
-        public float $passRate,
+        /**
+         * NULL when the domain has no `dmarc_record` rows at all — nothing has
+         * been measured, which is a different fact from "every message failed".
+         * See {@see DomainOverviewResult::$passRate}; this page kept a
+         * `COALESCE(..., 0)` after the list surfaces dropped theirs, so the very
+         * page a user lands on after adding a domain greeted them with a red 0.0%.
+         */
+        public ?float $passRate,
         public int $uniqueSenders,
         public ?string $dkimSelector,
     ) {
@@ -28,7 +35,22 @@ final readonly class DomainDetailResult
         return null !== $this->dmarcVerifiedAt;
     }
 
-    /** @param array{domain_id: string, domain_name: string, dmarc_policy: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, first_report_at: string|null, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string, dkim_selector: string|null} $row */
+    /** Mirrors {@see DomainOverviewResult::hasPassRateData()} so surfaces agree. */
+    public function hasPassRateData(): bool
+    {
+        return null !== $this->passRate;
+    }
+
+    /**
+     * Never received a report at all, as opposed to "received some, but none
+     * carried records" — the two get different waiting copy.
+     */
+    public function isAwaitingFirstReport(): bool
+    {
+        return null === $this->firstReportAt;
+    }
+
+    /** @param array{domain_id: string, domain_name: string, dmarc_policy: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, first_report_at: string|null, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string|null, unique_senders: int|string, dkim_selector: string|null} $row */
     public static function fromDatabaseRow(array $row): self
     {
         return new self(
@@ -42,7 +64,7 @@ final readonly class DomainDetailResult
             createdAt: $row['created_at'],
             totalReports: (int) $row['total_reports'],
             totalMessages: (int) $row['total_messages'],
-            passRate: (float) $row['pass_rate'],
+            passRate: null === $row['pass_rate'] ? null : (float) $row['pass_rate'],
             uniqueSenders: (int) $row['unique_senders'],
             dkimSelector: $row['dkim_selector'],
         );

@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration\Twig\Components;
 
+use App\Entity\MonitoredDomain;
+use App\Entity\Team;
+use App\Query\GetDomainReadinessSignals;
 use App\Results\ManagedDmarcCardResult;
+use App\Services\Dns\DmarcRampReadinessEvaluator;
 use App\Tests\WebTestCase;
 use App\Value\DmarcPolicy;
 use App\Value\Dns\AutoRampStage;
+use App\Value\Dns\DmarcSetupMode;
 use App\Value\Dns\ManagedDmarcCardState;
+use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\Attributes\Test;
+use Ramsey\Uuid\Uuid;
 use Twig\Environment;
 
 /**
@@ -42,6 +49,24 @@ final class ManagedDmarcCardReadinessCopyTest extends WebTestCase
     }
 
     #[Test]
+    public function aDomainAtFullEnforcementStaysAtFullEnforcementThroughAQuietPeriod(): void
+    {
+        // Reaching p=reject is terminal: the evaluator returns early with no
+        // recommended next policy, and there is nothing left to measure
+        // readiness FOR. A domain that finished the ramp and then had a quiet
+        // couple of months has a null pass rate over the 60-day window — but
+        // telling its owner "your first DMARC reports haven't arrived yet" is
+        // false about a customer who completed the whole journey, and it is
+        // exactly the mirror of the falsehood the docblock above this macro was
+        // written to prevent. Absence of measurement does not un-enforce a
+        // published policy.
+        $html = $this->render($this->card(daysOfData: null, passRate: null, recommendedNextPolicy: null, blockingReasons: ['already_at_full_enforcement']));
+
+        self::assertStringContainsString('You’re at full enforcement (reject)', $html);
+        self::assertStringNotContainsString('We haven’t measured your readiness yet', $html);
+    }
+
+    #[Test]
     public function aThinDataDomainIsToldHowMuchHistoryWeHaveSoFar(): void
     {
         $html = $this->render($this->card(
@@ -65,6 +90,79 @@ final class ManagedDmarcCardReadinessCopyTest extends WebTestCase
         ));
 
         self::assertStringContainsString('Alignment is 82.5% over 45 days', $html);
+    }
+
+    #[Test]
+    public function aRealDomainWithNoMailInTheWindowReachesTheCardAsUnmeasured(): void
+    {
+        // The arm above existed but nothing could reach it: the readiness query
+        // coalesced an empty 60-day window to 0.0, so a live managed domain that
+        // simply has no recent mail always arrived carrying a measurement it
+        // never had, and the card printed "Alignment is 0.0% over 70 days".
+        // This walks the real read path — query, evaluator, card DTO, template.
+        $card = $this->cardFromTheRealReadPath(DmarcPolicy::Quarantine);
+
+        self::assertNull($card->passRate);
+
+        $html = $this->render($card);
+        self::assertStringContainsString('We haven’t measured your readiness yet', $html);
+        self::assertStringNotContainsString('0.0%', $html);
+    }
+
+    #[Test]
+    public function aRealDomainAlreadyAtRejectReadsAsFullyEnforcedDespiteTheQuietWindow(): void
+    {
+        // Same read path, one rung further along. This is the shape a paying
+        // customer who finished the ramp and then had a quiet couple of months
+        // actually produces: the evaluator returns the terminal verdict AND a
+        // null pass rate together, and the card must lead with the policy that
+        // is published rather than the mail that is missing.
+        $card = $this->cardFromTheRealReadPath(DmarcPolicy::Reject);
+
+        self::assertNull($card->passRate, 'The empty window really does produce no rate — the terminal arm is not dodging the null.');
+        self::assertContains('already_at_full_enforcement', $card->blockingReasons);
+
+        $html = $this->render($card);
+        self::assertStringContainsString('You’re at full enforcement (reject)', $html);
+        self::assertStringNotContainsString('We haven’t measured your readiness yet', $html);
+    }
+
+    /**
+     * A managed domain with a long history and nothing at all in the trailing
+     * 60-day window, run through query -> evaluator -> card DTO.
+     */
+    private function cardFromTheRealReadPath(DmarcPolicy $publishedPolicy): ManagedDmarcCardResult
+    {
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        assert($em instanceof EntityManagerInterface);
+
+        $team = new Team(id: Uuid::uuid7(), name: 'Unmeasured', slug: 'unmeasured-'.Uuid::uuid7()->toString(), createdAt: new \DateTimeImmutable(), plan: 'pro');
+        $em->persist($team);
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'unmeasured-'.bin2hex(random_bytes(3)).'.example',
+            createdAt: new \DateTimeImmutable('-90 days'),
+            firstReportAt: new \DateTimeImmutable('-70 days'),
+        );
+        $domain->dmarcSetupMode = DmarcSetupMode::ManagedCname;
+        $domain->managedPolicyP = $publishedPolicy;
+        $domain->cnameVerifiedAt = new \DateTimeImmutable('-2 hours');
+        $domain->lastPolicyChangeAt = new \DateTimeImmutable('-30 days');
+        $em->persist($domain);
+        $em->flush();
+
+        $signals = self::getContainer()->get(GetDomainReadinessSignals::class);
+        assert($signals instanceof GetDomainReadinessSignals);
+        $evaluator = self::getContainer()->get(DmarcRampReadinessEvaluator::class);
+        assert($evaluator instanceof DmarcRampReadinessEvaluator);
+
+        return ManagedDmarcCardResult::build(
+            $domain,
+            $evaluator->evaluate($domain, $signals->forDomain($domain->id, [$team->id])),
+            available: true,
+            cnameTarget: 'irrelevant',
+        );
     }
 
     /**

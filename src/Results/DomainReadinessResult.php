@@ -11,11 +11,16 @@ namespace App\Results;
  * still failing DMARC alignment (the regression signal). Age-of-data (days
  * since firstReportAt) is computed by the evaluator from the entity + clock so
  * it survives retention purge and stays deterministic in tests.
+ *
+ * `passRate` is NULL when the window observed no messages at all — counts of
+ * nothing genuinely are zero, but a *rate* over nothing is not 0%, and this DTO
+ * is the input to a decision that can publish `p=reject`. See
+ * {@see \App\Services\Dns\DmarcRampReadinessEvaluator} for how the gate treats it.
  */
 final readonly class DomainReadinessResult
 {
     public function __construct(
-        public float $passRate,
+        public ?float $passRate,
         public int $reportsCount,
         public int $messageVolume,
         public int $distinctSources,
@@ -25,7 +30,7 @@ final readonly class DomainReadinessResult
 
     public static function empty(): self
     {
-        return new self(0.0, 0, 0, 0, 0);
+        return new self(null, 0, 0, 0, 0);
     }
 
     /**
@@ -34,7 +39,7 @@ final readonly class DomainReadinessResult
     public static function fromDatabaseRow(array $row): self
     {
         return new self(
-            passRate: (float) ($row['pass_rate'] ?? 0.0),
+            passRate: null === $row['pass_rate'] ? null : (float) $row['pass_rate'],
             reportsCount: (int) $row['reports_count'],
             messageVolume: (int) $row['message_volume'],
             distinctSources: (int) $row['distinct_sources'],

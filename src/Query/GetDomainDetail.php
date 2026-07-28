@@ -26,7 +26,7 @@ final readonly class GetDomainDetail
         }
 
 
-        /** @var array{domain_id: string, domain_name: string, dmarc_policy: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, first_report_at: string|null, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string, unique_senders: int|string, dkim_selector: string|null}|false $row */
+        /** @var array{domain_id: string, domain_name: string, dmarc_policy: string|null, spf_verified_at: string|null, dkim_verified_at: string|null, dmarc_verified_at: string|null, first_report_at: string|null, created_at: string, total_reports: int|string, total_messages: int|string, pass_rate: float|string|null, unique_senders: int|string, dkim_selector: string|null}|false $row */
         $row = $this->database->executeQuery(
             'SELECT
                 md.id AS domain_id,
@@ -45,7 +45,13 @@ final readonly class GetDomainDetail
                     JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
                     WHERE dr.monitored_domain_id = md.id
                 ), 0) AS total_messages,
-                COALESCE((
+                -- Deliberately NOT wrapped in COALESCE(..., 0), matching
+                -- GetDomainOverview::PASS_RATE_EXPR: NULLIF makes the divisor NULL
+                -- when the domain has no dmarc_record rows, so the rate is NULL and
+                -- the detail page can say "waiting for first report". The counts
+                -- above keep their zero fallback — a count of nothing is zero, a
+                -- rate over nothing is not 0%.
+                (
                     SELECT
                         SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
                         / NULLIF(SUM(rec.count), 0)
@@ -53,7 +59,7 @@ final readonly class GetDomainDetail
                     FROM dmarc_record rec
                     JOIN dmarc_report dr ON dr.id = rec.dmarc_report_id
                     WHERE dr.monitored_domain_id = md.id
-                ), 0) AS pass_rate,
+                ) AS pass_rate,
                 COALESCE((
                     SELECT COUNT(DISTINCT rec.source_ip)
                     FROM dmarc_record rec

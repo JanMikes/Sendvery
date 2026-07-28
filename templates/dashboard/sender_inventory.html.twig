@@ -17,6 +17,8 @@
 {% endblock %}
 
 {% block content %}
+    {% import 'components/_severity_glyph.html.twig' as severity %}
+
     <twig:DomainWorkspaceTabs :domain="domain" active="senders" :tabCounts="tabCounts" />
 
     {# The quantified call to action. Driven by the honest count of senders
@@ -139,9 +141,13 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
+                                {# Shared macros, not a hand-rolled ternary: that ternary had no
+                                   null branch, so a host we have seen but counted no messages
+                                   from fell into its `else` arm and rendered a red 0.0% next to
+                                   a message count of 0. #}
                                 <td>
-                                    <span class="{{ sender.passRate >= 90 ? 'text-success' : (sender.passRate >= 70 ? 'text-warning' : 'text-error') }}">
-                                        {{ sender.passRate|number_format(1) }}%
+                                    <span class="{{ severity.pass_rate_class(sender.passRate)|trim }}">
+                                        {{ severity.pass_rate_value(sender.passRate) }}
                                     </span>
                                 </td>
                                 <td class="text-sm text-base-content/60">{{ sender.firstSeenAt|date('M j, Y') }}</td>

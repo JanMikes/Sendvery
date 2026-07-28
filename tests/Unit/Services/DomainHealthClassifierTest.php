@@ -454,15 +454,22 @@ final class DomainHealthClassifierTest extends TestCase
     }
 
     #[Test]
-    public function isFullyHealthyReadsTheLatestCheckRatherThanTheVerificationTimestamps(): void
+    public function aBrokenRecordBeatsTheVerificationTimestampThatUsedToProveItWorked(): void
     {
-        // Same rule for the `/app/domains` "Fully healthy" stat card, which counts
-        // through this method: a broken record must not be counted as healthy just
-        // because it used to work.
+        // A domain whose DKIM key has since been removed still carries the
+        // `dkim_verified_at` stamp from the day it worked. The stored check
+        // verdict has to win, or "it was fine last month" reads as "it is fine".
         $classifier = new DomainHealthClassifier();
+        $verifiedWithGoodPassRate = $this->overview(dmarcVerifiedAt: '2026-05-01 00:00:00', passRate: 99.0);
 
-        self::assertFalse($classifier->isFullyHealthy($this->dnsHealthAllConfigured(dkimCheckValid: false)));
-        self::assertTrue($classifier->isFullyHealthy($this->dnsHealthAllConfigured(dkimCheckValid: true)));
+        self::assertSame(
+            DomainHealthFilter::Attention,
+            $classifier->classify($verifiedWithGoodPassRate, $this->dnsHealthAllConfigured(dkimCheckValid: false)),
+        );
+        self::assertSame(
+            DomainHealthFilter::Healthy,
+            $classifier->classify($verifiedWithGoodPassRate, $this->dnsHealthAllConfigured(dkimCheckValid: true)),
+        );
     }
 
     #[Test]
@@ -473,7 +480,40 @@ final class DomainHealthClassifierTest extends TestCase
         // until the next sweep overwrites it.
         $classifier = new DomainHealthClassifier();
 
-        self::assertFalse($classifier->isFullyHealthy($this->dnsHealthAllConfigured(latestMxScore: 95, mxCheckValid: false)));
+        self::assertSame(
+            DomainHealthFilter::Attention,
+            $classifier->classify(
+                $this->overview(dmarcVerifiedAt: '2026-05-01 00:00:00', passRate: 99.0),
+                $this->dnsHealthAllConfigured(latestMxScore: 95, mxCheckValid: false),
+            ),
+        );
+    }
+
+    #[Test]
+    public function theClassifierOffersNoShortcutThatAnswersOnlyPartOfTheRule(): void
+    {
+        // This class exists because three different rules were painting the same
+        // domain three different colours. A public helper that answers ONE of its
+        // questions — "are all four protocols configured?", with no DMARC-verified
+        // precedence and no pass-rate arm — is a fourth rule waiting to be picked
+        // up by name, and it already was: `/app/domains` counted a 30%-pass-rate
+        // domain as "Fully healthy" while its own badge and the list behind the
+        // link both said Attention.
+        //
+        // A docblock warning does not stop that; the next person holding a
+        // DnsHealthOverviewResult finds `isFullyHealthy()` in autocomplete and
+        // believes the name. Every public entry point has to return the verdict.
+        $publicMethods = array_map(
+            static fn (\ReflectionMethod $method): string => $method->getName(),
+            (new \ReflectionClass(DomainHealthClassifier::class))->getMethods(\ReflectionMethod::IS_PUBLIC),
+        );
+        sort($publicMethods);
+
+        self::assertSame(
+            ['classify', 'classifyOverview'],
+            $publicMethods,
+            'Every public method on the single source of truth must answer the whole question and return a DomainHealthFilter.',
+        );
     }
 
     private function overview(

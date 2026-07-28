@@ -303,7 +303,7 @@ final class DashboardOverviewFiltersTest extends WebTestCase
     }
 
     #[Test]
-    public function domainPassRateSparklinesRender(): void
+    public function eachSparklinePlotsOnlyTheWindowsThatWereActuallyMeasured(): void
     {
         $data = $this->createClientWithMixedReports();
 
@@ -315,11 +315,23 @@ final class DashboardOverviewFiltersTest extends WebTestCase
         // Each top-5 domain row carries a sparkline SVG. The Domain Health
         // card holds three of the seeded domains (primary, healthy, attention).
         self::assertStringContainsString('30-day pass-rate trend', $body);
-        // Sparkline SVGs use the dedicated viewBox; polyline tags appear
-        // wherever a domain has 2+ buckets of data.
         $svgs = $crawler->filterXPath('//svg[@viewBox="0 0 80 20"]');
         self::assertGreaterThanOrEqual(3, $svgs->count(), 'Expected at least 3 sparkline SVGs (one per top-5 domain)');
-        $polylines = $crawler->filterXPath('//svg[@viewBox="0 0 80 20"]/polyline');
-        self::assertGreaterThanOrEqual(1, $polylines->count(), 'Expected at least one polyline among the sparklines');
+
+        // Every seeded domain's mail falls inside ONE 3-day bucket, so one dot
+        // each is the whole honest picture. The trend query used to coalesce the
+        // other nine buckets to 0.0, which padded that single measurement into a
+        // ten-point polyline whose other nine points sat on the floor of the box
+        // — thirty days of "every message failed" invented out of no data.
+        self::assertCount(
+            0,
+            $crawler->filterXPath('//svg[@viewBox="0 0 80 20"]/polyline'),
+            'A domain measured in a single window has no line to draw; drawing one means the missing windows were invented.',
+        );
+        self::assertGreaterThanOrEqual(
+            3,
+            $crawler->filterXPath('//svg[@viewBox="0 0 80 20"]/circle')->count(),
+            'The one window each domain was measured in must still be plotted.',
+        );
     }
 }

@@ -3,48 +3,78 @@
    text-success / text-warning / text-error tint set by the row's pass-rate
    class — no JS, no chart library.
 
-   `points` is a list of pass-rates (0-100, oldest → newest). Two or more
-   points render as a polyline; one point degrades to a single dot; an empty
-   list renders an "—" placeholder so layout stays stable across all rows.
+   `points` is a list of pass-rates (0-100, oldest → newest) where a bucket that
+   observed no mail at all is `null`, NOT 0. The three renderings:
+
+     - a run of two or more consecutive measured buckets → one polyline;
+     - a run of exactly one → a dot at that bucket's own x/y (it is a real
+       measurement, so it must not vanish, and it must not slide to the middle
+       of the box either — that would misplace it in time);
+     - nothing measured anywhere → an "—" placeholder, so layout stays stable.
+
+   Nulls BREAK the line rather than bridging it. Bridging would draw straight
+   through days we never measured, which invents data; collapsing the whole
+   series to "—" the moment one bucket is empty would discard the days we did
+   measure. Two segments either side of a gap is the only honest option.
 
    The empty-series "—" is the same placeholder `pass_rate_value()` in
    `components/_severity_glyph.html.twig` renders for a null pass rate, so the
-   trend line and the figure beside it always tell the same story. Pair this
-   with `pass_rate_stat(...)` — never with a hard-coded "0.0%", which is what
-   used to make an empty sparkline sit next to a red zero. #}
+   trend line and the figure beside it always tell the same story. Before the
+   buckets were nullable this promise could not be kept: `GetDomainPassRateTrend`
+   coalesced empty buckets to 0.0, ten of which cleared the "two or more points"
+   gate and drew a flat line along the floor — "everything failed for 30 days" —
+   next to an honest "Waiting for first report". Pair this with
+   `pass_rate_stat(...)`, never with a hard-coded "0.0%". #}
 {% props points = [], width = 80, height = 20 %}
 
 {% set count = points|length %}
-{% if count >= 2 %}
-    {# Map each [index, pass_rate] pair onto the viewBox. Y is inverted —
-       pass_rate=100 → top of the box (y=padding), pass_rate=0 → bottom. #}
-    {% set padding = 1 %}
-    {% set drawWidth = width - (padding * 2) %}
-    {% set drawHeight = height - (padding * 2) %}
-    {% set stepX = drawWidth / (count - 1) %}
-    {% set coords = [] %}
-    {% for value in points %}
+{% set padding = 1 %}
+{% set drawWidth = width - (padding * 2) %}
+{% set drawHeight = height - (padding * 2) %}
+{% set stepX = count > 1 ? drawWidth / (count - 1) : 0 %}
+
+{# Split the series into runs of consecutive measured buckets. Y is inverted —
+   pass_rate=100 → top of the box (y=padding), pass_rate=0 → bottom. A lone
+   measured bucket in a single-bucket series is centred, which is where the eye
+   expects it when there is no time axis to place it against. #}
+{% set segments = [] %}
+{% set run = [] %}
+{% for value in points %}
+    {% if value is null %}
+        {% if run is not empty %}
+            {% set segments = segments|merge([run]) %}
+            {% set run = [] %}
+        {% endif %}
+    {% else %}
         {% set clamped = value < 0 ? 0 : (value > 100 ? 100 : value) %}
-        {% set x = padding + (loop.index0 * stepX) %}
+        {% set x = count > 1 ? padding + (loop.index0 * stepX) : width / 2 %}
         {% set y = padding + drawHeight - ((clamped / 100) * drawHeight) %}
-        {% set coords = coords|merge([x|number_format(2, '.', '') ~ ',' ~ y|number_format(2, '.', '')]) %}
-    {% endfor %}
-    <svg viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}"
-         class="inline-block align-middle" aria-hidden="true" role="img">
-        <polyline points="{{ coords|join(' ') }}"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"/>
-    </svg>
-{% elseif count == 1 %}
-    {# Single-data-point domain — show a centred dot so the eye doesn't read
-       it as missing. #}
-    <svg viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}"
-         class="inline-block align-middle" aria-hidden="true" role="img">
-        <circle cx="{{ width / 2 }}" cy="{{ height / 2 }}" r="1.5" fill="currentColor"/>
-    </svg>
-{% else %}
+        {% set run = run|merge([{
+            x: x|number_format(2, '.', ''),
+            y: y|number_format(2, '.', ''),
+        }]) %}
+    {% endif %}
+{% endfor %}
+{% if run is not empty %}
+    {% set segments = segments|merge([run]) %}
+{% endif %}
+
+{% if segments is empty %}
     <span class="inline-block align-middle text-base-content/30" style="width: {{ width }}px;" aria-hidden="true">—</span>
+{% else %}
+    <svg viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}"
+         class="inline-block align-middle" aria-hidden="true" role="img">
+        {% for segment in segments %}
+            {% if segment|length >= 2 %}
+                <polyline points="{{ segment|map(p => p.x ~ ',' ~ p.y)|join(' ') }}"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"/>
+            {% else %}
+                <circle cx="{{ segment[0].x }}" cy="{{ segment[0].y }}" r="1.5" fill="currentColor"/>
+            {% endif %}
+        {% endfor %}
+    </svg>
 {% endif %}

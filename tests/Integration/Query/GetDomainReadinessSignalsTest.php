@@ -81,7 +81,30 @@ final class GetDomainReadinessSignalsTest extends IntegrationTestCase
         $signals = $query->forDomain(Uuid::uuid7(), []);
 
         self::assertSame(0, $signals->reportsCount);
-        self::assertSame(0.0, $signals->passRate);
+        self::assertNull($signals->passRate, 'Nothing was measured, so there is no rate — 0.0 would claim every message failed.');
+    }
+
+    #[Test]
+    public function aDomainWithNoMailInTheWindowHasNoPassRateRatherThanZeroPercent(): void
+    {
+        // This is the readiness input the auto-ramp reads before advancing a
+        // published DMARC policy toward p=reject. "We measured nothing" and
+        // "every message failed" must not arrive as the same number: the first
+        // means there is no evidence to act on, the second is evidence.
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = new GetDomainReadinessSignals($em->getConnection());
+
+        $team = new Team(id: Uuid::uuid7(), name: 'Silent', slug: 'silent-'.Uuid::uuid7()->toString(), createdAt: new \DateTimeImmutable());
+        $em->persist($team);
+        $domain = new MonitoredDomain(id: Uuid::uuid7(), team: $team, domain: 'silent.example', createdAt: new \DateTimeImmutable('-90 days'));
+        $em->persist($domain);
+        $em->flush();
+
+        $signals = $query->forDomain($domain->id, [$team->id]);
+
+        self::assertSame(0, $signals->reportsCount);
+        self::assertSame(0, $signals->messageVolume, 'A count of nothing genuinely is zero.');
+        self::assertNull($signals->passRate);
     }
 
     private function record(DmarcReport $report, string $ip, int $count, AuthResult $dkim, AuthResult $spf): DmarcRecord

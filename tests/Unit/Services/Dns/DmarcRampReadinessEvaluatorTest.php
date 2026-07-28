@@ -214,6 +214,50 @@ final class DmarcRampReadinessEvaluatorTest extends TestCase
     }
 
     #[Test]
+    public function aDomainWithNoMeasuredMailNeverAdvancesTowardsFullEnforcement(): void
+    {
+        // The dangerous shape. At p=quarantine every other rung of the ladder is
+        // satisfied by history alone — 70 days since the first report, no minimum
+        // report count, no minimum source count, a fresh CNAME, dwell served — so
+        // the pass-rate gate is the ONLY thing standing between this domain and
+        // p=reject. Its 60-day window is empty (reports aged out of retention),
+        // so there is no rate at all.
+        //
+        // Advancing here would publish full enforcement on zero evidence and
+        // blackhole whatever real mail the domain still sends. The gate must
+        // treat "unmeasured" as "not proven safe" — a guard written as
+        // `null !== $passRate && $passRate < $threshold` skips the block on null
+        // and does the opposite.
+        $result = $this->evaluate(
+            $this->domain(DmarcPolicy::Quarantine, firstReportDaysAgo: 70, cnameVerified: true, lastChangeDaysAgo: 14),
+            new DomainReadinessResult(passRate: null, reportsCount: 0, messageVolume: 0, distinctSources: 0, authorizedFailureVolume: 0),
+        );
+
+        self::assertFalse($result->ready, 'No evidence is not qualifying evidence.');
+        self::assertFalse($result->eligibleForNextTier, 'A domain with nothing measured must never be advanced to p=reject.');
+        self::assertContains('no_pass_rate_data', $result->blockingReasons);
+        self::assertNotContains(
+            'pass_rate_below_threshold',
+            $result->blockingReasons,
+            'There is no rate to be below the threshold — saying otherwise invents a measurement in the reason the user reads.',
+        );
+        self::assertNull($result->passRate, 'The verdict carries the absence through, so the card can say "we have not measured yet".');
+    }
+
+    #[Test]
+    public function aDomainWithNoMeasuredMailIsAlsoHeldAtTheFirstRung(): void
+    {
+        $result = $this->evaluate(
+            $this->domain(DmarcPolicy::None, firstReportDaysAgo: 40, cnameVerified: true, lastChangeDaysAgo: 10),
+            new DomainReadinessResult(passRate: null, reportsCount: 0, messageVolume: 0, distinctSources: 0, authorizedFailureVolume: 0),
+        );
+
+        self::assertFalse($result->ready);
+        self::assertFalse($result->eligibleForNextTier);
+        self::assertContains('no_pass_rate_data', $result->blockingReasons);
+    }
+
+    #[Test]
     public function rejectIsTerminal(): void
     {
         $result = $this->evaluate(

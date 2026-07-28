@@ -69,10 +69,17 @@ final readonly class GetDomainPassRateTrend
      * 30-day window that yields 10 points per domain, which fits cleanly
      * into a tiny ~80×20 inline SVG without crowding.
      *
-     * Empty buckets (no messages observed) collapse to 0.0 rather than NULL
-     * so the SVG polyline always renders a continuous line; if you need to
-     * distinguish "no data" from "all-fail" check {@see DomainOverviewResult::$totalReports}
-     * on the same row before rendering.
+     * A bucket in which no message was observed is NULL, not 0.0. There is no
+     * `COALESCE(..., 0)` wrapper here on purpose: zero means "every message in
+     * this window failed authentication", which is a measurement, and a domain
+     * nobody has reported on has not been measured. Ten coalesced zeroes cleared
+     * the component's `count >= 2` gate and drew a flat polyline along the bottom
+     * edge of the box — thirty days of total authentication failure — right beside
+     * a pass-rate figure that honestly read "Waiting for first report".
+     *
+     * Do NOT reintroduce a zero fallback. `DomainPassRateSparkline` breaks the
+     * line across NULL buckets and falls through to the same "—" placeholder
+     * `pass_rate_value()` renders for a null rate.
      *
      * Single SQL round-trip across all domains — `generate_series` builds a
      * full per-bucket grid which is left-joined to each (domain, bucket)
@@ -81,7 +88,7 @@ final readonly class GetDomainPassRateTrend
      * @param list<string> $domainIds monitored-domain UUIDs to load trends for
      * @param list<string> $teamIds   team UUIDs the caller is allowed to read from
      *
-     * @return array<string, list<float>> map of domain UUID → list of pass-rate buckets, oldest → newest
+     * @return array<string, list<float|null>> map of domain UUID → list of pass-rate buckets, oldest → newest; NULL where nothing was observed
      */
     public function forDomains(array $domainIds, array $teamIds, int $days = 30): array
     {
@@ -96,7 +103,7 @@ final readonly class GetDomainPassRateTrend
 
         $bucketCount = (int) ceil($days / $bucketSize);
 
-        /** @var list<array{domain_id: string, bucket_index: int|string, pass_rate: float|string}> $data */
+        /** @var list<array{domain_id: string, bucket_index: int|string, pass_rate: float|string|null}> $data */
         $data = $this->database->executeQuery(
             'WITH buckets AS (
                 SELECT bucket_index, bucket_start, bucket_end FROM (
@@ -110,12 +117,9 @@ final readonly class GetDomainPassRateTrend
             SELECT
                 md.id::text AS domain_id,
                 b.bucket_index AS bucket_index,
-                COALESCE(
-                    SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
+                SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
                     / NULLIF(SUM(rec.count), 0)
-                    * 100,
-                    0
-                ) AS pass_rate
+                    * 100 AS pass_rate
             FROM monitored_domain md
             CROSS JOIN buckets b
             LEFT JOIN dmarc_report dr
@@ -145,7 +149,7 @@ final readonly class GetDomainPassRateTrend
         foreach ($data as $row) {
             $domainId = $row['domain_id'];
             $result[$domainId] ??= [];
-            $result[$domainId][] = (float) $row['pass_rate'];
+            $result[$domainId][] = null === $row['pass_rate'] ? null : (float) $row['pass_rate'];
         }
 
         return $result;

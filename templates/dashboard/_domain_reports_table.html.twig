@@ -1,3 +1,4 @@
+{% import 'components/_severity_glyph.html.twig' as severity %}
 <turbo-frame id="domain-reports-table">
     <div class="card bg-base-100 border border-base-200 shadow-sm">
         <div class="card-body p-4">
@@ -30,9 +31,13 @@
                                 </td>
                                 <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                 <td class="text-right">{{ report.recordCount }}</td>
+                                {# Routed through the shared macros rather than a hand-rolled
+                                   ternary: that ternary had no null branch, so a report that
+                                   observed no mail fell into its `else` arm and rendered a red
+                                   0.0% — "every message failed" for a report with nothing in it. #}
                                 <td class="text-right">
-                                    <span class="{{ report.passRate >= 90 ? 'text-success' : (report.passRate >= 70 ? 'text-warning' : 'text-error') }}">
-                                        {{ report.passRate|number_format(1) }}%
+                                    <span class="{{ severity.pass_rate_class(report.passRate)|trim }}">
+                                        {{ severity.pass_rate_value(report.passRate) }}
                                     </span>
                                 </td>
                             </tr>

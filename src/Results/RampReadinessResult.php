@@ -25,7 +25,7 @@ final readonly class RampReadinessResult
         public bool $regressionDetected,
         public bool $cnameVerified,
         public int $daysOfData,
-        public float $passRate,
+        public ?float $passRate,
         public int $distinctSources,
         public array $blockingReasons,
     ) {

@@ -35,7 +35,7 @@
                            report jumps off the page instead of forcing the user to read every number. #}
                         {% for report in reports %}
                             {% set reportTone = severity.pass_rate_tone(report.passRate)|trim %}
-                            <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ reportTone }}"
+                            <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ severity.pass_rate_row_tone(report.passRate)|trim }}"
                                 {{ stimulus_controller('row-link') }}
                                 data-action="click->row-link#navigate">
                                 <td class="w-8">
@@ -51,9 +51,13 @@
                                 <td>{{ report.reporterOrg }}</td>
                                 <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                 <td class="text-right">{{ report.recordCount }}</td>
+                                {# A report with no records observed no mail, so it has no pass
+                                   rate — the shared macros print "—" for that and tint it the
+                                   muted no-data colour, instead of the red 0.0% a bare
+                                   number_format would produce from a null. #}
                                 <td class="text-right">
-                                    <span class="text-{{ reportTone }}">
-                                        {{ report.passRate|number_format(1) }}%
+                                    <span class="{{ severity.pass_rate_class(report.passRate)|trim }}">
+                                        {{ severity.pass_rate_value(report.passRate) }}
                                     </span>
                                 </td>
                             </tr>

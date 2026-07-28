@@ -40,8 +40,15 @@ use App\Value\DomainHealthFilter;
  */
 final readonly class DomainHealthClassifier
 {
-    private const float HEALTHY_PASS_RATE_THRESHOLD = 90.0;
-    private const int MX_CONFIGURED_MIN_SCORE = 80;
+    /**
+     * Public because {@see \App\Query\GetDomainOverview} has to express the very
+     * same rule in SQL for the `?status=` filter, and the whole point of TASK-098
+     * is that there is ONE threshold. Re-typing `90` / `80` into the query is how
+     * the chip and the badge drifted apart in the first place.
+     */
+    public const float HEALTHY_PASS_RATE_THRESHOLD = 90.0;
+
+    public const int MX_CONFIGURED_MIN_SCORE = 80;
 
     /**
      * Two-input classifier: takes a `DomainOverviewResult` (carries
@@ -142,18 +149,6 @@ final readonly class DomainHealthClassifier
                 $dnsHealth->mxCheckValid,
                 null !== $dnsHealth->latestMxScore && $dnsHealth->latestMxScore >= self::MX_CONFIGURED_MIN_SCORE,
             );
-    }
-
-    /**
-     * Public wrapper around {@see allProtocolsConfigured()} so callers that
-     * already have a {@see DnsHealthOverviewResult} (the DNS Health overview
-     * page, TASK-083) can ask the same "is everything in place?" question
-     * without re-deriving the rule. Keeps the per-protocol threshold in one
-     * place per TASK-098.
-     */
-    public function isFullyHealthy(DnsHealthOverviewResult $dnsHealth): bool
-    {
-        return $this->allProtocolsConfigured($dnsHealth);
     }
 
     /**

@@ -94,6 +94,34 @@ final class AutoRampDmarcCommandTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function aDomainWithNothingMeasuredIsNeverDrivenToFullEnforcement(): void
+    {
+        // The quarantine -> reject rung asks for no minimum report count and no
+        // minimum source count, so on a domain whose reports have aged out of the
+        // 60-day window every other gate is satisfied by history alone and the
+        // pass-rate gate is the only one left. There is no rate to read. Publishing
+        // p=reject here would enforce full rejection on zero evidence.
+        $domainId = $this->managedDomain(
+            'pro',
+            DmarcPolicy::Quarantine,
+            autoRampEnabled: true,
+            ready: false,
+            scheduledAdvanceAt: new \DateTimeImmutable('-1 hour'),
+            scheduledStage: AutoRampStage::Reject,
+        );
+
+        $this->runSweep();
+
+        $domain = $this->reload($domainId);
+        self::assertSame(
+            DmarcPolicy::Quarantine,
+            $domain->managedPolicyP,
+            'Unmeasured is not proven safe — the ramp must hold, not advance.',
+        );
+        self::assertNotNull($domain->autoRampPausedAt, 'A due advance we cannot justify pauses the ramp for a human to look at.');
+    }
+
+    #[Test]
     public function pausesTheRampOnRegressionInsteadOfTightening(): void
     {
         $domainId = $this->managedDomain('pro', DmarcPolicy::None, autoRampEnabled: true, ready: true, withAuthorizedFailure: true);

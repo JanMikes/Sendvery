@@ -15,6 +15,13 @@ use Ramsey\Uuid\UuidInterface;
  * the strictest tier requirement (quarantine -> reject needs 99% over 60 days);
  * using the longer window for the none -> quarantine check too only makes
  * automation MORE conservative, which is the intent.
+ *
+ * `pass_rate` is deliberately NULL-when-no-data: `NULLIF(SUM(rec.count), 0)`
+ * makes the divisor NULL when the window observed no messages, and there is no
+ * `COALESCE(..., 0)` wrapper. A zero here claimed "every message failed" for a
+ * domain whose reports had simply aged out of the window, which the managed-DMARC
+ * card then printed as "Alignment is 0.0%". Counts stay coalesced — a count of
+ * nothing really is zero. Do NOT reintroduce a zero fallback on the rate.
  */
 final readonly class GetDomainReadinessSignals
 {
@@ -38,11 +45,8 @@ final readonly class GetDomainReadinessSignals
                 COUNT(DISTINCT dr.id) AS reports_count,
                 COALESCE(SUM(rec.count), 0) AS message_volume,
                 COUNT(DISTINCT rec.source_ip) AS distinct_sources,
-                COALESCE(
-                    SUM(CASE WHEN rec.dkim_result = 'pass' OR rec.spf_result = 'pass' THEN rec.count ELSE 0 END)::float
-                    / NULLIF(SUM(rec.count), 0) * 100,
-                    0
-                ) AS pass_rate,
+                SUM(CASE WHEN rec.dkim_result = 'pass' OR rec.spf_result = 'pass' THEN rec.count ELSE 0 END)::float
+                    / NULLIF(SUM(rec.count), 0) * 100 AS pass_rate,
                 COALESCE(
                     SUM(CASE WHEN ks.is_authorized = true AND rec.dkim_result <> 'pass' AND rec.spf_result <> 'pass' THEN rec.count ELSE 0 END),
                     0

@@ -106,9 +106,22 @@ final readonly class DmarcRampReadinessEvaluator
         if ($signals->distinctSources < $minSources) {
             $blockingReasons[] = 'too_few_sources';
         }
-        if ($signals->passRate < $minPassRate) {
+
+        // An absent pass rate is NOT a low pass rate, and it is emphatically not
+        // a qualifying one. Written as an explicit null arm rather than left to
+        // PHP's `null < 99.0` (which happens to be true, i.e. safe, but is an
+        // accident of loose comparison): the shape one refactor away is
+        // `null !== $passRate && $passRate < $minPassRate`, which SKIPS the block
+        // on null and advances a domain we have measured nothing about straight
+        // to p=reject. The separate reason also stops the card telling a user
+        // their rate is "below threshold" when no rate exists.
+        $passRateQualifies = null !== $signals->passRate && $signals->passRate >= $minPassRate;
+        if (null === $signals->passRate) {
+            $blockingReasons[] = 'no_pass_rate_data';
+        } elseif (!$passRateQualifies) {
             $blockingReasons[] = 'pass_rate_below_threshold';
         }
+
         if ($regressionDetected) {
             $blockingReasons[] = 'authorized_senders_failing';
         }
@@ -116,7 +129,7 @@ final readonly class DmarcRampReadinessEvaluator
         $ready = $daysOfData >= $minDays
             && $signals->reportsCount >= $minReports
             && $signals->distinctSources >= $minSources
-            && $signals->passRate >= $minPassRate
+            && $passRateQualifies
             && !$regressionDetected;
 
         if (!$cnameVerified) {

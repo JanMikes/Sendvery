@@ -260,10 +260,16 @@
     {# Quick stats #}
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <twig:StatCard title="Total Messages" value="{{ domain.totalMessages|number_format(0, '.', ',') }}" />
+        {# A domain with no DMARC records has no pass rate — the shared macro
+           prints "—" and the caption says what the user is waiting for, instead
+           of the red 0.0% a bare number_format would render from a null. The
+           variant falls to `default` for the no-data case: an absence is neither
+           a success nor an error. #}
         <twig:StatCard
             title="Pass Rate"
-            value="{{ domain.passRate|number_format(1) }}%"
-            variant="{{ domain.passRate >= 90 ? 'success' : (domain.passRate >= 70 ? 'warning' : 'error') }}"
+            value="{{ severity.pass_rate_value(domain.passRate) }}"
+            variant="{{ domain.hasPassRateData() ? severity.pass_rate_tone(domain.passRate)|trim : 'default' }}"
+            caption="{{ domain.hasPassRateData() ? '' : (domain.isAwaitingFirstReport() ? 'Waiting for first report — usually within 24 hours' : 'No reports in this period') }}"
         />
         <a href="{{ path('dashboard_sender_inventory', {domainId: domain.domainId}) }}" class="block">
             <twig:StatCard title="Unique Senders" value="{{ domain.uniqueSenders }}" />
@@ -494,7 +500,7 @@
                                 {# Same overlay-to-row-link conversion as the senders table
                                    above: one real anchor, clicks delegated. Without it every
                                    row in this table opened the LAST report's detail page. #}
-                                <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ reportTone }}"
+                                <tr class="hover:bg-base-200/50 cursor-pointer border-l-4 border-l-{{ severity.pass_rate_row_tone(report.passRate)|trim }}"
                                     {{ stimulus_controller('row-link') }}
                                     data-action="click->row-link#navigate">
                                     <td class="w-8">
@@ -508,9 +514,12 @@
                                     </td>
                                     <td>{{ report.dateRangeBegin|date('M j') }} — {{ report.dateRangeEnd|date('M j, Y') }}</td>
                                     <td class="text-right">{{ report.recordCount }}</td>
+                                    {# Shared macros, same reason as `_reports_table.html.twig`:
+                                       a report that observed no mail has no rate to print, and
+                                       `|number_format(1)` on a null renders it as 0.0%. #}
                                     <td class="text-right">
-                                        <span class="text-{{ reportTone }}">
-                                            {{ report.passRate|number_format(1) }}%
+                                        <span class="{{ severity.pass_rate_class(report.passRate)|trim }}">
+                                            {{ severity.pass_rate_value(report.passRate) }}
                                         </span>
                                     </td>
                                 </tr>

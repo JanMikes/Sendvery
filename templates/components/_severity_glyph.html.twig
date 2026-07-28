@@ -100,6 +100,19 @@
 {% endmacro %}
 
 {#
+   Row accent tone for a pass rate — feeds `border-l-{{ … }}` on list rows.
+   Mirrors `pass_rate_tone` but maps the `neutral` tone onto `base-300`, the
+   quiet accent the mailboxes and quarantine tables already use for
+   undifferentiated rows. daisyUI's `neutral` is a dark slate, so using it here
+   would make a row we have not measured shout louder than a healthy one.
+#}
+{% macro pass_rate_row_tone(passRate) %}
+    {%- import _self as severity -%}
+    {%- set tone = severity.pass_rate_tone(passRate)|trim -%}
+    {{- tone == 'neutral' ? 'base-300' : tone -}}
+{% endmacro %}
+
+{#
    The pass-rate figure itself, or an em-dash when there is nothing to show.
    Matches the placeholder `DomainPassRateSparkline` renders for an empty
    series, so the number and the trend line never contradict each other.

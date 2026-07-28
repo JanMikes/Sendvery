@@ -46,21 +46,53 @@ final class ListDomainsController extends AbstractController
         }
 
         $totalDnsCount = count($dnsHealthAll);
+
+        // Every domain, unfiltered — the population the stat cards count. Always
+        // loaded, even when a filter is active, because a filtered count would
+        // make each card report on itself ("Need attention 1" on the attention
+        // list, always). The unfiltered list is reused as `$domains` below when
+        // no filter is set, so the extra round-trip is paid only on a filtered
+        // view.
+        $allDomains = $this->getDomainOverview->forTeams($teamIdStrings, null);
+
+        // The "Fully healthy" and "Need attention" cards are anchors to
+        // ?status=healthy and ?status=attention, so the number IS a claim about
+        // that list and has to be produced by the rule that builds it.
+        //
+        // These two used to be counted with `hasSnapshot()` + `isFullyHealthy()`
+        // — a THIRD rule, asking only "are all four protocols configured?" with
+        // no DMARC-verified precedence and no pass-rate arm. So a domain with a
+        // 30% pass rate was counted "Fully healthy" while its own card badge and
+        // the attention list both said Attention, and a domain with a valid
+        // DMARC record that does not route reports to us was counted "Fully
+        // healthy" while appearing in no list at all. Three rules on one page.
+        //
+        // `classifyOverview()` is the same call that paints each card's badge
+        // two blocks down and the same rule `GetDomainOverview` now transcribes
+        // into the ?status= SQL, so the stat, the badge and the list are one
+        // answer. Unverified domains fall into neither count — deliberately:
+        // both chips require a verified DMARC record, and the page has no
+        // Unverified stat card, only an Unverified filter chip.
         $healthyCount = 0;
         $attentionCount = 0;
-        $awaitingCount = 0;
+        foreach ($allDomains as $domain) {
+            match ($this->domainHealthClassifier->classifyOverview($domain)) {
+                DomainHealthFilter::Healthy => ++$healthyCount,
+                DomainHealthFilter::Attention => ++$attentionCount,
+                DomainHealthFilter::Unverified => null,
+            };
+        }
+
+        // "Awaiting first check" stays on the snapshot axis it genuinely owns:
+        // it answers "has the nightly sweep ever run for this domain?", which is
+        // not a health verdict and has its own ?status=unchecked filter below.
+        $uncheckedDomainIds = [];
         foreach ($dnsHealthAll as $dnsHealth) {
             if (!$dnsHealth->hasSnapshot()) {
-                ++$awaitingCount;
-
-                continue;
-            }
-            if ($this->domainHealthClassifier->isFullyHealthy($dnsHealth)) {
-                ++$healthyCount;
-            } else {
-                ++$attentionCount;
+                $uncheckedDomainIds[$dnsHealth->domainId] = true;
             }
         }
+        $awaitingCount = count($uncheckedDomainIds);
 
         // TASK-130: ?status=unchecked is the new fourth filter chip absorbed
         // from the deleted /app/dns-health page. Handled here (not via
@@ -68,17 +100,12 @@ final class ListDomainsController extends AbstractController
         // a DnsHealthOverviewResult property — not a state the
         // DomainHealthClassifier carries on a DomainOverviewResult.
         if ('unchecked' === $statusFilterRaw) {
-            $uncheckedDomainIds = [];
-            foreach ($dnsHealthAll as $dnsHealth) {
-                if (!$dnsHealth->hasSnapshot()) {
-                    $uncheckedDomainIds[$dnsHealth->domainId] = true;
-                }
-            }
-            $allDomains = $this->getDomainOverview->forTeams($teamIdStrings, null);
             $domains = array_values(array_filter(
                 $allDomains,
                 static fn ($domain): bool => isset($uncheckedDomainIds[$domain->domainId]),
             ));
+        } elseif (null === $statusFilter) {
+            $domains = $allDomains;
         } else {
             $domains = $this->getDomainOverview->forTeams($teamIdStrings, $statusFilter);
         }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Query;
 
 use App\Results\DomainOverviewResult;
+use App\Services\DomainHealthClassifier;
 use App\Value\DomainHealthFilter;
 use App\Value\DomainHealthSort;
 use Doctrine\DBAL\ArrayParameterType;
@@ -70,6 +71,25 @@ final readonly class GetDomainOverview
 
     private const string GROUP_BY = 'md.id, md.domain, md.dmarc_verified_at, md.spf_verified_at, md.dkim_verified_at, md.first_report_at, t.id, t.name, dhs.spf_score, dhs.dkim_score, dhs.dmarc_score, dhs.mx_score, dcv.spf_check_valid, dcv.dkim_check_valid, dcv.dmarc_check_valid, dcv.mx_check_valid';
 
+    /**
+     * SQL transcription of {@see DomainHealthClassifier::protocolConfigured()},
+     * which is `$checkValid ?? $legacyConfigured` — the stored `dns_check_result`
+     * verdict wins in BOTH directions when one exists, and only a protocol with no
+     * check row at all falls back to the legacy verified-at / snapshot-score
+     * derivation. `COALESCE(<nullable bool>, <never-null bool>)` is exactly that,
+     * and never yields NULL, which is what keeps the HAVING arms below two-valued.
+     *
+     * Every column here is grouped (see {@see GROUP_BY}), so the predicate is legal
+     * in HAVING — which is where it has to live: the Attention arm is
+     * `NOT(all_configured AND pass_rate_ok)`, a disjunction spanning grouped
+     * columns AND an aggregate. Splitting the grouped half into WHERE would drop
+     * domains that need attention only because of their pass rate.
+     */
+    private const string ALL_PROTOCOLS_CONFIGURED_EXPR = 'COALESCE(dcv.spf_check_valid, md.spf_verified_at IS NOT NULL)
+        AND COALESCE(dcv.dkim_check_valid, md.dkim_verified_at IS NOT NULL)
+        AND COALESCE(dcv.dmarc_check_valid, md.dmarc_verified_at IS NOT NULL)
+        AND COALESCE(dcv.mx_check_valid, dhs.mx_score IS NOT NULL AND dhs.mx_score >= '.DomainHealthClassifier::MX_CONFIGURED_MIN_SCORE.')';
+
     public function __construct(
         private Connection $database,
     ) {
@@ -89,42 +109,50 @@ final readonly class GetDomainOverview
             return [];
         }
 
-        // Compose conditional WHERE/HAVING fragments per filter:
+        // Compose conditional WHERE/HAVING fragments per filter. These are a
+        // transcription of `DomainHealthClassifier::classifyOverview()`, not an
+        // approximation of it — the classifier paints the card badge and feeds the
+        // "Need attention" counter, and this filter backs the chip that counter
+        // links to. When the two disagree the product contradicts itself: before
+        // TASK-098's rule was pushed down here, a domain with a currently-broken
+        // SPF record showed the amber badge, was counted in the tally, and then
+        // was NOT in the list you got by clicking it. `DomainStatusFilterMatches
+        // TheHealthBadgeTest` asserts the parity over every input combination.
+        //
         //   - null         → no fragments, returns every domain
         //   - Unverified   → WHERE dmarc_verified_at IS NULL,      no HAVING
-        //   - Healthy      → WHERE dmarc_verified_at IS NOT NULL,  HAVING pass_rate >= 90 OR pass_rate IS NULL
-        //   - Attention    → WHERE dmarc_verified_at IS NOT NULL,  HAVING pass_rate < 90
+        //   - Healthy      → WHERE dmarc_verified_at IS NOT NULL,  HAVING all_protocols_configured AND pass_rate_ok
+        //   - Attention    → WHERE dmarc_verified_at IS NOT NULL,  HAVING NOT (all_protocols_configured AND pass_rate_ok)
         //
-        // `pass_rate` is genuinely NULL when the domain has no `dmarc_record`
-        // rows at all — see {@see buildBaseSelect()}. A verified, brand-new
-        // domain therefore does NOT fall into Attention just because no report
-        // has landed yet: `NULL < 90` is NULL (not true), so it drops out of
-        // Attention, and the explicit `IS NULL` arm keeps it in Healthy. This
-        // mirrors `DomainHealthClassifier::classifyOverview()`, which returns
-        // Healthy for "correctly configured, awaiting first report" — without
-        // the two agreeing, clicking "Need attention" would surface cards
-        // rendering a green glyph.
+        // `pass_rate_ok` is `pass_rate >= 90 OR pass_rate IS NULL`. `pass_rate` is
+        // genuinely NULL when the domain has no `dmarc_record` rows at all — see
+        // {@see buildBaseSelect()} — so a verified, correctly configured, brand-new
+        // domain does NOT fall into Attention just because no report has landed
+        // yet. That mirrors `awaitingFirstReportVerdict()`. Written as an explicit
+        // `IS NULL` arm rather than relying on `NULL < 90` being NULL, so the two
+        // arms are exact complements and every domain lands in exactly one chip.
         //
-        // The `dmarc_verified_at IS NOT NULL` guard on Healthy exists for the
+        // Both halves must sit in HAVING even though the protocol predicates are
+        // grouped columns: the Attention arm negates a conjunction that spans the
+        // grouped columns AND an aggregate, so moving the grouped half into WHERE
+        // would wrongly exclude domains that need attention for the other reason.
+        //
+        // The `dmarc_verified_at IS NOT NULL` guard on both arms exists for the
         // same agreement reason: an unverified domain always classifies as
-        // Unverified, so it must never be listed under Healthy — which it
-        // would be now that "no reports" no longer disqualifies.
-        //
-        // NOTE: the Healthy/Attention SQL filters here are still looser than
-        // the TASK-098 in-app `DomainHealthClassifier` verdict (which ALSO
-        // requires all 4 DNS protocols configured before declaring Healthy).
-        // Tightening the SQL filter to match would require pushing the
-        // per-protocol score thresholds into SQL and is a v2 refinement.
+        // Unverified, so it must appear under neither of the other two chips.
+        $passRateOk = '('.self::PASS_RATE_EXPR.' >= '.DomainHealthClassifier::HEALTHY_PASS_RATE_THRESHOLD.' OR '.self::PASS_RATE_EXPR.' IS NULL)';
+        $classifiesHealthy = '(('.self::ALL_PROTOCOLS_CONFIGURED_EXPR.') AND '.$passRateOk.')';
+
         $whereClause = '';
         $havingClause = '';
         if (DomainHealthFilter::Unverified === $statusFilter) {
             $whereClause = ' AND md.dmarc_verified_at IS NULL';
         } elseif (DomainHealthFilter::Healthy === $statusFilter) {
             $whereClause = ' AND md.dmarc_verified_at IS NOT NULL';
-            $havingClause = ' HAVING '.self::PASS_RATE_EXPR.' >= 90 OR '.self::PASS_RATE_EXPR.' IS NULL';
+            $havingClause = ' HAVING '.$classifiesHealthy;
         } elseif (DomainHealthFilter::Attention === $statusFilter) {
             $whereClause = ' AND md.dmarc_verified_at IS NOT NULL';
-            $havingClause = ' HAVING '.self::PASS_RATE_EXPR.' < 90';
+            $havingClause = ' HAVING NOT '.$classifiesHealthy;
         }
 
         // ORDER BY axis driven by the TASK-040 ?domain_health_sort= param:

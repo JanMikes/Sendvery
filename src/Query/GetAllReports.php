@@ -15,13 +15,24 @@ final readonly class GetAllReports
      * SELECT projection and the optional HAVING filter share a single
      * source of truth. (Postgres can't reference SELECT aliases in HAVING,
      * so the expression is repeated rather than aliased.).
+     *
+     * Deliberately NULL-when-no-data, matching {@see GetDomainOverview::PASS_RATE_EXPR}:
+     * `NULLIF(SUM(rec.count), 0)` makes the divisor NULL when the report has no
+     * `dmarc_record` rows, and there is no `COALESCE(..., 0)` wrapper. A report
+     * covering a period with no traffic is legal under RFC 7489 and storable here
+     * — `ProcessDmarcReportHandler` persists the report before iterating records,
+     * with no non-empty guard — and a zero would put a red "every message failed"
+     * row in the list for a report that observed nothing.
+     *
+     * The band filters below inherit that honesty: `NULL >= 90` and `NULL <= 69.99`
+     * are both NULL, so an empty report joins no band. It has no failure to
+     * triage, so the "failing only" chip must not offer it as one.
+     *
+     * Do NOT reintroduce a zero fallback here.
      */
-    private const string PASS_RATE_EXPR = 'COALESCE(
-        SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
+    private const string PASS_RATE_EXPR = 'SUM(CASE WHEN rec.dkim_result = :pass OR rec.spf_result = :pass THEN rec.count ELSE 0 END)::float
         / NULLIF(SUM(rec.count), 0)
-        * 100,
-        0
-    )';
+        * 100';
 
     public function __construct(
         private Connection $database,
@@ -142,10 +153,17 @@ final readonly class GetAllReports
             $sql .= ' HAVING '.implode(' AND ', $havingClauses);
         }
 
-        $sql .= ' ORDER BY dr.date_range_end DESC
+        // `dr.id DESC` is a tiebreaker, not decoration. Reporters send one
+        // aggregate report per UTC day, so several rows sharing a
+        // `date_range_end` is the norm; ordering on that column alone leaves the
+        // order WITHIN a tie group unspecified, and PostgreSQL may return a
+        // different one per query. Page 2 could then repeat a row from page 1 and
+        // silently drop another. UUID v7 sorts by creation time, so DESC keeps the
+        // "newest first" story the date column starts.
+        $sql .= ' ORDER BY dr.date_range_end DESC, dr.id DESC
             LIMIT :limit OFFSET :offset';
 
-        /** @var list<array{report_id: string, domain_name: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int|string, pass_rate: float|string}> $data */
+        /** @var list<array{report_id: string, domain_name: string, reporter_org: string, date_range_begin: string, date_range_end: string, record_count: int|string, pass_rate: float|string|null}> $data */
         $data = $this->database->executeQuery($sql, $params, $types)->fetchAllAssociative();
 
         return array_map(ReportListResult::fromDatabaseRow(...), $data);

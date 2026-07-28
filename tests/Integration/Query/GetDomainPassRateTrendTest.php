@@ -110,10 +110,47 @@ final class GetDomainPassRateTrendTest extends IntegrationTestCase
         self::assertCount(2, $results);
         self::assertCount(10, $results[$domainA->id->toString()]);
         self::assertCount(10, $results[$domainB->id->toString()]);
-        // No reports → every bucket pass-rate floors at 0.0.
+        // A bucket in which no message was ever observed has NO pass rate. 0.0
+        // would claim every message in that window failed authentication, and a
+        // sparkline drawn from ten of them is a flat line along the bottom of the
+        // box — "100% failure for 30 days" for a domain nobody has reported on.
         foreach ($results[$domainA->id->toString()] as $bucket) {
-            self::assertSame(0.0, $bucket);
+            self::assertNull($bucket);
         }
+    }
+
+    public function testADomainWithNoReportsHasNothingToPlotRatherThanTenZeroes(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetDomainPassRateTrend::class);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Never Reported',
+            slug: 'never-reported-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'never-reported.example',
+            createdAt: new \DateTimeImmutable('-40 days'),
+        );
+        $em->persist($domain);
+        $em->flush();
+
+        $buckets = $query->forDomains(
+            domainIds: [$domain->id->toString()],
+            teamIds: [$team->id->toString()],
+        )[$domain->id->toString()];
+
+        self::assertSame(
+            [],
+            array_values(array_filter($buckets, static fn (?float $b): bool => null !== $b)),
+            'Nothing has been measured, so the sparkline must have no plottable point at all — the same "—" state the pass-rate figure beside it renders.',
+        );
     }
 
     public function testForDomainsReflectsRecentReportPassRate(): void
@@ -186,8 +223,79 @@ final class GetDomainPassRateTrendTest extends IntegrationTestCase
         // 10 buckets total, last bucket holds the seeded report — 7 pass / 10 = 70%.
         self::assertCount(10, $buckets);
         self::assertSame(70.0, $buckets[9]);
-        // Older buckets (no reports) remain at zero.
-        self::assertSame(0.0, $buckets[0]);
+        // Older buckets saw no mail, so they carry no rate — the line breaks
+        // there rather than plunging to the floor and climbing back out.
+        self::assertNull($buckets[0]);
+    }
+
+    public function testAQuietBucketBetweenTwoMeasuredOnesBreaksTheLineInsteadOfPlungingToZero(): void
+    {
+        $em = $this->getService(EntityManagerInterface::class);
+        $query = $this->getService(GetDomainPassRateTrend::class);
+
+        $team = new Team(
+            id: Uuid::uuid7(),
+            name: 'Quiet Bucket',
+            slug: 'quiet-bucket-'.Uuid::uuid7()->toString(),
+            createdAt: new \DateTimeImmutable(),
+        );
+        $em->persist($team);
+
+        $domain = new MonitoredDomain(
+            id: Uuid::uuid7(),
+            team: $team,
+            domain: 'quiet-bucket.example',
+            createdAt: new \DateTimeImmutable('-40 days'),
+        );
+        $em->persist($domain);
+
+        // Buckets are 3 days wide over a 30-day window: index 9 covers the last
+        // 3 days, index 7 covers days -9..-6. Leaving index 8 empty puts a
+        // genuine measurement on both sides of a genuinely unmeasured gap.
+        $this->seedFullyPassingReport($em, $domain, new \DateTimeImmutable('-8 days'));
+        $this->seedFullyPassingReport($em, $domain, new \DateTimeImmutable('-1 day'));
+        $em->flush();
+
+        $buckets = $query->forDomains(
+            domainIds: [$domain->id->toString()],
+            teamIds: [$team->id->toString()],
+        )[$domain->id->toString()];
+
+        self::assertSame(100.0, $buckets[7], 'The older window saw only passing mail.');
+        self::assertNull($buckets[8], 'No mail was observed in this window, so there is no rate for it.');
+        self::assertSame(100.0, $buckets[9], 'The recent window saw only passing mail.');
+    }
+
+    private function seedFullyPassingReport(EntityManagerInterface $em, MonitoredDomain $domain, \DateTimeImmutable $day): void
+    {
+        $report = new DmarcReport(
+            id: Uuid::uuid7(),
+            monitoredDomain: $domain,
+            reporterOrg: 'google.com',
+            reporterEmail: 'noreply@google.com',
+            externalReportId: 'ext-gap-'.Uuid::uuid7()->toString(),
+            dateRangeBegin: $day,
+            dateRangeEnd: $day,
+            policyDomain: $domain->domain,
+            policyAdkim: DmarcAlignment::Relaxed,
+            policyAspf: DmarcAlignment::Relaxed,
+            policyP: DmarcPolicy::None,
+            policySp: null,
+            policyPct: 100,
+            rawXml: '<feedback></feedback>',
+            processedAt: new \DateTimeImmutable(),
+        );
+        $em->persist($report);
+        $em->persist(new DmarcRecord(
+            id: Uuid::uuid7(),
+            dmarcReport: $report,
+            sourceIp: '1.2.3.4',
+            count: 10,
+            disposition: Disposition::None,
+            dkimResult: AuthResult::Pass,
+            spfResult: AuthResult::Pass,
+            headerFrom: $domain->domain,
+        ));
     }
 
     public function testForDomainsScopesToTeam(): void

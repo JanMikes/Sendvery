@@ -6,6 +6,7 @@ namespace App\Tests\Integration\Query;
 
 use App\Entity\DmarcRecord;
 use App\Entity\DmarcReport;
+use App\Entity\DnsCheckResult;
 use App\Entity\MonitoredDomain;
 use App\Entity\Team;
 use App\Query\GetDomainOverview;
@@ -14,6 +15,7 @@ use App\Value\AuthResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
+use App\Value\DnsCheckType;
 use App\Value\DomainHealthFilter;
 use Doctrine\ORM\EntityManagerInterface;
 use Ramsey\Uuid\Uuid;
@@ -176,6 +178,13 @@ final class GetDomainOverviewTest extends IntegrationTestCase
         );
         $em->persist($team);
 
+        // Both verified domains carry a full set of passing DNS checks. Without
+        // them the health classifier calls BOTH of them Attention (it requires all
+        // four protocols configured before it will say Healthy), so a fixture that
+        // omitted them made the "healthy" domain healthy only in the eyes of the
+        // looser SQL filter — the exact disagreement between the chip and the card
+        // badge that W3 removes. Here the pass rate is the only difference between
+        // the two, which is what these tests are actually about.
         $healthy = new MonitoredDomain(
             id: Uuid::uuid7(),
             team: $team,
@@ -184,6 +193,7 @@ final class GetDomainOverviewTest extends IntegrationTestCase
             dmarcVerifiedAt: new \DateTimeImmutable('-10 days'),
         );
         $em->persist($healthy);
+        $this->seedPassingDnsChecks($em, $healthy);
         $this->seedReport($em, $healthy, pass: 10, fail: 0);
 
         $attention = new MonitoredDomain(
@@ -194,6 +204,7 @@ final class GetDomainOverviewTest extends IntegrationTestCase
             dmarcVerifiedAt: new \DateTimeImmutable('-10 days'),
         );
         $em->persist($attention);
+        $this->seedPassingDnsChecks($em, $attention);
         $this->seedReport($em, $attention, pass: 3, fail: 7);
 
         $em->persist(new MonitoredDomain(
@@ -359,15 +370,47 @@ final class GetDomainOverviewTest extends IntegrationTestCase
         );
         $em->persist($team);
 
-        $em->persist(new MonitoredDomain(
+        // Correctly set up in every respect — verified DMARC and four passing DNS
+        // checks — and simply has no reports yet. That is the whole point of these
+        // two tests: the ONLY thing absent is the pass rate.
+        $domain = new MonitoredDomain(
             id: Uuid::uuid7(),
             team: $team,
             domain: 'awaiting-report.example',
             createdAt: new \DateTimeImmutable('-1 hour'),
             dmarcVerifiedAt: new \DateTimeImmutable('-30 minutes'),
-        ));
+        );
+        $em->persist($domain);
+        $this->seedPassingDnsChecks($em, $domain);
         $em->flush();
 
         return $teamId->toString();
+    }
+
+    /**
+     * The newest `dns_check_result` per protocol, all passing. `DomainHealthClassifier`
+     * requires all four before it will call a domain Healthy, and the `?status=`
+     * filter now transcribes that same rule, so a fixture that leaves them out is
+     * describing a domain that needs attention.
+     */
+    private function seedPassingDnsChecks(EntityManagerInterface $em, MonitoredDomain $domain): void
+    {
+        foreach ([DnsCheckType::Spf, DnsCheckType::Dkim, DnsCheckType::Dmarc, DnsCheckType::Mx] as $type) {
+            $check = new DnsCheckResult(
+                id: Uuid::uuid7(),
+                monitoredDomain: $domain,
+                type: $type,
+                checkedAt: new \DateTimeImmutable('-1 hour'),
+                rawRecord: 'record',
+                isValid: true,
+                issues: [],
+                details: [],
+                previousRawRecord: null,
+                hasChanged: false,
+                isFirstCheck: false,
+            );
+            $check->popEvents();
+            $em->persist($check);
+        }
     }
 }

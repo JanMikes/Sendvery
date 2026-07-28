@@ -260,25 +260,36 @@
     </div>
 </div>
 
-{# Readiness copy. The FIRST arm is the no-measurement arm on purpose: a null
-   passRate/daysOfData means "we have not measured your readiness yet", and every
-   arm below it would turn that absence into a claim — either a 0.0% alignment
-   figure that reads as total authentication failure, or a "you're at full
-   enforcement" reassurance that may be untrue. Pass rates render through the
-   shared `pass_rate_value` macro so this surface can never disagree with the
-   rest of the app about how an absent rate looks. #}
+{# Readiness copy. Arm order carries the meaning, and it is load-bearing twice:
+
+   1. TERMINAL FIRST. `already_at_full_enforcement` is stamped by the evaluator's
+      early return for a domain whose published managed policy is p=reject. That
+      is a fact about DNS, not a measurement, so it must be decided before any
+      arm that reasons about measurements. It used to sit last, behind the
+      no-measurement arm, which meant a customer who completed the whole ramp and
+      then had a quiet couple of months — null pass rate over the 60-day window —
+      was told their first DMARC reports had not arrived yet. Absence of recent
+      mail does not un-enforce a published policy.
+   2. NO-MEASUREMENT SECOND, before every arm that would turn an absence into a
+      claim — a 0.0% alignment figure that reads as total authentication failure,
+      or (crucially, and the reason the terminal arm cannot simply be `{% else %}`)
+      a "you're at full enforcement" reassurance for a domain that has no verdict
+      at all yet, whose `recommendedNextPolicy` is also null.
+
+   Pass rates render through the shared `pass_rate_value` macro so this surface
+   can never disagree with the rest of the app about how an absent rate looks. #}
 {% macro readinessHint(card) %}
     {%- import 'components/_severity_glyph.html.twig' as severity -%}
-    {%- if card.passRate is null or card.daysOfData is null -%}
+    {%- if 'already_at_full_enforcement' in card.blockingReasons -%}
+        You’re at full enforcement (reject). Sendvery keeps your policy hosted and monitored.
+    {%- elseif card.passRate is null or card.daysOfData is null -%}
         We haven’t measured your readiness yet. As soon as your first DMARC reports arrive we’ll start tracking alignment here — nothing for you to do.
     {%- elseif card.eligibleForNextTier and card.recommendedNextPolicy -%}
         {{ severity.pass_rate_value(card.passRate) }} of your real mail has passed DMARC for {{ card.daysOfData }} days straight, across {{ card.distinctSources }} known senders. You’re ready to move to {{ card.recommendedNextPolicy.value }}.
     {%- elseif 'thin_data' in card.blockingReasons -%}
         We’re still gathering data — we’ve seen {{ card.daysOfData }} days of reports. Auto-drive stays paused until your traffic is well understood.
-    {%- elseif card.recommendedNextPolicy -%}
-        Alignment is {{ severity.pass_rate_value(card.passRate) }} over {{ card.daysOfData }} days. We hold steady until it’s safe to tighten — we’ll let you know the moment you’re ready.
     {%- else -%}
-        You’re at full enforcement (reject). Sendvery keeps your policy hosted and monitored.
+        Alignment is {{ severity.pass_rate_value(card.passRate) }} over {{ card.daysOfData }} days. We hold steady until it’s safe to tighten — we’ll let you know the moment you’re ready.
     {%- endif -%}
 {% endmacro %}
 

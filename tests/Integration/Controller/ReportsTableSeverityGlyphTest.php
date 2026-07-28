@@ -204,15 +204,16 @@ final class ReportsTableSeverityGlyphTest extends WebTestCase
     }
 
     #[Test]
-    public function nullPassRateRendersWarningTone(): void
+    public function aReportWithNoRecordsIsTonedNeutralRatherThanFailing(): void
     {
-        // Edge case: a report row with zero records (no underlying dmarc_record
-        // rows at all). COALESCE(...0) in the query collapses null to 0, which
-        // falls into the error bucket — so this exercises the "no data" guard
-        // working as designed: zero-record rows look like failing rows, which
-        // is the conservative default ("data missing" should be a 'look at
-        // me' cue, not a green-tinted lie). The shared macro's null branch
-        // (renders warning) protects future callers that pass null through.
+        // A report row with zero records observed no mail. This test used to
+        // assert the opposite — `border-l-error`, justified in its own comment as
+        // "zero-record rows look like failing rows, which is the conservative
+        // default" — and it passed because the query coalesced the missing rate to
+        // 0.0, which lands in the error band. CLAUDE.md's rule is the reverse:
+        // absent state must never render as failure. Painting an empty report red
+        // sends the user hunting for an authentication problem that is not there,
+        // and every false alarm costs credibility with the next real one.
         $data = $this->bootClientWithDomain();
         $this->persistReportWithPassRate($data['em'], $data['domain'], 'zerorecs.com', 0, 0);
 
@@ -221,9 +222,9 @@ final class ReportsTableSeverityGlyphTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $body = (string) $data['client']->getResponse()->getContent();
         self::assertStringContainsString('zerorecs.com', $body);
-        // Zero-record rows collapse to 0% pass which hits the error branch.
-        // The guard against accidentally green-tinting a missing-data row.
-        self::assertStringContainsString('border-l-error', $body);
+        self::assertStringNotContainsString('border-l-error', $body, 'Nothing measured is not everything failed.');
+        self::assertStringNotContainsString('border-l-success', $body, 'Nor is it a clean bill of health — we simply have not measured.');
+        self::assertStringContainsString('border-l-base-300', $body);
     }
 
     #[Test]

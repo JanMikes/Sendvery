@@ -99,7 +99,15 @@
                         <td>{{ sender.hostname ?? '-' }}</td>
                         <td>{{ sender.organization ?? '-' }}</td>
                         <td>{{ sender.totalMessages|number_format(0, '.', ',') }}</td>
-                        <td class="{{ sender.passRate >= 90 ? 'pass' : 'fail' }}">{{ sender.passRate|number_format(1) }}%</td>
+                        {# Same rule as the Pass Rate row above: a host we have counted no
+                           messages from has no rate. An exported report is forwarded to
+                           people who cannot ask us what the number meant, so a fabricated
+                           failing grade is worse here than on screen, not better. #}
+                        {% if sender.passRate is null %}
+                            <td class="nodata">&mdash;</td>
+                        {% else %}
+                            <td class="{{ sender.passRate >= 90 ? 'pass' : 'fail' }}">{{ sender.passRate|number_format(1) }}%</td>
+                        {% endif %}
                         <td>{{ sender.reviewState.label }}</td>
                     </tr>
                 {% endfor %}
