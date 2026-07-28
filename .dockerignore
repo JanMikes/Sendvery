@@ -13,6 +13,23 @@ var/
 .env.local
 .env.local.php
 .env.*.local
+# .env.dev carries no secret (see the file), but it is dev-only configuration
+# that a production image has no use for, and excluding it means the image's
+# behaviour cannot depend on a dev-only file even if APP_ENV were wrong.
+.env.dev
+# .env.test is the one that matters: it ships a NON-EMPTY, publicly committed
+# SENDVERY_TEST_LOGIN_SECRET, and TestLoginController's environment allow-list
+# admits `test`. Symfony never loads this file under APP_ENV=prod, so shipping it
+# was not exploitable — but it left a single-mistake path (one wrong APP_ENV on
+# the prod image) to a working sign-in-as-any-user endpoint whose secret is in
+# the public repository. Excluding it costs nothing and removes that path.
+.env.test
+
+# Node modules — `npm install` runs inside the build. Copying the host's tree in
+# would make the image depend on whatever a developer happens to have installed
+# locally (28 MB here, 20 MB of it the browser-test devDependencies) and then
+# throw it away.
+node_modules/
 
 # IDE
 .idea/

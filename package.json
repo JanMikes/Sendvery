@@ -3,5 +3,18 @@
     "dependencies": {
         "daisyui": "^5.5.19",
         "tom-select": "^2.6.2"
+    },
+    "comment:devDependencies": "EXACT versions, no carets, because package-lock.json is gitignored and CI therefore re-resolves on every run. @playwright/test fixes the Chromium build, and @axe-core/playwright + axe-core fix the rule set: an axe minor ADDS rules, and a new rule reads as a NEW violation against tests/Browser/axe-baseline.json, i.e. red CI for a dependency bump nobody made.",
+    "devDependencies": {
+        "@axe-core/playwright": "4.12.1",
+        "@playwright/test": "1.60.0"
+    },
+    "scripts": {
+        "test:browser": "playwright test"
+    },
+    "comment:overrides": "playwright-core: @axe-core/playwright pulls its own copy, pinning a DIFFERENT Chromium revision than @playwright/test does; two copies means `playwright install` and the runner can disagree about which browser build is required. axe-core: @axe-core/playwright depends on it as ~4.12.1, so a patch bump could still change rule behaviour under a pinned wrapper.",
+    "overrides": {
+        "playwright-core": "1.60.0",
+        "axe-core": "4.12.1"
     }
 }

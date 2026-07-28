@@ -1,0 +1,80 @@
+{
+    "alerts-list": {
+        "aria-prohibited-attr": {
+            "impact": "serious",
+            "nodes": 5,
+            "help": "Elements must only use permitted ARIA attributes",
+            "sample": [
+                ".bg-error\\/5.border-l-error.hover\\:shadow-md:nth-child(1) > .min-w-0.flex-1 > .gap-2.flex.items-center > .bg-error.w-2.h-2",
+                ".bg-error\\/5.border-l-error.hover\\:shadow-md:nth-child(2) > .min-w-0.flex-1 > .gap-2.flex.items-center > .bg-error.w-2.h-2",
+                ".bg-warning\\/5.border-l-warning.hover\\:shadow-md:nth-child(3) > .min-w-0.flex-1 > .gap-2.flex.items-center > .bg-warning.w-2.h-2"
+            ]
+        },
+        "color-contrast": {
+            "impact": "serious",
+            "nodes": 11,
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "sample": [
+                ".border-b.border-base-300.p-4 > .mt-0\\.5",
+                ".mb-1\\.5",
+                ".px-1 > .text-\\[10px\\]"
+            ]
+        }
+    },
+    "dashboard-overview": {
+        "color-contrast": {
+            "impact": "serious",
+            "nodes": 33,
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "sample": [
+                ".border-b.border-base-300.p-4 > .mt-0\\.5",
+                ".mb-1\\.5",
+                ".px-1 > .text-\\[10px\\]"
+            ]
+        }
+    },
+    "domain-detail": {
+        "color-contrast": {
+            "impact": "serious",
+            "nodes": 46,
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "sample": [
+                ".border-b.border-base-300.p-4 > .mt-0\\.5",
+                ".mb-1\\.5",
+                ".px-1 > .text-\\[10px\\]"
+            ]
+        },
+        "link-in-text-block": {
+            "impact": "serious",
+            "nodes": 1,
+            "help": "Links must be distinguishable without relying on color",
+            "sample": [
+                ".text-primary.link-hover.link"
+            ]
+        }
+    },
+    "domains-list": {
+        "color-contrast": {
+            "impact": "serious",
+            "nodes": 14,
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "sample": [
+                ".mt-0\\.5",
+                ".mb-1\\.5",
+                ".px-1 > p:nth-child(2)"
+            ]
+        }
+    },
+    "reports-list": {
+        "color-contrast": {
+            "impact": "serious",
+            "nodes": 29,
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "sample": [
+                ".mt-0\\.5",
+                ".mb-1\\.5",
+                ".px-1 > p:nth-child(2)"
+            ]
+        }
+    }
+}

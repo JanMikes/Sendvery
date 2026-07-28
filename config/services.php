@@ -92,6 +92,15 @@ return App::config([
                 '$stripeWebhookSecret' => '%env(STRIPE_WEBHOOK_SECRET)%',
             ],
         ],
+        // The browser suite's login bypass. `.env` leaves this EMPTY, which is
+        // what makes the endpoint inert everywhere it has not been deliberately
+        // switched on — see App\Controller\TestLoginController for the other two
+        // gates.
+        'App\Controller\TestLoginController' => [
+            'arguments' => [
+                '$testLoginSecret' => '%env(SENDVERY_TEST_LOGIN_SECRET)%',
+            ],
+        ],
         'App\Services\Sentry\SentryTracesSampler' => [
             'arguments' => [
                 '$profilingSecret' => '%env(SENTRY_PROFILING_SECRET)%',
