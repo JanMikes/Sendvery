@@ -31,6 +31,15 @@
                 {% endif %}
 
                 <form method="post" action="{{ path('auth_login') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('login_form') }}">
+                    <input type="hidden" name="renderedAt" value="{{ renderedAt }}">
+
+                    {# Honeypot — invisible to humans and assistive tech, irresistible to form-filling bots. #}
+                    <div style="display:none" aria-hidden="true">
+                        <label for="login-website">Website (leave empty)</label>
+                        <input type="text" id="login-website" name="website" tabindex="-1" autocomplete="off" value="">
+                    </div>
+
                     <div class="form-control mb-4">
                         <label class="label" for="email">
                             <span class="label-text font-medium">Email address</span>

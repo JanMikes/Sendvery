@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Message\InviteBetaUser;
 use App\Services\IdentityProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -18,6 +19,8 @@ final class InviteBetaUserController extends AbstractController
     public function __construct(
         private readonly MessageBusInterface $messageBus,
         private readonly IdentityProvider $identityProvider,
+        #[Autowire(env: 'SENDVERY_ADMIN_EMAIL')]
+        private readonly string $adminEmail,
     ) {
     }
 
@@ -27,6 +30,15 @@ final class InviteBetaUserController extends AbstractController
         $this->denyAccessUnlessGranted('ROLE_USER');
         $user = $this->getUser();
         assert($user instanceof User);
+
+        // ROLE_USER alone would let ANY signed-in account — including the
+        // gateway-clicked bot accounts the July 2026 abuse campaign created —
+        // send Sendvery-branded invitation emails to arbitrary addresses.
+        // There is no role system yet; the founder's address (already the
+        // admin identity for ownership-inquiry notifications) is the gate.
+        if ($user->email !== $this->adminEmail) {
+            throw $this->createAccessDeniedException('Beta invitations are restricted to the admin.');
+        }
 
         if ($request->isMethod('POST')) {
             $emailsRaw = $request->request->getString('emails');

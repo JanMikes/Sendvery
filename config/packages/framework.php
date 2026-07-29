@@ -10,6 +10,14 @@ return App::config([
         'secret' => '%env(APP_SECRET)%',
         'http_method_override' => false,
         'handle_all_throwables' => true,
+        // The app only ever receives traffic from a reverse proxy on a
+        // private network (Traefik in prod, Docker's bridge in dev, the PHP
+        // built-in server in CI), so X-Forwarded-For from private peers is
+        // trustworthy — Traefik strips forwarded headers arriving from
+        // untrusted clients before adding its own. Without this every
+        // getClientIp() returns the proxy's address, which would make the
+        // login rate-limiter throttle all humans as one shared "client".
+        'trusted_proxies' => 'private_ranges',
         'php_errors' => [
             'log' => true,
         ],
@@ -49,7 +57,20 @@ return App::config([
         // ("Re-check available in 2m"); token_bucket always reports a whole
         // interval no matter how much of it has already elapsed.
         // Autowires as RateLimiterFactory $domainRecheckLimiter.
+        // Per-IP cap for POST /login, the endpoint the July 2026 signup-abuse
+        // campaign fed with victim emails. 10/hour is roomy for humans — a
+        // whole office behind one NAT signing in the same hour fits — while
+        // an address-list walker burns through it in minutes. Keyed on client
+        // IP (hence trusted_proxies above). The per-EMAIL cap of 5/hour lives
+        // in RequestMagicLinkHandler and protects the opposite axis: one
+        // victim mailbox targeted from many IPs.
+        // Autowires as RateLimiterFactory $loginFormLimiter.
         'rate_limiter' => [
+            'login_form' => [
+                'policy' => 'token_bucket',
+                'limit' => 10,
+                'rate' => ['interval' => '1 hour', 'amount' => 10],
+            ],
             'contact_form' => [
                 'policy' => 'token_bucket',
                 'limit' => 5,

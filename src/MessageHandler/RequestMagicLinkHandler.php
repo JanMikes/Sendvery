@@ -8,6 +8,7 @@ use App\Entity\MagicLinkToken;
 use App\Message\RequestMagicLink;
 use App\Repository\MagicLinkTokenRepository;
 use App\Repository\UserRepository;
+use App\Services\MagicLinkAbuseMonitor;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Mailer\MailerInterface;
@@ -30,6 +31,7 @@ final readonly class RequestMagicLinkHandler
         private UrlGeneratorInterface $urlGenerator,
         private ClockInterface $clock,
         private Environment $twig,
+        private MagicLinkAbuseMonitor $abuseMonitor,
     ) {
     }
 
@@ -47,6 +49,13 @@ final readonly class RequestMagicLinkHandler
             return;
         }
 
+        $this->abuseMonitor->recordRequest(
+            $message->email,
+            $message->requestedIp,
+            $message->requestedUserAgent,
+            $now,
+        );
+
         $user = $this->userRepository->findByEmail($message->email);
         $token = bin2hex(random_bytes(32));
         $expiresAt = $now->modify('+'.self::TOKEN_EXPIRY_MINUTES.' minutes');
@@ -58,6 +67,8 @@ final readonly class RequestMagicLinkHandler
             expiresAt: $expiresAt,
             createdAt: $now,
             user: $user,
+            requestedIp: $message->requestedIp,
+            requestedUserAgent: $message->requestedUserAgent,
         );
 
         $this->entityManager->persist($magicLinkToken);

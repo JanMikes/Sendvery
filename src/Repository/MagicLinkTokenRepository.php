@@ -32,4 +32,25 @@ final readonly class MagicLinkTokenRepository
             ->getQuery()
             ->getSingleScalarResult();
     }
+
+    public function countCreatedSince(\DateTimeImmutable $since): int
+    {
+        return (int) $this->entityManager->getRepository(MagicLinkToken::class)
+            ->createQueryBuilder('t')
+            ->select('COUNT(t.id)')
+            ->where('t.createdAt >= :since')
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function deleteCreatedBefore(\DateTimeImmutable $cutoff): int
+    {
+        return (int) $this->entityManager->createQueryBuilder()
+            ->delete(MagicLinkToken::class, 't')
+            ->where('t.createdAt < :cutoff')
+            ->setParameter('cutoff', $cutoff)
+            ->getQuery()
+            ->execute();
+    }
 }

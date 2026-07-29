@@ -38,6 +38,28 @@ final class RequestMagicLinkHandlerTest extends IntegrationTestCase
         self::assertSame(64, strlen($token->token));
     }
 
+    public function testRecordsRequestOriginOnToken(): void
+    {
+        $handler = self::getContainer()->get(RequestMagicLinkHandler::class);
+        assert($handler instanceof RequestMagicLinkHandler);
+
+        $tokenId = Uuid::uuid7();
+
+        $handler(new RequestMagicLink(
+            tokenId: $tokenId,
+            email: 'forensics-'.$tokenId->toString().'@example.com',
+            requestedIp: '203.0.113.7',
+            requestedUserAgent: 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0)',
+        ));
+
+        $em = $this->getService(EntityManagerInterface::class);
+        $token = $em->find(MagicLinkToken::class, $tokenId);
+
+        self::assertNotNull($token);
+        self::assertSame('203.0.113.7', $token->requestedIp, 'The token must keep the origin IP — during the July 2026 abuse campaign the proxy access logs were the only IP source and they rotate away.');
+        self::assertSame('Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0)', $token->requestedUserAgent, 'The token must keep the User-Agent — a rotating pool of decade-old UAs is the campaign fingerprint.');
+    }
+
     public function testLinksTokenToExistingUser(): void
     {
         $em = $this->getService(EntityManagerInterface::class);

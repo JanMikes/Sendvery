@@ -43,6 +43,16 @@ return App::config([
                 ],
             ],
             'routing' => [
+                // The magic-link email used to be sent synchronously inside
+                // POST /login, so every request held a FrankenPHP worker for
+                // the length of an SMTP transaction — which handed the July
+                // 2026 signup-abuse campaign a cheap DoS lever on top of the
+                // spam one. Async also means an SMTP blip retries with
+                // backoff instead of surfacing a 500 to the sign-in form.
+                // (SendEmailMessage itself stays sync by design — see the
+                // central-inbox notes — so the send happens inside this
+                // handler, in the worker.)
+                \App\Message\RequestMagicLink::class => 'async',
                 // Decouple the Anthropic call for anomaly insights from report
                 // ingestion. The prod `worker` container already consumes `async`
                 // (Doctrine transport); a slow/failing API call can't roll back

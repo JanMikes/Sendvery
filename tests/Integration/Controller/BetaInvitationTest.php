@@ -43,6 +43,18 @@ final class BetaInvitationTest extends WebTestCase
     }
 
     #[Test]
+    public function nonAdminSignedInUserCannotSendBetaInvitations(): void
+    {
+        $client = $this->createAuthenticatedClient(email: 'regular-'.Uuid::uuid7()->toString().'@example.com');
+
+        $client->request('POST', '/app/admin/invite', [
+            'emails' => 'victim@example.com',
+        ]);
+
+        self::assertResponseStatusCodeSame(403, 'Any signed-in account could otherwise send Sendvery-branded invitation emails to arbitrary addresses — including the bot accounts a signup-abuse campaign creates. The invite surface belongs to the admin alone.');
+    }
+
+    #[Test]
     public function inviteFormRejectsInvalidEmails(): void
     {
         $client = $this->createAuthenticatedClient();
@@ -139,7 +151,7 @@ final class BetaInvitationTest extends WebTestCase
         self::assertSelectorTextContains('body', 'invalid');
     }
 
-    protected function createAuthenticatedClient(): \Symfony\Bundle\FrameworkBundle\KernelBrowser
+    protected function createAuthenticatedClient(?string $email = null): \Symfony\Bundle\FrameworkBundle\KernelBrowser
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
@@ -148,7 +160,11 @@ final class BetaInvitationTest extends WebTestCase
         $userId = Uuid::uuid7();
         $user = new User(
             id: $userId,
-            email: 'invite-admin-'.$userId->toString().'@example.com',
+            // Default must match SENDVERY_ADMIN_EMAIL in .env.test — the
+            // invite surface is admin-only (one signed-in bot account must
+            // not be able to send Sendvery-branded mail to arbitrary
+            // addresses).
+            email: $email ?? 'admin@sendvery.test',
             createdAt: new \DateTimeImmutable(),
             onboardingCompletedAt: new \DateTimeImmutable(),
         );

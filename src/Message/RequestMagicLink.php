@@ -11,6 +11,8 @@ final readonly class RequestMagicLink
     public function __construct(
         public UuidInterface $tokenId,
         public string $email,
+        public ?string $requestedIp = null,
+        public ?string $requestedUserAgent = null,
     ) {
     }
 }
