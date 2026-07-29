@@ -102,12 +102,12 @@ final class AlertOnBlacklistingTest extends IntegrationTestCase
     #[Test]
     public function aListingOnlyOnAnAdvisoryListIsAWarningNotACritical(): void
     {
-        // SORBS and UCEPROTECT are not queried by mailbox providers at SMTP
+        // PSBL and UCEPROTECT are not queried by mailbox providers at SMTP
         // time. Paging someone at the same urgency as a Spamhaus listing is
         // how an alert channel stops being believed.
         [, $domain] = $this->createTeamAndDomain();
 
-        $alert = $this->raise($domain, '203.0.113.6', ['dnsbl.sorbs.net', 'dnsbl-1.uceprotect.net']);
+        $alert = $this->raise($domain, '203.0.113.6', ['psbl.surriel.com', 'dnsbl-1.uceprotect.net']);
 
         self::assertNotNull($alert);
         self::assertSame(AlertSeverity::Warning, $alert->severity);

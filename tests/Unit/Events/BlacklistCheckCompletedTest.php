@@ -20,12 +20,12 @@ final class BlacklistCheckCompletedTest extends TestCase
             domainId: $domainId,
             ipAddress: '1.2.3.4',
             isListed: true,
-            listedOn: ['zen.spamhaus.org', 'dnsbl.sorbs.net'],
+            listedOn: ['zen.spamhaus.org', 'psbl.surriel.com'],
         );
 
         self::assertSame($domainId, $event->domainId);
         self::assertSame('1.2.3.4', $event->ipAddress);
         self::assertTrue($event->isListed);
-        self::assertSame(['zen.spamhaus.org', 'dnsbl.sorbs.net'], $event->listedOn);
+        self::assertSame(['zen.spamhaus.org', 'psbl.surriel.com'], $event->listedOn);
     }
 }

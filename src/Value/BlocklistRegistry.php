@@ -20,7 +20,7 @@ namespace App\Value;
  */
 final readonly class BlocklistRegistry
 {
-    /** @var array<string, array{name: string, operator: string, blocksDelivery: bool, delistUrl: string}> */
+    /** @var array<string, array{name: string, operator: string, blocksDelivery: bool, delistUrl: string|null}> */
     private const array LISTS = [
         'zen.spamhaus.org' => [
             'name' => 'Spamhaus ZEN',
@@ -52,11 +52,14 @@ final readonly class BlocklistRegistry
             'blocksDelivery' => false,
             'delistUrl' => 'https://psbl.org/remove',
         ],
+        // Retained for historical rows only — SORBS shut down in June 2024 and
+        // BlacklistChecker no longer queries it. Without this entry, a stored
+        // result from before the removal would render as a bare hostname.
         'dnsbl.sorbs.net' => [
-            'name' => 'SORBS',
+            'name' => 'SORBS (discontinued)',
             'operator' => 'SORBS',
             'blocksDelivery' => false,
-            'delistUrl' => 'https://www.sorbs.net/log/',
+            'delistUrl' => null,
         ],
         'dnsbl-1.uceprotect.net' => [
             'name' => 'UCEPROTECT Level 1',

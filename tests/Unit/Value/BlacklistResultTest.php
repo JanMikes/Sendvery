@@ -18,7 +18,7 @@ final class BlacklistResultTest extends TestCase
         $result = new BlacklistResult('1.2.3.4', [
             new BlacklistListing('zen.spamhaus.org', BlacklistListingStatus::Listed, 'Spam source', '127.0.0.2'),
             new BlacklistListing('b.barracudacentral.org', BlacklistListingStatus::NotListed),
-            new BlacklistListing('dnsbl.sorbs.net', BlacklistListingStatus::Listed, null, '127.0.0.5'),
+            new BlacklistListing('psbl.surriel.com', BlacklistListingStatus::Listed, null, '127.0.0.5'),
         ]);
 
         self::assertSame('1.2.3.4', $result->ipAddress);

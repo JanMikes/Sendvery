@@ -98,14 +98,14 @@ Second paragraph.'): UuidInterface
     {
         $this->openAlert([
             'ip_address' => '203.0.113.5',
-            'listed_on' => ['zen.spamhaus.org', 'dnsbl.sorbs.net'],
+            'listed_on' => ['zen.spamhaus.org', 'psbl.surriel.com'],
             'blocks_delivery' => true,
             'delisting_urls' => ['https://check.spamhaus.org/'],
         ]);
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('body', 'Spamhaus ZEN');
-        self::assertSelectorTextContains('body', 'SORBS');
+        self::assertSelectorTextContains('body', 'Passive Spam Block List');
         self::assertSelectorExists('a[href="https://check.spamhaus.org/"]');
     }
 
@@ -114,7 +114,7 @@ Second paragraph.'): UuidInterface
     {
         $this->openAlert([
             'ip_address' => '203.0.113.5',
-            'listed_on' => ['zen.spamhaus.org', 'dnsbl.sorbs.net'],
+            'listed_on' => ['zen.spamhaus.org', 'psbl.surriel.com'],
             'blocks_delivery' => true,
         ]);
 

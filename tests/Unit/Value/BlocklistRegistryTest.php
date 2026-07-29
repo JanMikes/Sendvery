@@ -40,8 +40,23 @@ final class BlocklistRegistryTest extends TestCase
     #[Test]
     public function advisoryListsAreNotMarkedAsBlockingDelivery(): void
     {
-        self::assertFalse($this->registry->blocksDelivery('dnsbl.sorbs.net'));
+        self::assertFalse($this->registry->blocksDelivery('psbl.surriel.com'));
         self::assertFalse($this->registry->blocksDelivery('dnsbl-1.uceprotect.net'));
+    }
+
+    #[Test]
+    public function aDiscontinuedListIsStillNameableForHistoricalRowsButIsNoLongerQueried(): void
+    {
+        // SORBS shut down in June 2024 — the zone has no NS and no SOA, so it
+        // could only ever answer NXDOMAIN, which reads as "not listed" and
+        // silently padded every verdict. It is no longer queried, but stored
+        // results that predate the removal must still render with a name.
+        self::assertNotContains('dnsbl.sorbs.net', (new BlacklistChecker())->getDnsblList());
+        self::assertSame('SORBS (discontinued)', $this->registry->name('dnsbl.sorbs.net'));
+        self::assertNull(
+            $this->registry->delistUrl('dnsbl.sorbs.net'),
+            'There is nowhere to delist from a list that no longer exists.',
+        );
     }
 
     #[Test]
@@ -55,8 +70,8 @@ final class BlocklistRegistryTest extends TestCase
     #[Test]
     public function anyBlocksDeliveryIsTrueWhenAtLeastOneListGatesDelivery(): void
     {
-        self::assertTrue($this->registry->anyBlocksDelivery(['dnsbl.sorbs.net', 'zen.spamhaus.org']));
-        self::assertFalse($this->registry->anyBlocksDelivery(['dnsbl.sorbs.net', 'dnsbl.dronebl.org']));
+        self::assertTrue($this->registry->anyBlocksDelivery(['psbl.surriel.com', 'zen.spamhaus.org']));
+        self::assertFalse($this->registry->anyBlocksDelivery(['psbl.surriel.com', 'dnsbl.dronebl.org']));
         self::assertFalse($this->registry->anyBlocksDelivery([]));
     }
 
@@ -69,8 +84,8 @@ final class BlocklistRegistryTest extends TestCase
             $this->registry->describeAll(['zen.spamhaus.org', 'cbl.abuseat.org']),
         );
         self::assertSame(
-            'Spamhaus ZEN, Spamhaus CBL/XBL and SORBS',
-            $this->registry->describeAll(['zen.spamhaus.org', 'cbl.abuseat.org', 'dnsbl.sorbs.net']),
+            'Spamhaus ZEN, Spamhaus CBL/XBL and SpamCop Blocking List',
+            $this->registry->describeAll(['zen.spamhaus.org', 'cbl.abuseat.org', 'bl.spamcop.net']),
         );
     }
 }

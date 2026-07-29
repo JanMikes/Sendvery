@@ -123,7 +123,7 @@ final class BlacklistCheckerTest extends TestCase
 
         self::assertFalse($result->isListed(), 'Two refused queries must not produce a blacklist alert.');
         self::assertSame(2, $result->unavailableCount());
-        self::assertSame(6, $result->answeredCount());
+        self::assertSame(5, $result->answeredCount());
         self::assertSame([], $result->listedOn());
     }
 
@@ -147,7 +147,7 @@ final class BlacklistCheckerTest extends TestCase
         // would otherwise make every IP look listed on every list.
         self::assertSame(
             BlacklistListingStatus::CheckFailed,
-            $this->verdictFor('dnsbl.sorbs.net', '93.184.216.34'),
+            $this->verdictFor('psbl.surriel.com', '93.184.216.34'),
         );
     }
 

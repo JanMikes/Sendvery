@@ -38,11 +38,23 @@ use App\Value\BlacklistResult;
  */
 final readonly class BlacklistChecker
 {
-    /** @var array<string> */
+    /**
+     * `dnsbl.sorbs.net` was removed on 2026-07-29: SORBS shut down in June 2024
+     * and the zone is gone entirely — no NS, no SOA, not even a delegation for
+     * `sorbs.net`. A dead zone can only ever answer NXDOMAIN, which this class
+     * correctly reads as "not listed", so it silently inflated every verdict:
+     * the UI said "clean on 8 of 8 lists" when one of the eight could not have
+     * answered under any circumstances. Claiming coverage we do not have is the
+     * same defect as a false all-clear, just quieter.
+     *
+     * It stays in {@see BlocklistRegistry} so historical rows that recorded it
+     * still render with a name rather than a bare hostname.
+     *
+     * @var array<string>
+     */
     private const array DNSBLS = [
         'zen.spamhaus.org',
         'b.barracudacentral.org',
-        'dnsbl.sorbs.net',
         'bl.spamcop.net',
         'cbl.abuseat.org',
         'dnsbl-1.uceprotect.net',
