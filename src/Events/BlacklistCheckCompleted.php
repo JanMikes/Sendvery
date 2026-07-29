@@ -9,7 +9,8 @@ use Ramsey\Uuid\UuidInterface;
 final readonly class BlacklistCheckCompleted
 {
     /**
-     * @param array<string> $listedOn
+     * @param list<string> $listedOn DNSBL hostnames that returned a genuine
+     *                               listing code — never one that refused the query
      */
     public function __construct(
         public UuidInterface $domainId,

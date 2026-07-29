@@ -46,6 +46,7 @@ final readonly class SendAlertEmailNotification
             'title' => $event->title,
             'severity' => $event->severity->value,
             'domainName' => $event->domainName,
+            'message' => $event->message,
             'alertUrl' => $alertUrl,
         ]);
 
@@ -60,7 +61,7 @@ final readonly class SendAlertEmailNotification
                 ->text(sprintf(
                     "%s\n\n%s\n\nView alert: %s\n\n— Sendvery",
                     $subject,
-                    $event->title,
+                    '' !== $event->message ? $event->message : $event->title,
                     $alertUrl,
                 ));
 

@@ -17,6 +17,14 @@ final readonly class AlertCreated
         public AlertSeverity $severity,
         public string $title,
         public ?string $domainName,
+        /**
+         * The alert body. Carried on the event because the notification email
+         * rendered the title and nothing else — a red "CRITICAL ALERT" headline
+         * over a bare IP address, with the explanation sitting in the database
+         * one click away. Users reported panicking at it, which is what an
+         * alarm that withholds its own reason earns.
+         */
+        public string $message = '',
     ) {
     }
 }

@@ -47,4 +47,29 @@ final readonly class KnownSenderRepository
 
         return $result instanceof KnownSender ? $result : null;
     }
+
+    /**
+     * The sender record behind a sending IP, so an alert about that IP can say
+     * what it actually is.
+     *
+     * A blacklist alert naming a bare address makes the reader guess whether it
+     * is their own mail server or their ESP's shared relay — which is the whole
+     * difference between "go and delist it" and "you cannot delist this and
+     * probably should not try".
+     */
+    public function findByDomainAndIp(UuidInterface $domainId, string $sourceIp): ?KnownSender
+    {
+        $result = $this->entityManager->createQueryBuilder()
+            ->select('ks')
+            ->from(KnownSender::class, 'ks')
+            ->where('ks.monitoredDomain = :domainId')
+            ->andWhere('ks.sourceIp = :sourceIp')
+            ->setParameter('domainId', $domainId->toString())
+            ->setParameter('sourceIp', $sourceIp)
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $result instanceof KnownSender ? $result : null;
+    }
 }

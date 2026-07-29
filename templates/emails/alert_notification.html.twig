@@ -38,6 +38,16 @@
         {{ ui.muted('Domain: <strong style="color:#0f172a;font-family:\'JetBrains Mono\',ui-monospace,Menlo,Consolas,monospace;">' ~ domainName|e ~ '</strong>') }}
     {% endif %}
 
+    {# The body, not just the headline. This email used to be a red banner over
+       a bare title with the explanation one click away behind a login — which
+       reads as "something is badly wrong and we won't say what". Each blank-line
+       separated paragraph of the alert message becomes its own <p>. #}
+    {% for paragraph in (message|default('')|split('\n\n')) %}
+        {% if paragraph|trim is not empty %}
+            {{ ui.paragraph(paragraph|trim|e|nl2br) }}
+        {% endif %}
+    {% endfor %}
+
     {{ ui.button('View alert details', alertUrl, accent) }}
 
     {{ ui.callout(calloutVariantMap[severity] ?? 'info', 'You’re receiving this because alerts for this team are enabled. You can change notification preferences in your dashboard settings.') }}

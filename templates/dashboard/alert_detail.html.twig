@@ -144,12 +144,58 @@
             </div>
         {% endif %}
 
-        {# Message #}
+        {# Message. Alert bodies are multi-paragraph (blank-line separated) so
+           the reader gets "what this is", "what it means" and "what to do" as
+           separate beats rather than one dense block. #}
         <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
-            <div class="card-body">
-                <p class="text-sm leading-relaxed">{{ alert.message }}</p>
+            <div class="card-body gap-3">
+                {% for paragraph in alert.message|split('\n\n') %}
+                    {% if paragraph|trim is not empty %}
+                        <p class="text-sm leading-relaxed">{{ paragraph|trim }}</p>
+                    {% endif %}
+                {% endfor %}
             </div>
         </div>
+
+        {# Blocklist listings get a purpose-built panel: the generic Details
+           table below renders `listed_on` as bare hostname badges, which is
+           what left the reader unable to tell an advisory aggregator from the
+           list their mail provider actually queries. #}
+        {% if alert.type == 'ip_blacklisted' and alert.data.listed_on is defined %}
+            <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
+                <div class="card-body">
+                    <h3 class="text-sm font-semibold mb-3">Where it&rsquo;s listed</h3>
+                    <div class="space-y-2">
+                        {% for dnsbl in alert.data.listed_on %}
+                            <div class="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg bg-base-200/50">
+                                <div class="min-w-0">
+                                    <span class="font-medium text-sm">{{ blocklist_name(dnsbl) }}</span>
+                                    <code class="text-xs text-base-content/50 ml-2">{{ dnsbl }}</code>
+                                    <p class="text-xs mt-1 {{ blocklist_blocks_delivery(dnsbl) ? 'text-error' : 'text-base-content/60' }}">
+                                        {% if blocklist_blocks_delivery(dnsbl) %}
+                                            Queried by mailbox providers when accepting mail — this one can affect delivery.
+                                        {% else %}
+                                            Advisory list — most mailbox providers don&rsquo;t consult it when accepting mail.
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                {% if blocklist_delist_url(dnsbl) %}
+                                    <a href="{{ blocklist_delist_url(dnsbl) }}" target="_blank" rel="noopener noreferrer"
+                                       class="btn btn-xs btn-outline shrink-0">
+                                        Check &amp; delist
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    </a>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <p class="text-xs text-base-content/50 mt-3">
+                        Blocklists publish their own verdict — if one of these pages says the address is clean,
+                        the listing was lifted after we checked, and this alert will resolve on the next run.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
 
         {# AI explanation — pre-computed for failure-spike anomalies. #}
         {% if aiAnomaly is not null %}
@@ -166,15 +212,19 @@
             </div>
         {% endif %}
 
-        {# Context data #}
-        {% if alert.data is not empty %}
+        {# Context data. Keys already rendered above as prose or as the
+           blocklist panel are skipped — repeating them as a raw dump is noise
+           that pushes the useful rows off the screen. #}
+        {% set renderedElsewhere = ['listed_on', 'delisting_urls', 'blocks_delivery'] %}
+        {% set extraDetails = alert.data|filter((value, key) => key not in renderedElsewhere and value is not null) %}
+        {% if extraDetails is not empty %}
             <div class="card bg-base-100 border border-base-200 shadow-sm mb-6">
                 <div class="card-body">
                     <h3 class="text-sm font-semibold mb-3">Details</h3>
                     <div class="overflow-x-auto">
                         <table class="table table-sm">
                             <tbody>
-                                {% for key, value in alert.data %}
+                                {% for key, value in extraDetails %}
                                     <tr>
                                         <td class="font-medium text-base-content/70 w-48">{{ key|replace({'_': ' '})|capitalize }}</td>
                                         <td>

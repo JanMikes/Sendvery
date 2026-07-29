@@ -109,6 +109,7 @@ final class Alert implements EntityWithEvents
             severity: $this->severity,
             title: $this->title,
             domainName: $this->monitoredDomain?->domain,
+            message: $this->message,
         ));
     }
 
