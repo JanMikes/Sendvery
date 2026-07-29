@@ -175,6 +175,87 @@ final class BlacklistCheckerTest extends TestCase
     }
 
     #[Test]
+    public function theBlocklistsOwnExplanationIsPreferredOverOurGenericOne(): void
+    {
+        // Spamhaus says exactly what is wrong and where to fix it; that is far
+        // more useful to the operator than us paraphrasing a return code.
+        $hosts = [];
+        foreach ($this->checker->getDnsblList() as $dnsbl) {
+            $hosts['4.3.2.1.'.$dnsbl] = [];
+        }
+        $hosts['4.3.2.1.zen.spamhaus.org'] = [
+            ['type' => 'A', 'ip' => '127.255.255.254'],
+            ['type' => 'TXT', 'txt' => 'Error: open resolver; https://check.spamhaus.org/returnc/pub/'],
+        ];
+        DnsMock::withMockedHosts($hosts);
+
+        self::assertSame(
+            'Error: open resolver; https://check.spamhaus.org/returnc/pub/',
+            $this->checker->check('1.2.3.4')->unavailable()[0]->reason,
+        );
+    }
+
+    #[Test]
+    public function aListingCarriesTheBlocklistsOwnReasonWhenItPublishesOne(): void
+    {
+        $hosts = [];
+        foreach ($this->checker->getDnsblList() as $dnsbl) {
+            $hosts['4.3.2.1.'.$dnsbl] = [];
+        }
+        $hosts['4.3.2.1.bl.spamcop.net'] = [
+            ['type' => 'A', 'ip' => '127.0.0.2'],
+            ['type' => 'TXT', 'txt' => 'Blocked - see https://www.spamcop.net/bl.shtml?1.2.3.4'],
+        ];
+        DnsMock::withMockedHosts($hosts);
+
+        $listing = $this->checker->check('1.2.3.4')->listedOn()[0];
+
+        self::assertSame('Blocked - see https://www.spamcop.net/bl.shtml?1.2.3.4', $listing->reason);
+    }
+
+    #[Test]
+    public function anEmptyTxtRecordDoesNotBecomeAnEmptyReason(): void
+    {
+        // An empty string reads in the UI as "there is a reason and it is
+        // blank". Absent is the honest representation.
+        $hosts = [];
+        foreach ($this->checker->getDnsblList() as $dnsbl) {
+            $hosts['4.3.2.1.'.$dnsbl] = [];
+        }
+        $hosts['4.3.2.1.bl.spamcop.net'] = [
+            ['type' => 'A', 'ip' => '127.0.0.2'],
+            ['type' => 'TXT', 'txt' => ''],
+        ];
+        DnsMock::withMockedHosts($hosts);
+
+        self::assertNull($this->checker->check('1.2.3.4')->listedOn()[0]->reason);
+    }
+
+    #[Test]
+    public function anAnswerWithNoAddressInItIsAFailedCheckNotAListing(): void
+    {
+        // An answer section carrying no address — what a CNAME'd or rewritten
+        // lookup returns. Responding with *something* is not a listing.
+        $hosts = [];
+        foreach ($this->checker->getDnsblList() as $dnsbl) {
+            $hosts['4.3.2.1.'.$dnsbl] = [];
+        }
+        $hosts['4.3.2.1.dnsbl.dronebl.org'] = [
+            ['type' => 'A'],
+        ];
+        DnsMock::withMockedHosts($hosts);
+
+        $result = $this->checker->check('1.2.3.4');
+
+        self::assertFalse($result->isListed());
+        self::assertSame(1, $result->unavailableCount());
+        self::assertSame(
+            'The blocklist answered without a usable address.',
+            $result->unavailable()[0]->reason,
+        );
+    }
+
+    #[Test]
     public function aListingRecordsTheReturnCodeAsEvidence(): void
     {
         $this->mockLists('1.2.3.4', ['zen.spamhaus.org' => '127.0.0.11']);

@@ -82,4 +82,24 @@ final class BlacklistStatusResultTest extends TestCase
         self::assertSame(BlacklistListingStatus::NotListed, $result->listings[1]->status);
         self::assertNull($result->listings[0]->returnCode);
     }
+
+    #[Test]
+    public function aRowWithNeitherStatusNorListedIsTreatedAsUnknown(): void
+    {
+        // Defensive: a truncated or hand-edited row must not default to
+        // "listed" (a false alarm) or "clean" (a false all-clear).
+        $result = self::row(['zen.spamhaus.org' => ['reason' => null]], false);
+
+        self::assertSame(BlacklistListingStatus::CheckFailed, $result->listings[0]->status);
+        self::assertTrue($result->isInconclusive());
+    }
+
+    #[Test]
+    public function anUnrecognisedStatusValueIsTreatedAsUnknown(): void
+    {
+        // A status written by a newer version than the one reading it.
+        $result = self::row(['zen.spamhaus.org' => ['status' => 'something_new', 'listed' => false]], false);
+
+        self::assertSame(BlacklistListingStatus::CheckFailed, $result->listings[0]->status);
+    }
 }

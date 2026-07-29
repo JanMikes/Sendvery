@@ -154,6 +154,22 @@ final class AlertOnBlacklistingTest extends IntegrationTestCase
     }
 
     #[Test]
+    public function aSenderWeOnlyHaveAHostnameForIsStillIdentifiedByThatHostname(): void
+    {
+        // Reverse DNS often resolves before the ASN-to-organisation mapping
+        // does. A hostname is still far more use to the reader than nothing.
+        [, $domain] = $this->createTeamAndDomain();
+        $this->knownSender($domain, '203.0.113.20', null, 'mail.someprovider.example');
+
+        $alert = $this->raise($domain, '203.0.113.20', ['zen.spamhaus.org']);
+
+        self::assertNotNull($alert);
+        self::assertStringContainsString('mail.someprovider.example', $alert->message);
+        // Without an operator we cannot claim it is somebody else's to delist.
+        self::assertStringContainsString('If you operate this server', $alert->message);
+    }
+
+    #[Test]
     public function anUnattributedAddressGetsSelfServeDelistingAdvice(): void
     {
         [, $domain] = $this->createTeamAndDomain();
