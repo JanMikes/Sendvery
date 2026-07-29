@@ -100,7 +100,7 @@ final readonly class DnsMonitor
     ): DnsCheckResult {
         $previous = $this->dnsCheckResultRepository->findLatestForDomainAndType($domain->id, $type);
         $previousRawRecord = $previous?->rawRecord;
-        $hasChanged = $previousRawRecord !== $rawRecord;
+        $hasChanged = $this->hasRecordChanged($type, $previousRawRecord, $rawRecord);
         $isFirstCheck = null === $previous;
 
         $serializedIssues = array_map(static fn ($issue) => [
@@ -124,6 +124,55 @@ final readonly class DnsMonitor
         );
     }
 
+    /**
+     * Did the record actually change, or did the answer just come back in a
+     * different order?
+     *
+     * MX is the only check that observes a SET of records, and a DNS resolver
+     * is free to return an RRset in any order — round-robin rotation between
+     * equal-priority records is normal, deliberate behaviour. Comparing the
+     * serialised answer string therefore reported a change on most nights for
+     * any domain with more than one MX at the same priority, and users got a
+     * daily "MX record changed" warning showing two identical record sets in a
+     * different order. False alarms teach people to ignore the real ones.
+     *
+     * Canonicalising BOTH sides (rather than only what we write from now on)
+     * is what stops the deploy itself firing one last bogus alert against the
+     * un-canonicalised value already stored.
+     */
+    private function hasRecordChanged(DnsCheckType $type, ?string $previous, ?string $current): bool
+    {
+        if (DnsCheckType::Mx !== $type) {
+            return $previous !== $current;
+        }
+
+        return $this->canonicalizeMxRecord($previous) !== $this->canonicalizeMxRecord($current);
+    }
+
+    /**
+     * Order- and case-independent form of a serialised MX record set.
+     *
+     * Case matters as much as order: DNS hostnames are case-insensitive and
+     * some resolvers echo back the case of the query (0x20 encoding), so
+     * `email.webglobe.cz` and `Email.Webglobe.cz` are the same mail server and
+     * must not read as an edit.
+     */
+    private function canonicalizeMxRecord(?string $record): ?string
+    {
+        if (null === $record || '' === trim($record)) {
+            return $record;
+        }
+
+        $parts = array_map(
+            static fn (string $part): string => strtolower(trim($part)),
+            explode(',', $record),
+        );
+        $parts = array_values(array_filter($parts, static fn (string $p): bool => '' !== $p));
+        sort($parts, \SORT_STRING);
+
+        return implode(', ', $parts);
+    }
+
     private function serializeMxRecords(\App\Value\Dns\MxCheckResult $mxResult): ?string
     {
         if ([] === $mxResult->records) {
@@ -134,6 +183,17 @@ final readonly class DnsMonitor
         foreach ($mxResult->records as $record) {
             $parts[] = "{$record->priority} {$record->host}";
         }
+
+        // Sort by (priority, host) so what we store is stable across runs too.
+        // MxChecker already sorts on priority, but PHP's sort is stable, which
+        // means equal priorities preserve whatever order the resolver happened
+        // to hand back — the very thing that has to stop varying.
+        usort($parts, static function (string $a, string $b): int {
+            [$priorityA, $hostA] = explode(' ', $a, 2);
+            [$priorityB, $hostB] = explode(' ', $b, 2);
+
+            return [(int) $priorityA, strtolower($hostA)] <=> [(int) $priorityB, strtolower($hostB)];
+        });
 
         return implode(', ', $parts);
     }
