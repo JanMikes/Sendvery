@@ -1,4 +1,8 @@
-{# Pass/fail/warning status badge #}
+{# Status badge for check results.
+   The error tone is an EXPLICIT arm, never the fallback: `unknown` is already
+   emitted by DomainHealthScorer::statusFromScore() for an unmeasured category,
+   and while it fell through to the `{% else %}` an unmeasured category rendered
+   as a red "Fail". Unknown and any future status land on the neutral arm. #}
 {% if status == 'pass' %}
     <span class="badge badge-success gap-1">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
@@ -9,9 +13,14 @@
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
         {{ label|default('Warning') }}
     </span>
-{% else %}
+{% elseif status == 'fail' %}
     <span class="badge badge-error gap-1">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         {{ label|default('Fail') }}
+    </span>
+{% else %}
+    <span class="badge badge-ghost gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        {{ label|default('Not checked') }}
     </span>
 {% endif %}

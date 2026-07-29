@@ -20,6 +20,9 @@ use App\Services\IdentityProvider;
 use App\Value\AlertSeverity;
 use App\Value\AlertType;
 use App\Value\AuthResult;
+use App\Value\BlacklistListing;
+use App\Value\BlacklistListingStatus;
+use App\Value\BlacklistResult;
 use App\Value\Disposition;
 use App\Value\DmarcAlignment;
 use App\Value\DmarcPolicy;
@@ -577,9 +580,23 @@ final class SeedDemoDataCommand extends Command
                 monitoredDomain: $domain,
                 ipAddress: $ip,
                 checkedAt: $now->modify('-6 hours'),
-                results: $listed
-                    ? ['zen.spamhaus.org' => ['listed' => true, 'reason' => 'https://check.spamhaus.org/']]
-                    : ['zen.spamhaus.org' => ['listed' => false, 'reason' => null]],
+                results: (new BlacklistResult($ip, [
+                    new BlacklistListing(
+                        dnsbl: 'zen.spamhaus.org',
+                        status: $listed ? BlacklistListingStatus::Listed : BlacklistListingStatus::NotListed,
+                        reason: $listed ? 'https://check.spamhaus.org/' : null,
+                        returnCode: $listed ? '127.0.0.2' : null,
+                    ),
+                    // The second address exercises the third state, so the demo
+                    // dashboard shows what "we could not check" looks like next
+                    // to a real listing rather than only pass/fail.
+                    new BlacklistListing(
+                        dnsbl: 'cbl.abuseat.org',
+                        status: BlacklistListingStatus::CheckFailed,
+                        reason: 'Error: open resolver; https://check.spamhaus.org/returnc/pub/',
+                        returnCode: '127.255.255.254',
+                    ),
+                ]))->toStorageArray(),
                 isListed: $listed,
             ));
         }

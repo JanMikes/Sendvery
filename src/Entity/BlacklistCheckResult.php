@@ -27,15 +27,25 @@ final class BlacklistCheckResult
     #[ORM\Column(type: 'datetime_immutable')]
     public readonly \DateTimeImmutable $checkedAt;
 
-    /** @var array<string, array{listed: bool, reason: string|null}> */
+    /**
+     * Per-list verdicts keyed by DNSBL hostname.
+     *
+     * `status` is the authoritative field (see `BlacklistListingStatus`);
+     * `listed` is retained for rows written before the three-state model and
+     * for the `is_listed` SQL consumers. Rows predating it have no `status`
+     * key — `BlacklistListing::fromStorageArray()` handles both shapes.
+     *
+     * @var array<string, array{status?: string, listed: bool, reason: string|null, return_code?: string|null}>
+     */
     #[ORM\Column(type: 'json')]
     public readonly array $results;
 
+    /** True only for a confirmed listing — never for a list that refused the query. */
     #[ORM\Column(type: 'boolean')]
     public readonly bool $isListed;
 
     /**
-     * @param array<string, array{listed: bool, reason: string|null}> $results
+     * @param array<string, array{status?: string, listed: bool, reason: string|null, return_code?: string|null}> $results
      */
     public function __construct(
         UuidInterface $id,

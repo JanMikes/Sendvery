@@ -38,24 +38,20 @@ final readonly class CheckBlacklistHandler
             monitoredDomain: $domain,
             ipAddress: $message->ipAddress,
             checkedAt: $this->clock->now(),
-            results: $result->results,
-            isListed: $result->isListed,
+            results: $result->toStorageArray(),
+            isListed: $result->isListed(),
         );
 
         $this->entityManager->persist($checkResult);
 
-        $listedOn = [];
-        foreach ($result->results as $dnsbl => $data) {
-            if ($data['listed']) {
-                $listedOn[] = $dnsbl;
-            }
-        }
-
         $this->eventBus->dispatch(new BlacklistCheckCompleted(
             domainId: $domain->id,
             ipAddress: $message->ipAddress,
-            isListed: $result->isListed,
-            listedOn: $listedOn,
+            isListed: $result->isListed(),
+            listedOn: array_map(
+                static fn ($listing): string => $listing->dnsbl,
+                $result->listedOn(),
+            ),
         ));
     }
 }
