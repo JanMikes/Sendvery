@@ -73,6 +73,31 @@ final readonly class BlacklistChecker
 
     public function check(string $ipAddress): BlacklistResult
     {
+        // IPv6 is queried in reverse-nibble form, not dotted-quad. Reversing on
+        // dots produces a syntactically valid but meaningless hostname, every
+        // list answers NXDOMAIN, and the address is reported CLEAN on all eight
+        // — a false all-clear on the one signal blacklist monitoring exists to
+        // give. `checkHostOrIp()` already refuses IPv6; the cron path calls
+        // this method directly and did not.
+        //
+        // Saying "not checked" is the honest answer until per-list IPv6 support
+        // is implemented: of the eight lists here only some publish an IPv6
+        // zone, so a blanket nibble query would swap this false negative for a
+        // set of unanswerable lookups.
+        if (false !== filter_var($ipAddress, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+            return new BlacklistResult(
+                ipAddress: $ipAddress,
+                listings: array_map(
+                    static fn (string $dnsbl): BlacklistListing => new BlacklistListing(
+                        dnsbl: $dnsbl,
+                        status: BlacklistListingStatus::CheckFailed,
+                        reason: 'Sendvery does not check IPv6 addresses against this blocklist yet. This is a gap in our coverage, not a finding against the address.',
+                    ),
+                    self::DNSBLS,
+                ),
+            );
+        }
+
         $reversedIp = implode('.', array_reverse(explode('.', $ipAddress)));
         $listings = [];
 

@@ -307,6 +307,37 @@ final class BlacklistCheckerTest extends TestCase
     }
 
     #[Test]
+    public function anIpv6AddressIsReportedAsNotCheckedRatherThanClean(): void
+    {
+        // Reversing an IPv6 address on dots yields a meaningless hostname, so
+        // every list answers NXDOMAIN and the address looks clean on all eight
+        // — a false all-clear on the signal the feature exists to provide.
+        // IPv6 senders are real: this reached production via the cron path,
+        // which calls check() directly and so bypassed the IPv6 guard on
+        // checkHostOrIp().
+        $result = $this->checker->check('2a02:598:64:8a00::1000:906');
+
+        self::assertFalse($result->isListed());
+        self::assertTrue($result->isInconclusive(), 'An unchecked address must not be reported as clean.');
+        self::assertSame(0, $result->answeredCount());
+        self::assertSame(
+            $result->totalChecked(),
+            $result->unavailableCount(),
+            'No list can answer an IPv6 query in dotted-quad form.',
+        );
+    }
+
+    #[Test]
+    public function theIpv6GapIsExplainedAsOurLimitationNotTheAddressesFault(): void
+    {
+        $reason = $this->checker->check('2a02:598:64:8a00::1000:906')->unavailable()[0]->reason;
+
+        self::assertNotNull($reason);
+        self::assertStringContainsString('does not check IPv6', $reason);
+        self::assertStringContainsString('not a finding against the address', $reason);
+    }
+
+    #[Test]
     public function everyConfiguredBlocklistIsQueried(): void
     {
         $result = $this->checker->check('1.2.3.4');
