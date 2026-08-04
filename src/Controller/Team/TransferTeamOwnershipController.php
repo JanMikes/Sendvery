@@ -38,7 +38,7 @@ final class TransferTeamOwnershipController extends AbstractController
 
         $newOwnerIdString = $request->request->getString('new_owner_user_id');
         if ('' === $newOwnerIdString) {
-            $this->addFlash('team_error', 'Pick the teammate you want to make the new Owner.');
+            $this->addFlash('error', 'Pick the teammate you want to make the new Owner.');
 
             return $this->redirectToRoute('team_settings');
         }
@@ -57,12 +57,12 @@ final class TransferTeamOwnershipController extends AbstractController
             $message = $previous instanceof CannotTransferOwnership
                 ? $previous->getMessage()
                 : 'Something went wrong transferring ownership.';
-            $this->addFlash('team_error', $message);
+            $this->addFlash('error', $message);
 
             return $this->redirectToRoute('team_settings');
         }
 
-        $this->addFlash('team_success', 'Ownership transferred. You are now an Admin.');
+        $this->addFlash('success', 'Ownership transferred. You are now an Admin.');
 
         return $this->redirectToRoute('team_settings');
     }

@@ -1,0 +1,26 @@
+{# Every flash message in the app, rendered once by whichever layout is in use.
+
+   This used to be a block copy-pasted into individual page templates, so
+   whether a confirmation appeared depended on which page the controller
+   happened to redirect to. Around twenty of them reached nobody.
+
+   Three features had also namespaced their own types — `team_*`,
+   `domain_taken_*` and `domain_recheck` — each rendered by a bespoke block.
+   Two of those (2026-05-22) predate any shared region and namespaced purely to
+   place their message on their own page. The third (2026-07-27) existed for
+   tone: the old copy-pasted markup was binary, treating everything that was
+   not `error` as a success, so a neutral "you are inside the re-check
+   cooldown" notice would have been painted green. Both reasons are gone —
+   there is one region now, and it has a neutral arm — so plain `success`,
+   `error`, `warning` and `info` cover every case.
+
+   Unknown types stay neutral rather than alarming: a message we cannot
+   classify is not evidence that something is wrong. #}
+{% for type, messages in app.flashes %}
+    {% set tone = {'error': 'error', 'warning': 'warning', 'success': 'success'}[type]|default('info') %}
+    {% for message in messages %}
+        <div class="alert alert-{{ tone }} mb-4" role="{{ 'error' == tone ? 'alert' : 'status' }}" data-testid="flash-{{ tone }}">
+            <span>{{ message }}</span>
+        </div>
+    {% endfor %}
+{% endfor %}

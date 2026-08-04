@@ -85,18 +85,32 @@ final class FlashMessagesAreAlwaysRenderedTest extends WebTestCase
     }
 
     #[Test]
-    public function teamMessagesStayInTheirOwnPlaceOnTheTeamPage(): void
+    public function teamMessagesUseTheSameGlobalConventionAsEverythingElse(): void
     {
-        // team_* is deliberately rendered inside the team settings card. The
-        // layout peeks at the bag rather than reading it precisely so these
-        // survive to be rendered where they belong — a generic `app.flashes`
-        // loop would clear them before their own template ran.
+        // team_* used to be its own namespace rendered by its own block inside
+        // the settings card — a convention that predates there being a shared
+        // region at all. One region, one set of types.
         [$client] = $this->signedIn();
 
-        $crawler = $this->requestWithPendingFlash($client, '/app/team', 'team_success', 'Invitation sent to sam@example.com.');
+        $crawler = $this->requestWithPendingFlash($client, '/app/team', 'success', 'Invitation sent to sam@example.com.');
 
         self::assertStringContainsString('Invitation sent to sam@example.com.', $crawler->filter('body')->text());
-        self::assertCount(1, $crawler->filter('.alert-success'), 'Rendered by the team page, and not a second time by the layout.');
+        self::assertCount(1, $crawler->filter('.alert-success'), 'Rendered once, by the shared region.');
+    }
+
+    #[Test]
+    public function aPublicPageRendersFlashesToo(): void
+    {
+        // The sign-in page is on the marketing layout, not the dashboard one,
+        // and used to render only `success` — so an error redirected there had
+        // nowhere to land. Both layouts share the region now.
+        $client = self::createClient();
+        $client->disableReboot();
+
+        $crawler = $this->requestWithPendingFlash($client, '/login', 'error', 'That sign-in link has expired.');
+
+        self::assertSelectorExists('.alert-error');
+        self::assertStringContainsString('That sign-in link has expired.', $crawler->filter('.alert-error')->text());
     }
 
     /**

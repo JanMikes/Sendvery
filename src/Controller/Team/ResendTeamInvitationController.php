@@ -45,7 +45,7 @@ final class ResendTeamInvitationController extends AbstractController
 
         $this->commandBus->dispatch(new ResendTeamInvitation($invitation->id));
 
-        $this->addFlash('team_success', sprintf('Re-sent invitation to %s.', $invitation->invitedEmail));
+        $this->addFlash('success', sprintf('Re-sent invitation to %s.', $invitation->invitedEmail));
 
         return $this->redirectToRoute('team_settings');
     }

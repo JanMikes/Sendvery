@@ -45,7 +45,7 @@ final class RevokeTeamInvitationController extends AbstractController
 
         $this->commandBus->dispatch(new RevokeTeamInvitation($invitation->id));
 
-        $this->addFlash('team_success', sprintf('Invitation to %s revoked.', $invitation->invitedEmail));
+        $this->addFlash('success', sprintf('Invitation to %s revoked.', $invitation->invitedEmail));
 
         return $this->redirectToRoute('team_settings');
     }

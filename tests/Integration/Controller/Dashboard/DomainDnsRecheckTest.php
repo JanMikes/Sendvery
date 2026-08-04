@@ -142,7 +142,7 @@ final class DomainDnsRecheckTest extends WebTestCase
         $crawler = $client->followRedirect();
 
         self::assertResponseIsSuccessful();
-        $notice = $crawler->filter('[data-testid="domain-recheck-notice"]');
+        $notice = $crawler->filter('[data-testid="flash-info"]');
         self::assertCount(1, $notice, 'Being early must be explained, not silently ignored — otherwise the click appears to do nothing.');
         self::assertStringContainsString('you can run another check in', $notice->text(), 'The notice names the remaining wait.');
         self::assertStringNotContainsString('alert-error', (string) $notice->attr('class'), 'Impatience is not an error state — the notice must read as neutral information.');

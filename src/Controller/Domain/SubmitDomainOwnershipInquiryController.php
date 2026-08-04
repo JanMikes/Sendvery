@@ -50,15 +50,15 @@ final class SubmitDomainOwnershipInquiryController extends AbstractController
             $previous = $e->getPrevious();
 
             if ($previous instanceof InquiryRateLimited || $previous instanceof DomainNotTaken) {
-                $this->addFlash('domain_taken_error', $previous->getMessage());
+                $this->addFlash('error', $previous->getMessage());
             } else {
-                $this->addFlash('domain_taken_error', 'Something went wrong sending your request. Please try again.');
+                $this->addFlash('error', 'Something went wrong sending your request. Please try again.');
             }
 
             return $this->redirectToRoute('domain_taken', ['domain' => $domain]);
         }
 
-        $this->addFlash('domain_taken_success', 'Thanks — we\'ll review your request and get back to you shortly.');
+        $this->addFlash('success', 'Thanks — we\'ll review your request and get back to you shortly.');
 
         return $this->redirectToRoute('domain_taken', ['domain' => $domain]);
     }

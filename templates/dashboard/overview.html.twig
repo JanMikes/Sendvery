@@ -27,7 +27,6 @@
 {% block content %}
     {% import 'components/_severity_glyph.html.twig' as severity %}
 
-    <twig:DomainRecheckNotice />
 
     {% set isEmptyState = (nextAction.actionKey.value == 'add_domain') %}
 

@@ -18,13 +18,6 @@
         </p>
     </header>
 
-    {% for flash in app.flashes('domain_taken_success') %}
-        <div class="alert alert-success"><span>{{ flash }}</span></div>
-    {% endfor %}
-    {% for flash in app.flashes('domain_taken_error') %}
-        <div class="alert alert-error"><span>{{ flash }}</span></div>
-    {% endfor %}
-
     {# ─── Most likely path: join the existing team ─── #}
     <section class="card bg-base-100 border border-primary/30">
         <div class="card-body">

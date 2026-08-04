@@ -33,17 +33,6 @@
         </div>
     </section>
 
-    {% for flash in app.flashes('team_success') %}
-        <div class="alert alert-success">
-            <span>{{ flash }}</span>
-        </div>
-    {% endfor %}
-    {% for flash in app.flashes('team_error') %}
-        <div class="alert alert-error">
-            <span>{{ flash }}</span>
-        </div>
-    {% endfor %}
-
     {# ─── Current members ─── #}
     <section class="card bg-base-100 border border-base-300">
         <div class="card-body">

@@ -62,7 +62,7 @@ final class ReverifyDomainController extends AbstractController
             // An exhausted budget is normal impatience (or a second tab whose
             // button was still enabled) — neutral copy, no exception, and the
             // user still lands back where they clicked from.
-            $this->addFlash('domain_recheck', sprintf(
+            $this->addFlash('info', sprintf(
                 'We checked %s moments ago — you can run another check in %s. Limiting this to one check every few minutes keeps us from hammering your DNS provider.',
                 $domain->domain,
                 $availability->cooldownLabel(),

@@ -88,14 +88,14 @@ final class InviteTeammateController extends AbstractController
 
         if (count($violations) > 0) {
             $first = $violations->get(0);
-            $this->addFlash('team_error', (string) $first->getMessage());
+            $this->addFlash('error', (string) $first->getMessage());
 
             return $this->redirectToRoute('team_settings');
         }
 
         $role = TeamRole::tryFrom($roleValue);
         if (null === $role || !in_array($role, [TeamRole::Member, TeamRole::Admin], true)) {
-            $this->addFlash('team_error', 'Please pick a valid role for the new teammate.');
+            $this->addFlash('error', 'Please pick a valid role for the new teammate.');
 
             return $this->redirectToRoute('team_settings');
         }
@@ -116,12 +116,12 @@ final class InviteTeammateController extends AbstractController
             $message = $previous instanceof UserAlreadyOnTeam
                 ? $previous->getMessage()
                 : 'Something went wrong sending the invitation. Please try again.';
-            $this->addFlash('team_error', $message);
+            $this->addFlash('error', $message);
 
             return $this->redirectToRoute('team_settings');
         }
 
-        $this->addFlash('team_success', sprintf('Invitation sent to %s.', $email));
+        $this->addFlash('success', sprintf('Invitation sent to %s.', $email));
 
         return $this->redirectToRoute('team_settings');
     }

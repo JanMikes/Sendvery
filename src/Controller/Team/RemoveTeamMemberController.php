@@ -52,12 +52,12 @@ final class RemoveTeamMemberController extends AbstractController
             $message = $previous instanceof CannotRemoveTeamOwner
                 ? $previous->getMessage()
                 : 'Something went wrong removing this teammate.';
-            $this->addFlash('team_error', $message);
+            $this->addFlash('error', $message);
 
             return $this->redirectToRoute('team_settings');
         }
 
-        $this->addFlash('team_success', sprintf('Removed %s from the team.', $membership->user->email));
+        $this->addFlash('success', sprintf('Removed %s from the team.', $membership->user->email));
 
         return $this->redirectToRoute('team_settings');
     }

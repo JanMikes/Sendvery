@@ -4,6 +4,12 @@
     <twig:Nav />
 
     <main>
+        {# Public pages carry the same region as the dashboard: a controller
+           redirecting here (magic-link confirmations, for one) must not have its
+           message silently dropped just because the layout differs. #}
+        <div class="container mx-auto px-4">
+            {% include 'components/_flash_messages.html.twig' %}
+        </div>
         {% block content %}{% endblock %}
     </main>
 
