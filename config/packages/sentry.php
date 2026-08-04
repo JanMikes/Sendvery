@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Services\Sentry\GenericObjectSerializer;
 use Symfony\Component\DependencyInjection\Loader\Configurator\App;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
@@ -45,10 +46,14 @@ return App::config([
                 '%kernel.project_dir%/vendor',
             ],
 
-            // Noise filters: don't ship 403s and 404s, they're not actionable.
+            // Noise filters: don't ship 403s, 404s and 405s, they're not actionable.
+            // The 405s are almost entirely bots POSTing at the read-only API
+            // entrypoint (`POST /api`) — the router is answering correctly, so
+            // there is nothing for us to fix and nothing to be told about.
             'ignore_exceptions' => [
                 AccessDeniedException::class,
                 NotFoundHttpException::class,
+                MethodNotAllowedHttpException::class,
             ],
 
             // Skip Symfony web profiler / debug toolbar routes (and a couple of infra checks).
