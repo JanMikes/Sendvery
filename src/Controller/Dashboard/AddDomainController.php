@@ -13,9 +13,11 @@ use App\Services\DashboardContext;
 use App\Services\IdentityProvider;
 use App\Services\Stripe\PlanEnforcement;
 use App\Services\Stripe\PlanLimits;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -43,6 +45,7 @@ final class AddDomainController extends AbstractController
         $canAdd = $this->planEnforcement->canAddDomain($teamId->toString(), $plan);
         $data = new AddDomainData();
         $errors = [];
+        $alreadyConnected = null;
 
         if ($request->isMethod('GET')) {
             $data->domainName = trim($request->query->getString('domain'));
@@ -64,21 +67,46 @@ final class AddDomainController extends AbstractController
                         $errors[] = (string) $violation->getMessage();
                     }
                 } else {
-                    // Hard-block when another team has already claimed this name.
                     $conflict = $this->monitoredDomainRepository->findAnyByName($data->domainName);
-                    if (null !== $conflict && $conflict->team->id->toString() !== $teamId->toString()) {
-                        return $this->redirectToRoute('domain_taken', ['domain' => $data->domainName]);
+
+                    if (null !== $conflict) {
+                        // Hard-block when another team has already claimed this name.
+                        if ($conflict->team->id->toString() !== $teamId->toString()) {
+                            return $this->redirectToRoute('domain_taken', ['domain' => $data->domainName]);
+                        }
+
+                        // Ours already. Persisting a second row would trip the
+                        // system-wide unique index on lower(domain) and answer a
+                        // duplicate submit with a 500 — and there is nothing to
+                        // fix anyway: the domain IS monitored, which is what the
+                        // user asked for. Show them where it lives, in the
+                        // neutral tone a satisfied intent deserves.
+                        $alreadyConnected = $conflict;
+                    } else {
+                        $domainId = $this->identityProvider->nextIdentity();
+
+                        try {
+                            $this->commandBus->dispatch(new AddDomain(
+                                domainId: $domainId,
+                                teamId: $teamId,
+                                domainName: $data->domainName,
+                            ));
+                        } catch (HandlerFailedException $e) {
+                            if (!$e->getPrevious() instanceof UniqueConstraintViolationException) {
+                                throw $e;
+                            }
+
+                            // Lost the race against a concurrent submit (double
+                            // click, second tab) between the check above and the
+                            // insert. The failed flush closes the EntityManager,
+                            // so the owner cannot be re-read here — resolve it in
+                            // a fresh request instead. /app/domain-taken sends a
+                            // same-team conflict on to the domain itself.
+                            return $this->redirectToRoute('domain_taken', ['domain' => $data->domainName]);
+                        }
+
+                        return $this->redirectToRoute('dashboard_domain_detail', ['id' => $domainId]);
                     }
-
-                    $domainId = $this->identityProvider->nextIdentity();
-
-                    $this->commandBus->dispatch(new AddDomain(
-                        domainId: $domainId,
-                        teamId: $teamId,
-                        domainName: $data->domainName,
-                    ));
-
-                    return $this->redirectToRoute('dashboard_domain_detail', ['id' => $domainId]);
                 }
             }
         }
@@ -86,6 +114,7 @@ final class AddDomainController extends AbstractController
         return $this->render('dashboard/domain_add.html.twig', [
             'data' => $data,
             'errors' => $errors,
+            'alreadyConnected' => $alreadyConnected,
             'canAddDomain' => $canAdd,
             'currentPlan' => $plan,
             'maxDomains' => $this->planLimits->getMaxDomains($plan),

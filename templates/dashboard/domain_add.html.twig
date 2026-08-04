@@ -21,6 +21,20 @@
                     Enter the domain name you want to monitor for DMARC reports.
                 </p>
 
+                {# Re-adding a domain the team already monitors isn't a failure —
+                   the end state the user wanted is already true. Point at it in a
+                   neutral tone instead of scolding them with a red alert. #}
+                {% if alreadyConnected is not null %}
+                    <div class="alert alert-info mb-4" data-testid="domain-already-connected">
+                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <div>
+                            <p class="text-sm font-medium">{{ alreadyConnected.domain }} is already connected</p>
+                            <p class="text-sm mt-1">You're already monitoring this domain — there's nothing more to add.</p>
+                            <a href="{{ path('dashboard_domain_detail', {id: alreadyConnected.id}) }}" class="btn btn-sm btn-primary mt-2">View {{ alreadyConnected.domain }}</a>
+                        </div>
+                    </div>
+                {% endif %}
+
                 {% if errors is not empty %}
                     <div class="alert alert-error mb-4">
                         <ul class="text-sm">
