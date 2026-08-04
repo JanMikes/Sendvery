@@ -12,6 +12,7 @@ use App\MessageHandler\CheckDomainDnsHandler;
 use App\Repository\DnsCheckResultRepository;
 use App\Repository\MonitoredDomainRepository;
 use App\Services\IdentityProvider;
+use App\Services\Stripe\PlanEnforcement;
 use App\Services\TeamProvisioner;
 use App\Value\DnsCheckType;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,6 +34,7 @@ final class OnboardingDomainController extends AbstractController
         private readonly EntityManagerInterface $entityManager,
         private readonly CheckDomainDnsHandler $checkDomainDnsHandler,
         private readonly DnsCheckResultRepository $dnsCheckResultRepository,
+        private readonly PlanEnforcement $planEnforcement,
     ) {
     }
 
@@ -52,6 +54,7 @@ final class OnboardingDomainController extends AbstractController
         $errors = [];
         $dnsResults = null;
         $hasExistingDomain = false;
+        $joinedExistingTeam = null;
 
         if ($request->isMethod('POST')) {
             $data->domainName = $this->normalizeDomainInput($request->request->getString('domain_name'));
@@ -83,11 +86,30 @@ final class OnboardingDomainController extends AbstractController
                         domainName: $data->domainName,
                     ));
                 } elseif ($existing->domain !== $data->domainName) {
-                    $existing->domain = $data->domainName;
-                    $this->entityManager->flush();
+                    // The rename above exists so someone can correct a typo in the
+                    // domain they just typed — and it is only theirs to correct
+                    // while they are the team's only member.
+                    //
+                    // Accepting an invitation does not set onboardingCompletedAt,
+                    // so an invited teammate is walked through this step against a
+                    // team that already monitors something, and the stepper links
+                    // step 2. Renaming there re-points a colleague's domain — id,
+                    // DMARC reports, alerts and DNS history intact — at a name its
+                    // owner never chose, and silently stops the original from being
+                    // monitored, because inbound reports route by name. When the
+                    // team holds several domains it also collides with the
+                    // system-wide unique index on lower(domain) and 500s.
+                    if (1 === $this->planEnforcement->getTeamMemberCount($teamId->toString())) {
+                        $existing->domain = $data->domainName;
+                        $this->entityManager->flush();
+                    } else {
+                        $joinedExistingTeam = $existing->domain;
+                    }
                 }
 
-                return $this->redirectToRoute('onboarding_domain');
+                if (null === $joinedExistingTeam) {
+                    return $this->redirectToRoute('onboarding_domain');
+                }
             }
         } else {
             $existing = $this->monitoredDomainRepository->findLatestForTeam($teamId);
@@ -115,6 +137,7 @@ final class OnboardingDomainController extends AbstractController
             'errors' => $errors,
             'dnsResults' => $dnsResults,
             'hasExistingDomain' => $hasExistingDomain,
+            'joinedExistingTeam' => $joinedExistingTeam,
         ]);
     }
 
