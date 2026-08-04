@@ -5681,6 +5681,33 @@ Stopping at TASK-104 + 3 deferred-to-round-5 tasks per the orchestrator brief's 
 
 ---
 
+## TASK-174: `chmod -R 777 var` costs ~50s on every container start, dominating every cron run
+
+- Status: proposed
+- Area: ops / infra
+- Why: `.docker/on-startup.sh:30` runs `time chmod -R 777 var` on every container boot. Because a recursive chmod rewrites the mode of every inode, it forces an **overlayfs copy-up of the whole `var/` tree** into each container's writable layer. Measured on lily 2026-07-30 against 2,862 files / 134 MB in `var/`, from `/var/log/lily/sendvery-cron.log`:
+
+  ```
+  == Skipping database migrations ==
+  == Setting 777 permission to var/ ==
+  real	0m46.486s      # solo run
+  real	1m2.035s       # three cron containers starting concurrently
+  ```
+
+  The `real` line is the chmod itself, and migrations are already skipped for `messenger-consumer`, so **the chmod is essentially the entire container start time**. Every `docker compose run --rm messenger-consumer` cron pays it before its command begins: `sendvery:reports:poll-inbox` averages **56s over 1,263 runs** for a job that only dispatches one message, and `sendvery:auth:purge-magic-links` occupied a 65s window to do ~3s of real work. At 288 runs/day (`*/5`) plus 96 (`*/15`) plus the daily jobs, that is several hours a day of container time spent re-chmod'ing the same unchanged files.
+
+  Secondary effect worth keeping in mind: it delays every Sentry cron check-in to **65–108s after its scheduled slot** (measured across all 16 sendvery monitors). Sentry's default `checkin_margin` currently absorbs that and all of them report `ok`, so this is not causing false "missed check-in" alerts today — but it leaves zero headroom, and any further startup regression starts tripping them.
+- Acceptance:
+  - `docker compose run --rm messenger-consumer <cmd>` reaches the command in a few seconds, not ~50.
+  - `var/cache` and `var/log` remain writable by the runtime user in dev, test and prod — no permission regressions in the app, the workers, or the cron jobs.
+  - No recursive mode change over the whole `var/` tree on the boot path.
+  - Cron durations in `/var/log/lily/sendvery-cron.log` drop correspondingly (poll-inbox well under its current 56s average).
+- Notes: candidate fixes, cheapest first — (a) narrow the chmod to `var/cache` and `var/log` rather than all of `var`; (b) make it conditional so it is a no-op when the modes are already correct; (c) set correct ownership at image build and drop the boot-time chmod entirely. Worth checking whether prod needs `777` at all or whether correct ownership suffices.
+
+  Discovered while investigating the 2026-07-30 `Cron failure: sendvery-auth-purge-magic-links` Sentry alert (`SENDVERY-W`). **That alert was a separate, unrelated false positive** — the job ran fine (exit 0, purged 12 tokens) but Sentry received only the `in_progress` check-in and never the closing `ok`, so the check-in aged out at the default 30-minute `max_runtime`; most likely a first-check-in race on a monitor auto-created that morning, since the other 15 sendvery monitors were all `ok`. The 62s start was found in the same log and is a genuine, independent problem.
+
+---
+
 ## RUN SUMMARY — 2026-05-26 round 12 autonomous CX loop (Cloudflare DNS automation for RFC 7489 authorization records)
 
 ### Shipped (5 tasks across 5 code commits + 1 self-review fix)
