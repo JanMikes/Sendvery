@@ -1,0 +1,48 @@
+{# Renders one value from an alert's free-form `data` payload.
+
+   The payload is whatever the raising handler put there, and it is NOT flat:
+   `AlertOnNewSender` stores `new_senders` as a list of maps, each with its own
+   `source_ips` list. The Details table used to render every iterable as one
+   flat row of badges, so a nested map reached `{{ item }}` and PHP raised
+   "Array to string conversion" — a 500 on the alert page for what is a
+   perfectly ordinary alert.
+
+   Recursing keeps that generic: any depth a future handler writes renders as
+   labelled rows instead of crashing the page. #}
+{% macro render(value) %}
+    {% import _self as helpers %}
+
+    {% if value is not iterable %}
+        <code class="text-sm">{{ value }}</code>
+    {% elseif value is empty %}
+        <span class="text-sm text-base-content/50">&mdash;</span>
+    {% else %}
+        {% set is_list = value|keys == range(0, value|length - 1) %}
+
+        {% if is_list and value|filter(item => item is iterable) is empty %}
+            {# A flat list of scalars — the badge row this table always showed. #}
+            <div class="flex flex-wrap gap-1">
+                {% for item in value %}
+                    <span class="badge badge-ghost badge-sm">{{ item }}</span>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="space-y-2">
+                {% for key, item in value %}
+                    {% if is_list %}
+                        {# List entries have no meaningful key, so the index is
+                           noise — separate them visually instead of labelling. #}
+                        <div class="rounded-lg bg-base-200/50 p-2">
+                            {{ helpers.render(item) }}
+                        </div>
+                    {% else %}
+                        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                            <span class="text-xs font-medium text-base-content/60">{{ key|replace({'_': ' '})|capitalize }}</span>
+                            {{ helpers.render(item) }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endif %}
+{% endmacro %}

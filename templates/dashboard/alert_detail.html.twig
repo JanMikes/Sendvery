@@ -1,5 +1,7 @@
 {% extends 'dashboard/layout.html.twig' %}
 
+{% import 'dashboard/_alert_detail_value.html.twig' as detail_value %}
+
 {% block page_title %}Alert — {{ alert.title }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -227,17 +229,7 @@
                                 {% for key, value in extraDetails %}
                                     <tr>
                                         <td class="font-medium text-base-content/70 w-48">{{ key|replace({'_': ' '})|capitalize }}</td>
-                                        <td>
-                                            {% if value is iterable %}
-                                                <div class="flex flex-wrap gap-1">
-                                                    {% for item in value %}
-                                                        <span class="badge badge-ghost badge-sm">{{ item }}</span>
-                                                    {% endfor %}
-                                                </div>
-                                            {% else %}
-                                                <code class="text-sm">{{ value }}</code>
-                                            {% endif %}
-                                        </td>
+                                        <td>{{ detail_value.render(value) }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
