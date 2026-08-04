@@ -7,7 +7,7 @@
         "When coverage improves the gate fails as stale: run --update and commit the smaller numbers.",
         "Regenerate from CI: download the tests job coverage-clover artifact, then --update against it."
     ],
-    "statements": 16165,
+    "statements": 16147,
     "files": {
         "src/ApiResource/DomainResource.php": 14,
         "src/ApiResource/ReportResource.php": 14,
@@ -47,11 +47,11 @@
         "src/Controller/Dashboard/UnmuteAlertTypeController.php": 1,
         "src/Controller/Dashboard/UnsnoozeAlertController.php": 1,
         "src/Controller/Dashboard/UpgradePlanController.php": 12,
-        "src/Controller/Domain/DomainTakenController.php": 16,
+        "src/Controller/Domain/DomainTakenController.php": 2,
         "src/Controller/Domain/SubmitDomainOwnershipInquiryController.php": 6,
         "src/Controller/HealthCheckController.php": 1,
         "src/Controller/OgImageController.php": 7,
-        "src/Controller/Onboarding/OnboardingDomainController.php": 3,
+        "src/Controller/Onboarding/OnboardingDomainController.php": 2,
         "src/Controller/Onboarding/OnboardingIngestionController.php": 20,
         "src/Controller/StatusController.php": 28,
         "src/Controller/Team/AcceptTeamInvitationController.php": 25,
