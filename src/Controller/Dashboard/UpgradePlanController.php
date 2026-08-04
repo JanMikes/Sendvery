@@ -54,7 +54,7 @@ final class UpgradePlanController extends AbstractController
             // by Stripe). New subscriber → fresh Checkout session.
             if (null !== $team->stripeSubscriptionId) {
                 $this->subscriptionManager->updateSubscription($team, $targetPlan, $interval);
-                $this->addFlash('billing_success', 'Plan change requested — your subscription will update shortly.');
+                $this->addFlash('success', 'Plan change requested — your subscription will update shortly.');
 
                 return $this->redirectToRoute('dashboard_billing');
             }
@@ -65,7 +65,7 @@ final class UpgradePlanController extends AbstractController
             // If someone hits this URL while the key isn't configured, the
             // pricing page's AI toggle is already hidden — this catch is a
             // belt-and-braces fallback.
-            $this->addFlash('billing_error', 'AI Insights aren\'t available right now. The base plan is still ready to go.');
+            $this->addFlash('error', 'AI Insights aren\'t available right now. The base plan is still ready to go.');
 
             return $this->redirectToRoute('dashboard_billing');
         }

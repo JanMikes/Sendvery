@@ -1,0 +1,37 @@
+{# Flash messages for every dashboard page, rendered once by the layout.
+
+   This used to be a block copy-pasted into individual page templates, so
+   whether a confirmation appeared depended on which page the controller
+   happened to redirect to. Six templates had the block; every page added since
+   did not — and the controllers redirecting *there* had their message dropped
+   in silence. "DMARC policy published: p=quarantine", "Note saved.",
+   "Sender authorized.", "Released quarantined reports for X." and the whole of
+   billing reached nobody. Owning it in the layout means a new page cannot
+   forget, because it never has to remember.
+
+   `rendered_elsewhere` types have a deliberate home of their own and are left
+   alone. Peeking rather than reading the bag is what makes that possible:
+   `app.flashes` with no argument CLEARS every type, so a generic loop here
+   would swallow the messages those templates are waiting for. #}
+{% set rendered_elsewhere = [
+    'domain_recheck',
+    'team_success',
+    'team_error',
+    'domain_taken_success',
+    'domain_taken_error',
+] %}
+
+{% if app.request.hasSession %}
+    {% for type, messages in app.session.flashBag.peekAll() %}
+        {% if type not in rendered_elsewhere %}
+            {# Unknown types are neutral, never alarming: a message we cannot
+               classify is not evidence that something is wrong. #}
+            {% set tone = {'error': 'error', 'warning': 'warning', 'success': 'success'}[type]|default('info') %}
+            {% for message in app.flashes(type) %}
+                <div class="alert alert-{{ tone }} mb-4" role="{{ 'error' == tone ? 'alert' : 'status' }}">
+                    <span>{{ message }}</span>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+{% endif %}

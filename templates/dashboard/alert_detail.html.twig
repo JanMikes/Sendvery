@@ -55,15 +55,6 @@
             </div>
         </div>
 
-        {# Flash messages #}
-        {% for type, messages in app.flashes %}
-            {% for message in messages %}
-                <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
-                    <span>{{ message }}</span>
-                </div>
-            {% endfor %}
-        {% endfor %}
-
         {# Action toolbar — Mark read / Snooze / Mute. #}
         <div class="flex flex-wrap gap-2 mb-6">
             {% if not alert.isRead %}

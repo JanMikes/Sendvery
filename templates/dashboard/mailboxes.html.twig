@@ -15,15 +15,6 @@
 {% block content %}
     {% import 'components/_severity_glyph.html.twig' as severity %}
 
-    {# Flash messages #}
-    {% for type, messages in app.flashes %}
-        {% for message in messages %}
-            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
-                <span>{{ message }}</span>
-            </div>
-        {% endfor %}
-    {% endfor %}
-
     {# Our own half of the pipeline, stated before anything that could be read
        as the customer's fault. When intake is stale, every domain below looks
        silent for a reason that is ours. #}

@@ -204,6 +204,7 @@
         {# Page content #}
         <main class="flex-1 p-4 lg:p-6">
             {% block page_heading %}{% endblock %}
+            {% include 'dashboard/_flash_messages.html.twig' %}
             {% block content %}{% endblock %}
         </main>
     </div>

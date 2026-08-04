@@ -15,15 +15,6 @@
 {% block content %}
     {% import 'components/_severity_glyph.html.twig' as severity %}
 
-    {# Flash messages #}
-    {% for type, messages in app.flashes %}
-        {% for message in messages %}
-            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
-                <span>{{ message }}</span>
-            </div>
-        {% endfor %}
-    {% endfor %}
-
     {# Filter chips — URL-driven via ?reason=. Mirrors the alerts / domains pattern.
        Counts come from countByReason() in one SQL round-trip so chip labels stay
        accurate under pagination (TASK-036). #}

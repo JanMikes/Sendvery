@@ -40,15 +40,6 @@
 {% endblock %}
 
 {% block content %}
-    {# Flash messages #}
-    {% for type, messages in app.flashes %}
-        {% for message in messages %}
-            <div class="alert alert-{{ type == 'error' ? 'error' : 'success' }} mb-4">
-                <span>{{ message }}</span>
-            </div>
-        {% endfor %}
-    {% endfor %}
-
     {# Health advisor card (TASK-094) — renders only when the advisor returns
        a non-healthy verdict. Sits above the connection-details card so the
        operator sees the interpretation before the raw stats. #}
