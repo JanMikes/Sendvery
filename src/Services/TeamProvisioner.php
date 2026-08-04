@@ -11,7 +11,6 @@ use App\Repository\TeamMembershipRepository;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
-use Symfony\Component\String\Slugger\AsciiSlugger;
 
 final readonly class TeamProvisioner
 {
@@ -20,6 +19,7 @@ final readonly class TeamProvisioner
         private TeamMembershipRepository $teamMembershipRepository,
         private IdentityProvider $identityProvider,
         private ClockInterface $clock,
+        private TeamSlugGenerator $slugGenerator,
     ) {
     }
 
@@ -39,7 +39,7 @@ final readonly class TeamProvisioner
 
         $now = $this->clock->now();
         $domain = $this->extractEmailDomain($user->email);
-        $slug = (new AsciiSlugger())->slug($domain)->lower()->toString().'-'.substr($user->id->toString(), 0, 8);
+        $slug = $this->slugGenerator->forUser($domain, $user->id);
 
         $team = new Team(
             id: $this->identityProvider->nextIdentity(),

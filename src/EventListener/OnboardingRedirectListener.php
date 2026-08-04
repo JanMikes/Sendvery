@@ -17,6 +17,17 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
 #[AsEventListener(event: 'kernel.request', priority: 4)]
 final readonly class OnboardingRedirectListener
 {
+    /**
+     * Routes this listener must let through. Anything else under /app is
+     * redirected back to the next unfinished onboarding step.
+     *
+     * `domain_taken` and its notify-admin POST are here because the domain step
+     * itself redirects to them: someone entering a domain another team already
+     * monitors was bounced straight back to a blank domain form with no message,
+     * unable to finish onboarding and never told why. The page exists precisely
+     * to explain that case and offer a way out, so it has to be reachable from
+     * inside the flow that sends people to it.
+     */
     private const array ONBOARDING_ROUTES = [
         'onboarding_team',
         'onboarding_domain',
@@ -24,6 +35,8 @@ final readonly class OnboardingRedirectListener
         'onboarding_ingestion_verify',
         'onboarding_ingestion_managed_verify',
         'onboarding_complete',
+        'domain_taken',
+        'domain_taken_notify_admin',
     ];
 
     public function __construct(

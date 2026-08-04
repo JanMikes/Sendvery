@@ -12,6 +12,7 @@ use App\Repository\TeamInvitationRepository;
 use App\Repository\UserRepository;
 use App\Services\IdentityProvider;
 use App\Services\OnboardingTracker;
+use App\Services\TeamSlugGenerator;
 use App\Value\TeamRole;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
@@ -27,7 +28,6 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface;
-use Symfony\Component\String\Slugger\AsciiSlugger;
 
 final class MagicLinkAuthenticator extends AbstractAuthenticator implements AuthenticationEntryPointInterface
 {
@@ -40,6 +40,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         private readonly UrlGeneratorInterface $urlGenerator,
         private readonly OnboardingTracker $onboardingTracker,
         private readonly TeamInvitationRepository $invitationRepository,
+        private readonly TeamSlugGenerator $slugGenerator,
     ) {
     }
 
@@ -127,8 +128,7 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator implements Auth
         }
 
         $domain = $this->extractDomain($email);
-        $slugger = new AsciiSlugger();
-        $slug = $slugger->slug($domain)->lower()->toString().'-'.substr($user->id->toString(), 0, 8);
+        $slug = $this->slugGenerator->forUser($domain, $user->id);
 
         $team = new Team(
             id: $this->identityProvider->nextIdentity(),
