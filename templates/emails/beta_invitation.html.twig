@@ -1,12 +1,12 @@
 {% extends 'emails/_layout.html.twig' %}
 {% import 'emails/_components.html.twig' as ui %}
 
-{% block subject %}You're invited to the Sendvery beta{% endblock %}
+{% block subject %}You're invited to Sendvery{% endblock %}
 {% block preheader %}Monitor DMARC, track DNS, keep email deliverability healthy — all in one place.{% endblock %}
 
 {% block content %}
-    {{ ui.pretitle('Beta invitation') }}
-    {{ ui.heading('You’re invited to the Sendvery beta') }}
+    {{ ui.pretitle('Invitation') }}
+    {{ ui.heading('You’re invited to Sendvery') }}
 
     {% if invitedByEmail %}
         {{ ui.lead(

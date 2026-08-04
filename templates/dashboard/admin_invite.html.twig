@@ -1,14 +1,14 @@
 {% extends 'dashboard/layout.html.twig' %}
 
-{% block page_title %}Invite Beta Users{% endblock %}
+{% block page_title %}Invite Users{% endblock %}
 
 {% block breadcrumbs %}
-    <li>Invite Beta Users</li>
+    <li>Invite Users</li>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">Invite Beta Users</h1>
+    <h1 class="text-2xl font-bold mb-6">Invite Users</h1>
 
     {% if success is defined and success %}
         <div class="alert alert-success mb-6">
@@ -27,7 +27,7 @@
     <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
             <p class="text-base-content/60 mb-4">
-                Enter email addresses to invite to the Sendvery beta. Separate multiple emails with commas or new lines.
+                Enter email addresses to invite to Sendvery. Separate multiple emails with commas or new lines.
             </p>
 
             <form method="POST" action="{{ path('admin_invite_beta_user') }}">

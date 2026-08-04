@@ -37,7 +37,7 @@ final class InviteBetaUserController extends AbstractController
         // There is no role system yet; the founder's address (already the
         // admin identity for ownership-inquiry notifications) is the gate.
         if ($user->email !== $this->adminEmail) {
-            throw $this->createAccessDeniedException('Beta invitations are restricted to the admin.');
+            throw $this->createAccessDeniedException('Invitations are restricted to the admin.');
         }
 
         if ($request->isMethod('POST')) {

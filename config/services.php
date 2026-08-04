@@ -207,9 +207,6 @@ return App::config([
             'App\Repository\BetaSignupRepository' => [
                 'public' => true,
             ],
-            'App\MessageHandler\RegisterBetaSignupHandler' => [
-                'public' => true,
-            ],
             'App\MessageHandler\NotifyMeAboutToolHandler' => [
                 'public' => true,
             ],

@@ -93,7 +93,6 @@
         "src/Query/GetLatestDkimDetection.php": 1,
         "src/Query/GetTeamPassRateAggregates.php": 5,
         "src/Query/GetTeamPlan.php": 1,
-        "src/Repository/BetaInvitationRepository.php": 4,
         "src/Repository/DmarcReportRepository.php": 2,
         "src/Repository/DomainOwnershipInquiryRepository.php": 1,
         "src/Repository/KnownSenderRepository.php": 1,

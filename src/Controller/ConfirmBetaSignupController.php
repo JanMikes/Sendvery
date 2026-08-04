@@ -35,7 +35,9 @@ final class ConfirmBetaSignupController extends AbstractController
             $this->entityManager->flush();
         }
 
-        $this->addFlash('success', 'Your email is confirmed. Sign in to get started with Sendvery.');
+        // "No account needed" is the promise on the form that sent them here, so
+        // this cannot read as a demand to sign in — the account is an offer.
+        $this->addFlash('success', 'Your email is confirmed — thanks. Want your domain monitored properly? Creating a free account takes a minute.');
 
         return $this->redirectToRoute('auth_login');
     }

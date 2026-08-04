@@ -1,19 +1,27 @@
 {% extends 'emails/_layout.html.twig' %}
 {% import 'emails/_components.html.twig' as ui %}
 
-{% block subject %}Confirm your Sendvery beta signup{% endblock %}
-{% block preheader %}One click to confirm your email and join the Sendvery beta waitlist.{% endblock %}
+{# Sent to everyone who submits the notify form under a public DNS checker.
+   This has not been a beta waitlist mail since launch.
+
+   Deliberately does NOT claim we will alert them when their records change:
+   nothing reads `beta_signup` yet, so that would repeat a promise the system
+   does not keep. The form above it already over-promises; see the note in
+   SubmitToolNotifyController. Wording here stays to what confirming actually
+   does. #}
+{% block subject %}Confirm your email address{% endblock %}
+{% block preheader %}One click to confirm the address you just gave us.{% endblock %}
 
 {% block content %}
-    {{ ui.pretitle('Confirm your signup') }}
-    {{ ui.heading('Confirm your beta signup') }}
+    {{ ui.pretitle('Confirm your email') }}
+    {{ ui.heading('One click and you’re set') }}
 
-    {{ ui.lead('Thanks for signing up for the Sendvery beta. Please confirm your email address by clicking the button below.') }}
+    {{ ui.lead('You asked us to keep you posted about your domain’s email setup. Confirm your address below so we know it’s really you.') }}
 
     {{ ui.button('Confirm my email', confirmUrl) }}
 
     {{ ui.subheading('What happens next?') }}
-    {{ ui.muted('We’ll notify you as soon as Sendvery is ready for beta testers. You’ll be among the first to try DMARC report parsing, DNS monitoring, and AI-powered email authentication insights.') }}
+    {{ ui.muted('That’s it — you’re on the list, and no account is needed. If you’d rather monitor your domain properly, you can create a free account any time.') }}
 
     {{ ui.link_fallback(confirmUrl) }}
 {% endblock %}

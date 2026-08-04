@@ -26,7 +26,7 @@ final class BetaInvitationTest extends WebTestCase
         $client->request('GET', '/app/admin/invite');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('h1', 'Invite Beta Users');
+        self::assertSelectorTextContains('h1', 'Invite Users');
     }
 
     #[Test]

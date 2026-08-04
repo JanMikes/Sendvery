@@ -43,38 +43,6 @@ final class BetaSignupRepositoryTest extends IntegrationTestCase
         self::assertNull($found);
     }
 
-    public function testFindByEmail(): void
-    {
-        $em = $this->getService(EntityManagerInterface::class);
-        $repository = $this->getService(BetaSignupRepository::class);
-
-        $email = 'email-test-'.Uuid::uuid7()->toString().'@example.com';
-        $signup = new BetaSignup(
-            id: Uuid::uuid7(),
-            email: $email,
-            domainCount: null,
-            painPoint: null,
-            source: 'test',
-            signedUpAt: new \DateTimeImmutable(),
-            confirmationToken: 'emailtoken'.Uuid::uuid7()->toString(),
-        );
-        $signup->popEvents();
-        $em->persist($signup);
-        $em->flush();
-
-        $found = $repository->findByEmail($email);
-        self::assertNotNull($found);
-        self::assertSame($email, $found->email);
-    }
-
-    public function testFindByEmailReturnsNullForUnknownEmail(): void
-    {
-        $repository = $this->getService(BetaSignupRepository::class);
-
-        $found = $repository->findByEmail('nonexistent@example.com');
-        self::assertNull($found);
-    }
-
     public function testFindByEmailAndSourceMatchesPairExactly(): void
     {
         $em = $this->getService(EntityManagerInterface::class);

@@ -61,10 +61,10 @@ final readonly class InviteBetaUserHandler
 
         $email = (new Email())
             ->to($message->email)
-            ->subject("You're invited to Sendvery Beta!")
+            ->subject("You're invited to Sendvery!")
             ->html($html)
             ->text(sprintf(
-                "You're invited to Sendvery Beta!\n\n%s\n\nAccept your invitation: %s\n\nThis link expires in 7 days.\n\n— Sendvery",
+                "You're invited to Sendvery!\n\n%s\n\nAccept your invitation: %s\n\nThis link expires in 7 days.\n\n— Sendvery",
                 null !== $invitedBy ? "Invited by {$invitedBy->email}" : 'You have been invited to try Sendvery',
                 $acceptUrl,
             ));

@@ -36,10 +36,10 @@ final readonly class SendBetaConfirmationEmail
 
         $email = (new Email())
             ->to($event->email)
-            ->subject('Confirm your Sendvery beta signup')
+            ->subject('Confirm your email address')
             ->html($html)
             ->text(sprintf(
-                "Hi!\n\nThanks for signing up for the Sendvery beta.\n\nPlease confirm your email by visiting:\n%s\n\nWhat happens next?\nWe'll notify you as soon as Sendvery is ready for beta testers. You'll be among the first to try it.\n\n— The Sendvery Team",
+                "Hi!\n\nYou asked us to keep you posted about your domain's email setup.\n\nPlease confirm your email by visiting:\n%s\n\nThat's it — you're on the list, and no account is needed. If you'd rather monitor your domain properly, you can create a free account any time.\n\n— The Sendvery Team",
                 $confirmUrl,
             ));
 
