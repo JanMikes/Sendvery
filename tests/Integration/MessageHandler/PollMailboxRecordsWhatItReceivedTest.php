@@ -252,7 +252,7 @@ final class PollMailboxRecordsWhatItReceivedTest extends IntegrationTestCase
             messageId: '<byo-oversized@example.com>',
             subject: 'DMARC Aggregate Report',
             from: 'noreply-dmarc-support@google.com',
-            date: new \DateTimeImmutable('2026-07-20 09:00:00'),
+            date: new \DateTimeImmutable('-1 day'),
             attachments: [new MailAttachment('report.xml', (string) file_get_contents(__DIR__.'/../../Fixtures/minimal-report.xml'), 'text/xml')],
             rawEml: $oversized,
         ));
@@ -347,7 +347,7 @@ final class PollMailboxRecordsWhatItReceivedTest extends IntegrationTestCase
             messageId: $messageId,
             subject: 'DMARC Aggregate Report',
             from: 'noreply-dmarc-support@google.com',
-            date: new \DateTimeImmutable('2026-07-20 09:00:00'),
+            date: new \DateTimeImmutable('-1 day'),
             attachments: [new MailAttachment('report.xml', $xml, 'text/xml')],
             rawEml: $rawEml,
         );
@@ -365,7 +365,7 @@ final class PollMailboxRecordsWhatItReceivedTest extends IntegrationTestCase
             messageId: $messageId,
             subject: 'DMARC Aggregate Report',
             from: 'noreply-dmarc-support@google.com',
-            date: new \DateTimeImmutable('2026-07-20 09:00:00'),
+            date: new \DateTimeImmutable('-1 day'),
             attachments: [new MailAttachment('report.xml.gz', 'not actually gzip', 'application/gzip')],
             rawEml: $this->rawEml($messageId),
         );
