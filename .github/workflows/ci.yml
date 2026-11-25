@@ -133,7 +133,7 @@ jobs:
     # Separate job because it needs a booted app, a database with demo data and
     # a real browser — none of which the other jobs want.
     name: Browser Smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright has no chromium build for ubuntu-latest (= 26.04) yet
     # The whole suite is ~25s locally. Anything past this is a hang, and the
     # 360-minute default would burn a runner all afternoon to tell us so.
     timeout-minutes: 15
